@@ -24,7 +24,6 @@
 
 # Editor and local workspace
 /.vscode/
-/.web/
 /.clangd
 
 # Temporary local files
