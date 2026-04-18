@@ -12,6 +12,11 @@
 # Local reference files not needed in the repo
 /*.pdf
 /*.PDF
+/*.tel
+/example2/*.tel
+/API_SUMMARY.md
+/BACON_HOST_BEHAVIOR.md
+/BUSINESS_WEB_API.md
 
 # Local progress / experiment notes
 /PROGRESS_*.md

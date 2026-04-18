@@ -5,7 +5,7 @@ PLL_CLKIN PIN_OSC
 
 
 #################################################################################
-# CPLD pins (derived from Netlist_Schematic1_3_2026-03-06.tel, U18)
+# CPLD pins derived from the board netlist (U18)
 
 # Control signals
 CS1_N         PIN_3  : OUTPUT
@@ -59,4 +59,3 @@ LED_ACT        PIN_79 : OUTPUT
 # Power
 V3V3_CTRL       PIN_64 : OUTPUT
 V5V_CTRL        PIN_63 : OUTPUT
-
