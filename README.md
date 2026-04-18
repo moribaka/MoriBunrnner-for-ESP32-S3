@@ -6,7 +6,6 @@ ESP32-S3 firmware and companion FPGA project sources for a web-based cartridge b
 
 - `main/`: ESP-IDF application source
 - `example/`: FPGA project source files
-- `example2/`: alternate FPGA project source files
 - `tools/`: small local helper tools
 
 ## Build notes
