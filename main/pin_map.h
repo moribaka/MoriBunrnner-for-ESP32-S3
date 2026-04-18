@@ -4,9 +4,8 @@
 #include "driver/gpio.h"
 
 /*
- * MORI burner pin mapping from:
- * Netlist_Schematic1_3_2026-03-06.tel
- * (ESP32-S3-WROOM-1, U6.* pins)
+ * MORI burner pin mapping derived from the board schematic/netlist
+ * (ESP32-S3-WROOM-1, U6.* pins).
  */
 
 /* TF card (SDMMC 4-bit) */
