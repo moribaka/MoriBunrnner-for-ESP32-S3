@@ -1,0 +1,67 @@
+# ESP-IDF build output
+/build/
+/build_*/
+
+# Generated dependency cache
+/managed_components/
+
+# Release artifacts and local backups
+/dist/
+/backup/
+
+# Local reference files not needed in the repo
+/*.pdf
+/*.PDF
+
+# Local progress / experiment notes
+/PROGRESS_*.md
+/EXPERIMENT_*.md
+
+# Editor and local workspace
+/.vscode/
+/.web/
+/.clangd
+
+# Temporary local files
+/.tmp-tools/
+/.tmp*
+
+# Common generated files
+/sdkconfig.old
+/compile_commands.json
+*.log
+Thumbs.db
+
+# FPGA project generated output
+/example/.vscode/
+/example/moriburnner下位机.bin
+/example/logic/alta_db/
+/example/logic/alta_logs/
+/example/logic/db/
+/example/logic/incremental_db/
+/example/logic/quartus_logs/
+/example/logic/simulation/
+/example/logic/*.o
+/example/logic/*.bin
+/example/logic/*.rpt
+/example/logic/logic_log.txt
+/example/logic/example_board.inc
+/example/logic/example_board.v
+/example/logic/example_board_routed.v
+
+/example2/.vscode/
+/example2/agm_example_release_batch.bin
+/example2/logic/alta_db/
+/example2/logic/alta_logs/
+/example2/logic/db/
+/example2/logic/incremental_db/
+/example2/logic/quartus_logs/
+/example2/logic/simulation/
+/example2/logic/*.o
+/example2/logic/*.bin
+/example2/logic/*.rpt
+/example2/logic/map.log
+/example2/logic/logic_log.txt
+/example2/logic/example_board.inc
+/example2/logic/example_board.v
+/example2/logic/example_board_routed.v

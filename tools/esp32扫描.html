@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MORI 烧录器 IP 扫描</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5efe4;
+      --panel: rgba(255, 252, 246, 0.92);
+      --panel-strong: #fffaf2;
+      --text: #221b16;
+      --muted: #6d5e52;
+      --accent: #0f766e;
+      --accent-strong: #115e59;
+      --border: rgba(34, 27, 22, 0.12);
+      --warn: #b45309;
+      --good: #166534;
+      --bad: #b91c1c;
+      --shadow: 0 22px 60px rgba(80, 62, 39, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.1), transparent 28%),
+        linear-gradient(180deg, #fcf8f2 0%, var(--bg) 100%);
+      padding: 28px;
+    }
+
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 28px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 220px;
+      height: 220px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(15, 118, 110, 0.18), transparent 70%);
+      pointer-events: none;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 5vw, 42px);
+      letter-spacing: 0.02em;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1.3fr 0.9fr;
+    }
+
+    .panel {
+      padding: 22px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+    }
+
+    .field-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input,
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid rgba(34, 27, 22, 0.14);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: var(--panel-strong);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus {
+      border-color: rgba(15, 118, 110, 0.5);
+      box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+    }
+
+    .row-span {
+      grid-column: 1 / -1;
+    }
+
+    .checkbox-row {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 4px;
+    }
+
+    .checkbox-row label {
+      margin: 0;
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      cursor: pointer;
+      transition: transform 0.14s ease, opacity 0.14s ease, background 0.14s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #fff;
+      box-shadow: 0 12px 24px rgba(15, 118, 110, 0.24);
+    }
+
+    .secondary {
+      background: rgba(17, 24, 39, 0.06);
+      color: var(--text);
+    }
+
+    .warning {
+      background: rgba(180, 83, 9, 0.12);
+      color: var(--warn);
+    }
+
+    .stats {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 6px;
+    }
+
+    .stat {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    .stat .label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat .value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(17, 24, 39, 0.06);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .status-pill::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warn);
+    }
+
+    .status-pill.running::before {
+      background: var(--accent);
+      box-shadow: 0 0 0 8px rgba(15, 118, 110, 0.12);
+    }
+
+    .status-pill.good::before {
+      background: #22c55e;
+    }
+
+    .results,
+    .log {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .result {
+      border: 1px solid rgba(22, 101, 52, 0.18);
+      background: rgba(240, 253, 244, 0.96);
+      border-radius: 16px;
+      padding: 14px 16px;
+    }
+
+    .result strong {
+      font-size: 18px;
+    }
+
+    .result-meta {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .result-actions a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 110px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      text-decoration: none;
+      background: rgba(15, 118, 110, 0.12);
+      color: var(--accent-strong);
+      font-weight: 600;
+    }
+
+    .log-entry {
+      border-left: 3px solid rgba(34, 27, 22, 0.12);
+      padding: 8px 0 8px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .log-entry.good {
+      border-left-color: rgba(22, 101, 52, 0.52);
+      color: var(--good);
+    }
+
+    .log-entry.bad {
+      border-left-color: rgba(185, 28, 28, 0.36);
+      color: var(--bad);
+    }
+
+    .notes {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .note {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(17, 24, 39, 0.05);
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    code {
+      background: rgba(17, 24, 39, 0.08);
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.95em;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 16px;
+      }
+
+      .grid,
+      .field-grid,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .panel,
+      .hero {
+        padding: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>MORI 烧录器 IP 扫描</h1>
+      <p class="muted">
+        这个工具不需要刷固件，也不需要往设备里放额外文件。
+        它会直接遍历局域网 IP，检查哪些地址有 HTTP 响应，扫到后可以直接打开网页。
+      </p>
+      <div class="notes">
+        <div class="note">
+          快速入口：如果板子退回了配网 AP 模式，连接 SSID <code>MORI-GBA-SETUP</code>，
+          然后打开 <code>http://192.168.4.1/</code>。
+        </div>
+        <div class="note">
+          盲扫模式只能知道某个 IP 对 HTTP 有响应，不能 100% 证明它一定是你的 ESP32。
+          如果你的局域网里还有路由器、打印机、NAS、摄像头之类，也可能一起被扫出来。
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>扫描设置</h2>
+        <div class="field-grid">
+          <div class="row-span">
+            <label for="prefixes">网段前缀，多个用逗号分隔，格式是前三段</label>
+            <input id="prefixes" type="text" value="192.168.1, 192.168.0, 192.168.31, 10.0.0" spellcheck="false">
+          </div>
+          <div class="row-span">
+            <label for="path">要测试的 HTTP 路径</label>
+            <input id="path" type="text" value="/" spellcheck="false">
+          </div>
+          <div>
+            <label for="startHost">起始主机号</label>
+            <input id="startHost" type="number" min="1" max="254" value="2">
+          </div>
+          <div>
+            <label for="endHost">结束主机号</label>
+            <input id="endHost" type="number" min="1" max="254" value="254">
+          </div>
+          <div>
+            <label for="timeoutMs">每个 IP 超时，毫秒</label>
+            <input id="timeoutMs" type="number" min="200" max="10000" value="1200">
+          </div>
+          <div>
+            <label for="concurrency">并发扫描数</label>
+            <input id="concurrency" type="number" min="1" max="128" value="32">
+          </div>
+          <div class="checkbox-row">
+            <input id="stopOnFirst" type="checkbox">
+            <label for="stopOnFirst">扫到第一个有响应的主机后停止</label>
+          </div>
+          <div class="checkbox-row">
+            <input id="autoOpenFirst" type="checkbox" checked>
+            <label for="autoOpenFirst">自动打开第一个有响应的主机</label>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="scanBtn" class="primary" type="button">开始扫描</button>
+          <button id="stopBtn" class="secondary" type="button" disabled>停止</button>
+          <button id="commonBtn" class="secondary" type="button">填入常见网段</button>
+          <button id="apBtn" class="warning" type="button">打开 192.168.4.1</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>实时状态</h2>
+        <div id="statusPill" class="status-pill">空闲</div>
+        <div class="stats">
+          <div class="stat">
+            <span class="label">目标数</span>
+            <div id="targetsValue" class="value">0</div>
+          </div>
+          <div class="stat">
+            <span class="label">已处理</span>
+            <div id="processedValue" class="value">0</div>
+          </div>
+          <div class="stat">
+            <span class="label">命中数</span>
+            <div id="matchesValue" class="value">0</div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="note">
+            扫描方式：<code>fetch("http://IP/PATH", { mode: "no-cors" })</code>
+          </div>
+          <div class="note">
+            如果浏览器弹出“本地网络访问”之类的权限提示，请允许。
+            如果你知道自己的准确网段，只填一个网段会快很多。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>扫描结果</h2>
+        <div id="results" class="results"></div>
+      </div>
+      <div class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var state = {
+        running: false,
+        queue: [],
+        active: 0,
+        total: 0,
+        processed: 0,
+        matches: [],
+        seenMatches: {},
+        handles: {},
+        stopOnFirst: false,
+        autoOpenFirst: true,
+        timeoutMs: 1200,
+        concurrency: 32,
+        path: "/",
+        pendingWindow: null
+      };
+
+      var prefixesEl = document.getElementById("prefixes");
+      var pathEl = document.getElementById("path");
+      var startHostEl = document.getElementById("startHost");
+      var endHostEl = document.getElementById("endHost");
+      var timeoutEl = document.getElementById("timeoutMs");
+      var concurrencyEl = document.getElementById("concurrency");
+      var stopOnFirstEl = document.getElementById("stopOnFirst");
+      var autoOpenFirstEl = document.getElementById("autoOpenFirst");
+      var scanBtn = document.getElementById("scanBtn");
+      var stopBtn = document.getElementById("stopBtn");
+      var commonBtn = document.getElementById("commonBtn");
+      var apBtn = document.getElementById("apBtn");
+      var statusPill = document.getElementById("statusPill");
+      var targetsValue = document.getElementById("targetsValue");
+      var processedValue = document.getElementById("processedValue");
+      var matchesValue = document.getElementById("matchesValue");
+      var resultsEl = document.getElementById("results");
+      var logEl = document.getElementById("log");
+
+      function setStatus(text, className) {
+        statusPill.textContent = text;
+        statusPill.className = "status-pill" + (className ? " " + className : "");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function log(message, kind) {
+        var entry = document.createElement("div");
+        entry.className = "log-entry" + (kind ? " " + kind : "");
+        entry.textContent = new Date().toLocaleTimeString() + "  " + message;
+        logEl.prepend(entry);
+      }
+
+      function updateCounters() {
+        targetsValue.textContent = String(state.total);
+        processedValue.textContent = String(state.processed);
+        matchesValue.textContent = String(state.matches.length);
+      }
+
+      function renderResults() {
+        if (!state.matches.length) {
+          resultsEl.innerHTML =
+            '<div class="note">暂时还没有扫到有 HTTP 响应的主机。这个模式是盲扫，所以只要对你设置的路径有响应，就会被列出来。</div>';
+          return;
+        }
+
+        resultsEl.innerHTML = state.matches.map(function (match) {
+          var rootUrl = "http://" + match.ip + "/";
+          var matchedUrl = "http://" + match.ip + match.path;
+          return (
+            '<div class="result">' +
+            "<strong>" + escapeHtml(match.ip) + "</strong>" +
+            '<div class="result-meta">' +
+            "<span>响应路径：" + escapeHtml(match.path) + "</span>" +
+            "<span>" + escapeHtml(match.detectedAt) + "</span>" +
+            "</div>" +
+            '<div class="result-actions">' +
+            '<a href="' + escapeHtml(rootUrl) + '" target="_blank" rel="noopener">打开首页</a>' +
+            '<a href="' + escapeHtml(matchedUrl) + '" target="_blank" rel="noopener">打开命中路径</a>' +
+            "</div>" +
+            "</div>"
+          );
+        }).join("");
+      }
+
+      function normalizePrefix(raw) {
+        var text = String(raw || "").trim().replace(/\.$/, "");
+        if (!text) {
+          return null;
+        }
+
+        var parts = text.split(".");
+        if (parts.length !== 3) {
+          return null;
+        }
+
+        for (var i = 0; i < parts.length; i += 1) {
+          if (!/^\d+$/.test(parts[i])) {
+            return null;
+          }
+          var value = Number(parts[i]);
+          if (!Number.isInteger(value) || value < 0 || value > 255) {
+            return null;
+          }
+        }
+
+        return parts.join(".");
+      }
+
+      function buildTargets(prefixText, startHost, endHost) {
+        var prefixes = prefixText.split(",");
+        var unique = {};
+        var targets = [];
+        var prefixIndex;
+        var host;
+
+        for (prefixIndex = 0; prefixIndex < prefixes.length; prefixIndex += 1) {
+          var prefix = normalizePrefix(prefixes[prefixIndex]);
+          if (!prefix) {
+            continue;
+          }
+
+          for (host = startHost; host <= endHost; host += 1) {
+            var ip = prefix + "." + host;
+            if (!unique[ip]) {
+              unique[ip] = true;
+              targets.push(ip);
+            }
+          }
+        }
+
+        return targets;
+      }
+
+      function normalizePath(raw) {
+        var text = String(raw || "").trim();
+        if (!text) {
+          return "/";
+        }
+        if (text.charAt(0) !== "/") {
+          text = "/" + text;
+        }
+        return text;
+      }
+
+      function cleanupHandle(ip) {
+        var handle = state.handles[ip];
+        if (!handle) {
+          return;
+        }
+
+        window.clearTimeout(handle.timerId);
+        if (handle.controller) {
+          handle.controller.abort();
+        }
+        delete state.handles[ip];
+      }
+
+      function finishProbe(ip, status) {
+        if (!state.running && status !== "found") {
+          cleanupHandle(ip);
+          return;
+        }
+
+        cleanupHandle(ip);
+        state.active = Math.max(0, state.active - 1);
+        state.processed += 1;
+        updateCounters();
+
+        if (status === "found" && !state.seenMatches[ip]) {
+          state.seenMatches[ip] = true;
+          state.matches.push({
+            ip: ip,
+            path: state.path,
+            detectedAt: new Date().toLocaleString()
+          });
+          renderResults();
+          updateCounters();
+          setStatus("已发现响应主机", "good");
+          log("发现 HTTP 响应：" + ip + state.path, "good");
+
+          if (state.autoOpenFirst && state.matches.length === 1) {
+            if (state.pendingWindow && !state.pendingWindow.closed) {
+              state.pendingWindow.location = "http://" + ip + "/";
+            } else {
+              log("弹窗被浏览器拦截了，无法自动打开。你可以直接点结果里的链接。", "bad");
+            }
+          }
+
+          if (state.stopOnFirst) {
+            stopScan(false);
+            return;
+          }
+        }
+
+        if (state.running) {
+          pumpQueue();
+        }
+
+        if (state.running && state.processed >= state.total && state.active === 0) {
+          stopScan(false);
+          if (!state.matches.length) {
+            setStatus("扫描结束，未命中", "");
+            log("扫描结束，没有主机对 " + state.path + " 返回响应。", "bad");
+          } else {
+            setStatus("扫描结束", "good");
+            log("扫描结束，共发现 " + state.matches.length + " 个响应主机。", "good");
+          }
+        }
+      }
+
+      function probeHost(ip) {
+        var cacheBust = Date.now() + "-" + Math.random().toString(16).slice(2);
+        var hasQuery = state.path.indexOf("?") >= 0;
+        var url = "http://" + ip + state.path + (hasQuery ? "&" : "?") + "_scan=" + encodeURIComponent(cacheBust);
+        var controller = new AbortController();
+        var finished = false;
+        var timerId;
+
+        function settle(status) {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          finishProbe(ip, status);
+        }
+
+        timerId = window.setTimeout(function () {
+          settle("timeout");
+        }, state.timeoutMs);
+
+        state.handles[ip] = {
+          controller: controller,
+          timerId: timerId
+        };
+
+        fetch(url, {
+          method: "GET",
+          mode: "no-cors",
+          cache: "no-store",
+          signal: controller.signal
+        }).then(function () {
+          settle("found");
+        }).catch(function () {
+          settle("miss");
+        });
+      }
+
+      function pumpQueue() {
+        while (state.running && state.active < state.concurrency && state.queue.length > 0) {
+          var ip = state.queue.shift();
+          state.active += 1;
+          probeHost(ip);
+        }
+
+        if (state.running) {
+          setStatus("扫描中...", "running");
+        }
+      }
+
+      function resetStateForScan(targets, options) {
+        stopScan(false);
+        state.running = true;
+        state.queue = targets.slice();
+        state.active = 0;
+        state.total = targets.length;
+        state.processed = 0;
+        state.matches = [];
+        state.seenMatches = {};
+        state.handles = {};
+        state.stopOnFirst = options.stopOnFirst;
+        state.autoOpenFirst = options.autoOpenFirst;
+        state.timeoutMs = options.timeoutMs;
+        state.concurrency = options.concurrency;
+        state.path = options.path;
+        state.pendingWindow = options.pendingWindow || null;
+
+        renderResults();
+        updateCounters();
+        scanBtn.disabled = true;
+        stopBtn.disabled = false;
+      }
+
+      function stopScan(logManualStop) {
+        var keys = Object.keys(state.handles);
+        var i;
+
+        state.running = false;
+        for (i = 0; i < keys.length; i += 1) {
+          cleanupHandle(keys[i]);
+        }
+        state.handles = {};
+        state.queue = [];
+        state.active = 0;
+        scanBtn.disabled = false;
+        stopBtn.disabled = true;
+
+        if (!state.matches.length && state.pendingWindow && !state.pendingWindow.closed) {
+          state.pendingWindow.close();
+        }
+        state.pendingWindow = null;
+
+        if (logManualStop) {
+          setStatus("已停止", "");
+          log("扫描已由用户停止。", "bad");
+        }
+      }
+
+      function startScan() {
+        var path = normalizePath(pathEl.value);
+        var startHost = Number(startHostEl.value);
+        var endHost = Number(endHostEl.value);
+        var timeoutMs = Number(timeoutEl.value);
+        var concurrency = Number(concurrencyEl.value);
+        var stopOnFirst = !!stopOnFirstEl.checked;
+        var autoOpenFirst = !!autoOpenFirstEl.checked;
+        var pendingWindow = null;
+        var targets;
+
+        if (!Number.isInteger(startHost) || !Number.isInteger(endHost) || startHost < 1 || endHost > 254 || startHost > endHost) {
+          window.alert("主机号范围必须在 1 到 254 之间，而且起始值不能大于结束值。");
+          return;
+        }
+
+        if (!Number.isInteger(timeoutMs) || timeoutMs < 200 || timeoutMs > 10000) {
+          window.alert("超时时间必须在 200 到 10000 毫秒之间。");
+          return;
+        }
+
+        if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 128) {
+          window.alert("并发扫描数必须在 1 到 128 之间。");
+          return;
+        }
+
+        targets = buildTargets(prefixesEl.value, startHost, endHost);
+        if (!targets.length) {
+          window.alert("请至少输入一个合法网段前缀，例如 192.168.1");
+          return;
+        }
+
+        if (autoOpenFirst) {
+          pendingWindow = window.open("about:blank", "_blank", "noopener");
+          if (!pendingWindow) {
+            log("预打开窗口失败，浏览器可能拦截了弹窗。", "bad");
+          }
+        }
+
+        resetStateForScan(targets, {
+          path: path,
+          stopOnFirst: stopOnFirst,
+          autoOpenFirst: autoOpenFirst,
+          timeoutMs: timeoutMs,
+          concurrency: concurrency,
+          pendingWindow: pendingWindow
+        });
+
+        setStatus("扫描中...", "running");
+        log("开始盲扫 HTTP，共 " + targets.length + " 个目标，测试路径 " + path + "。");
+        renderResults();
+        pumpQueue();
+      }
+
+      scanBtn.addEventListener("click", startScan);
+      stopBtn.addEventListener("click", function () {
+        stopScan(true);
+      });
+
+      commonBtn.addEventListener("click", function () {
+        prefixesEl.value = "192.168.1, 192.168.0, 192.168.31, 10.0.0, 10.0.1";
+        log("已填入常见的私有网段前缀。");
+      });
+
+      apBtn.addEventListener("click", function () {
+        window.open("http://192.168.4.1/", "_blank", "noopener");
+      });
+
+      renderResults();
+      updateCounters();
+      setStatus("空闲", "");
+      log("准备就绪。这个模式会盲扫局域网 IP，如果保持“自动打开”开启，就会直接打开第一个有响应的主机。");
+    })();
+  </script>
+</body>
+</html>
