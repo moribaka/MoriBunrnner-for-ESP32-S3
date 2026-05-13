@@ -1,4 +1,3 @@
-
         // 全局状态
         const state = {
             currentPath: '',
@@ -33,13 +32,19 @@
             powerAutoRefresh: true,
             powerRefreshInterval: 2000,
             powerRefreshTimer: null,
+            systemRefreshTimer: null,
             powerViewMode: 'basic',
             cartMode: 'gba',
             writePathMode: 'direct',
             psramWindowMb: 4,
             mbc5ChunkKb: 16,
+            dumpChunkKb: 64,
+            baconSpiConfiguredHz: 0,
+            baconSpiActualHz: 0,
             romFile: null,
             saveFile: null,
+            selectedTfRomPath: '',
+            selectedTfSavePath: '',
             activeBurnOperation: null,
             pendingDumpRelPath: '',
             pendingDumpName: '',
@@ -55,9 +60,10 @@
             wifi: renderWiFiPage,
             power: renderPowerPage,
             burner: renderBurnerPage,
-            chip: renderChipPage,
             settings: renderSettingsPage
         };
+
+        const ROM_DUMP_CHUNK_OPTIONS_KB = Object.freeze([32, 64, 128, 256]);
 
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -67,22 +73,18 @@
             startStatusPolling();
             initClock();
             
-            // 测试移动端菜单按钮
-            console.log('Page loaded, testing mobile menu button');
-            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-            if (mobileMenuBtn) {
-                console.log('Mobile menu button found:', mobileMenuBtn);
-                // 添加额外的事件监听器进行测试
-                mobileMenuBtn.addEventListener('click', function() {
-                    console.log('Mobile menu button clicked via addEventListener');
+            // 移动端触摸优化：为所有按钮添加被动触摸事件监听
+            if ('ontouchstart' in window) {
+                document.querySelectorAll('.btn, .mobile-menu-btn, .mobile-close-btn').forEach(btn => {
+                    btn.addEventListener('touchstart', function(e) {
+                        // 添加触摸反馈效果
+                        this.style.transform = 'scale(0.95)';
+                    }, { passive: true });
+                    btn.addEventListener('touchend', function(e) {
+                        // 恢复按钮状态
+                        this.style.transform = '';
+                    }, { passive: true });
                 });
-                mobileMenuBtn.addEventListener('touchstart', function(e) {
-                    console.log('Mobile menu button touched:', e);
-                    e.preventDefault();
-                    toggleMobileSidebar();
-                });
-            } else {
-                console.error('Mobile menu button not found');
             }
             
             // 面板拖拽恢复
@@ -252,6 +254,9 @@
             // 如果离开电源页面，停止电源页面的自动刷新
             if (state.currentPage === 'power' && pageName !== 'power') {
                 stopPowerAutoRefresh();
+            }
+            if (state.currentPage === 'system' && pageName !== 'system') {
+                stopSystemAutoRefresh();
             }
 
             state.currentPage = pageName;
@@ -528,103 +533,6 @@
             switchPowerView(state.powerViewMode);
         }
 
-        // 芯片管理页面
-        function renderChipPage() {
-            const container = document.getElementById('mainContent');
-            container.innerHTML = `
-                <div class="page-header animate-in">
-                    <h1 class="page-title">🔧 芯片管理</h1>
-                    <p class="page-subtitle">MCU SWD 自动探测</p>
-                </div>
-
-                <div class="card animate-in">
-                    <div class="card-header">
-                        <h3 class="card-title">🔍 一键探测</h3>
-                    </div>
-                    <div style="padding: 16px; text-align: center;">
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">自动尝试所有 SWD 配置组合，检测连接的 MCU 芯片</p>
-                        <button class="btn btn-primary btn-lg" onclick="probeMCU()" id="probeBtn" style="padding: 16px 48px; font-size: 18px;">
-                            🔍 一键探测
-                        </button>
-                    </div>
-                </div>
-
-                <div class="card animate-in" id="probeResultCard" style="display: none;">
-                    <div class="card-header">
-                        <h3 class="card-title">📊 探测结果</h3>
-                    </div>
-                    <div style="padding: 16px;" id="probeResultContent">
-                    </div>
-                </div>
-            `;
-        }
-
-        async function probeMCU() {
-            const btn = document.getElementById('probeBtn');
-            const resultCard = document.getElementById('probeResultCard');
-            const resultContent = document.getElementById('probeResultContent');
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ 探测中...';
-            resultCard.style.display = 'block';
-            resultContent.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">正在探测 MCU...</div>';
-
-            try {
-                const response = await fetch('/api/mcu/probe');
-                const data = await response.json();
-
-                if (data.ok) {
-                    resultContent.innerHTML = `
-                        <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid var(--accent-success); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-                            <div style="font-size: 24px; font-weight: 700; color: var(--accent-success); margin-bottom: 8px;">✓ 探测成功</div>
-                            <div style="font-size: 32px; font-family: monospace; color: var(--text-primary);">IDCODE: ${data.idcode}</div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 12px; color: var(--text-secondary);">序列模式</div>
-                                <div style="font-size: 16px; font-weight: 600; color: var(--text-primary);">${data.seq_used}</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 12px; color: var(--text-secondary);">尝试次数</div>
-                                <div style="font-size: 16px; font-weight: 600; color: var(--text-primary);">${data.attempt_count}</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 12px; color: var(--text-secondary);">奇偶校验</div>
-                                <div style="font-size: 16px; font-weight: 600; color: ${data.parity_ok ? 'var(--accent-success)' : 'var(--accent-secondary)'};">${data.parity_ok ? '✓ 通过' : '✕ 失败'}</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <div style="font-size: 12px; color: var(--text-secondary);">ACK</div>
-                                <div style="font-size: 16px; font-weight: 600; color: var(--text-primary);">${data.ack}</div>
-                            </div>
-                        </div>
-                    `;
-                    showToast('探测成功: ' + data.idcode, 'success');
-                } else {
-                    resultContent.innerHTML = `
-                        <div style="background: rgba(255, 68, 68, 0.1); border: 1px solid var(--accent-secondary); border-radius: 8px; padding: 20px;">
-                            <div style="font-size: 24px; font-weight: 700; color: var(--accent-secondary); margin-bottom: 8px;">✕ 探测失败</div>
-                            <div style="font-size: 16px; color: var(--text-primary);">状态: ${data.status}</div>
-                            <div style="margin-top: 12px; color: var(--text-secondary); font-size: 14px;">
-                                请检查：SWD 连线是否正确、目标芯片是否供电、芯片是否支持 SWD 调试
-                            </div>
-                        </div>
-                    `;
-                    showToast('探测失败: ' + data.status, 'error');
-                }
-            } catch (error) {
-                resultContent.innerHTML = `
-                    <div style="background: rgba(255, 68, 68, 0.1); border: 1px solid var(--accent-secondary); border-radius: 8px; padding: 20px;">
-                        <div style="font-size: 24px; font-weight: 700; color: var(--accent-secondary); margin-bottom: 8px;">✕ 网络错误</div>
-                        <div style="font-size: 16px; color: var(--text-primary);">${error.message}</div>
-                    </div>
-                `;
-                showToast('网络错误: ' + error.message, 'error');
-            }
-
-            btn.disabled = false;
-            btn.textContent = '🔍 一键探测';
-        }
-
         // 烧录中心页面
         function renderBurnerPage() {
             const container = document.getElementById('mainContent');
@@ -684,10 +592,23 @@
                                     用于 MBC5 写入任务（direct / psram）。块越大通常吞吐越高，但稳定性可能受卡带影响。
                                 </div>
                             </div>
+                            <div class="setting-item" style="flex: 1; min-width: 220px;">
+                                <label class="setting-label">ROM 导出块大小 (KB)</label>
+                                <select class="input" id="dumpChunkKbSelect" onchange="setDumpChunkKb(this.value)">
+                                    <option value="32">32 KB</option>
+                                    <option value="64" selected>64 KB</option>
+                                    <option value="128">128 KB</option>
+                                    <option value="256">256 KB</option>
+                                </select>
+                                <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    仅用于 ROM 导出任务（卡带 → TF）。便于手动对比 32 / 64 / 128 / 256 KB。
+                                </div>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
                             <h4 style="margin: 0; width: 100%; font-size: 14px; color: var(--text-secondary);">ROM 操作</h4>
                             <button class="btn" onclick="cartReadId()">🔍 读取 ID</button>
+                            <!-- <button class="btn" onclick="cartReadIdDebug()">🧪 读 ID+内容</button> -->
                             <button class="btn btn-danger" id="eraseChipBtn" onclick="cartEraseChip()">🗑️ 全片擦除</button>
                             <button class="btn btn-primary" onclick="cartWriteRom()">📤 写入 ROM</button>
                             <button class="btn" onclick="cartDumpRom()">📥 导出 ROM</button>
@@ -709,16 +630,6 @@
                             <h3 class="card-title">📂 ROM 文件</h3>
                         </div>
                         <div style="padding: 16px;">
-                            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
-                                <input type="text" class="input" id="romPath" placeholder="本地 ROM（可选，用于上传到TF）..." style="flex: 1; min-width: 200px;" readonly>
-                                <button class="btn" onclick="document.getElementById('romFileInput').click()">📁 浏览</button>
-                                <input type="file" id="romFileInput" accept=".gba,.gb,.gbc,.bin" style="display: none;" onchange="selectRomFile(this.files[0])">
-                            </div>
-                            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;">
-                                <input type="text" class="input" id="tfRomName" placeholder="未选择 TF ROM 文件（点击右侧按钮选择）" style="flex: 1; min-width: 200px;" readonly>
-                                <button class="btn" onclick="goSelectTfRom()">📂 去文件浏览选择</button>
-                                <button class="btn" onclick="clearTfRomSelection()">✕ 清空</button>
-                            </div>
                             <div style="display: flex; gap: 16px; flex-wrap: wrap;">
                                 <div class="setting-item" style="flex: 1; min-width: 150px;">
                                     <label class="setting-label">ROM 大小 (MiB)</label>
@@ -769,14 +680,6 @@
                             <h3 class="card-title">💾 存档文件</h3>
                         </div>
                         <div style="padding: 16px;">
-                            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
-                                <input type="text" class="input" id="savePath" placeholder="本地存档（可选，用于上传到TF）..." style="flex: 1; min-width: 200px;" readonly>
-                                <button class="btn" onclick="document.getElementById('saveFileInput').click()">📁 浏览</button>
-                                <input type="file" id="saveFileInput" accept=".sav" style="display: none;" onchange="selectSaveFile(this.files[0])">
-                            </div>
-                            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;">
-                                <input type="text" class="input" id="tfSaveName" placeholder="TF SAV 文件名（可选）" style="flex: 1; min-width: 200px;">
-                            </div>
                             <div style="display: flex; gap: 16px; flex-wrap: wrap;">
                                 <div class="setting-item" style="flex: 1; min-width: 150px;">
                                     <label class="setting-label">存档大小 (KiB)</label>
@@ -840,12 +743,13 @@
                                 <div class="status-value-large" id="burnSpeedMax">--</div>
                             </div>
                         </div>
-                        <div class="progress-container" style="margin-top: 16px;">
+                        <div class="progress-container" id="burnProgressContainer" style="margin-top: 16px;">
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">步骤提示</div>
                             <div class="progress-info">
                                 <span id="burnMessage">等待开始...</span>
                                 <span id="burnPercent">0%</span>
                             </div>
-                            <div class="progress-bar">
+                            <div class="progress-bar" id="burnProgressBarWrap">
                                 <div class="progress-fill" id="burnBar" style="width: 0%"></div>
                             </div>
                         </div>
@@ -873,6 +777,7 @@
             setWritePathMode(state.writePathMode || 'direct');
             setPsramWindowMb(state.psramWindowMb || 4);
             setMbc5ChunkKb(state.mbc5ChunkKb || 16);
+            setDumpChunkKb(state.dumpChunkKb || 64);
             setupBurnerDragDrop();
         }
 
@@ -996,6 +901,33 @@
             return kb;
         }
 
+        function setDumpChunkKb(value) {
+            let kb = parseInt(value, 10);
+            const prev = state.dumpChunkKb || 64;
+
+            if (!Number.isFinite(kb) || !ROM_DUMP_CHUNK_OPTIONS_KB.includes(kb)) {
+                kb = 64;
+            }
+            state.dumpChunkKb = kb;
+
+            const select = document.getElementById('dumpChunkKbSelect');
+            if (select && select.value !== String(kb)) {
+                select.value = String(kb);
+            }
+
+            if (prev !== kb) {
+                addBurnLog(`ROM 导出块大小已设为 ${kb}KB`, 'info');
+            }
+        }
+
+        function getDumpChunkKb() {
+            const kb = parseInt(state.dumpChunkKb, 10);
+            if (!Number.isFinite(kb) || !ROM_DUMP_CHUNK_OPTIONS_KB.includes(kb)) {
+                return 64;
+            }
+            return kb;
+        }
+
         function updateCartModeUI() {
             const gbaBtn = document.getElementById('modeGbaBtn');
             const mbc5Btn = document.getElementById('modeMbc5Btn');
@@ -1044,10 +976,12 @@
 
         function selectRomFile(file) {
             if (!file) return;
-            document.getElementById('romPath').value = file.name;
+            const romPathInput = document.getElementById('romPath');
+            if (romPathInput) romPathInput.value = file.name;
             state.romFile = file;
+            setSelectedTfRomPath(file.name);
             const tfRomInput = document.getElementById('tfRomName');
-            if (tfRomInput && !tfRomInput.value.trim()) {
+            if (tfRomInput) {
                 tfRomInput.value = file.name;
             }
             
@@ -1066,8 +1000,10 @@
 
         function selectSaveFile(file) {
             if (!file) return;
-            document.getElementById('savePath').value = file.name;
+            const savePathInput = document.getElementById('savePath');
+            if (savePathInput) savePathInput.value = file.name;
             state.saveFile = file;
+            setSelectedTfSavePath(file.name);
             
             const sizeKiB = file.size / 1024;
             document.getElementById('saveSize').value = Math.ceil(sizeKiB);
@@ -1090,6 +1026,7 @@
             const tfRomInput = document.getElementById('tfRomName');
             if (tfRomInput) tfRomInput.value = '';
             state.romFile = null;
+            setSelectedTfRomPath('');
             const romPathInput = document.getElementById('romPath');
             if (romPathInput) romPathInput.value = '';
             addBurnLog('已清空当前 ROM 选择', 'info');
@@ -1099,6 +1036,24 @@
             const raw = String(name || '').trim();
             if (!raw) return '';
             return raw.split(/[\\/]/).pop();
+        }
+
+        function getSelectedTfRomPath() {
+            return String(state.selectedTfRomPath || '').trim();
+        }
+
+        function setSelectedTfRomPath(path) {
+            state.selectedTfRomPath = String(path || '').trim();
+            return state.selectedTfRomPath;
+        }
+
+        function getSelectedTfSavePath() {
+            return String(state.selectedTfSavePath || '').trim();
+        }
+
+        function setSelectedTfSavePath(path) {
+            state.selectedTfSavePath = String(path || '').trim();
+            return state.selectedTfSavePath;
         }
 
         function getSelectedCartSlot() {
@@ -1248,6 +1203,160 @@
             showToast(text, 'warning');
         }
 
+        function logCartIdResponse(data, mode) {
+            addBurnLog('后端模式: ' + (data.mode || mode), 'info');
+            if (data.cmd_mode) {
+                addBurnLog(
+                    '命令地址模式: ' + data.cmd_mode,
+                    data.cmd_mode === 'byte' ? 'success' : 'info');
+            }
+            if (data.power && typeof data.power === 'object') {
+                addBurnLog(
+                    '供电状态: 5V=' + (data.power.v5 ? 'ON' : 'OFF') +
+                    ', 3.3V=' + (data.power.v3 ? 'ON' : 'OFF'),
+                    'info');
+            }
+            addBurnLog('卡带 ID: ' + (data.id || '未知'), 'success');
+            addBurnLog('芯片型号: ' + (data.chip || '未知'), 'success');
+            if (data.id_looks_like_rom_header) {
+                addBurnLog('警告: 返回值像普通 ROM 头，说明未进入 ID/CFI 命令模式', 'warning');
+            }
+            if (data.cfi_ok) {
+                addBurnLog('容量: ' + formatSize(data.device_size || 0), 'success');
+                addBurnLog(
+                    '扇区/缓冲: ' +
+                    String(Math.round((data.sector_size || 0) / 1024)) + ' KB / ' +
+                    String(data.buffer_write || 0),
+                    'info');
+            } else {
+                addBurnLog('CFI 读取失败，容量信息不可用', 'warning');
+            }
+        }
+
+        function getCartRomTitleReadConfig(mode) {
+            if (mode === 'mbc5') {
+                return {
+                    sampleAddr: 0x134,
+                    sampleLen: 32,
+                };
+            }
+
+            return {
+                sampleAddr: 0xA0,
+                sampleLen: 32,
+            };
+        }
+
+        function parseHexByteList(hexText) {
+            const text = String(hexText || '').trim();
+            if (!text) {
+                return [];
+            }
+
+            const parts = text.split(/\s+/);
+            const bytes = [];
+            for (const part of parts) {
+                if (!/^[0-9A-Fa-f]{2}$/.test(part)) {
+                    return [];
+                }
+                bytes.push(parseInt(part, 16));
+            }
+            return bytes;
+        }
+
+        function decodeCartAscii(bytes) {
+            const chars = [];
+
+            for (const value of bytes || []) {
+                const byte = Number(value) & 0xFF;
+                if (byte === 0x00 || byte === 0xFF) {
+                    break;
+                }
+                if (byte < 0x20 || byte > 0x7E) {
+                    return '';
+                }
+                chars.push(String.fromCharCode(byte));
+            }
+
+            return chars.join('').trim();
+        }
+
+        function parseCartRomTitleInfo(mode, data) {
+            const actualMode = String(data && data.mode || mode || 'gba').toLowerCase();
+            const bytes = parseHexByteList(data && data.sample_hex);
+            if (!data || !data.sample_ok || bytes.length === 0) {
+                throw new Error(String(data && data.sample_error || 'ROM 头读取失败'));
+            }
+
+            if (actualMode === 'mbc5') {
+                const cgbFlag = bytes[0x0F];
+                const titleLength = (cgbFlag === 0x80 || cgbFlag === 0xC0) ? 15 : 16;
+                const title = decodeCartAscii(bytes.slice(0, titleLength));
+                if (!title) {
+                    throw new Error('GB ROM 头里没有可识别标题');
+                }
+                return {
+                    mode: actualMode,
+                    title,
+                    code: '',
+                };
+            }
+
+            const title = decodeCartAscii(bytes.slice(0, 12));
+            const gameCode = decodeCartAscii(bytes.slice(12, 16));
+            if (!title) {
+                throw new Error('GBA ROM 头里没有可识别标题');
+            }
+            return {
+                mode: actualMode,
+                title,
+                code: gameCode,
+            };
+        }
+
+        async function readCartRomTitleInfo(mode) {
+            const config = getCartRomTitleReadConfig(mode);
+            const response = await apiCall(
+                '/api/cart/id_debug?mode=' +
+                encodeURIComponent(mode) +
+                '&sample_addr=' + encodeURIComponent(String(config.sampleAddr)) +
+                '&sample_len=' + encodeURIComponent(String(config.sampleLen)));
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+                throw new Error(data.message || ('HTTP ' + response.status));
+            }
+            return parseCartRomTitleInfo(mode, data);
+        }
+
+        function logCartRomTitleInfo(info) {
+            if (!info || !info.title) {
+                return;
+            }
+
+            addBurnLog('ROM 标题: ' + info.title, 'success');
+            if (info.code) {
+                addBurnLog('游戏代码: ' + info.code, 'info');
+            }
+        }
+
+        function logCartIdDebugSample(data) {
+            const addr = formatHexAddr32(Number(data && data.sample_addr || 0));
+            const len = Number(data && data.sample_len || 0);
+            const hex = String(data && data.sample_hex || '').trim();
+            const error = String(data && data.sample_error || '').trim();
+
+            if (data && data.sample_ok && hex) {
+                addBurnLog(`ROM 样本 @ ${addr} (${len} B): ${hex}`, 'info');
+                return;
+            }
+
+            if (error) {
+                addBurnLog(`ROM 样本读取失败 @ ${addr}: ${error}`, 'warning');
+            } else {
+                addBurnLog(`ROM 样本不可用 @ ${addr}`, 'warning');
+            }
+        }
+
         async function cartReadId() {
             const mode = state.cartMode || 'gba';
 
@@ -1261,29 +1370,50 @@
                     throw new Error(data.message || ('HTTP ' + response.status));
                 }
 
-                addBurnLog('后端模式: ' + (data.mode || mode), 'info');
-                if (data.power && typeof data.power === 'object') {
-                    addBurnLog(
-                        '供电状态: 5V=' + (data.power.v5 ? 'ON' : 'OFF') +
-                        ', 3.3V=' + (data.power.v3 ? 'ON' : 'OFF'),
-                        'info');
-                }
-                addBurnLog('卡带 ID: ' + (data.id || '未知'), 'success');
-                addBurnLog('芯片型号: ' + (data.chip || '未知'), 'success');
-                if (data.cfi_ok) {
-                    addBurnLog('容量: ' + formatSize(data.device_size || 0), 'success');
-                    addBurnLog(
-                        '扇区/缓冲: ' +
-                        String(Math.round((data.sector_size || 0) / 1024)) + ' KB / ' +
-                        String(data.buffer_write || 0),
-                        'info');
-                } else {
-                    addBurnLog('CFI 读取失败，容量信息不可用', 'warning');
+                logCartIdResponse(data, mode);
+                try {
+                    const titleInfo = await readCartRomTitleInfo(mode);
+                    logCartRomTitleInfo(titleInfo);
+                } catch (titleError) {
+                    addBurnLog('ROM 标题读取失败: ' + titleError.message, 'warning');
                 }
                 showToast('ID 读取成功', 'success');
             } catch (error) {
                 addBurnLog('读取失败: ' + error.message, 'error');
                 showToast('ID 读取失败', 'error');
+            }
+
+            hideBurnStatus();
+        }
+
+        async function cartReadIdDebug() {
+            const mode = state.cartMode || 'gba';
+
+            addBurnLog('正在调试读取卡带 ID + 内容...', 'info');
+            showBurnStatus('调试读 ID', '读取中...');
+
+            try {
+                const response = await apiCall(
+                    '/api/cart/id_debug?mode=' +
+                    encodeURIComponent(mode) +
+                    '&sample_addr=0&sample_len=32');
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.message || ('HTTP ' + response.status));
+                }
+
+                logCartIdResponse(data, mode);
+                try {
+                    const titleInfo = await readCartRomTitleInfo(mode);
+                    logCartRomTitleInfo(titleInfo);
+                } catch (titleError) {
+                    addBurnLog('ROM 标题读取失败: ' + titleError.message, 'warning');
+                }
+                logCartIdDebugSample(data);
+                showToast('ID+内容 读取成功', 'success');
+            } catch (error) {
+                addBurnLog('调试读取失败: ' + error.message, 'error');
+                showToast('ID+内容 读取失败', 'error');
             }
 
             hideBurnStatus();
@@ -1322,7 +1452,7 @@
             const psramMb = getPsramWindowMb();
             const mbc5ChunkKb = getMbc5ChunkKb();
             const tfRomInput = document.getElementById('tfRomName');
-            let tfRomName = String(tfRomInput ? tfRomInput.value : '').trim();
+            let tfRomName = String(tfRomInput ? tfRomInput.value : getSelectedTfRomPath()).trim();
 
             addBurnLog('准备烧录...', 'info');
             showBurnStatus('写入ROM', '准备中...');
@@ -1333,12 +1463,15 @@
                     addBurnLog('检测到本地 ROM，正在先上传到 TF...', 'info');
                     tfRomName = await uploadFileToTfForBurn(state.romFile, mode);
                     if (tfRomInput) tfRomInput.value = tfRomName;
+                    setSelectedTfRomPath(tfRomName);
                     addBurnLog('ROM 已上传到 TF: ' + tfRomName, 'success');
                 }
 
                 if (!tfRomName) {
                     throw new Error('请填写 TF ROM 文件名，或先选择本地 ROM 文件');
                 }
+
+                setSelectedTfRomPath(tfRomName);
 
                 let writeUrl =
                     `/api/write?name=${encodeURIComponent(tfRomName)}` +
@@ -1374,28 +1507,23 @@
         async function cartDumpRom() {
             const mode = state.cartMode || 'gba';
             const slot = getSelectedCartSlot();
+            const dumpChunkKb = getDumpChunkKb();
 
             const sizeMiB = parseInt(document.getElementById('romSize').value, 10) || 32;
-            const tfRomInput = document.getElementById('tfRomName');
-            const baseNameRaw =
-                getBaseName(tfRomInput ? tfRomInput.value : '') ||
-                (state.romFile ? state.romFile.name : 'cart');
-            const dumpBase = baseNameRaw.replace(/\.[^.]+$/, '') || 'cart';
-            const dumpExt = mode === 'gba' ? 'gba' : 'gb';
-            const dumpName = `${dumpBase}_${sizeMiB}M_dump.${dumpExt}`;
             const sizeArg = `${sizeMiB}M`;
             
             addBurnLog(
-                '开始导出 ROM (' + sizeMiB + ' MiB, mode=' + mode + ', slot=' + slot + ')...',
+                '开始导出 ROM (' + sizeMiB + ' MiB, mode=' + mode + ', slot=' + slot + ', chunk=' + dumpChunkKb + 'KB)...',
                 'info');
+            addBurnLog('文件名将按 ROM 标题 + 当前时间自动生成', 'info');
             showBurnStatus('导出ROM', '任务启动中...');
             
             try {
                 const readResult = await startTaskRequest(
-                    `/api/read?name=${encodeURIComponent(dumpName)}` +
-                    `&size=${encodeURIComponent(sizeArg)}` +
+                    `/api/read?size=${encodeURIComponent(sizeArg)}` +
                     `&mode=${encodeURIComponent(mode)}` +
-                    `&slot=${encodeURIComponent(slot)}`);
+                    `&slot=${encodeURIComponent(slot)}` +
+                    `&dump_chunk_kb=${encodeURIComponent(String(dumpChunkKb))}`);
                 const readResponse = readResult.response;
                 const data = readResult.data;
                 if (!readResponse.ok || !data.ok) {
@@ -1405,13 +1533,16 @@
                 state.activeBurnOperation = 'read';
                 state.pendingDumpRelPath = (typeof data.path === 'string' && data.path.length > 0)
                     ? data.path.replace(/^\/sdcard\//, '')
-                    : `ROM_OUTPUT/${dumpName}`;
-                state.pendingDumpName = state.pendingDumpRelPath.split('/').pop() || dumpName;
+                    : 'ROM_OUTPUT/';
+                state.pendingDumpName = state.pendingDumpRelPath.split('/').pop() || '';
                 state.pendingDumpAutoDownloaded = false;
                 state.lastBurnMessage = '';
 
-                addBurnLog('导出任务已启动: ' + state.pendingDumpName, 'success');
-                addBurnLog('任务完成后将自动下载到浏览器', 'info');
+                addBurnLog(
+                    '导出任务已启动: ' + (state.pendingDumpName || '将由固件自动按标题命名'),
+                    'success');
+                addBurnLog('导出块大小: ' + dumpChunkKb + 'KB', 'info');
+                addBurnLog('任务完成后文件将保存在 TF 卡中', 'info');
                 startBurnStatusPolling();
             } catch (error) {
                 addBurnLog('导出失败: ' + error.message, 'error');
@@ -1429,7 +1560,7 @@
             const mode = state.cartMode || 'gba';
             const slot = getSelectedCartSlot();
             const tfRomInput = document.getElementById('tfRomName');
-            let tfRomName = String(tfRomInput ? tfRomInput.value : '').trim();
+            let tfRomName = String(tfRomInput ? tfRomInput.value : getSelectedTfRomPath()).trim();
 
             addBurnLog('准备校验 ROM，模式=' + mode + ', slot=' + slot, 'info');
             showBurnStatus('校验ROM', '准备中...');
@@ -1440,12 +1571,15 @@
                     addBurnLog('检测到本地 ROM，正在先上传到 TF...', 'info');
                     tfRomName = await uploadFileToTfForBurn(state.romFile, mode);
                     if (tfRomInput) tfRomInput.value = tfRomName;
+                    setSelectedTfRomPath(tfRomName);
                     addBurnLog('ROM 已上传到 TF: ' + tfRomName, 'success');
                 }
 
                 if (!tfRomName) {
                     throw new Error('请填写 TF ROM 文件名，或先选择本地 ROM 文件');
                 }
+
+                setSelectedTfRomPath(tfRomName);
 
                 const verifyUrl =
                     `/api/verify?name=${encodeURIComponent(tfRomName)}` +
@@ -1478,7 +1612,7 @@
 
             const slot = getSelectedCartSlot();
             const tfSaveInput = document.getElementById('tfSaveName');
-            let tfSaveName = getBaseName(tfSaveInput ? tfSaveInput.value : '');
+            let tfSaveName = getBaseName(tfSaveInput ? tfSaveInput.value : getSelectedTfSavePath());
             const ramType = (document.getElementById('ramType')?.value || 'sram').toLowerCase();
             const ramLatency = parseInt(document.getElementById('ramLatency')?.value || '10', 10);
 
@@ -1492,12 +1626,15 @@
                     addBurnLog('检测到本地存档，正在先上传到 TF...', 'info');
                     tfSaveName = await uploadFileToTfForBurn(state.saveFile, mode);
                     if (tfSaveInput) tfSaveInput.value = tfSaveName;
+                    setSelectedTfSavePath(tfSaveName);
                     addBurnLog('存档已上传到 TF: ' + tfSaveName, 'success');
                 }
 
                 if (!tfSaveName) {
                     throw new Error('请填写 TF 存档文件名，或先选择本地存档文件');
                 }
+
+                setSelectedTfSavePath(tfSaveName);
 
                 const writeUrl =
                     `/api/ram/write?name=${encodeURIComponent(tfSaveName)}` +
@@ -1535,7 +1672,7 @@
             const ramType = (document.getElementById('ramType')?.value || 'sram').toLowerCase();
             const ramLatency = parseInt(document.getElementById('ramLatency')?.value || '10', 10);
             const tfSaveInput = document.getElementById('tfSaveName');
-            const base = getBaseName(tfSaveInput ? tfSaveInput.value : '').replace(/\.[^.]+$/, '') || 'cart_save';
+            const base = getBaseName(tfSaveInput ? tfSaveInput.value : getSelectedTfSavePath()).replace(/\.[^.]+$/, '') || 'cart_save';
             const dumpName = `${base}_${sizeKiB}K_dump.sav`;
             const sizeArg = `${sizeKiB}K`;
 
@@ -1561,8 +1698,9 @@
                 state.pendingDumpName = state.pendingDumpRelPath.split('/').pop() || dumpName;
                 state.pendingDumpAutoDownloaded = false;
                 state.lastBurnMessage = '';
+
                 addBurnLog('存档导出任务已启动: ' + state.pendingDumpName, 'success');
-                addBurnLog('任务完成后将自动下载到浏览器', 'info');
+                addBurnLog('任务完成后文件将保存在 TF 卡中', 'info');
                 startBurnStatusPolling();
             } catch (error) {
                 addBurnLog('导出存档失败: ' + error.message, 'error');
@@ -1580,7 +1718,7 @@
 
             const slot = getSelectedCartSlot();
             const tfSaveInput = document.getElementById('tfSaveName');
-            let tfSaveName = getBaseName(tfSaveInput ? tfSaveInput.value : '');
+            let tfSaveName = getBaseName(tfSaveInput ? tfSaveInput.value : getSelectedTfSavePath());
             const ramType = (document.getElementById('ramType')?.value || 'sram').toLowerCase();
             const ramLatency = parseInt(document.getElementById('ramLatency')?.value || '10', 10);
 
@@ -1592,12 +1730,15 @@
                     addBurnLog('检测到本地存档，正在先上传到 TF...', 'info');
                     tfSaveName = await uploadFileToTfForBurn(state.saveFile, mode);
                     if (tfSaveInput) tfSaveInput.value = tfSaveName;
+                    setSelectedTfSavePath(tfSaveName);
                     addBurnLog('存档已上传到 TF: ' + tfSaveName, 'success');
                 }
 
                 if (!tfSaveName) {
                     throw new Error('请填写 TF 存档文件名，或先选择本地存档文件');
                 }
+
+                setSelectedTfSavePath(tfSaveName);
 
                 const verifyUrl =
                     `/api/ram/verify?name=${encodeURIComponent(tfSaveName)}` +
@@ -1629,12 +1770,14 @@
             
             const stateEl = document.getElementById('burnState');
             if (stateEl) stateEl.textContent = status;
+            updateBurnProgress(0, status || '等待开始...');
             setBurnCancelUi(false);
         }
 
         function hideBurnStatus() {
             const card = document.getElementById('burnStatusCard');
             if (card) card.style.display = 'none';
+            updateBurnProgress(0, '等待开始...');
             setBurnCancelUi(false);
         }
 
@@ -1712,16 +1855,36 @@
             cancelBtn.textContent = isPending ? '取消中...' : '✕ 取消部署';
         }
 
-        function updateBurnProgress(percent, message) {
-            const bar = document.getElementById('burnBar');
-            const percentEl = document.getElementById('burnPercent');
-            const progressEl = document.getElementById('burnProgress');
-            const msgEl = document.getElementById('burnMessage');
-            
+        function updateProgressBar(barId, percentId, progressId, messageId, percent, message) {
+            const bar = document.getElementById(barId);
+            const percentEl = document.getElementById(percentId);
+            const progressEl = progressId ? document.getElementById(progressId) : null;
+            const msgEl = document.getElementById(messageId);
+
             if (bar) bar.style.width = percent + '%';
             if (percentEl) percentEl.textContent = percent + '%';
             if (progressEl) progressEl.textContent = percent + '%';
             if (msgEl) msgEl.textContent = message || '';
+        }
+
+        function updateBurnTotalProgress(percent, message) {
+            updateProgressBar('burnBar', 'burnPercent', 'burnProgress', 'burnMessage', percent, message);
+        }
+
+        function setBurnProgressBarVisible(visible) {
+            const barWrap = document.getElementById('burnProgressBarWrap');
+            const percentEl = document.getElementById('burnPercent');
+
+            if (barWrap) {
+                barWrap.style.display = visible ? '' : 'none';
+            }
+            if (percentEl && !visible) {
+                percentEl.textContent = '';
+            }
+        }
+
+        function updateBurnProgress(percent, message) {
+            updateBurnTotalProgress(percent, message);
         }
 
         function getBurnProgressPercent(data) {
@@ -1738,6 +1901,27 @@
                 return 0;
             }
             return Math.max(0, Math.min(100, Math.round(fallback)));
+        }
+
+        function getErasePhaseProgressPercent(data) {
+            const done = Number(data && data.erase_phase_done_sectors);
+            const total = Number(data && data.erase_phase_total_sectors);
+
+            if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+                return Math.max(0, Math.min(100, Math.round((done * 100) / total)));
+            }
+
+            return 0;
+        }
+
+        function getErasePhaseProgressMessage(data) {
+            const done = Number(data && data.erase_phase_done_sectors || 0);
+            const total = Number(data && data.erase_phase_total_sectors || 0);
+
+            if (total > 0) {
+                return `擦除进度: ${done}/${total} 扇区`;
+            }
+            return '擦除中...';
         }
 
         function getBurnRunningLogText(operation) {
@@ -1761,7 +1945,214 @@
             }
         }
 
+        function isVerifyOperation(operation) {
+            return operation === 'verify' || operation === 'ram_verify';
+        }
+
+        function isVerifyMismatchMessage(message) {
+            return /mismatch/i.test(String(message || '')) || /不一致/.test(String(message || ''));
+        }
+
+        function formatHexByte(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+                return '--';
+            }
+            return '0x' + Math.max(0, Math.min(255, Math.round(num))).toString(16).toUpperCase().padStart(2, '0');
+        }
+
+        function formatHexAddr32(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+                return '0x--------';
+            }
+            return '0x' + (Math.max(0, Math.floor(num)) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+        }
+
+        function getBurnStateText(dataState, operation) {
+            switch (dataState) {
+                case 'idle':
+                    return '空闲';
+                case 'receiving':
+                    return '接收中';
+                case 'burning':
+                    return isVerifyOperation(operation) ? '校验中' : getBurnRunningLogText(operation).replace(/\.+$/g, '');
+                case 'done':
+                    return isVerifyOperation(operation) ? '校验完成' : '完成';
+                case 'error':
+                    return isVerifyOperation(operation) ? '校验失败' : '错误';
+                case 'cancelled':
+                    return '已取消';
+                default:
+                    return dataState || '';
+            }
+        }
+
+        function getVerifyProgressMessage(operation, data, currentMessage) {
+            const noun = operation === 'ram_verify' ? '存档校验' : 'ROM校验';
+            const dataState = data && data.state;
+            const sampleValid = Boolean(data && data.verify_sample_valid);
+            const sampleEqual = Boolean(data && data.verify_sample_equal);
+            const sampleAddr = formatHexAddr32(data && data.verify_sample_addr);
+            const fileLabel = operation === 'ram_verify' ? 'SAV' : 'ROM';
+            const fileByte = formatHexByte(data && data.verify_sample_file_byte);
+            const cartByte = formatHexByte(data && data.verify_sample_cart_byte);
+            const compareOp = sampleEqual ? '=' : '!=';
+
+            if (sampleValid) {
+                const detail = `${sampleAddr} | ${fileLabel} ${fileByte} ${compareOp} 卡带 ${cartByte}`;
+
+                if (dataState === 'done') {
+                    return `${noun}完成，${detail}`;
+                }
+                if (dataState === 'error') {
+                    return `${noun}失败，${detail}`;
+                }
+                if (dataState === 'burning') {
+                    return `${noun}中，${detail}`;
+                }
+            }
+
+            if (dataState === 'error') {
+                return `${noun}失败`;
+            }
+            if (dataState === 'done') {
+                return `${noun}完成`;
+            }
+            if (dataState === 'cancelled') {
+                return `${noun}已取消`;
+            }
+            if (dataState === 'burning') {
+                return `${noun}中...`;
+            }
+            if (currentMessage) {
+                return currentMessage;
+            }
+            return `${noun}准备中...`;
+        }
+
+        function translateBurnMessage(message) {
+            const text = String(message || '').trim();
+            let translated = text;
+            const exactMap = new Map([
+                ['task started', '任务开始'],
+                ['burn task started', '烧录任务开始'],
+                ['burn task started (psram staging)', '烧录任务开始（PSRAM 暂存）'],
+                ['dump task started (direct)', '导出任务开始'],
+                ['verify task started', '校验任务开始'],
+                ['chip erase task started', '全片擦除任务开始'],
+                ['ram write task started', '存档写入任务开始'],
+                ['ram dump task started', '存档导出任务开始'],
+                ['ram verify task started', '存档校验任务开始'],
+                ['probing cart and preparing flash', '正在探测卡带并准备 Flash'],
+                ['probing gba cart and preparing flash', '正在探测 GBA 卡带并准备 Flash'],
+                ['cart prepare failed', '卡带准备失败'],
+                ['gba cart prepare failed', 'GBA 卡带准备失败'],
+                ['selected range exceeds flash size', '所选范围超出 Flash 容量'],
+                ['selected range exceeds gba flash size', '所选范围超出 GBA Flash 容量'],
+                ['open rom failed', '打开 ROM 文件失败'],
+                ['create tf reader failed', '创建 TF 读取器失败'],
+                ['no memory for write chunk', '写入缓冲分配失败'],
+                ['no memory for gba write chunk', 'GBA 写入缓冲分配失败'],
+                ['checking flash blank state', '正在检查 Flash 空白状态'],
+                ['checking gba flash blank state', '正在检查 GBA Flash 空白状态'],
+                ['read flash probe failed', '读取 Flash 探测数据失败'],
+                ['read gba flash probe failed', '读取 GBA Flash 探测数据失败'],
+                ['erasing flash sectors', '正在擦除 Flash 扇区'],
+                ['erasing gba flash sectors', '正在擦除 GBA Flash 扇区'],
+                ['erase flash failed', 'Flash 擦除失败'],
+                ['erase gba flash failed', 'GBA Flash 擦除失败'],
+                ['prefetch tf->psram failed', 'TF 预读到 PSRAM 失败'],
+                ['read tf failed', '读取 TF 失败'],
+                ['tf busy by usb host', 'TF 正被 USB 主机占用'],
+                ['program gba cart failed', 'GBA 卡带写入失败'],
+                ['psram->gba cart programmed', 'PSRAM -> GBA 卡带写入中'],
+                ['ram->gba cart programmed', '内存 -> GBA 卡带写入中'],
+                ['tf file shorter than expected', 'TF 文件长度比预期更短'],
+                ['probing cart for read', '正在探测卡带并准备导出'],
+                ['probing gba cart for read', '正在探测 GBA 卡带并准备导出'],
+                ['selected range has no gba cart data', '所选范围内没有 GBA 卡带数据'],
+                ['selected range clamped to gba flash size', '所选范围已裁剪到 GBA Flash 容量'],
+                ['cart->tf direct dumping', '正在从卡带直接导出到 TF'],
+                ['gba cart->tf direct dumping', '正在从 GBA 卡带直接导出到 TF'],
+                ['alloc direct dump buffer failed', '导出缓冲分配失败'],
+                ['read cart failed', '读取卡带失败'],
+                ['read gba cart failed', '读取 GBA 卡带失败'],
+                ['write dump file failed', '写入导出文件失败'],
+                ['probing cart for verify', '正在探测卡带并准备校验'],
+                ['probing gba cart for verify', '正在探测 GBA 卡带并准备校验'],
+                ['open verify file failed', '打开校验文件失败'],
+                ['no memory for verify cart chunk', '校验缓冲分配失败'],
+                ['no memory for gba verify', 'GBA 校验缓冲分配失败'],
+                ['read verify file failed', '读取校验文件失败'],
+                ['psram->cart verify running', 'PSRAM -> 卡带校验中'],
+                ['preparing cart ram write', '正在准备写入卡带存档'],
+                ['cart ram prepare failed', '卡带存档准备失败'],
+                ['open sav file failed', '打开存档文件失败'],
+                ['no memory for ram write', '存档写入缓冲分配失败'],
+                ['read sav file failed', '读取存档文件失败'],
+                ['write cart ram failed', '写入卡带存档失败'],
+                ['sav->cart ram writing', '正在写入存档到卡带'],
+                ['preparing cart ram dump', '正在准备导出卡带存档'],
+                ['open ram dump file failed', '打开存档导出文件失败'],
+                ['no memory for ram dump', '存档导出缓冲分配失败'],
+                ['read cart ram failed', '读取卡带存档失败'],
+                ['write ram dump failed', '写入存档导出文件失败'],
+                ['cart ram->tf dumping', '正在从卡带存档导出到 TF'],
+                ['preparing cart ram verify', '正在准备校验卡带存档'],
+                ['open sav verify file failed', '打开存档校验文件失败'],
+                ['no memory for ram verify', '存档校验缓冲分配失败'],
+                ['read sav verify file failed', '读取存档校验文件失败'],
+                ['cart ram verify running', '卡带存档校验中'],
+                ['force_no_cfi chip erase failed', 'force_no_cfi 全片擦除失败'],
+                ['gba sector geometry unavailable', 'GBA 扇区几何信息不可用'],
+                ['chip erase finished', '全片擦除完成'],
+                ['burn finished', '烧录完成'],
+                ['dump finished', '导出完成'],
+                ['verify finished', '校验完成'],
+                ['ram write finished', '存档写入完成'],
+                ['ram dump finished', '存档导出完成'],
+                ['ram verify finished', '存档校验完成'],
+                ['task finished', '任务完成'],
+                ['spi init failed', 'SPI 初始化失败'],
+                ['task cancelled', '任务已取消'],
+                ['task failed', '任务失败']
+            ]);
+
+            if (exactMap.has(translated)) {
+                return exactMap.get(translated);
+            }
+
+            const replaceRules = [
+                [/^copy tf->psram \((\d+)MB window\)$/i, '正在从 TF 读取到 PSRAM（$1MB 窗口）'],
+                [/^copy tf->psram \((\d+)MB verify window\)$/i, '正在从 TF 读取到 PSRAM（$1MB 校验窗口）'],
+                [/^copy tf->ram \(64KB chunk\)$/i, '正在从 TF 读取到内存（64KB 块）'],
+                [/^alloc (\d+)MB psram staging failed$/i, '分配 $1MB PSRAM 暂存缓冲失败'],
+                [/^alloc (\d+)MB psram verify staging failed$/i, '分配 $1MB PSRAM 校验缓冲失败'],
+                [/^erasing flash sectors \((\d+)MB\) \+ prefetch tf->psram$/i, '正在擦除 Flash 扇区并预读到 PSRAM（$1MB）'],
+                [/^erasing gba flash sectors \((\d+)MB\) \+ prefetch tf->psram$/i, '正在擦除 GBA Flash 扇区并预读到 PSRAM（$1MB）'],
+                [/^program cart failed @(.+)$/i, '卡带写入失败 @$1'],
+                [/^verify mismatch @(0x[0-9a-f]+) ([0-9a-f]{2})->([0-9a-f]{2})(.*)$/i, '校验不一致 @$1 $2->$3$4'],
+                [/^ram mismatch @(0x[0-9a-f]+) ([0-9a-f]{2})->([0-9a-f]{2})$/i, '存档不一致 @$1 $2->$3'],
+                [/^psram->cart verify \((\d+)KB chunk\)$/i, 'PSRAM -> 卡带校验中（$1KB 块）'],
+                [/^force_no_cfi: unknown sector, trying full chip erase$/i, 'force_no_cfi：扇区信息未知，尝试全片擦除'],
+                [/^psram->cart programmed$/i, 'PSRAM -> 卡带写入中']
+            ];
+
+            for (const [pattern, replacement] of replaceRules) {
+                if (pattern.test(translated)) {
+                    return translated.replace(pattern, replacement);
+                }
+            }
+
+            return translated;
+        }
+
         function getBurnProgressMessage(data, currentMessage) {
+            if (isVerifyOperation(state.activeBurnOperation)) {
+                return getVerifyProgressMessage(state.activeBurnOperation, data, currentMessage);
+            }
+
             if (currentMessage) {
                 return currentMessage;
             }
@@ -1833,6 +2224,33 @@
                 return sectorsPerSecond.toFixed(1) + ' 扇区/秒';
             }
             return sectorsPerSecond.toFixed(2) + ' 扇区/秒';
+        }
+
+        function getBurnResultLogText(operation, stateName, currentMessage) {
+            switch (operation) {
+                case 'verify':
+                    if (stateName === 'done') return 'ROM 校验成功，数据一致';
+                    if (stateName === 'error') {
+                        return isVerifyMismatchMessage(currentMessage)
+                            ? 'ROM 校验失败，数据不一致: ' + currentMessage
+                            : 'ROM 校验失败: ' + (currentMessage || '未知错误');
+                    }
+                    break;
+                case 'ram_verify':
+                    if (stateName === 'done') return '存档校验成功，数据一致';
+                    if (stateName === 'error') {
+                        return isVerifyMismatchMessage(currentMessage)
+                            ? '存档校验失败，数据不一致: ' + currentMessage
+                            : '存档校验失败: ' + (currentMessage || '未知错误');
+                    }
+                    break;
+                case 'write':
+                    if (stateName === 'done') return '烧录完成！';
+                    break;
+                default:
+                    break;
+            }
+            return '';
         }
 
         function addBurnDurationLog(data) {
@@ -2097,7 +2515,7 @@
                         <h3 class="card-title">📊 系统状态</h3>
                         <button class="btn btn-sm" onclick="refreshSystemInfo()">🔄 刷新</button>
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div class="system-status-grid">
                         <div class="status-card">
                             <div class="status-label">Wi-Fi 状态</div>
                             <div class="status-value-large" id="sysWifiStatus">--</div>
@@ -2111,8 +2529,31 @@
                             <div class="status-value-large" id="sysStorage">--</div>
                         </div>
                         <div class="status-card">
+                            <div class="status-label">TF 总容量</div>
+                            <div class="status-value-large" id="sysTfTotal" style="font-size: 18px;">--</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">TF 已用</div>
+                            <div class="status-value-large" id="sysTfUsed" style="font-size: 18px;">--</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">TF 剩余</div>
+                            <div class="status-value-large" id="sysTfFree" style="font-size: 18px;">--</div>
+                        </div>
+                        <div class="status-card">
                             <div class="status-label">USB 直通</div>
                             <div class="status-value-large" id="sysUsbMode">--</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">CPU 使用率</div>
+                            <div class="status-value-large" id="sysCpuUsage">--</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">系统分区容量</div>
+                            <div class="status-value-large" id="sysPartitionSize" style="font-size: 18px;">--</div>
+                            <div style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">
+                                运行分区: <span id="sysPartitionLabel">--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2121,10 +2562,57 @@
             `;
 
             refreshSystemInfo();
+            startSystemAutoRefresh();
+        }
+
+        function stopSystemAutoRefresh() {
+            if (state.systemRefreshTimer) {
+                clearInterval(state.systemRefreshTimer);
+                state.systemRefreshTimer = null;
+            }
+        }
+
+        function startSystemAutoRefresh() {
+            stopSystemAutoRefresh();
+            state.systemRefreshTimer = setInterval(() => {
+                if (state.currentPage === 'system') {
+                    refreshSystemInfo();
+                }
+            }, 3000);
+        }
+
+        function setSystemMetric(id, value, color) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value;
+            if (color) {
+                el.style.color = color;
+            } else {
+                el.style.removeProperty('color');
+            }
+        }
+
+        function parseDeviceInfoText(text) {
+            const source = String(text || '');
+            const take = (pattern) => {
+                const match = source.match(pattern);
+                return match && match[1] ? match[1].trim() : '';
+            };
+            return {
+                projectName: take(/Project name:\s*([^\r\n]+)/i),
+                firmware: take(/App version:\s*([^\r\n]+)/i),
+                cpuUsage: take(/CPU usage:\s*([^\r\n]+)/i),
+                partitionLabel: take(/Running partition:\s*([^\r\n]+)/i),
+                partitionSize: take(/Running partition size:\s*([^\r\n]+)/i)
+            };
         }
 
         async function refreshSystemInfo() {
             try {
+                if (state.currentPage !== 'system') {
+                    return;
+                }
+
                 const [powerReq, storageReq, wifiReq] = await Promise.allSettled([
                     fetch('/api/power/status'),
                     fetch('/api/storage/status'),
@@ -2134,36 +2622,67 @@
                 if (powerReq.status === 'fulfilled' && powerReq.value.ok) {
                     const powerData = await powerReq.value.json();
                     const batteryPercent = estimateBatteryPercent(powerData.ip5306);
-                    document.getElementById('sysBattery').textContent = batteryPercent + '%';
-                    document.getElementById('sysBatteryBar').style.width = batteryPercent + '%';
-                    document.getElementById('sysUptime').textContent = formatDuration(Math.floor(powerData.uptime_ms / 1000));
+                    const batteryEl = document.getElementById('sysBattery');
+                    const batteryBarEl = document.getElementById('sysBatteryBar');
+                    const uptimeEl = document.getElementById('sysUptime');
+                    const heapEl = document.getElementById('sysHeap');
+                    const heapBarEl = document.getElementById('sysHeapBar');
+
+                    if (batteryEl) batteryEl.textContent = batteryPercent + '%';
+                    if (batteryBarEl) batteryBarEl.style.width = batteryPercent + '%';
+                    if (uptimeEl) uptimeEl.textContent = formatDuration(Math.floor(powerData.uptime_ms / 1000));
 
                     const freeHeap = powerData.free_heap || 0;
                     const minFreeHeap = powerData.min_free_heap || 0;
                     const totalHeap = freeHeap + (minFreeHeap * 2);
-                    document.getElementById('sysHeap').textContent = formatSize(freeHeap);
-                    document.getElementById('sysHeapBar').style.width = totalHeap > 0 ? (freeHeap / totalHeap * 100) + '%' : '0%';
+                    if (heapEl) heapEl.textContent = formatSize(freeHeap);
+                    if (heapBarEl) heapBarEl.style.width = totalHeap > 0 ? (freeHeap / totalHeap * 100) + '%' : '0%';
                 }
 
                 if (storageReq.status === 'fulfilled' && storageReq.value.ok) {
                     const storageData = await storageReq.value.json();
                     const tfReady = !!(storageData.tf_ready ?? storageData.mounted);
-                    document.getElementById('sysUsbMode').textContent = storageData.usb_passthrough_enabled ? '已启用' : '已禁用';
-                    document.getElementById('sysUsbMode').style.color = storageData.usb_passthrough_enabled ? 'var(--accent-warning)' : 'var(--accent-success)';
-                    document.getElementById('sysStorage').textContent = tfReady ? '已挂载' : '未挂载';
-                    document.getElementById('sysStorage').style.color = tfReady ? 'var(--accent-success)' : 'var(--accent-danger)';
+                    const tfBusy = !!storageData.tf_busy;
+                    const tfCapacityOk = !!storageData.tf_capacity_ok;
+                    const tfTotalBytes = Number(storageData.tf_total_bytes || 0);
+                    const tfUsedBytes = Number(storageData.tf_used_bytes || 0);
+                    const tfFreeBytes = Number(storageData.tf_free_bytes || 0);
+
+                    setSystemMetric(
+                        'sysUsbMode',
+                        storageData.usb_passthrough_enabled ? '已启用' : '已禁用',
+                        storageData.usb_passthrough_enabled ? 'var(--accent-warning)' : 'var(--accent-success)'
+                    );
+                    setSystemMetric(
+                        'sysStorage',
+                        !tfReady ? '未挂载' : (tfBusy ? '主机占用' : '已挂载'),
+                        !tfReady ? 'var(--accent-danger)' : (tfBusy ? 'var(--accent-warning)' : 'var(--accent-success)')
+                    );
+                    setSystemMetric(
+                        'sysTfTotal',
+                        tfCapacityOk ? formatSize(tfTotalBytes) : '--',
+                        tfCapacityOk ? 'var(--text-primary)' : 'var(--text-secondary)'
+                    );
+                    setSystemMetric(
+                        'sysTfUsed',
+                        tfCapacityOk ? formatSize(tfUsedBytes) : '--',
+                        tfCapacityOk ? 'var(--accent-warning)' : 'var(--text-secondary)'
+                    );
+                    setSystemMetric(
+                        'sysTfFree',
+                        tfCapacityOk ? formatSize(tfFreeBytes) : '--',
+                        tfCapacityOk ? 'var(--accent-success)' : 'var(--text-secondary)'
+                    );
                 }
 
                 if (wifiReq.status === 'fulfilled' && wifiReq.value.ok) {
                     const wifiData = await wifiReq.value.json();
                     if (wifiData.connected) {
-                        document.getElementById('sysWifiStatus').textContent = '已连接';
-                        document.getElementById('sysWifiStatus').style.color = 'var(--accent-success)';
-                        document.getElementById('sysIpAddress').textContent = wifiData.ip || '--';
+                        setSystemMetric('sysWifiStatus', '已连接', 'var(--accent-success)');
+                        setSystemMetric('sysIpAddress', wifiData.ip || '--');
                     } else {
-                        document.getElementById('sysWifiStatus').textContent = '未连接';
-                        document.getElementById('sysWifiStatus').style.color = 'var(--accent-secondary)';
-                        document.getElementById('sysIpAddress').textContent = '--';
+                        setSystemMetric('sysWifiStatus', '未连接', 'var(--accent-secondary)');
+                        setSystemMetric('sysIpAddress', '--');
                     }
                 }
 
@@ -2172,23 +2691,58 @@
                     const deviceRes = await fetch('/api/device/info');
                     if (deviceRes.ok) {
                         const contentType = (deviceRes.headers.get('content-type') || '').toLowerCase();
+                        let projectName = '';
                         let firmware = '--';
+                        let cpuUsage = '--';
+                        let partitionLabel = '--';
+                        let partitionSize = '--';
 
                         if (contentType.includes('application/json')) {
                             const deviceData = await deviceRes.json();
+                            projectName = deviceData.project_name || deviceData.name || '';
                             firmware = deviceData.firmware_version || deviceData.app_version || '--';
+                            cpuUsage = deviceData.cpu_usage || '--';
+                            partitionLabel = deviceData.running_partition || '--';
+                            partitionSize = deviceData.running_partition_size || '--';
                         } else {
                             const text = await deviceRes.text();
-                            const m = text.match(/App version:\s*([^\r\n]+)/i);
-                            if (m && m[1]) {
-                                firmware = m[1].trim();
+                            const parsed = parseDeviceInfoText(text);
+                            if (parsed.projectName) {
+                                projectName = parsed.projectName;
+                            }
+                            if (parsed.firmware) {
+                                firmware = parsed.firmware;
+                            }
+                            if (parsed.cpuUsage) {
+                                cpuUsage = parsed.cpuUsage;
+                            }
+                            if (parsed.partitionLabel) {
+                                partitionLabel = parsed.partitionLabel;
+                            }
+                            if (parsed.partitionSize) {
+                                const sizeMatch = parsed.partitionSize.match(/\(([^)]+)\)/);
+                                partitionSize = sizeMatch && sizeMatch[1] ? sizeMatch[1].trim() : parsed.partitionSize;
                             }
                         }
 
-                        document.getElementById('sysFirmware').textContent = firmware || '--';
+                        if (projectName) {
+                            const deviceNameEl = document.getElementById('sysDeviceName');
+                            if (deviceNameEl) deviceNameEl.textContent = projectName;
+                        }
+                        setSystemMetric('sysFirmware', firmware || '--');
+                        setSystemMetric(
+                            'sysCpuUsage',
+                            cpuUsage || '--',
+                            cpuUsage && cpuUsage !== '--' && cpuUsage !== 'sampling...' ? 'var(--accent-success)' : 'var(--text-secondary)'
+                        );
+                        setSystemMetric('sysPartitionSize', partitionSize || '--');
+                        setSystemMetric('sysPartitionLabel', partitionLabel || '--');
                     }
                 } catch (e) {
-                    document.getElementById('sysFirmware').textContent = '--';
+                    setSystemMetric('sysFirmware', '--');
+                    setSystemMetric('sysCpuUsage', '--', 'var(--text-secondary)');
+                    setSystemMetric('sysPartitionSize', '--', 'var(--text-secondary)');
+                    setSystemMetric('sysPartitionLabel', '--');
                 }
             } catch (error) {
                 console.error('System info refresh failed:', error);
@@ -2302,14 +2856,11 @@
 
                 <div class="card animate-in">
                     <div class="card-header">
-                        <h3 class="card-title">⚡ Bacon SPI 频率</h3>
+                        <h3 class="card-title">⚡ Bacon SPI</h3>
                     </div>
                     <div style="padding: 16px;">
-                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">设置 ESP32 到 Bacon 的 SPI 频率。支持 20~80MHz，烧录任务运行中不可修改。</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">ESP32 到 Bacon 的 SPI 频率固定为 40 MHz。</p>
                         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                            <label for="baconSpiMhz" style="color: var(--text-secondary); font-size: 13px;">频率 (MHz)</label>
-                            <input type="number" id="baconSpiMhz" class="input" min="20" max="80" step="1" value="40" style="width: 140px;">
-                            <button class="btn btn-primary" onclick="applyBaconSpiClock()">✓ 应用</button>
                             <button class="btn" onclick="refreshBaconSpiClock()">🔄 刷新</button>
                         </div>
                         <div id="baconSpiStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px;">
@@ -2365,6 +2916,22 @@
 
                 <div class="card animate-in">
                     <div class="card-header">
+                        <h3 class="card-title">🔓 PPB 解锁</h3>
+                    </div>
+                    <div style="padding: 16px;">
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">调用 NOR 的 All PPB Erase 解锁扇区保护位。适合遇到擦除失败、怀疑受保护扇区时使用。</p>
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-warning" onclick="unlockCartPpb('gba')">🔓 GBA 解锁 PPB</button>
+                            <button class="btn btn-warning" onclick="unlockCartPpb('mbc5')">🔓 MBC5 解锁 PPB</button>
+                        </div>
+                        <div id="ppbUnlockStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap;">
+                            空闲
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="card-header">
                         <h3 class="card-title">🌐 语言设置</h3>
                     </div>
                     <div style="padding: 16px;">
@@ -2384,23 +2951,6 @@
 
                 <div class="card animate-in">
                     <div class="card-header">
-                        <h3 class="card-title">🔋 IP5306 配置</h3>
-                    </div>
-                    <div style="padding: 16px;">
-                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">读取或保存 IP5306 电源管理芯片的 INI 配置文件。</p>
-                        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-                            <button class="btn" onclick="loadIp5306Ini()">📖 读取配置</button>
-                            <button class="btn btn-primary" onclick="saveIp5306Ini()">💾 保存配置</button>
-                        </div>
-                        <textarea id="ip5306IniContent" class="input" style="width: 100%; min-height: 200px; font-family: 'Consolas', monospace; font-size: 13px; resize: vertical;" placeholder="点击读取配置..."></textarea>
-                        <div id="ip5306Status" style="margin-top: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px;">
-                            空闲
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card animate-in">
-                    <div class="card-header">
                         <h3 class="card-title">📱 设备信息</h3>
                     </div>
                     <div id="deviceInfo">
@@ -2410,44 +2960,6 @@
                     </div>
                 </div>
 
-                <div class="card animate-in">
-                    <h3 class="card-title" style="margin-bottom: 20px;">🔧 MCU 探测设置</h3>
-                    <div class="settings-grid">
-                        <div class="setting-item">
-                            <label class="setting-label">序列模式 (seq)</label>
-                            <select class="input" id="mcuSeq">
-                                <option value="auto">自动 (auto)</option>
-                                <option value="std">标准 (std)</option>
-                                <option value="alt">备用 (alt)</option>
-                            </select>
-                            <span class="setting-desc">SWD 序列生成模式</span>
-                        </div>
-                        <div class="setting-item">
-                            <label class="setting-label">延迟 (delay)</label>
-                            <input type="number" class="input" id="mcuDelay" value="8" min="0" max="100">
-                            <span class="setting-desc">微秒级延迟 (0-100)</span>
-                        </div>
-                        <div class="setting-item">
-                            <label class="setting-label">不复位 (norst)</label>
-                            <select class="input" id="mcuNorst">
-                                <option value="false">否</option>
-                                <option value="true">是</option>
-                            </select>
-                            <span class="setting-desc">跳过复位序列</span>
-                        </div>
-                        <div class="setting-item">
-                            <label class="setting-label">交换 CLK/DIO (swap)</label>
-                            <select class="input" id="mcuSwap">
-                                <option value="false">否</option>
-                                <option value="true">是</option>
-                            </select>
-                            <span class="setting-desc">交换时钟和数据线</span>
-                        </div>
-                    </div>
-                    <div style="margin-top: 24px;">
-                        <button class="btn btn-primary" onclick="probeMCUWithParams()">🔍 执行探测</button>
-                    </div>
-                </div>
             `;
 
             loadDeviceInfo();
@@ -2517,7 +3029,7 @@
                 const data = await response.json();
                 
                 if (data.ok) {
-                    renderFileList(data.entries);
+                    renderFileList(data.entries, data.server_time);
                 } else {
                     throw new Error(data.message || '加载失败');
                 }
@@ -2534,7 +3046,7 @@
             }
         }
 
-        function renderFileList(entries) {
+        function renderFileList(entries, serverTimeSeconds = 0) {
             const list = document.getElementById('fileList');
             
             if (entries.length === 0) {
@@ -2555,9 +3067,9 @@
             list.innerHTML = entries.map(entry => `
                 <div class="file-item" data-path="${entry.path}" data-is-dir="${entry.is_dir}" data-name="${entry.name}" data-size="${entry.size}" onclick="handleFileClick(this, event)">
                     <div class="file-icon">${entry.is_dir ? '📁' : getFileIcon(entry.name)}</div>
-                    <div class="file-name" title="${entry.name}">${entry.name}</div>
+                    <div class="file-name" title="${entry.name}"><span class="file-name-text">${entry.name}</span></div>
                     <div class="file-size">${entry.is_dir ? '--' : formatSize(entry.size)}</div>
-                    <div class="file-date">--</div>
+                    <div class="file-date">${formatFileModifiedTime(entry.mtime, serverTimeSeconds)}</div>
                     <div class="file-actions" onclick="event.stopPropagation()">
                         ${entry.is_dir ? '' : `<button class="btn" onclick="downloadFile('${entry.path}')">⬇️</button>`}
                         <button class="btn" onclick="showRenameModal('${entry.path}')">✏️</button>
@@ -2565,6 +3077,30 @@
                     </div>
                 </div>
             `).join('');
+
+            requestAnimationFrame(updateFileNameMarquee);
+        }
+
+        function updateFileNameMarquee() {
+            document.querySelectorAll('#fileList .file-name').forEach(nameEl => {
+                const textEl = nameEl.querySelector('.file-name-text');
+                if (!textEl) return;
+
+                nameEl.classList.remove('is-overflowing');
+                textEl.style.removeProperty('--scroll-distance');
+                textEl.style.removeProperty('--scroll-duration');
+
+                if (window.innerWidth > 640) {
+                    return;
+                }
+
+                const overflow = Math.ceil(textEl.scrollWidth - nameEl.clientWidth);
+                if (overflow > 8) {
+                    nameEl.classList.add('is-overflowing');
+                    textEl.style.setProperty('--scroll-distance', `${overflow}px`);
+                    textEl.style.setProperty('--scroll-duration', `${Math.max(4, Math.min(10, overflow / 18))}s`);
+                }
+            });
         }
 
         function handleFileClick(element, event) {
@@ -3307,27 +3843,55 @@
 
         function showFileActionModal(filename, size, path) {
             state.selectedFile = { filename, size, path };
-            const ext = filename.split('.').pop().toLowerCase();
-            const mode = ext === 'gba' ? 'gba' : 'mbc5';
 
             document.getElementById('fileActionName').textContent = filename;
-            document.getElementById('fileActionInfo').textContent = `${formatSize(size)} • 准备烧录到卡带`;
+            document.getElementById('fileActionInfo').textContent =
+                `${formatSize(size)} • 默认 7MB PSRAM 流水烧录，可直接校验`;
             document.getElementById('fileActionIcon').textContent = getFileIcon(filename);
             const writePathSelect = document.getElementById('fileActionWritePathSelect');
             if (writePathSelect) {
-                writePathSelect.value = getEffectiveWritePath(mode, state.writePathMode || 'direct');
+                writePathSelect.value = 'psram';
             }
             const psramMbSelect = document.getElementById('fileActionPsramMbSelect');
             if (psramMbSelect) {
-                psramMbSelect.value = String(getPsramWindowMb());
+                psramMbSelect.value = '7';
+                psramMbSelect.disabled = false;
             }
-            updateWritePathControls(mode);
             document.getElementById('fileActionModal').classList.add('active');
         }
 
         function closeFileActionModal() {
             document.getElementById('fileActionModal').classList.remove('active');
             state.selectedFile = null;
+        }
+
+        function prepareSelectedTfRomForBurner(fileEntry) {
+            const filename = String(fileEntry && fileEntry.filename ? fileEntry.filename : '').trim();
+            const path = String(fileEntry && fileEntry.path ? fileEntry.path : '').trim();
+            const ext = filename.split('.').pop().toLowerCase();
+            const mode = ext === 'gba' ? 'gba' : 'mbc5';
+            const selectedTfPath = path || filename;
+
+            setSelectedTfRomPath(selectedTfPath);
+            state.romFile = null;
+            window.location.hash = '#/burner';
+
+            return { mode, selectedTfPath };
+        }
+
+        function focusBurnerOnSelectedTfRom(mode, selectedTfPath) {
+            setCartMode(mode);
+            const tfRomInput = document.getElementById('tfRomName');
+            if (tfRomInput) tfRomInput.value = selectedTfPath;
+            const romPathInput = document.getElementById('romPath');
+            if (romPathInput) romPathInput.value = '';
+
+            const burnStatusCard = document.getElementById('burnStatusCard');
+            if (burnStatusCard) {
+                burnStatusCard.style.display = 'block';
+            }
+
+            addBurnLog('已选中 TF ROM: ' + selectedTfPath, 'info');
         }
 
         async function confirmBurn() {
@@ -3341,34 +3905,39 @@
                 setPsramWindowMb(psramMbSelect.value);
             }
             closeFileActionModal();
-            const { filename, path } = fileToBurn;
-            const ext = filename.split('.').pop().toLowerCase();
-            const mode = ext === 'gba' ? 'gba' : 'mbc5';
+            const { mode, selectedTfPath } = prepareSelectedTfRomForBurner(fileToBurn);
             const selectedWritePath = getEffectiveWritePath(mode, requestedWritePath);
 
-            window.location.hash = '#/burner';
-
             setTimeout(async () => {
-                setCartMode(mode);
+                focusBurnerOnSelectedTfRom(mode, selectedTfPath);
                 setWritePathMode(selectedWritePath);
-                const tfRomInput = document.getElementById('tfRomName');
-                if (tfRomInput) tfRomInput.value = path || filename;
-                state.romFile = null;
-                const romPathInput = document.getElementById('romPath');
-                if (romPathInput) romPathInput.value = '';
-
                 addBurnLog('准备烧录...', 'info');
-
-                const burnStatusCard = document.getElementById('burnStatusCard');
-                if (burnStatusCard) {
-                    burnStatusCard.style.display = 'block';
-                }
 
                 try {
                     await cartWriteRom();
                 } catch (error) {
                     addBurnLog('烧录失败: ' + error.message, 'error');
                     showToast('烧录失败: ' + error.message, 'error');
+                }
+            }, 100);
+        }
+
+        async function confirmVerify() {
+            if (!state.selectedFile) return;
+
+            const fileToVerify = { ...state.selectedFile };
+            closeFileActionModal();
+            const { mode, selectedTfPath } = prepareSelectedTfRomForBurner(fileToVerify);
+
+            setTimeout(async () => {
+                focusBurnerOnSelectedTfRom(mode, selectedTfPath);
+                addBurnLog('准备校验...', 'info');
+
+                try {
+                    await cartVerifyRom();
+                } catch (error) {
+                    addBurnLog('校验失败: ' + error.message, 'error');
+                    showToast('校验失败: ' + error.message, 'error');
                 }
             }, 100);
         }
@@ -3450,6 +4019,7 @@
                 });
 
                 if (tfRomInput) tfRomInput.value = tfName;
+                setSelectedTfRomPath(tfName);
                 if (status) status.textContent = autoStart ? '上传完成，启动烧录...' : '上传完成';
                 addBurnLog('文件已上传到 TF: ' + tfName, 'success');
 
@@ -3879,22 +4449,47 @@
         function updateBurnStatus(data) {
             const prevState = state.burnStatus ? state.burnStatus.state : null;
             state.burnStatus = data;
-            const currentMessage = data.message || '';
+            const activeOperation = state.activeBurnOperation;
+            const currentMessage = translateBurnMessage(data.message || '');
             const progressPercent = getBurnProgressPercent(data);
             const progressMessage = getBurnProgressMessage(data, currentMessage);
-            const primarySpeedLabel = getBurnPrimarySpeedLabel(state.activeBurnOperation);
+            const eraseActive = Boolean(data.erase_active);
+            const erasePhaseDoneSectors = Number(data.erase_phase_done_sectors || 0);
+            const erasePhaseTotalSectors = Number(data.erase_phase_total_sectors || 0);
+            const erasePhasePercent = getErasePhaseProgressPercent(data);
+            const displayErasePhaseOnMainBar =
+                erasePhaseTotalSectors > 0 &&
+                erasePhaseDoneSectors < erasePhaseTotalSectors;
+            const primarySpeedLabel = getBurnPrimarySpeedLabel(activeOperation);
             const speedCurrent = Number(data.speed_current_bps || 0);
             const speedAvg = Number(data.speed_avg_bps || 0);
             const speedMin = Number(data.speed_min_bps || 0);
             const speedMax = Number(data.speed_max_bps || 0);
+            const taskTimeMs = Number(data.task_time_ms || 0);
             const eraseTimeMs = Number(data.erase_time_ms || 0);
             const writeTimeMs = Number(data.write_time_ms || 0);
             const eraseSectorCount = Number(data.erase_sector_count || 0);
-            const totalDurationText = getBurnTotalDurationText(data);
+            const effectiveEraseSectorCount =
+                eraseSectorCount + ((eraseActive || displayErasePhaseOnMainBar) ? erasePhaseDoneSectors : 0);
+            const totalDurationText = taskTimeMs > 0 ? formatTaskTimeMs(taskTimeMs) : getBurnTotalDurationText(data);
             const tfToPsramSpeedCurrent = Number(data.tf_to_psram_speed_current_bps || 0);
             const tfToPsramSpeedAvg = Number(data.tf_to_psram_speed_avg_bps || 0);
             const tfToPsramSpeedMin = Number(data.tf_to_psram_speed_min_bps || 0);
             const tfToPsramSpeedMax = Number(data.tf_to_psram_speed_max_bps || 0);
+            const dumpReadTimeMs = Number(data.dump_read_time_ms || 0);
+            const dumpWriteTimeMs = Number(data.dump_write_time_ms || 0);
+            const dumpWaitTimeMs = Number(data.dump_wait_time_ms || 0);
+            const dumpFinalizeTimeMs = Number(data.dump_finalize_time_ms || 0);
+            const dumpReadSpeedCurrent = Number(data.dump_read_speed_current_bps || 0);
+            const dumpReadSpeedAvg = Number(data.dump_read_speed_avg_bps || 0);
+            const dumpReadSpeedMin = Number(data.dump_read_speed_min_bps || 0);
+            const dumpReadSpeedMax = Number(data.dump_read_speed_max_bps || 0);
+            const dumpWriteSpeedCurrent = Number(data.dump_write_speed_current_bps || 0);
+            const dumpWriteSpeedAvg = Number(data.dump_write_speed_avg_bps || 0);
+            const dumpWriteSpeedMin = Number(data.dump_write_speed_min_bps || 0);
+            const dumpWriteSpeedMax = Number(data.dump_write_speed_max_bps || 0);
+            const spiConfiguredHz = Number(data.spi_configured_hz || 0);
+            const spiActualHz = Number(data.spi_actual_hz || spiConfiguredHz || 0);
             const mbc5BufferWriteOkCount = Number(data.mbc5_buffer_write_ok_count || 0);
             const mbc5BufferFallbackCount = Number(data.mbc5_buffer_fallback_count || 0);
             const mbc5BufferTotalCount = mbc5BufferWriteOkCount + mbc5BufferFallbackCount;
@@ -3909,10 +4504,38 @@
             const tfToPsramSpeedAvgText = tfToPsramSpeedAvg > 0 ? formatSpeed(tfToPsramSpeedAvg) : '--';
             const tfToPsramSpeedMinText = tfToPsramSpeedMin > 0 ? formatSpeed(tfToPsramSpeedMin) : '--';
             const tfToPsramSpeedMaxText = tfToPsramSpeedMax > 0 ? formatSpeed(tfToPsramSpeedMax) : '--';
-            const eraseTimeText = eraseTimeMs > 0 ? formatDuration(eraseTimeMs / 1000) : '--';
-            const eraseSpeedText = formatEraseSpeedText(eraseSectorCount, eraseTimeMs);
-            const writeTimeText = writeTimeMs > 0 ? formatDuration(writeTimeMs / 1000) : '--';
+            const dumpReadSpeedCurrentText = dumpReadSpeedCurrent > 0 ? formatSpeed(dumpReadSpeedCurrent) : '--';
+            const dumpReadSpeedAvgText = dumpReadSpeedAvg > 0 ? formatSpeed(dumpReadSpeedAvg) : '--';
+            const dumpReadSpeedMinText = dumpReadSpeedMin > 0 ? formatSpeed(dumpReadSpeedMin) : '--';
+            const dumpReadSpeedMaxText = dumpReadSpeedMax > 0 ? formatSpeed(dumpReadSpeedMax) : '--';
+            const dumpWriteSpeedCurrentText = dumpWriteSpeedCurrent > 0 ? formatSpeed(dumpWriteSpeedCurrent) : '--';
+            const dumpWriteSpeedAvgText = dumpWriteSpeedAvg > 0 ? formatSpeed(dumpWriteSpeedAvg) : '--';
+            const dumpWriteSpeedMinText = dumpWriteSpeedMin > 0 ? formatSpeed(dumpWriteSpeedMin) : '--';
+            const dumpWriteSpeedMaxText = dumpWriteSpeedMax > 0 ? formatSpeed(dumpWriteSpeedMax) : '--';
+            const spiClockText = spiActualHz > 0 ? `${(spiActualHz / 1000000).toFixed(spiActualHz % 1000000 === 0 ? 0 : 1)} MHz` : '--';
+            const spiRequestedText =
+                spiConfiguredHz > 0 && spiConfiguredHz !== spiActualHz
+                    ? ` (请求 ${(spiConfiguredHz / 1000000).toFixed(spiConfiguredHz % 1000000 === 0 ? 0 : 1)} MHz)`
+                    : '';
+            const eraseTimeText = eraseTimeMs > 0 ? formatTaskTimeMs(eraseTimeMs) : '--';
+            const eraseSpeedText = formatEraseSpeedText(effectiveEraseSectorCount, eraseTimeMs);
+            const writeTimeText = writeTimeMs > 0 ? formatTaskTimeMs(writeTimeMs) : '--';
+            const dumpReadTimeText = dumpReadTimeMs > 0 ? formatTaskTimeMs(dumpReadTimeMs) : '--';
+            const dumpWriteTimeText = dumpWriteTimeMs > 0 ? formatTaskTimeMs(dumpWriteTimeMs) : '--';
+            const dumpWaitTimeText = dumpWaitTimeMs > 0 ? formatTaskTimeMs(dumpWaitTimeMs) : '--';
+            const dumpFinalizeTimeText = dumpFinalizeTimeMs > 0 ? formatTaskTimeMs(dumpFinalizeTimeMs) : '--';
             const cancelRequested = Boolean(data.cancel_requested);
+            let displayProgressPercent = progressPercent;
+            let displayProgressMessage = progressMessage;
+
+            if (activeOperation === 'erase' && erasePhaseTotalSectors > 0) {
+                displayProgressPercent = erasePhasePercent;
+                displayProgressMessage = currentMessage || getErasePhaseProgressMessage(data);
+            }
+            if (displayErasePhaseOnMainBar) {
+                displayProgressPercent = erasePhasePercent;
+                displayProgressMessage = currentMessage || getErasePhaseProgressMessage(data);
+            }
 
             const stateMap = {
                 idle: '空闲',
@@ -3940,9 +4563,10 @@
                     <div class="status-card">
                         <div class="status-label">任务概览</div>
                         <div class="status-value-large" style="font-size: 14px; line-height: 1.6; word-break: break-all;">
-                            状态: <span style="color: ${stateColors[data.state] || 'inherit'}">${stateMap[data.state] || data.state}</span><br>
+                            状态: <span style="color: ${stateColors[data.state] || 'inherit'}">${getBurnStateText(data.state, activeOperation)}</span><br>
                             烧录文件: ${data.rom || '--'}<br>
-                            已处理 / 总计: ${formatSize(data.processed || 0)} / ${formatSize(data.total || 0)}
+                            已处理 / 总计: ${formatSize(data.processed || 0)} / ${formatSize(data.total || 0)}<br>
+                            Bacon SPI: ${spiClockText}${spiRequestedText}
                         </div>
                     </div>
                     <div class="status-card">
@@ -3964,9 +4588,31 @@
                         </div>
                     </div>
                     <div class="status-card">
+                        <div class="status-label">卡带读取</div>
+                        <div class="status-value-large" style="font-size: 14px; line-height: 1.6;">
+                            当前: ${dumpReadSpeedCurrentText}<br>
+                            平均: ${dumpReadSpeedAvgText}<br>
+                            最低: ${dumpReadSpeedMinText}<br>
+                            最高: ${dumpReadSpeedMaxText}
+                        </div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">TF 写入</div>
+                        <div class="status-value-large" style="font-size: 14px; line-height: 1.6;">
+                            当前: ${dumpWriteSpeedCurrentText}<br>
+                            平均: ${dumpWriteSpeedAvgText}<br>
+                            最低: ${dumpWriteSpeedMinText}<br>
+                            最高: ${dumpWriteSpeedMaxText}
+                        </div>
+                    </div>
+                    <div class="status-card">
                         <div class="status-label">耗时统计</div>
                         <div class="status-value-large" style="font-size: 14px; line-height: 1.6;">
                             总耗时: ${totalDurationText}<br>
+                            卡带读取耗时: ${dumpReadTimeText}<br>
+                            TF写入耗时: ${dumpWriteTimeText}<br>
+                            等待落盘: ${dumpWaitTimeText}<br>
+                            收尾耗时: ${dumpFinalizeTimeText}<br>
                             擦除耗时: ${eraseTimeText}<br>
                             写入耗时: ${writeTimeText}<br>
                             擦除速度: ${eraseSpeedText}
@@ -3985,22 +4631,22 @@
                 `;
             }
 
-            updateBurnProgress(progressPercent, progressMessage);
+            updateBurnProgress(
+                displayProgressPercent,
+                displayProgressMessage);
+            setBurnProgressBarVisible(!(eraseActive || displayErasePhaseOnMainBar || activeOperation === 'erase'));
 
             if (data.state === 'done' && prevState !== 'done') {
-                if (state.activeBurnOperation === 'read' || state.activeBurnOperation === 'ram_read') {
-                    const dumpName = state.pendingDumpName || data.rom || 'dump.gba';
+                if (activeOperation === 'read' || activeOperation === 'ram_read') {
+                    const dumpName = state.pendingDumpName || data.rom || 'dump.bin';
+                    const dumpPath = state.pendingDumpRelPath || dumpName;
                     addBurnLog('导出完成: ' + dumpName, 'success');
-                    showToast('导出完成', 'success');
-
-                    if (!state.pendingDumpAutoDownloaded && state.pendingDumpRelPath) {
-                        state.pendingDumpAutoDownloaded = true;
-                        downloadFile(state.pendingDumpRelPath);
-                        addBurnLog('已自动下载: ' + state.pendingDumpRelPath, 'info');
-                    }
+                    addBurnLog('已保存到 TF: ' + dumpPath, 'info');
+                    showToast('导出已保存到 TF', 'success');
                 } else {
-                    addBurnLog('烧录完成！', 'success');
-                    showToast('烧录完成！', 'success');
+                    const doneLogText = getBurnResultLogText(activeOperation, 'done', currentMessage) || '任务完成';
+                    addBurnLog(doneLogText, 'success');
+                    showToast(doneLogText, 'success');
                 }
                 addBurnDurationLog(data);
                 state.activeBurnOperation = null;
@@ -4018,9 +4664,10 @@
                 state.pendingDumpAutoDownloaded = false;
                 setBurnCancelUi(false);
             } else if (data.state === 'error' && prevState !== 'error') {
-                addBurnLog('任务错误: ' + currentMessage, 'error');
+                const errorLogText = getBurnResultLogText(activeOperation, 'error', currentMessage) || ('任务错误: ' + currentMessage);
+                addBurnLog(errorLogText, 'error');
                 addBurnDurationLog(data);
-                showToast('任务失败: ' + currentMessage, 'error');
+                showToast(errorLogText, 'error');
                 state.activeBurnOperation = null;
                 state.pendingDumpRelPath = '';
                 state.pendingDumpName = '';
@@ -4045,73 +4692,6 @@
 
             while (log.children.length > 100) {
                 log.removeChild(log.lastChild);
-            }
-        }
-
-        async function probeMCUWithParams() {
-            const params = new URLSearchParams();
-            params.append('seq', document.getElementById('mcuSeq').value);
-            params.append('delay', document.getElementById('mcuDelay').value);
-            params.append('norst', document.getElementById('mcuNorst').value);
-            params.append('swap', document.getElementById('mcuSwap').value);
-
-            try {
-                const response = await fetch(`/api/mcu/probe?${params.toString()}`);
-                const data = await response.json();
-
-                if (data.ok) {
-                    renderMCUInfo(data);
-                    showToast('探测成功', 'success');
-                } else {
-                    showToast('探测失败', 'error');
-                }
-            } catch (error) {
-                showToast('探测错误: ' + error.message, 'error');
-            }
-        }
-
-        function renderMCUInfo(data) {
-            const html = `
-                <div class="burn-status">
-                    <div class="status-card">
-                        <div class="status-label">状态</div>
-                        <div class="status-value-large" style="color: ${data.status === 'ok' ? 'var(--accent-success)' : 'var(--accent-secondary)'}">
-                            ${data.status.toUpperCase()}
-                        </div>
-                    </div>
-                    <div class="status-card">
-                        <div class="status-label">IDCODE</div>
-                        <div class="status-value-large" style="font-family: monospace; font-size: 18px;">
-                            ${data.idcode}
-                        </div>
-                    </div>
-                    <div class="status-card">
-                        <div class="status-label">ACK</div>
-                        <div class="status-value-large">${data.ack}</div>
-                    </div>
-                    <div class="status-card">
-                        <div class="status-label">校验</div>
-                        <div class="status-value-large" style="color: ${data.parity_ok ? 'var(--accent-success)' : 'var(--accent-secondary)'}">
-                            ${data.parity_ok ? '✓' : '✗'}
-                        </div>
-                    </div>
-                </div>
-                <div style="margin-top: 16px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.6;">
-                    <div>序列模式: ${data.seq_mode} (${data.seq_used})</div>
-                    <div>延迟: ${data.delay_us}μs</div>
-                    <div>复位: ${data.do_reset ? '是' : '否'}</div>
-                    <div>交换 CLK/DIO: ${data.swap_clk_dio ? '是' : '否'}</div>
-                    <div>周转周期: ${data.turnaround_cycles}</div>
-                    <div>SWDIO 上拉: ${data.swdio_pull_mode}</div>
-                    <div>尝试次数: ${data.attempt_count}</div>
-                </div>
-            `;
-
-            const container = document.getElementById('cartInfo');
-            if (container) {
-                container.innerHTML = html;
-            } else {
-                showModal('MCU 探测结果', html);
             }
         }
 
@@ -4429,21 +5009,24 @@
         function formatBaconSpiStatusLines(data) {
             const configuredHz = Number(data && data.configured_hz) || 0;
             const actualHz = Number(data && data.actual_hz) || 0;
-            const minHz = Number(data && data.min_hz) || 20000000;
-            const maxHz = Number(data && data.max_hz) || 80000000;
             const configuredMhz = configuredHz > 0 ? (configuredHz / 1000000).toFixed(2) : '--';
             const actualMhz = actualHz > 0 ? (actualHz / 1000000).toFixed(2) : '--';
-            return [
-                `配置频率: ${configuredHz} Hz (${configuredMhz} MHz)`,
+            const lines = [
+                `固定频率: ${configuredHz} Hz (${configuredMhz} MHz)`,
                 `实际频率: ${actualHz} Hz (${actualMhz} MHz)`,
-                `可设置范围: ${(minHz / 1000000).toFixed(0)}~${(maxHz / 1000000).toFixed(0)} MHz`
-            ].join('\n');
+                '模式: 固定 40 MHz'
+            ];
+
+            if (configuredHz > 0 && actualHz > 0 && configuredHz !== actualHz) {
+                lines.push('说明: 当前硬件/驱动实际分频与配置值略有差异');
+            }
+
+            return lines.join('\n');
         }
 
         async function refreshBaconSpiClock() {
             const statusEl = document.getElementById('baconSpiStatus');
-            const inputEl = document.getElementById('baconSpiMhz');
-            if (!statusEl || !inputEl) return;
+            if (!statusEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -4454,46 +5037,11 @@
                     return;
                 }
 
-                if (Number.isFinite(data.configured_hz) && data.configured_hz > 0) {
-                    inputEl.value = String(Math.round(Number(data.configured_hz) / 1000000));
-                }
+                state.baconSpiConfiguredHz = Number(data.configured_hz) || 0;
+                state.baconSpiActualHz = Number(data.actual_hz) || 0;
                 statusEl.textContent = formatBaconSpiStatusLines(data);
             } catch (error) {
                 statusEl.textContent = '读取失败: ' + error.message;
-            }
-        }
-
-        async function applyBaconSpiClock() {
-            const statusEl = document.getElementById('baconSpiStatus');
-            const inputEl = document.getElementById('baconSpiMhz');
-            if (!statusEl || !inputEl) return;
-
-            const mhz = parseInt(String(inputEl.value || '').trim(), 10);
-            if (!Number.isFinite(mhz) || mhz < 20 || mhz > 80) {
-                showToast('SPI 频率必须是 20~80 MHz', 'warning');
-                statusEl.textContent = '参数无效: 请输入 20~80 之间的整数 MHz';
-                return;
-            }
-
-            statusEl.textContent = '应用中...';
-            try {
-                const response = await apiCall(`/api/spi/config?mhz=${encodeURIComponent(String(mhz))}`, { method: 'POST' });
-                const data = await readApiPayload(response);
-                if (!response.ok || !data.ok) {
-                    const msg = data.message || ('HTTP ' + response.status);
-                    statusEl.textContent = '设置失败: ' + msg;
-                    showToast('SPI 频率设置失败: ' + msg, 'error');
-                    return;
-                }
-
-                if (Number.isFinite(data.configured_hz) && data.configured_hz > 0) {
-                    inputEl.value = String(Math.round(Number(data.configured_hz) / 1000000));
-                }
-                statusEl.textContent = formatBaconSpiStatusLines(data);
-                showToast('SPI 频率已更新', 'success');
-            } catch (error) {
-                statusEl.textContent = '设置失败: ' + error.message;
-                showToast('SPI 频率设置失败: ' + error.message, 'error');
             }
         }
 
@@ -4570,6 +5118,65 @@
             }
         }
 
+        function formatPpbUnlockStatusLines(data) {
+            const lockStatus = (data && data.ppb_lock_status) ? data.ppb_lock_status : '--';
+            const chip = (data && data.chip) ? data.chip : 'unknown';
+            const mode = (data && data.mode) ? String(data.mode).toUpperCase() : '--';
+            const sectorCount = Number.isFinite(Number(data && data.sector_count)) ? Number(data.sector_count) : 0;
+            const sectorSize = Number.isFinite(Number(data && data.sector_size)) ? Number(data.sector_size) : 0;
+            const before = Number.isFinite(Number(data && data.ppb_needs_unlock_before)) ? Number(data.ppb_needs_unlock_before) : 0;
+            const after = Number.isFinite(Number(data && data.ppb_needs_unlock_after)) ? Number(data.ppb_needs_unlock_after) : 0;
+            const cfiText = (data && data.cfi_ok) ? 'ok' : 'fallback';
+            const message = (data && data.message) ? data.message : '';
+            return [
+                `模式: ${mode}`,
+                `芯片: ${chip}`,
+                `CFI: ${cfiText}`,
+                `扇区: ${sectorCount} x ${formatSize(sectorSize)}`,
+                `PPB Lock: ${lockStatus}`,
+                `需解锁扇区(前): ${before}`,
+                `需解锁扇区(后): ${after}`,
+                `结果: ${message}`
+            ].join('\n');
+        }
+
+        async function unlockCartPpb(mode) {
+            const statusEl = document.getElementById('ppbUnlockStatus');
+            const upperMode = String(mode || 'gba').toUpperCase();
+            if (!statusEl) return;
+
+            const confirmed = window.confirm(`确认对 ${upperMode} 卡带执行 PPB 解锁吗？这会发送 All PPB Erase。`);
+            if (!confirmed) {
+                return;
+            }
+
+            statusEl.textContent = `执行中...\n模式: ${upperMode}`;
+
+            try {
+                const response = await apiCall(`/api/cart/unlock_ppb?mode=${encodeURIComponent(mode)}`, {
+                    method: 'POST'
+                });
+                const data = await readApiPayload(response);
+
+                if (!response.ok || !data.ok) {
+                    const msg = (data && data.message) ? data.message : ('HTTP ' + response.status);
+                    statusEl.textContent = formatPpbUnlockStatusLines({
+                        ...data,
+                        mode,
+                        message: msg
+                    });
+                    showToast(`${upperMode} PPB 解锁失败: ${msg}`, 'error');
+                    return;
+                }
+
+                statusEl.textContent = formatPpbUnlockStatusLines(data);
+                showToast(`${upperMode} PPB 解锁完成`, 'success');
+            } catch (error) {
+                statusEl.textContent = `执行失败\n模式: ${upperMode}\n错误: ${error.message}`;
+                showToast(`${upperMode} PPB 解锁失败: ${error.message}`, 'error');
+            }
+        }
+
         async function loadLanguageList() {
             const statusEl = document.getElementById('languageStatus');
             const selectEl = document.getElementById('languageSelect');
@@ -4629,54 +5236,6 @@
             } catch (error) {
                 if (statusEl) statusEl.textContent = '应用失败: ' + error.message;
                 showToast('语言应用失败: ' + error.message, 'error');
-            }
-        }
-
-        async function loadIp5306Ini() {
-            const statusEl = document.getElementById('ip5306Status');
-            const contentEl = document.getElementById('ip5306IniContent');
-            
-            if (statusEl) statusEl.textContent = '加载中...';
-            
-            try {
-                const response = await fetch('/api/ip5306/ini');
-                const text = await response.text();
-                
-                if (contentEl) contentEl.value = text;
-                if (statusEl) statusEl.textContent = '配置已加载';
-                showToast('IP5306 配置已加载', 'success');
-            } catch (error) {
-                if (statusEl) statusEl.textContent = '加载失败: ' + error.message;
-                showToast('加载 IP5306 配置失败', 'error');
-            }
-        }
-
-        async function saveIp5306Ini() {
-            const statusEl = document.getElementById('ip5306Status');
-            const contentEl = document.getElementById('ip5306IniContent');
-            
-            if (!contentEl) return;
-            
-            if (statusEl) statusEl.textContent = '保存中...';
-            
-            try {
-                const response = await fetch('/api/ip5306/ini', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-                    body: contentEl.value
-                });
-                const data = await response.json();
-                
-                if (data.ok) {
-                    if (statusEl) statusEl.textContent = '配置已保存';
-                    showToast('IP5306 配置已保存', 'success');
-                } else {
-                    if (statusEl) statusEl.textContent = '保存失败: ' + (data.message || '未知错误');
-                    showToast('保存 IP5306 配置失败', 'error');
-                }
-            } catch (error) {
-                if (statusEl) statusEl.textContent = '保存失败: ' + error.message;
-                showToast('保存 IP5306 配置失败: ' + error.message, 'error');
             }
         }
 
@@ -4744,12 +5303,59 @@
             return date.toTimeString().split(' ')[0];
         }
 
+        function buildExportTimestamp(date = new Date()) {
+            const year = String(date.getFullYear());
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+        }
+
+        function formatFileModifiedTime(mtimeSeconds, serverTimeSeconds = 0) {
+            let timestamp = Number(mtimeSeconds);
+            const suspectFatTimestampMax = 631152000;
+
+            if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp <= suspectFatTimestampMax) {
+                const deviceNow = Number(serverTimeSeconds);
+                if (Number.isFinite(deviceNow) && deviceNow > suspectFatTimestampMax) {
+                    timestamp = deviceNow;
+                } else {
+                    timestamp = Math.floor(Date.now() / 1000);
+                }
+            }
+
+            if (!Number.isFinite(timestamp) || timestamp <= 0) {
+                return '--';
+            }
+
+            const date = new Date(timestamp * 1000);
+            if (Number.isNaN(date.getTime())) {
+                return '--';
+            }
+
+            const year = String(date.getFullYear());
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
         function formatDuration(seconds) {
             if (!isFinite(seconds) || seconds < 0) return '--:--:--';
             const hrs = Math.floor(seconds / 3600);
             const mins = Math.floor((seconds % 3600) / 60);
             const secs = Math.floor(seconds % 60);
             return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatTaskTimeMs(milliseconds) {
+            if (!isFinite(milliseconds) || milliseconds < 0) return '--';
+            if (milliseconds < 1000) return `${Math.round(milliseconds)} ms`;
+            return formatDuration(milliseconds / 1000);
         }
 
         function formatSpeed(bytesPerSecond) {
@@ -4934,6 +5540,10 @@
         window.addEventListener('resize', () => {
             if (window.innerWidth > 1024) {
                 closeMobileSidebar();
+            }
+
+            if (state.currentPage === 'tf') {
+                updateFileNameMarquee();
             }
         });
 

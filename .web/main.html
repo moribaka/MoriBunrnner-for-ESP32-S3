@@ -2200,14 +2200,6 @@
             settings: renderSettingsPage
         };
 
-        const BACON_SPI_OPTIONS = Object.freeze([
-            { hz: 20000000, label: '20 MHz' },
-            { hz: 26666000, label: '26.67 MHz' },
-            { hz: 40000000, label: '40 MHz' },
-            { hz: 60000000, label: '60 MHz' },
-            { hz: 80000000, label: '80 MHz' }
-        ]);
-
         const ROM_DUMP_CHUNK_OPTIONS_KB = Object.freeze([32, 64, 128, 256]);
 
         // 初始化
@@ -4897,11 +4889,6 @@
         // 设置页面
         function renderSettingsPage() {
             const container = document.getElementById('mainContent');
-            const selectedBaconSpiHz = normalizeBaconSpiOptionHz(
-                Number(state.baconSpiActualHz || state.baconSpiConfiguredHz || 40000000));
-            const baconSpiOptionsHtml = BACON_SPI_OPTIONS.map((option) => `
-                                <option value="${option.hz}" ${option.hz === selectedBaconSpiHz ? 'selected' : ''}>${option.label}</option>
-                            `).join('');
             container.innerHTML = `
                 <div class="page-header animate-in">
                     <h1 class="page-title">⚙️ 设备设置</h1>
@@ -5006,16 +4993,11 @@
 
                 <div class="card animate-in">
                     <div class="card-header">
-                        <h3 class="card-title">⚡ Bacon SPI 频率</h3>
+                        <h3 class="card-title">⚡ Bacon SPI</h3>
                     </div>
                     <div style="padding: 16px;">
-                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">设置 ESP32 到 Bacon 的 SPI 频率。仅提供当前硬件可达档位：20 / 26.67 / 40 / 80 MHz。烧录任务运行中不可修改。</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">ESP32 到 Bacon 的 SPI 频率固定为 40 MHz。</p>
                         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                            <label for="baconSpiSelect" style="color: var(--text-secondary); font-size: 13px;">频率档位</label>
-                            <select id="baconSpiSelect" class="input" style="width: 160px;">
-${baconSpiOptionsHtml}
-                            </select>
-                            <button class="btn btn-primary" onclick="applyBaconSpiClock()">✓ 应用</button>
                             <button class="btn" onclick="refreshBaconSpiClock()">🔄 刷新</button>
                         </div>
                         <div id="baconSpiStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px;">
@@ -7164,46 +7146,24 @@ ${baconSpiOptionsHtml}
         function formatBaconSpiStatusLines(data) {
             const configuredHz = Number(data && data.configured_hz) || 0;
             const actualHz = Number(data && data.actual_hz) || 0;
-            const minHz = Number(data && data.min_hz) || 20000000;
-            const maxHz = Number(data && data.max_hz) || 80000000;
             const configuredMhz = configuredHz > 0 ? (configuredHz / 1000000).toFixed(2) : '--';
             const actualMhz = actualHz > 0 ? (actualHz / 1000000).toFixed(2) : '--';
             const lines = [
-                `请求频率: ${configuredHz} Hz (${configuredMhz} MHz)`,
+                `固定频率: ${configuredHz} Hz (${configuredMhz} MHz)`,
                 `实际频率: ${actualHz} Hz (${actualMhz} MHz)`,
-                `可请求范围: ${(minHz / 1000000).toFixed(0)}~${(maxHz / 1000000).toFixed(0)} MHz`,
-                `可达档位: ${BACON_SPI_OPTIONS.map((option) => option.label).join(' / ')}`
+                '模式: 固定 40 MHz'
             ];
 
             if (configuredHz > 0 && actualHz > 0 && configuredHz !== actualHz) {
-                lines.push('说明: 当前硬件/驱动只支持离散分频，已自动取最近可达频率');
+                lines.push('说明: 当前硬件/驱动实际分频与配置值略有差异');
             }
 
             return lines.join('\n');
         }
 
-        function normalizeBaconSpiOptionHz(hz) {
-            const targetHz = Number(hz);
-            if (!Number.isFinite(targetHz) || targetHz <= 0) {
-                return BACON_SPI_OPTIONS[2].hz;
-            }
-
-            let best = BACON_SPI_OPTIONS[0];
-            let bestDiff = Math.abs(best.hz - targetHz);
-            BACON_SPI_OPTIONS.forEach((option) => {
-                const diff = Math.abs(option.hz - targetHz);
-                if (diff < bestDiff) {
-                    best = option;
-                    bestDiff = diff;
-                }
-            });
-            return best.hz;
-        }
-
         async function refreshBaconSpiClock() {
             const statusEl = document.getElementById('baconSpiStatus');
-            const selectEl = document.getElementById('baconSpiSelect');
-            if (!statusEl || !selectEl) return;
+            if (!statusEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -7216,52 +7176,9 @@ ${baconSpiOptionsHtml}
 
                 state.baconSpiConfiguredHz = Number(data.configured_hz) || 0;
                 state.baconSpiActualHz = Number(data.actual_hz) || 0;
-                selectEl.value = String(normalizeBaconSpiOptionHz(state.baconSpiActualHz || state.baconSpiConfiguredHz));
                 statusEl.textContent = formatBaconSpiStatusLines(data);
             } catch (error) {
                 statusEl.textContent = '读取失败: ' + error.message;
-            }
-        }
-
-        async function applyBaconSpiClock() {
-            const statusEl = document.getElementById('baconSpiStatus');
-            const selectEl = document.getElementById('baconSpiSelect');
-            if (!statusEl || !selectEl) return;
-
-            const hz = parseInt(String(selectEl.value || '').trim(), 10);
-            if (!BACON_SPI_OPTIONS.some((option) => option.hz === hz)) {
-                showToast('请选择一个可达 SPI 档位', 'warning');
-                statusEl.textContent = '参数无效: 请选择 20 / 26.67 / 40 / 60 / 80 MHz';
-                return;
-            }
-
-            statusEl.textContent = '应用中...';
-            try {
-                const response = await apiCall(`/api/spi/config?hz=${encodeURIComponent(String(hz))}`, { method: 'POST' });
-                const data = await readApiPayload(response);
-                if (!response.ok || !data.ok) {
-                    const msg = data.message || ('HTTP ' + response.status);
-                    statusEl.textContent = '设置失败: ' + msg;
-                    showToast('SPI 频率设置失败: ' + msg, 'error');
-                    return;
-                }
-
-                state.baconSpiConfiguredHz = Number(data.configured_hz) || 0;
-                state.baconSpiActualHz = Number(data.actual_hz) || 0;
-                selectEl.value = String(normalizeBaconSpiOptionHz(state.baconSpiActualHz || state.baconSpiConfiguredHz));
-                statusEl.textContent = formatBaconSpiStatusLines(data);
-                if (Number.isFinite(data.actual_hz) && Number.isFinite(data.configured_hz) &&
-                    data.actual_hz > 0 && data.configured_hz > 0 &&
-                    Number(data.actual_hz) !== Number(data.configured_hz)) {
-                    showToast(
-                        `SPI 请求 ${Math.round(Number(data.configured_hz) / 1000000)}MHz，实际为 ${Math.round(Number(data.actual_hz) / 1000000)}MHz`,
-                        'warning');
-                } else {
-                    showToast('SPI 频率已更新', 'success');
-                }
-            } catch (error) {
-                statusEl.textContent = '设置失败: ' + error.message;
-                showToast('SPI 频率设置失败: ' + error.message, 'error');
             }
         }
 

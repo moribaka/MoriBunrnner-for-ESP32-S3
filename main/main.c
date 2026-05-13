@@ -44,6 +44,11 @@
 #define MORI_TCA9555_BOOT_INPUT_CFG 0xFFFFU
 #define MORI_TCA9555_IRQ_DEBOUNCE_MS 60U
 #define MORI_TCA9555_IRQ_LOG_RELEASE 0
+#define MORI_BOOT_KEY_TASK_STACK_SIZE 2048
+#define MORI_BOOT_KEY_TASK_PRIORITY 3
+#define MORI_BOOT_KEY_POLL_MS 20U
+#define MORI_BOOT_KEY_DEBOUNCE_MS 40U
+#define MORI_BOOT_KEY_LONG_PRESS_MS 700U
 #define MORI_SETTING_DIR_PATH mount_point "/.setting"
 #define MORI_SYSTEM_INI_PATH MORI_SETTING_DIR_PATH "/mori_system.ini"
 #define MORI_LANG_ZH_INI_PATH MORI_SETTING_DIR_PATH "/lang_zh_cn.ini"
@@ -66,6 +71,7 @@ static volatile bool s_web_started = false;
 static volatile bool s_web_starting = false;
 static char s_ntp_active_server[MORI_NTP_SERVER_MAX] = "";
 static bool s_ntp_active = false;
+static TaskHandle_t s_boot_key_task = NULL;
 
 static void mori_apply_timezone(void)
 {
@@ -2066,9 +2072,9 @@ static const char *tca9555_pin_name(uint16_t pin_mask)
 {
     switch (pin_mask) {
         case TCA9555_IO0_0:
-            return "BTN_DOWN";
-        case TCA9555_IO0_1:
             return "BTN_LEFT";
+        case TCA9555_IO0_1:
+            return "BTN_DOWN";
         case TCA9555_IO0_2:
             return "BTN_UP";
         case TCA9555_IO0_3:
@@ -2123,6 +2129,44 @@ static bool tca9555_is_known_button(uint16_t pin_mask)
     }
 }
 
+static bool tca9555_button_to_ui_button(uint16_t pin_mask, ui_button_t *button)
+{
+    if (button == NULL) {
+        return false;
+    }
+
+    switch (pin_mask) {
+        case TCA9555_IO0_0:
+            *button = UI_BUTTON_LEFT;
+            return true;
+        case TCA9555_IO0_1:
+        case TCA9555_IO1_3:
+            *button = UI_BUTTON_DOWN;
+            return true;
+        case TCA9555_IO0_2:
+        case TCA9555_IO1_1:
+            *button = UI_BUTTON_UP;
+            return true;
+        case TCA9555_IO0_3:
+            *button = UI_BUTTON_RIGHT;
+            return true;
+        case TCA9555_IO0_4:
+        case TCA9555_IO0_5:
+        case TCA9555_IO0_7:
+        case TCA9555_IO1_0:
+            *button = UI_BUTTON_SELECT;
+            return true;
+        case TCA9555_IO0_6:
+            *button = UI_BUTTON_BACK;
+            return true;
+        case TCA9555_IO1_2:
+            *button = UI_BUTTON_MENU;
+            return true;
+        default:
+            return false;
+    }
+}
+
 static void tca9555_input_irq_cb(uint16_t pin_mask, int level, void *user_ctx)
 {
     static uint32_t s_last_ms[16];
@@ -2165,6 +2209,12 @@ static void tca9555_input_irq_cb(uint16_t pin_mask, int level, void *user_ctx)
     if (!tca9555_is_known_button(pin_mask)) {
         return;
     }
+    if (level == 0) {
+        ui_button_t button = UI_BUTTON_SELECT;
+        if (tca9555_button_to_ui_button(pin_mask, &button)) {
+            ui_post_button(button, true);
+        }
+    }
 #if !MORI_TCA9555_IRQ_LOG_RELEASE
     if (level != 0) {
         return;
@@ -2172,6 +2222,76 @@ static void tca9555_input_irq_cb(uint16_t pin_mask, int level, void *user_ctx)
 #endif
     name = tca9555_pin_name(pin_mask);
     ESP_LOGI("main", "TCA9555 IRQ %s pin=0x%04X level=%d", name, pin_mask, level);
+}
+
+static void boot_key_task(void *arg)
+{
+    gpio_config_t key_cfg = {
+        .pin_bit_mask = (1ULL << MORI_PIN_KEY_BOOT),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    int last_raw = 1;
+    int stable_level = 1;
+    uint32_t last_change_ms = 0;
+    uint32_t press_start_ms = 0;
+
+    (void)arg;
+
+    if (gpio_config(&key_cfg) != ESP_OK) {
+        ESP_LOGW("main", "BOOT key gpio config failed");
+        s_boot_key_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+
+    last_raw = gpio_get_level(MORI_PIN_KEY_BOOT);
+    stable_level = last_raw;
+    last_change_ms = esp_log_timestamp();
+
+    while (1) {
+        uint32_t now_ms = esp_log_timestamp();
+        int raw = gpio_get_level(MORI_PIN_KEY_BOOT);
+
+        if (raw != last_raw) {
+            last_raw = raw;
+            last_change_ms = now_ms;
+        }
+
+        if (raw != stable_level && (now_ms - last_change_ms) >= MORI_BOOT_KEY_DEBOUNCE_MS) {
+            stable_level = raw;
+            if (stable_level == 0) {
+                press_start_ms = now_ms;
+            } else {
+                uint32_t held_ms = now_ms - press_start_ms;
+                ui_post_button(
+                    (held_ms >= MORI_BOOT_KEY_LONG_PRESS_MS) ? UI_BUTTON_SELECT : UI_BUTTON_RIGHT,
+                    true);
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(MORI_BOOT_KEY_POLL_MS));
+    }
+}
+
+static void start_boot_key_task(void)
+{
+    if (s_boot_key_task != NULL) {
+        return;
+    }
+
+    if (xTaskCreate(
+            boot_key_task,
+            "boot_key",
+            MORI_BOOT_KEY_TASK_STACK_SIZE,
+            NULL,
+            MORI_BOOT_KEY_TASK_PRIORITY,
+            &s_boot_key_task) != pdPASS) {
+        s_boot_key_task = NULL;
+        ESP_LOGW("main", "create BOOT key task failed");
+    }
 }
 
 static void init_i2c_peripherals(void)
@@ -2428,6 +2548,7 @@ void app_main(void)
     if (lvgl_err != ESP_OK) {
         ESP_LOGW("main", "LVGL/display init failed, continuing headless: %s", esp_err_to_name(lvgl_err));
     } else {
+        start_boot_key_task();
         ui_set_status_text("system initialized");
     }
 
