@@ -7,6 +7,7 @@ static esp_err_t burner_resolve_input_file(
     char *full_path,
     size_t full_path_len,
     uint32_t *file_size);
+static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const char *error_msg);
 
 static bool burner_rom_dump_name_is_placeholder(const char *name)
 {
@@ -265,25 +266,15 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     char psram_mb_arg[16] = {0};
     char mbc5_chunk_kb_arg[16] = {0};
     char force_no_cfi_arg[16] = {0};
-    char safe_name[BURNER_FILE_NAME_LEN] = {0};
-    char full_path[BURNER_FILE_PATH_LEN] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
-    char size_err[160] = {0};
-    uint32_t write_size = 0;
+    char error_msg[160] = {0};
     uint32_t slot = 0;
-    uint32_t addr_begin = 0;
-    uint32_t effective_size = 0;
-    uint32_t device_size = 0;
-    uint32_t available_size = 0;
-    uint32_t mbc5_chunk_kb = 0;
+    uint32_t mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     uint32_t psram_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
-    uint32_t psram_window_bytes = BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES;
-    uint32_t mbc5_program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
-    uint64_t requested_top64 = 0u;
-    bool gba_force_multi = false;
     bool gba_force_no_cfi = false;
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
     burner_write_path_t write_path = BURNER_WRITE_PATH_DIRECT;
+    burner_task_start_result_t result = {0};
     esp_err_t err;
     int n;
 
@@ -330,13 +321,10 @@ esp_err_t burner_write_handler(httpd_req_t *req)
             return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "psram_mb must be integer 1..8");
         }
     }
-    psram_window_bytes = burner_psram_window_mb_to_bytes(psram_mb);
-    psram_mb = burner_psram_window_bytes_to_mb(psram_window_bytes);
     if (mbc5_chunk_kb_arg[0] != '\0') {
         if (!burner_parse_u32_text(mbc5_chunk_kb_arg, &mbc5_chunk_kb)) {
             return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mbc5_chunk_kb must be integer");
         }
-        mbc5_program_chunk_bytes = burner_mbc5_program_chunk_kb_to_bytes(mbc5_chunk_kb);
     }
     if (slot_arg[0] != '\0' && !burner_parse_u32_text(slot_arg, &slot)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
@@ -348,113 +336,19 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         gba_force_no_cfi = false;
     }
 
-    err = burner_resolve_input_file(
+    err = burner_start_write_from_tf(
         raw_name,
-        safe_name,
-        sizeof(safe_name),
-        full_path,
-        sizeof(full_path),
-        &write_size);
-    if (err == ESP_ERR_NOT_FOUND) {
-        return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "rom file not found");
-    }
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "rom file invalid size");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid rom file");
-    }
-
-    if (cart_mode == BURNER_CART_MODE_GBA && (write_size & 0x1u) != 0u) {
-        FILE *pad_fp;
-
-        if (write_size == UINT32_MAX) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "rom file too large");
-        }
-        pad_fp = fopen(full_path, "ab");
-        if (pad_fp == NULL) {
-            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "append gba padding failed");
-        }
-        if (fputc(0x00, pad_fp) == EOF) {
-            fclose(pad_fp);
-            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "append gba padding failed");
-        }
-        fclose(pad_fp);
-        write_size += 1u;
-    }
-
-    if (cart_mode == BURNER_CART_MODE_GBA) {
-        err = burner_apply_gba_slot_limit(slot, write_size, &addr_begin, &effective_size, &gba_force_multi);
-    } else {
-        err = burner_apply_mbc5_slot_limit(false, slot, write_size, &addr_begin, &effective_size);
-    }
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "rom file exceeds selected slot range");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
-    }
-
-    requested_top64 = (uint64_t)addr_begin + (uint64_t)effective_size;
-    if (requested_top64 > UINT32_MAX) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "requested write range too large");
-    }
-
-    err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
-    if (err != ESP_OK) {
-        if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED && gba_force_no_cfi) {
-            device_size = (uint32_t)requested_top64;
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBA force_no_cfi: bypass capacity probe and continue write (range top=0x%08" PRIX32 ")",
-                device_size);
-        } else {
-            if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
-                return httpd_resp_send_err(
-                    req,
-                    HTTPD_400_BAD_REQUEST,
-                    "gba cfi probe failed: command mode unavailable; cartridge may be read-only or unsupported");
-            }
-            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "read nor size failed");
-        }
-    }
-    available_size = (addr_begin < device_size) ? (device_size - addr_begin) : 0u;
-    if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
-        (void)snprintf(
-            size_err,
-            sizeof(size_err),
-            "rom size exceeds nor size: rom=%" PRIu32 "B available=%" PRIu32 "B nor=%" PRIu32 "B",
-            effective_size,
-            available_size,
-            device_size);
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, size_err);
-    }
-
-    err = burner_start_task_ex(
-        BURNER_JOB_WRITE_ROM,
         cart_mode,
+        slot,
         write_path,
-        gba_force_multi,
+        psram_mb,
+        mbc5_chunk_kb,
         gba_force_no_cfi,
-        mbc5_program_chunk_bytes,
-        BURN_GBA_DUMP_CHUNK_BYTES,
-        psram_window_bytes,
-        safe_name,
-        full_path,
-        addr_begin,
-        effective_size,
-        false,
-        0u);
+        &result,
+        error_msg,
+        sizeof(error_msg));
     if (err != ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            effective_size,
-            "burn task busy or start failed",
-            safe_name,
-            full_path);
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "burn task is already running");
+        return burner_send_start_error(req, err, error_msg);
     }
 
     n = snprintf(
@@ -463,11 +357,11 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         "{\"ok\":true,\"mode\":\"%s\",\"write_path\":\"%s\",\"mbc5_chunk_kb\":%" PRIu32 ",\"psram_mb\":%" PRIu32 ",\"force_no_cfi\":%s,\"message\":\"burn started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
         (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
         burner_write_path_to_str(write_path),
-        (uint32_t)(mbc5_program_chunk_bytes / 1024u),
-        psram_mb,
-        gba_force_no_cfi ? "true" : "false",
-        full_path,
-        effective_size);
+        result.mbc5_chunk_kb,
+        result.psram_mb,
+        result.gba_force_no_cfi ? "true" : "false",
+        result.full_path,
+        result.effective_size);
     if (n <= 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }
@@ -729,20 +623,446 @@ static esp_err_t burner_resolve_input_file(
     return ESP_ERR_NOT_FOUND;
 }
 
+static esp_err_t burner_start_error(
+    esp_err_t err,
+    const char *message,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    if (error_msg != NULL && error_msg_len > 0u) {
+        snprintf(error_msg, error_msg_len, "%s", (message != NULL) ? message : esp_err_to_name(err));
+    }
+    return err;
+}
+
+static void burner_start_result_fill(
+    burner_task_start_result_t *result,
+    const char *safe_name,
+    const char *full_path,
+    uint32_t effective_size,
+    uint32_t psram_mb,
+    uint32_t mbc5_chunk_kb,
+    bool gba_force_no_cfi)
+{
+    if (result == NULL) {
+        return;
+    }
+    memset(result, 0, sizeof(*result));
+    snprintf(result->safe_name, sizeof(result->safe_name), "%s", (safe_name != NULL) ? safe_name : "");
+    snprintf(result->full_path, sizeof(result->full_path), "%s", (full_path != NULL) ? full_path : "");
+    result->effective_size = effective_size;
+    result->psram_mb = psram_mb;
+    result->mbc5_chunk_kb = mbc5_chunk_kb;
+    result->gba_force_no_cfi = gba_force_no_cfi;
+}
+
+static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const char *error_msg)
+{
+    const char *msg = (error_msg != NULL && error_msg[0] != '\0') ? error_msg : esp_err_to_name(err);
+
+    if (err == ESP_ERR_NOT_FOUND) {
+        return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, msg);
+    }
+    if (err == ESP_ERR_INVALID_ARG || err == ESP_ERR_INVALID_SIZE || err == ESP_ERR_NOT_SUPPORTED ||
+        err == ESP_ERR_INVALID_STATE) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, msg);
+    }
+    return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, msg);
+}
+
+esp_err_t burner_start_write_from_tf(
+    const char *raw_name,
+    burner_cart_mode_t cart_mode,
+    uint32_t slot,
+    burner_write_path_t write_path,
+    uint32_t psram_mb,
+    uint32_t mbc5_chunk_kb,
+    bool gba_force_no_cfi,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    char safe_name[BURNER_FILE_NAME_LEN] = {0};
+    char full_path[BURNER_FILE_PATH_LEN] = {0};
+    uint32_t write_size = 0;
+    uint32_t addr_begin = 0;
+    uint32_t effective_size = 0;
+    uint32_t device_size = 0;
+    uint32_t available_size = 0;
+    uint32_t psram_window_bytes = BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES;
+    uint32_t mbc5_program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
+    uint64_t requested_top64 = 0u;
+    char probe_err[96] = {0};
+    bool gba_force_multi = false;
+    esp_err_t err;
+
+    if (card == NULL) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "TF card not ready", error_msg, error_msg_len);
+    }
+    if (usb_msc_tf_in_use_by_host()) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "tf busy by usb host", error_msg, error_msg_len);
+    }
+
+    psram_window_bytes = burner_psram_window_mb_to_bytes(psram_mb);
+    psram_mb = burner_psram_window_bytes_to_mb(psram_window_bytes);
+    mbc5_program_chunk_bytes = burner_mbc5_program_chunk_kb_to_bytes(mbc5_chunk_kb);
+    if (cart_mode != BURNER_CART_MODE_GBA) {
+        gba_force_no_cfi = false;
+    }
+
+    err = burner_resolve_input_file(
+        raw_name,
+        safe_name,
+        sizeof(safe_name),
+        full_path,
+        sizeof(full_path),
+        &write_size);
+    if (err == ESP_ERR_NOT_FOUND) {
+        return burner_start_error(err, "rom file not found", error_msg, error_msg_len);
+    }
+    if (err == ESP_ERR_INVALID_SIZE) {
+        return burner_start_error(err, "rom file invalid size", error_msg, error_msg_len);
+    }
+    if (err != ESP_OK) {
+        return burner_start_error(err, "invalid rom file", error_msg, error_msg_len);
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA && (write_size & 0x1u) != 0u) {
+        FILE *pad_fp;
+
+        if (write_size == UINT32_MAX) {
+            return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
+        }
+        pad_fp = fopen(full_path, "ab");
+        if (pad_fp == NULL) {
+            return burner_start_error(ESP_FAIL, "append gba padding failed", error_msg, error_msg_len);
+        }
+        if (fputc(0x00, pad_fp) == EOF) {
+            fclose(pad_fp);
+            return burner_start_error(ESP_FAIL, "append gba padding failed", error_msg, error_msg_len);
+        }
+        fclose(pad_fp);
+        write_size += 1u;
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        err = burner_apply_gba_slot_limit(slot, write_size, &addr_begin, &effective_size, &gba_force_multi);
+    } else {
+        err = burner_apply_mbc5_slot_limit(false, slot, write_size, &addr_begin, &effective_size);
+    }
+    if (err == ESP_ERR_INVALID_SIZE) {
+        return burner_start_error(err, "rom file exceeds selected slot range", error_msg, error_msg_len);
+    }
+    if (err != ESP_OK) {
+        return burner_start_error(err, "invalid slot query", error_msg, error_msg_len);
+    }
+
+    requested_top64 = (uint64_t)addr_begin + (uint64_t)effective_size;
+    if (requested_top64 > UINT32_MAX) {
+        return burner_start_error(ESP_ERR_INVALID_SIZE, "requested write range too large", error_msg, error_msg_len);
+    }
+
+    err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
+    if (err != ESP_OK) {
+        if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED && gba_force_no_cfi) {
+            device_size = (uint32_t)requested_top64;
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA force_no_cfi: bypass capacity probe and continue write (range top=0x%08" PRIX32 ")",
+                device_size);
+        } else {
+            if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
+                return burner_start_error(
+                    err,
+                    "gba cfi probe failed: command mode unavailable; cartridge may be read-only or unsupported",
+                    error_msg,
+                    error_msg_len);
+            }
+            (void)snprintf(
+                probe_err,
+                sizeof(probe_err),
+                "read %s nor size failed: %s",
+                (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
+                esp_err_to_name(err));
+            return burner_start_error(err, probe_err, error_msg, error_msg_len);
+        }
+    }
+    available_size = (addr_begin < device_size) ? (device_size - addr_begin) : 0u;
+    if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
+        char size_err[160] = {0};
+
+        (void)snprintf(
+            size_err,
+            sizeof(size_err),
+            "rom size exceeds nor size: rom=%" PRIu32 "B available=%" PRIu32 "B nor=%" PRIu32 "B",
+            effective_size,
+            available_size,
+            device_size);
+        return burner_start_error(ESP_ERR_INVALID_SIZE, size_err, error_msg, error_msg_len);
+    }
+
+    err = burner_start_task_ex(
+        BURNER_JOB_WRITE_ROM,
+        cart_mode,
+        write_path,
+        gba_force_multi,
+        gba_force_no_cfi,
+        mbc5_program_chunk_bytes,
+        BURN_GBA_DUMP_CHUNK_BYTES,
+        psram_window_bytes,
+        safe_name,
+        full_path,
+        addr_begin,
+        effective_size,
+        false,
+        0u);
+    if (err != ESP_OK) {
+        const char *task_start_error =
+            (err == ESP_ERR_INVALID_STATE) ? "burn task is already running" : "burn task start failed";
+        burner_status_update(
+            BURNER_STATE_ERROR,
+            0,
+            0,
+            effective_size,
+            task_start_error,
+            safe_name,
+            full_path);
+        return burner_start_error(err, task_start_error, error_msg, error_msg_len);
+    }
+
+    burner_start_result_fill(
+        result,
+        safe_name,
+        full_path,
+        effective_size,
+        psram_mb,
+        (uint32_t)(mbc5_program_chunk_bytes / 1024u),
+        gba_force_no_cfi);
+    return ESP_OK;
+}
+
+esp_err_t burner_start_verify_from_tf(
+    const char *raw_name,
+    burner_cart_mode_t cart_mode,
+    uint32_t slot,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    char safe_name[BURNER_FILE_NAME_LEN] = {0};
+    char full_path[BURNER_FILE_PATH_LEN] = {0};
+    uint32_t verify_size = 0;
+    uint32_t addr_begin = 0;
+    uint32_t effective_size = 0;
+    bool gba_force_multi = false;
+    esp_err_t err;
+
+    if (card == NULL) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "TF card not ready", error_msg, error_msg_len);
+    }
+    if (usb_msc_tf_in_use_by_host()) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "tf busy by usb host", error_msg, error_msg_len);
+    }
+
+    err = burner_resolve_input_file(
+        raw_name,
+        safe_name,
+        sizeof(safe_name),
+        full_path,
+        sizeof(full_path),
+        &verify_size);
+    if (err == ESP_ERR_NOT_FOUND) {
+        return burner_start_error(err, "verify file not found", error_msg, error_msg_len);
+    }
+    if (err == ESP_ERR_INVALID_SIZE) {
+        return burner_start_error(err, "verify file invalid size", error_msg, error_msg_len);
+    }
+    if (err != ESP_OK) {
+        return burner_start_error(err, "invalid verify file", error_msg, error_msg_len);
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA && (verify_size & 0x1u) != 0u) {
+        if (verify_size == UINT32_MAX) {
+            return burner_start_error(ESP_ERR_INVALID_SIZE, "verify file too large", error_msg, error_msg_len);
+        }
+        verify_size += 1u;
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        err = burner_apply_gba_slot_limit(slot, verify_size, &addr_begin, &effective_size, &gba_force_multi);
+    } else {
+        err = burner_apply_mbc5_slot_limit(false, slot, verify_size, &addr_begin, &effective_size);
+    }
+    if (err == ESP_ERR_INVALID_SIZE) {
+        return burner_start_error(err, "verify file exceeds selected slot range", error_msg, error_msg_len);
+    }
+    if (err != ESP_OK) {
+        return burner_start_error(err, "invalid slot query", error_msg, error_msg_len);
+    }
+
+    err = burner_start_task_ex(
+        BURNER_JOB_VERIFY_ROM,
+        cart_mode,
+        BURNER_WRITE_PATH_DIRECT,
+        gba_force_multi,
+        false,
+        BURN_MBC5_PROGRAM_CHUNK_BYTES,
+        BURN_GBA_DUMP_CHUNK_BYTES,
+        BURN_VERIFY_PSRAM_WINDOW_BYTES,
+        safe_name,
+        full_path,
+        addr_begin,
+        effective_size,
+        false,
+        0u);
+    if (err != ESP_OK) {
+        burner_status_update(
+            BURNER_STATE_ERROR,
+            0,
+            0,
+            effective_size,
+            "verify task busy or start failed",
+            safe_name,
+            full_path);
+        return burner_start_error(err, "verify task is already running", error_msg, error_msg_len);
+    }
+
+    burner_start_result_fill(result, safe_name, full_path, effective_size, 0u, 0u, false);
+    return ESP_OK;
+}
+
+static esp_err_t burner_start_ram_file_from_tf(
+    burner_job_mode_t mode,
+    const char *raw_name,
+    uint32_t slot,
+    bool fram_mode,
+    uint8_t ram_latency,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    char safe_name[BURNER_FILE_NAME_LEN] = {0};
+    char full_path[BURNER_FILE_PATH_LEN] = {0};
+    uint32_t file_size = 0;
+    uint32_t addr_begin = 0;
+    uint32_t effective_size = 0;
+    const bool write_mode = (mode == BURNER_JOB_WRITE_RAM);
+    esp_err_t err;
+
+    if (card == NULL) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "TF card not ready", error_msg, error_msg_len);
+    }
+    if (usb_msc_tf_in_use_by_host()) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "tf busy by usb host", error_msg, error_msg_len);
+    }
+
+    err = burner_resolve_input_file(
+        raw_name,
+        safe_name,
+        sizeof(safe_name),
+        full_path,
+        sizeof(full_path),
+        &file_size);
+    if (err == ESP_ERR_NOT_FOUND) {
+        return burner_start_error(err, write_mode ? "sav file not found" : "sav verify file not found", error_msg, error_msg_len);
+    }
+    if (err == ESP_ERR_INVALID_SIZE) {
+        return burner_start_error(err, write_mode ? "sav file invalid size" : "sav verify file invalid size", error_msg, error_msg_len);
+    }
+    if (err != ESP_OK) {
+        return burner_start_error(err, write_mode ? "invalid sav file" : "invalid sav verify file", error_msg, error_msg_len);
+    }
+
+    err = burner_apply_mbc5_slot_limit(true, slot, file_size, &addr_begin, &effective_size);
+    if (err == ESP_ERR_INVALID_SIZE) {
+        return burner_start_error(
+            err,
+            write_mode ? "sav file exceeds selected slot range" : "sav verify file exceeds selected slot range",
+            error_msg,
+            error_msg_len);
+    }
+    if (err != ESP_OK) {
+        return burner_start_error(err, "invalid slot query", error_msg, error_msg_len);
+    }
+
+    err = burner_start_task(
+        mode,
+        safe_name,
+        full_path,
+        addr_begin,
+        effective_size,
+        fram_mode,
+        ram_latency);
+    if (err != ESP_OK) {
+        burner_status_update(
+            BURNER_STATE_ERROR,
+            0,
+            0,
+            effective_size,
+            write_mode ? "ram write task busy or start failed" : "ram verify task busy or start failed",
+            safe_name,
+            full_path);
+        return burner_start_error(
+            err,
+            write_mode ? "ram write task is already running" : "ram verify task is already running",
+            error_msg,
+            error_msg_len);
+    }
+
+    burner_start_result_fill(result, safe_name, full_path, effective_size, 0u, 0u, false);
+    return ESP_OK;
+}
+
+esp_err_t burner_start_ram_write_from_tf(
+    const char *raw_name,
+    uint32_t slot,
+    bool fram_mode,
+    uint8_t ram_latency,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    return burner_start_ram_file_from_tf(
+        BURNER_JOB_WRITE_RAM,
+        raw_name,
+        slot,
+        fram_mode,
+        ram_latency,
+        result,
+        error_msg,
+        error_msg_len);
+}
+
+esp_err_t burner_start_ram_verify_from_tf(
+    const char *raw_name,
+    uint32_t slot,
+    bool fram_mode,
+    uint8_t ram_latency,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    return burner_start_ram_file_from_tf(
+        BURNER_JOB_VERIFY_RAM,
+        raw_name,
+        slot,
+        fram_mode,
+        ram_latency,
+        result,
+        error_msg,
+        error_msg_len);
+}
+
 esp_err_t burner_verify_handler(httpd_req_t *req)
 {
     char raw_name[TF_PATH_LEN_MAX] = {0};
     char slot_arg[16] = {0};
     char mode_arg[16] = {0};
-    char safe_name[BURNER_FILE_NAME_LEN] = {0};
-    char full_path[BURNER_FILE_PATH_LEN] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
-    uint32_t verify_size = 0;
+    char error_msg[160] = {0};
     uint32_t slot = 0;
-    uint32_t addr_begin = 0;
-    uint32_t effective_size = 0;
-    bool gba_force_multi = false;
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
+    burner_task_start_result_t result = {0};
     esp_err_t err;
     int n;
 
@@ -772,67 +1092,15 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
     }
 
-    err = burner_resolve_input_file(
+    err = burner_start_verify_from_tf(
         raw_name,
-        safe_name,
-        sizeof(safe_name),
-        full_path,
-        sizeof(full_path),
-        &verify_size);
-    if (err == ESP_ERR_NOT_FOUND) {
-        return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "verify file not found");
-    }
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "verify file invalid size");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid verify file");
-    }
-
-    if (cart_mode == BURNER_CART_MODE_GBA && (verify_size & 0x1u) != 0u) {
-        if (verify_size == UINT32_MAX) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "verify file too large");
-        }
-        verify_size += 1u;
-    }
-
-    if (cart_mode == BURNER_CART_MODE_GBA) {
-        err = burner_apply_gba_slot_limit(slot, verify_size, &addr_begin, &effective_size, &gba_force_multi);
-    } else {
-        err = burner_apply_mbc5_slot_limit(false, slot, verify_size, &addr_begin, &effective_size);
-    }
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "verify file exceeds selected slot range");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
-    }
-
-    err = burner_start_task_ex(
-        BURNER_JOB_VERIFY_ROM,
         cart_mode,
-        BURNER_WRITE_PATH_DIRECT,
-        gba_force_multi,
-        false,
-        BURN_MBC5_PROGRAM_CHUNK_BYTES,
-        BURN_GBA_DUMP_CHUNK_BYTES,
-        BURN_VERIFY_PSRAM_WINDOW_BYTES,
-        safe_name,
-        full_path,
-        addr_begin,
-        effective_size,
-        false,
-        0u);
+        slot,
+        &result,
+        error_msg,
+        sizeof(error_msg));
     if (err != ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            effective_size,
-            "verify task busy or start failed",
-            safe_name,
-            full_path);
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "verify task is already running");
+        return burner_send_start_error(req, err, error_msg);
     }
 
     n = snprintf(
@@ -840,8 +1108,8 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
         sizeof(resp),
         "{\"ok\":true,\"mode\":\"%s\",\"message\":\"verify started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
         (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
-        full_path,
-        effective_size);
+        result.full_path,
+        result.effective_size);
     if (n <= 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }
@@ -854,15 +1122,12 @@ esp_err_t burner_ram_write_handler(httpd_req_t *req)
     char slot_arg[16] = {0};
     char ram_type_arg[16] = {0};
     char ram_latency_arg[16] = {0};
-    char safe_name[BURNER_FILE_NAME_LEN] = {0};
-    char full_path[BURNER_FILE_PATH_LEN] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
-    uint32_t write_size = 0;
+    char error_msg[160] = {0};
     uint32_t slot = 0;
-    uint32_t addr_begin = 0;
-    uint32_t effective_size = 0;
     uint32_t ram_latency = 10u;
     bool fram_mode = false;
+    burner_task_start_result_t result = {0};
     esp_err_t err;
     int n;
 
@@ -899,57 +1164,24 @@ esp_err_t burner_ram_write_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ram_latency must be 0..255");
     }
 
-    err = burner_resolve_input_file(
+    err = burner_start_ram_write_from_tf(
         raw_name,
-        safe_name,
-        sizeof(safe_name),
-        full_path,
-        sizeof(full_path),
-        &write_size);
-    if (err == ESP_ERR_NOT_FOUND) {
-        return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "sav file not found");
-    }
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "sav file invalid size");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid sav file");
-    }
-
-    err = burner_apply_mbc5_slot_limit(true, slot, write_size, &addr_begin, &effective_size);
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "sav file exceeds selected slot range");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
-    }
-
-    err = burner_start_task(
-        BURNER_JOB_WRITE_RAM,
-        safe_name,
-        full_path,
-        addr_begin,
-        effective_size,
+        slot,
         fram_mode,
-        (uint8_t)ram_latency);
+        (uint8_t)ram_latency,
+        &result,
+        error_msg,
+        sizeof(error_msg));
     if (err != ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            effective_size,
-            "ram write task busy or start failed",
-            safe_name,
-            full_path);
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ram write task is already running");
+        return burner_send_start_error(req, err, error_msg);
     }
 
     n = snprintf(
         resp,
         sizeof(resp),
         "{\"ok\":true,\"message\":\"ram write started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
-        full_path,
-        effective_size);
+        result.full_path,
+        result.effective_size);
     if (n <= 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }
@@ -1084,15 +1316,12 @@ esp_err_t burner_ram_verify_handler(httpd_req_t *req)
     char slot_arg[16] = {0};
     char ram_type_arg[16] = {0};
     char ram_latency_arg[16] = {0};
-    char safe_name[BURNER_FILE_NAME_LEN] = {0};
-    char full_path[BURNER_FILE_PATH_LEN] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
-    uint32_t verify_size = 0;
+    char error_msg[160] = {0};
     uint32_t slot = 0;
-    uint32_t addr_begin = 0;
-    uint32_t effective_size = 0;
     uint32_t ram_latency = 10u;
     bool fram_mode = false;
+    burner_task_start_result_t result = {0};
     esp_err_t err;
     int n;
 
@@ -1129,57 +1358,24 @@ esp_err_t burner_ram_verify_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ram_latency must be 0..255");
     }
 
-    err = burner_resolve_input_file(
+    err = burner_start_ram_verify_from_tf(
         raw_name,
-        safe_name,
-        sizeof(safe_name),
-        full_path,
-        sizeof(full_path),
-        &verify_size);
-    if (err == ESP_ERR_NOT_FOUND) {
-        return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "sav verify file not found");
-    }
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "sav verify file invalid size");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid sav verify file");
-    }
-
-    err = burner_apply_mbc5_slot_limit(true, slot, verify_size, &addr_begin, &effective_size);
-    if (err == ESP_ERR_INVALID_SIZE) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "sav verify file exceeds selected slot range");
-    }
-    if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
-    }
-
-    err = burner_start_task(
-        BURNER_JOB_VERIFY_RAM,
-        safe_name,
-        full_path,
-        addr_begin,
-        effective_size,
+        slot,
         fram_mode,
-        (uint8_t)ram_latency);
+        (uint8_t)ram_latency,
+        &result,
+        error_msg,
+        sizeof(error_msg));
     if (err != ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            effective_size,
-            "ram verify task busy or start failed",
-            safe_name,
-            full_path);
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ram verify task is already running");
+        return burner_send_start_error(req, err, error_msg);
     }
 
     n = snprintf(
         resp,
         sizeof(resp),
         "{\"ok\":true,\"message\":\"ram verify started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
-        full_path,
-        effective_size);
+        result.full_path,
+        result.effective_size);
     if (n <= 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }

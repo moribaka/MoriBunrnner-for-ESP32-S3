@@ -1,6 +1,7 @@
 #ifndef UI_H
 #define UI_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -12,8 +13,20 @@ typedef enum {
     UI_WIFI_STATE_CONNECTED,
 } ui_wifi_state_t;
 
+typedef enum {
+    UI_BUTTON_LEFT = 0,
+    UI_BUTTON_RIGHT,
+    UI_BUTTON_UP,
+    UI_BUTTON_DOWN,
+    UI_BUTTON_SELECT,
+    UI_BUTTON_BACK,
+    UI_BUTTON_MENU,
+} ui_button_t;
+
 esp_err_t ui_init(void);
 void ui_process(void);
+void ui_handle_button(ui_button_t button, bool pressed);
+void ui_post_button(ui_button_t button, bool pressed);
 void ui_set_wifi_state(ui_wifi_state_t state);
 void ui_set_ip_text(const char *ip);
 void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total);

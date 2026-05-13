@@ -56,12 +56,6 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_spi_config_get_handler,
         .user_ctx = NULL,
     };
-    httpd_uri_t spi_config_post_uri = {
-        .uri = "/api/spi/config",
-        .method = HTTP_POST,
-        .handler = burner_spi_config_post_handler,
-        .user_ctx = NULL,
-    };
     httpd_uri_t core_config_get_uri = {
         .uri = "/api/burn/core_config",
         .method = HTTP_GET,
@@ -408,11 +402,6 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &spi_config_get_uri);
-    if (err != ESP_OK) {
-        web_ws_stop();
-        return err;
-    }
-    err = httpd_register_uri_handler(s_httpd, &spi_config_post_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;

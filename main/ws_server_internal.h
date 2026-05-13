@@ -144,8 +144,6 @@ typedef struct {
 #define BURNER_SPI_ENABLE 1
 #define BURNER_SPI_HOST SPI2_HOST
 #define BURNER_SPI_CLOCK_HZ (40 * 1000 * 1000)
-#define BURNER_SPI_CLOCK_MIN_HZ (20 * 1000 * 1000)
-#define BURNER_SPI_CLOCK_MAX_HZ (80 * 1000 * 1000)
 /* Optional fallback profiles */
 /* #define BURNER_SPI_CLOCK_HZ (60 * 1000 * 1000) */
 /* #define BURNER_SPI_CLOCK_HZ (20 * 1000 * 1000) */
@@ -320,6 +318,15 @@ typedef struct {
 } burner_status_t;
 
 typedef struct {
+    char safe_name[BURNER_FILE_NAME_LEN];
+    char full_path[BURNER_FILE_PATH_LEN];
+    uint32_t effective_size;
+    uint32_t psram_mb;
+    uint32_t mbc5_chunk_kb;
+    bool gba_force_no_cfi;
+} burner_task_start_result_t;
+
+typedef struct {
     burner_job_mode_t mode;
     burner_cart_mode_t cart_mode;
     burner_write_path_t write_path;
@@ -334,6 +341,7 @@ typedef struct {
     uint8_t ram_latency;
     bool gba_force_multi;
     bool gba_force_no_cfi;
+    bool task_with_caps;
 } burner_task_param_t;
 
 typedef struct {
@@ -473,7 +481,7 @@ extern spi_device_handle_t s_mcu_spi;
 extern bool s_mcu_spi_ready;
 extern uint8_t *s_mcu_spi_tx_shadow;
 extern uint8_t *s_mcu_spi_rw_shadow;
-extern uint32_t s_mcu_spi_clock_hz;
+extern const uint32_t s_mcu_spi_clock_hz;
 extern uint32_t s_mcu_spi_actual_hz;
 extern burner_core_config_t s_burn_core_cfg;
 extern TickType_t s_bacon_last_active_tick;
@@ -490,9 +498,7 @@ void burner_bacon_idle_task_entry(void *param);
 esp_err_t burner_bacon_gba_power_cmd(bool power_5v, bool power_3v3);
 esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len);
 void burner_spi_release_cs(void);
-esp_err_t burner_spi_reconfigure_clock_locked(uint32_t hz, uint32_t *actual_hz_out);
 esp_err_t burner_spi_config_get_handler(httpd_req_t *req);
-esp_err_t burner_spi_config_post_handler(httpd_req_t *req);
 esp_err_t burner_core_config_get_handler(httpd_req_t *req);
 esp_err_t burner_core_config_post_handler(httpd_req_t *req);
 uint8_t *burner_spi_alloc_rw_buffer(size_t len, bool *needs_free);
@@ -509,6 +515,7 @@ bool burner_task_is_running_snapshot(void);
 bool burner_build_full_path(const char *rel_path, char *full_path, size_t full_path_len);
 esp_err_t burner_mkdirs_rel(const char *rel_path);
 void burner_build_output_timestamp(char *buf, size_t buf_len);
+esp_err_t burner_backend_init(void);
 void burner_status_update(
     burner_state_t state,
     int progress,
@@ -545,7 +552,7 @@ BaseType_t burner_core_affinity_to_task_core_id(burner_core_affinity_t affinity)
 BaseType_t burner_create_task_with_affinity(
     TaskFunction_t task_fn,
     const char *name,
-    uint32_t stack_words,
+    uint32_t stack_bytes,
     void *arg,
     UBaseType_t priority,
     TaskHandle_t *task_out,
@@ -564,6 +571,40 @@ esp_err_t burner_apply_gba_slot_limit(
     uint32_t *effective_size,
     bool *force_multi);
 bool burner_parse_ram_mode(const char *ram_type_text, bool *fram_mode);
+esp_err_t burner_start_write_from_tf(
+    const char *raw_name,
+    burner_cart_mode_t cart_mode,
+    uint32_t slot,
+    burner_write_path_t write_path,
+    uint32_t psram_mb,
+    uint32_t mbc5_chunk_kb,
+    bool gba_force_no_cfi,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len);
+esp_err_t burner_start_verify_from_tf(
+    const char *raw_name,
+    burner_cart_mode_t cart_mode,
+    uint32_t slot,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len);
+esp_err_t burner_start_ram_write_from_tf(
+    const char *raw_name,
+    uint32_t slot,
+    bool fram_mode,
+    uint8_t ram_latency,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len);
+esp_err_t burner_start_ram_verify_from_tf(
+    const char *raw_name,
+    uint32_t slot,
+    bool fram_mode,
+    uint8_t ram_latency,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len);
 bool burner_status_tracks_speed(burner_state_t state);
 bool burner_status_is_operation_active_state(burner_state_t state);
 bool burner_status_is_operation_active_locked(void);

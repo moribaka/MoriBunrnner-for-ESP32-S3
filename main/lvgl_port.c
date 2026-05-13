@@ -19,11 +19,15 @@
 #define LVGL_TASK_MIN_DELAY_MS 5
 #define LVGL_TASK_MAX_DELAY_MS 30
 #define LVGL_TASK_TICK_MS 5
+#define LVGL_PSRAM_POOL_COUNT 4
+#define LVGL_PSRAM_POOL_CHUNK_BYTES (48U * 1024U)
 
 static lv_display_t *s_display = NULL;
 static TaskHandle_t s_lvgl_task = NULL;
 static void *s_draw_buf1 = NULL;
 static void *s_draw_buf2 = NULL;
+static void *s_lvgl_psram_pools[LVGL_PSRAM_POOL_COUNT] = {0};
+static lv_mem_pool_t s_lvgl_psram_mem_pools[LVGL_PSRAM_POOL_COUNT] = {0};
 static bool s_inited = false;
 
 static void *lvgl_alloc_draw_buffer(size_t size, const char *name)
@@ -115,6 +119,37 @@ esp_err_t lvgl_port_init(void)
     }
 
     lv_init();
+
+    for (uint32_t i = 0; i < LVGL_PSRAM_POOL_COUNT; ++i) {
+        s_lvgl_psram_pools[i] = heap_caps_malloc(LVGL_PSRAM_POOL_CHUNK_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (s_lvgl_psram_pools[i] != NULL) {
+            s_lvgl_psram_mem_pools[i] = lv_mem_add_pool(s_lvgl_psram_pools[i], LVGL_PSRAM_POOL_CHUNK_BYTES);
+            if (s_lvgl_psram_mem_pools[i] != NULL) {
+                ESP_LOGI(
+                    LVGL_TAG,
+                    "LVGL PSRAM heap pool added (%u/%u, %u bytes)",
+                    (unsigned)(i + 1U),
+                    (unsigned)LVGL_PSRAM_POOL_COUNT,
+                    (unsigned)LVGL_PSRAM_POOL_CHUNK_BYTES);
+            } else {
+                ESP_LOGW(
+                    LVGL_TAG,
+                    "LVGL PSRAM heap pool add failed (%u/%u, %u bytes)",
+                    (unsigned)(i + 1U),
+                    (unsigned)LVGL_PSRAM_POOL_COUNT,
+                    (unsigned)LVGL_PSRAM_POOL_CHUNK_BYTES);
+                heap_caps_free(s_lvgl_psram_pools[i]);
+                s_lvgl_psram_pools[i] = NULL;
+            }
+        } else {
+            ESP_LOGW(
+                LVGL_TAG,
+                "LVGL PSRAM heap pool alloc failed (%u/%u, %u bytes)",
+                (unsigned)(i + 1U),
+                (unsigned)LVGL_PSRAM_POOL_COUNT,
+                (unsigned)LVGL_PSRAM_POOL_CHUNK_BYTES);
+        }
+    }
 
     s_display = lv_display_create(width, height);
     if (s_display == NULL) {

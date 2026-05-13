@@ -21,6 +21,7 @@
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_app_desc.h"
+#include "esp_attr.h"
 #include "esp_psram.h"
 #include "esp_freertos_hooks.h"
 #include "esp_rom_sys.h"
@@ -75,6 +76,7 @@
 #define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
 #define BURN_VERIFY_PSRAM_WINDOW_MB 7U
 #define BURN_VERIFY_PSRAM_WINDOW_BYTES (BURN_VERIFY_PSRAM_WINDOW_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
+#define BURN_TASK_STACK_BYTES (16U * 1024U)
 #define VERIFY_LOG_DIR_REL ".log"
 #define ROM_OUTPUT_TEMP_ROOT_REL ".temp/ROM_OUTPUT"
 #define TF_PATH_LEN_MAX 240
@@ -141,8 +143,6 @@ typedef struct {
 #define BURNER_SPI_ENABLE 1
 #define BURNER_SPI_HOST SPI2_HOST
 #define BURNER_SPI_CLOCK_HZ (40 * 1000 * 1000)
-#define BURNER_SPI_CLOCK_MIN_HZ (20 * 1000 * 1000)
-#define BURNER_SPI_CLOCK_MAX_HZ (80 * 1000 * 1000)
 /* Optional fallback profiles */
 /* #define BURNER_SPI_CLOCK_HZ (60 * 1000 * 1000) */
 /* #define BURNER_SPI_CLOCK_HZ (20 * 1000 * 1000) */
@@ -331,6 +331,7 @@ typedef struct {
     uint8_t ram_latency;
     bool gba_force_multi;
     bool gba_force_no_cfi;
+    bool task_with_caps;
 } burner_task_param_t;
 
 typedef struct {
@@ -468,9 +469,13 @@ TaskHandle_t s_burn_task = NULL;
 TaskHandle_t s_bacon_idle_task = NULL;
 spi_device_handle_t s_mcu_spi = NULL;
 bool s_mcu_spi_ready = false;
-uint8_t *s_mcu_spi_tx_shadow = NULL;
-uint8_t *s_mcu_spi_rw_shadow = NULL;
-uint32_t s_mcu_spi_clock_hz = BURNER_SPI_CLOCK_HZ;
+static DMA_ATTR uint8_t s_mcu_spi_tx_shadow_storage[BURNER_SPI_STREAM_CHUNK_BYTES];
+static DMA_ATTR uint8_t s_mcu_spi_rw_shadow_storage[BURNER_SPI_STREAM_CHUNK_BYTES];
+uint8_t *s_mcu_spi_tx_shadow = s_mcu_spi_tx_shadow_storage;
+uint8_t *s_mcu_spi_rw_shadow = s_mcu_spi_rw_shadow_storage;
+static const size_t s_mcu_spi_tx_shadow_size = sizeof(s_mcu_spi_tx_shadow_storage);
+static const size_t s_mcu_spi_rw_shadow_size = sizeof(s_mcu_spi_rw_shadow_storage);
+const uint32_t s_mcu_spi_clock_hz = BURNER_SPI_CLOCK_HZ;
 uint32_t s_mcu_spi_actual_hz = BURNER_SPI_CLOCK_HZ;
 burner_core_config_t s_burn_core_cfg = {
     .erase_core = BURNER_CORE_AFFINITY_AUTO,
@@ -496,9 +501,7 @@ void burner_bacon_idle_task_entry(void *param);
 esp_err_t burner_bacon_gba_power_cmd(bool power_5v, bool power_3v3);
 esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len);
 void burner_spi_release_cs(void);
-esp_err_t burner_spi_reconfigure_clock_locked(uint32_t hz, uint32_t *actual_hz_out);
 esp_err_t burner_spi_config_get_handler(httpd_req_t *req);
-esp_err_t burner_spi_config_post_handler(httpd_req_t *req);
 esp_err_t burner_core_config_get_handler(httpd_req_t *req);
 esp_err_t burner_core_config_post_handler(httpd_req_t *req);
 uint8_t *burner_spi_alloc_rw_buffer(size_t len, bool *needs_free);
@@ -1534,7 +1537,7 @@ BaseType_t burner_core_affinity_to_task_core_id(burner_core_affinity_t affinity)
 BaseType_t burner_create_task_with_affinity(
     TaskFunction_t task_fn,
     const char *name,
-    uint32_t stack_words,
+    uint32_t stack_bytes,
     void *arg,
     UBaseType_t priority,
     TaskHandle_t *task_out,
@@ -1543,9 +1546,9 @@ BaseType_t burner_create_task_with_affinity(
     BaseType_t core_id = burner_core_affinity_to_task_core_id(affinity);
 
     if (core_id == tskNO_AFFINITY) {
-        return xTaskCreate(task_fn, name, stack_words, arg, priority, task_out);
+        return xTaskCreate(task_fn, name, stack_bytes, arg, priority, task_out);
     }
-    return xTaskCreatePinnedToCore(task_fn, name, stack_words, arg, priority, task_out, core_id);
+    return xTaskCreatePinnedToCore(task_fn, name, stack_bytes, arg, priority, task_out, core_id);
 }
 
 bool burner_get_mbc5_slot_range(bool ram_range, uint32_t slot, uint32_t *addr_begin, uint32_t *addr_end)
@@ -4642,33 +4645,6 @@ esp_err_t burner_spi_init(void)
         return err;
     }
 
-    if (s_mcu_spi_tx_shadow == NULL) {
-        s_mcu_spi_tx_shadow = (uint8_t *)heap_caps_malloc(
-            BURNER_SPI_MAX_XFER,
-            MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        if (s_mcu_spi_tx_shadow == NULL) {
-            ESP_LOGE(BURNER_TAG, "alloc spi tx shadow failed");
-            (void)spi_bus_remove_device(s_mcu_spi);
-            s_mcu_spi = NULL;
-            (void)spi_bus_free(BURNER_SPI_HOST);
-            return ESP_ERR_NO_MEM;
-        }
-    }
-
-    if (s_mcu_spi_rw_shadow == NULL) {
-        s_mcu_spi_rw_shadow = (uint8_t *)heap_caps_malloc(
-            BURNER_SPI_MAX_XFER,
-            MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        if (s_mcu_spi_rw_shadow == NULL) {
-            ESP_LOGE(BURNER_TAG, "alloc spi rw shadow failed");
-            (void)spi_bus_remove_device(s_mcu_spi);
-            s_mcu_spi = NULL;
-            s_mcu_spi_ready = false;
-            (void)spi_bus_free(BURNER_SPI_HOST);
-            return ESP_ERR_NO_MEM;
-        }
-    }
-
     s_cart_ctx.prepared = false;
     s_cart_ctx.current_bank = UINT16_MAX;
     s_cart_ctx.buffer_write_bytes = 0;
@@ -4688,6 +4664,12 @@ esp_err_t burner_spi_init(void)
     } else {
         s_mcu_spi_actual_hz = s_mcu_spi_clock_hz;
     }
+    ESP_LOGI(
+        BURNER_TAG,
+        "MCU SPI ready: actual=%" PRIu32 "Hz dma_scratch_tx=%u dma_scratch_rw=%u",
+        s_mcu_spi_actual_hz,
+        (unsigned)s_mcu_spi_tx_shadow_size,
+        (unsigned)s_mcu_spi_rw_shadow_size);
     burner_bacon_mark_activity_locked();
     return ESP_OK;
 #else
@@ -4791,38 +4773,36 @@ bool burner_task_is_running_snapshot(void)
     return is_busy;
 }
 
-esp_err_t burner_spi_reconfigure_clock_locked(uint32_t hz, uint32_t *actual_hz_out)
+esp_err_t burner_backend_init(void)
 {
-    esp_err_t err;
-
-    if (hz < BURNER_SPI_CLOCK_MIN_HZ || hz > BURNER_SPI_CLOCK_MAX_HZ) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    s_mcu_spi_clock_hz = hz;
-
-    if (s_mcu_spi_ready && s_mcu_spi != NULL) {
-        err = spi_bus_remove_device(s_mcu_spi);
-        if (err != ESP_OK) {
-            return err;
+    if (s_status_lock == NULL) {
+        s_status_lock = xSemaphoreCreateMutex();
+        if (s_status_lock == NULL) {
+            return ESP_ERR_NO_MEM;
         }
-        s_mcu_spi = NULL;
-        s_mcu_spi_ready = false;
-
-        err = spi_bus_free(BURNER_SPI_HOST);
-        if (err != ESP_OK) {
-            return err;
+    }
+    if (s_spi_lock == NULL) {
+        s_spi_lock = xSemaphoreCreateMutex();
+        if (s_spi_lock == NULL) {
+            return ESP_ERR_NO_MEM;
         }
     }
 
-    err = burner_spi_init();
-    if (err != ESP_OK) {
-        return err;
+    s_bacon_last_active_tick = xTaskGetTickCount();
+    s_bacon_idle_powered_down = false;
+
+    if (s_bacon_idle_task == NULL) {
+        if (xTaskCreate(
+                burner_bacon_idle_task_entry,
+                "bacon_idle",
+                3072,
+                NULL,
+                2,
+                &s_bacon_idle_task) != pdPASS) {
+            return ESP_ERR_NO_MEM;
+        }
     }
 
-    if (actual_hz_out != NULL) {
-        *actual_hz_out = s_mcu_spi_actual_hz;
-    }
     return ESP_OK;
 }
 
@@ -4835,82 +4815,11 @@ esp_err_t burner_spi_config_get_handler(httpd_req_t *req)
         resp,
         sizeof(resp),
         "{\"ok\":true,\"configured_hz\":%" PRIu32 ",\"actual_hz\":%" PRIu32
-        ",\"min_hz\":%u,\"max_hz\":%u}",
+        ",\"min_hz\":%u,\"max_hz\":%u,\"fixed\":true}",
         s_mcu_spi_clock_hz,
         s_mcu_spi_actual_hz,
-        (unsigned)BURNER_SPI_CLOCK_MIN_HZ,
-        (unsigned)BURNER_SPI_CLOCK_MAX_HZ);
-    if (n <= 0 || n >= (int)sizeof(resp)) {
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
-    }
-    return burner_send_json(req, resp);
-}
-
-esp_err_t burner_spi_config_post_handler(httpd_req_t *req)
-{
-    char hz_arg[24] = {0};
-    char mhz_arg[16] = {0};
-    char resp[320];
-    uint32_t hz = 0;
-    uint32_t parsed = 0;
-    uint32_t actual_hz = 0;
-    esp_err_t err;
-    int n;
-
-    if (!burner_get_query_arg(req, "hz", hz_arg, sizeof(hz_arg), false)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid hz query");
-    }
-    if (!burner_get_query_arg(req, "mhz", mhz_arg, sizeof(mhz_arg), false)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mhz query");
-    }
-    if (hz_arg[0] == '\0' && mhz_arg[0] == '\0') {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "hz or mhz is required");
-    }
-
-    if (hz_arg[0] != '\0') {
-        if (!burner_parse_u32_text(hz_arg, &hz)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid hz query");
-        }
-    } else {
-        if (!burner_parse_u32_text(mhz_arg, &parsed)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mhz query");
-        }
-        if (parsed > (UINT32_MAX / 1000000u)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mhz out of range");
-        }
-        hz = parsed * 1000000u;
-    }
-
-    if (hz < BURNER_SPI_CLOCK_MIN_HZ || hz > BURNER_SPI_CLOCK_MAX_HZ) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "spi hz must be 20000000..80000000");
-    }
-    if (burner_task_is_running_snapshot()) {
-        return httpd_resp_send_custom_err(req, "409 Conflict", "burn task is running");
-    }
-
-    burner_spi_lock_take();
-    err = burner_spi_reconfigure_clock_locked(hz, &actual_hz);
-    burner_spi_lock_give();
-    if (err != ESP_OK) {
-        ESP_LOGE(BURNER_TAG, "spi reconfigure failed: %s", esp_err_to_name(err));
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "spi reconfigure failed");
-    }
-    ESP_LOGI(
-        BURNER_TAG,
-        "SPI clock updated: requested=%" PRIu32 "Hz configured=%" PRIu32 "Hz actual=%" PRIu32 "Hz",
-        hz,
-        s_mcu_spi_clock_hz,
-        actual_hz);
-
-    n = snprintf(
-        resp,
-        sizeof(resp),
-        "{\"ok\":true,\"configured_hz\":%" PRIu32 ",\"actual_hz\":%" PRIu32
-        ",\"min_hz\":%u,\"max_hz\":%u}",
-        s_mcu_spi_clock_hz,
-        actual_hz,
-        (unsigned)BURNER_SPI_CLOCK_MIN_HZ,
-        (unsigned)BURNER_SPI_CLOCK_MAX_HZ);
+        (unsigned)BURNER_SPI_CLOCK_HZ,
+        (unsigned)BURNER_SPI_CLOCK_HZ);
     if (n <= 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }
@@ -5243,6 +5152,10 @@ static esp_err_t burner_spi_transfer_cs_legacy(
 #if BURNER_SPI_ENABLE
     esp_err_t err;
     spi_transaction_t trans = {0};
+    const uint8_t *tx_buf = tx;
+    uint8_t *rx_buf = rx;
+    bool use_tx_shadow = false;
+    bool use_rx_shadow = false;
 
     if (tx == NULL || len == 0u || len > BURNER_SPI_MAX_XFER) {
         return ESP_ERR_INVALID_ARG;
@@ -5251,14 +5164,28 @@ static esp_err_t burner_spi_transfer_cs_legacy(
         return ESP_ERR_INVALID_STATE;
     }
 
+    if (s_mcu_spi_tx_shadow != NULL && len <= s_mcu_spi_tx_shadow_size) {
+        memcpy(s_mcu_spi_tx_shadow, tx, len);
+        tx_buf = s_mcu_spi_tx_shadow;
+        use_tx_shadow = true;
+    }
+    if (rx != NULL && s_mcu_spi_rw_shadow != NULL && len <= s_mcu_spi_rw_shadow_size) {
+        rx_buf = s_mcu_spi_rw_shadow;
+        use_rx_shadow = true;
+    }
+
     trans.length = (uint32_t)(len * 8u);
-    trans.tx_buffer = tx;
-    trans.rx_buffer = rx;
+    trans.tx_buffer = tx_buf;
+    trans.rx_buffer = rx_buf;
 
     burner_bacon_mark_activity_locked();
     burner_spi_apply_cs_mode(mode);
     err = spi_device_polling_transmit(s_mcu_spi, &trans);
     burner_spi_release_cs();
+    if (err == ESP_OK && use_rx_shadow) {
+        memcpy(rx, s_mcu_spi_rw_shadow, len);
+    }
+    (void)use_tx_shadow;
     return err;
 #else
     (void)mode;
@@ -5273,7 +5200,7 @@ static esp_err_t burner_spi_write_read(uint8_t *io_buf, size_t len)
 {
     esp_err_t err;
     uint8_t *tx_buf = s_mcu_spi_tx_shadow;
-    bool use_shadow = (tx_buf != NULL && len <= BURNER_SPI_MAX_XFER);
+    bool use_shadow = (tx_buf != NULL && len <= s_mcu_spi_tx_shadow_size);
 
     if (io_buf == NULL || len == 0u) {
         return ESP_ERR_INVALID_ARG;
@@ -5372,7 +5299,7 @@ uint8_t *burner_spi_alloc_rw_buffer(size_t len, bool *needs_free)
         return NULL;
     }
 
-    if (s_mcu_spi_rw_shadow != NULL) {
+    if (s_mcu_spi_rw_shadow != NULL && len <= s_mcu_spi_rw_shadow_size) {
         return s_mcu_spi_rw_shadow;
     }
 
@@ -5396,7 +5323,7 @@ uint8_t *burner_spi_alloc_tx_buffer(size_t len, bool *needs_free)
         return NULL;
     }
 
-    if (s_mcu_spi_tx_shadow != NULL) {
+    if (s_mcu_spi_tx_shadow != NULL && len <= s_mcu_spi_tx_shadow_size) {
         return s_mcu_spi_tx_shadow;
     }
 
@@ -5583,9 +5510,9 @@ static esp_err_t burner_bacon_gbc_read_stream_hoststyle(uint16_t addr, uint8_t *
         return ESP_ERR_INVALID_ARG;
     }
 
-    chunk_len_limit = BURNER_SPI_MAX_XFER;
-    if (chunk_len_limit == 0u) {
-        return ESP_ERR_INVALID_SIZE;
+    chunk_len_limit = BURNER_SPI_STREAM_CHUNK_BYTES;
+    if (chunk_len_limit == 0u || chunk_len_limit > BURNER_SPI_MAX_XFER) {
+        chunk_len_limit = BURNER_SPI_MAX_XFER;
     }
     chunk_len_limit -= (chunk_len_limit % 3u);
     if (chunk_len_limit == 0u) {
@@ -13838,11 +13765,13 @@ static void burner_task(void *param)
     const char *done_msg = "task finished";
     const char *start_msg = "task started";
     bool restore_power = false;
+    bool task_with_caps = false;
 
     if (job == NULL) {
         vTaskDelete(NULL);
         return;
     }
+    task_with_caps = job->task_with_caps;
 
     burner_cancel_reset();
 
@@ -13977,6 +13906,10 @@ static void burner_task(void *param)
 
 task_done:
     burner_cancel_reset();
+    ESP_LOGI(
+        BURNER_TAG,
+        "burn_task stack free min=%u bytes",
+        (unsigned)uxTaskGetStackHighWaterMark2(NULL));
     free(job);
     if (s_status_lock != NULL) {
         xSemaphoreTake(s_status_lock, portMAX_DELAY);
@@ -13985,7 +13918,11 @@ task_done:
     } else {
         s_burn_task = NULL;
     }
-    vTaskDelete(NULL);
+    if (task_with_caps) {
+        vTaskDeleteWithCaps(NULL);
+    } else {
+        vTaskDelete(NULL);
+    }
 }
 
 esp_err_t burner_start_task_ex(
@@ -14060,15 +13997,42 @@ esp_err_t burner_start_task_ex(
         burn_task_affinity = BURNER_CORE_AFFINITY_AUTO;
     }
 
-    ret = burner_create_task_with_affinity(
+    job->task_with_caps = true;
+    ret = xTaskCreatePinnedToCoreWithCaps(
         burner_task,
         "burn_task",
-        8192,
+        BURN_TASK_STACK_BYTES,
         job,
         5,
         &s_burn_task,
-        burn_task_affinity);
+        burner_core_affinity_to_task_core_id(burn_task_affinity),
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (ret != pdPASS) {
+        job->task_with_caps = false;
+        ret = burner_create_task_with_affinity(
+            burner_task,
+            "burn_task",
+            BURN_TASK_STACK_BYTES,
+            job,
+            5,
+            &s_burn_task,
+            burn_task_affinity);
+    }
+    if (ret != pdPASS) {
+        size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        ESP_LOGW(
+            BURNER_TAG,
+            "burn_task create failed: ret=%d stack=%u affinity=%s internal_free=%u internal_largest=%u psram_free=%u psram_largest=%u",
+            (int)ret,
+            (unsigned)BURN_TASK_STACK_BYTES,
+            burner_core_affinity_to_str(burn_task_affinity),
+            (unsigned)internal_free,
+            (unsigned)internal_largest,
+            (unsigned)psram_free,
+            (unsigned)psram_largest);
         free(job);
         s_burn_task = NULL;
         return ESP_FAIL;

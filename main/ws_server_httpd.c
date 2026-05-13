@@ -62,12 +62,6 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_spi_config_get_handler,
         .user_ctx = NULL,
     };
-    httpd_uri_t spi_config_post_uri = {
-        .uri = "/api/spi/config",
-        .method = HTTP_POST,
-        .handler = burner_spi_config_post_handler,
-        .user_ctx = NULL,
-    };
     httpd_uri_t core_config_get_uri = {
         .uri = "/api/burn/core_config",
         .method = HTTP_GET,
@@ -334,36 +328,14 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
     s_upload_html_override = (cfg != NULL) ? cfg->html_code : NULL;
     s_receive_cb = (cfg != NULL) ? cfg->receive_fn : NULL;
 
-    if (s_status_lock == NULL) {
-        s_status_lock = xSemaphoreCreateMutex();
-        if (s_status_lock == NULL) {
-            return ESP_ERR_NO_MEM;
-        }
-    }
-    if (s_spi_lock == NULL) {
-        s_spi_lock = xSemaphoreCreateMutex();
-        if (s_spi_lock == NULL) {
-            return ESP_ERR_NO_MEM;
-        }
+    err = burner_backend_init();
+    if (err != ESP_OK) {
+        return err;
     }
 
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
     burner_status_reset();
     xSemaphoreGive(s_status_lock);
-    s_bacon_last_active_tick = xTaskGetTickCount();
-    s_bacon_idle_powered_down = false;
-
-    if (s_bacon_idle_task == NULL) {
-        if (xTaskCreate(
-                burner_bacon_idle_task_entry,
-                "bacon_idle",
-                3072,
-                NULL,
-                2,
-                &s_bacon_idle_task) != pdPASS) {
-            return ESP_ERR_NO_MEM;
-        }
-    }
 
     config.max_uri_handlers = 60;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
@@ -420,11 +392,6 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &spi_config_get_uri);
-    if (err != ESP_OK) {
-        web_ws_stop();
-        return err;
-    }
-    err = httpd_register_uri_handler(s_httpd, &spi_config_post_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;
