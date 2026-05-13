@@ -16,9 +16,8 @@
 #define LVGL_TASK_STACK_SIZE 8192
 #define LVGL_TASK_PRIORITY 4
 #define LVGL_DRAW_BUF_LINES 40
-#define LVGL_TASK_MIN_DELAY_MS 5
-#define LVGL_TASK_MAX_DELAY_MS 30
-#define LVGL_TASK_TICK_MS 5
+#define LVGL_TASK_FRAME_MS 16
+#define LVGL_TASK_CORE_ID 0
 #define LVGL_PSRAM_POOL_COUNT 4
 #define LVGL_PSRAM_POOL_CHUNK_BYTES (48U * 1024U)
 
@@ -70,19 +69,15 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 
 static void lvgl_task(void *arg)
 {
+    TickType_t last_wake = xTaskGetTickCount();
+
     (void)arg;
 
     while (1) {
-        lv_tick_inc(LVGL_TASK_TICK_MS);
+        lv_tick_inc(LVGL_TASK_FRAME_MS);
         ui_process();
-        uint32_t delay_ms = lv_timer_handler();
-        if (delay_ms < LVGL_TASK_MIN_DELAY_MS) {
-            delay_ms = LVGL_TASK_MIN_DELAY_MS;
-        }
-        if (delay_ms > LVGL_TASK_MAX_DELAY_MS) {
-            delay_ms = LVGL_TASK_MAX_DELAY_MS;
-        }
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        (void)lv_timer_handler();
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LVGL_TASK_FRAME_MS));
     }
 }
 
@@ -172,13 +167,20 @@ esp_err_t lvgl_port_init(void)
         return err;
     }
 
-    if (xTaskCreate(lvgl_task, "lvgl", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, &s_lvgl_task) != pdPASS) {
+    if (xTaskCreatePinnedToCore(
+            lvgl_task,
+            "lvgl",
+            LVGL_TASK_STACK_SIZE,
+            NULL,
+            LVGL_TASK_PRIORITY,
+            &s_lvgl_task,
+            LVGL_TASK_CORE_ID) != pdPASS) {
         ESP_LOGE(LVGL_TAG, "create lvgl task failed");
         return ESP_FAIL;
     }
 
     s_inited = true;
-    ESP_LOGI(LVGL_TAG, "LVGL started on %dx%d", width, height);
+    ESP_LOGI(LVGL_TAG, "LVGL started on %dx%d core=%d", width, height, LVGL_TASK_CORE_ID);
     return ESP_OK;
 }
 

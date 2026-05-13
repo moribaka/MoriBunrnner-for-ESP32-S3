@@ -6,11 +6,14 @@
 #include "sdmmc_cmd.h"
 #include "driver/sdmmc_host.h"
 #include "esp_vfs_fat.h"
+#include "esp_spiffs.h"
 #include "driver/gpio.h"
 #include "pin_map.h"
 
 // 挂载点
 #define mount_point "/sdcard"
+#define assets_mount_point "/assets"
+#define assets_partition_label "assets"
 #define sdcard_tag "SDCARD"
 // 全局变量
 #define sdmmc_tag  "sdmmc"
@@ -28,4 +31,6 @@ extern sdmmc_card_t *card;
 // 函数声明
 esp_err_t sdmmc_init(void);
 esp_err_t sdmmc_unmount(void);
+esp_err_t assets_fs_init(void);
+void assets_fs_print_info(void);
 #endif

@@ -40,12 +40,14 @@
 #define UI_IP_BUF_LEN 32
 #define WEB_START_TASK_STACK_SIZE 6144
 #define WEB_START_TASK_PRIORITY 4
+#define WEB_START_TASK_CORE_ID 0
 #define MORI_I2C_BOOT_FREQ_HZ 100000U
 #define MORI_TCA9555_BOOT_INPUT_CFG 0xFFFFU
-#define MORI_TCA9555_IRQ_DEBOUNCE_MS 60U
+#define MORI_TCA9555_IRQ_DEBOUNCE_MS 25U
 #define MORI_TCA9555_IRQ_LOG_RELEASE 0
 #define MORI_BOOT_KEY_TASK_STACK_SIZE 2048
 #define MORI_BOOT_KEY_TASK_PRIORITY 3
+#define MORI_BOOT_KEY_TASK_CORE_ID 0
 #define MORI_BOOT_KEY_POLL_MS 20U
 #define MORI_BOOT_KEY_DEBOUNCE_MS 40U
 #define MORI_BOOT_KEY_LONG_PRESS_MS 700U
@@ -2197,10 +2199,10 @@ static void tca9555_input_irq_cb(uint16_t pin_mask, int level, void *user_ctx)
     }
 
     now_ms = esp_log_timestamp();
-    if ((now_ms - s_last_ms[pin_index]) < MORI_TCA9555_IRQ_DEBOUNCE_MS) {
+    if (s_last_level[pin_index] == (uint8_t)level) {
         return;
     }
-    if (s_last_level[pin_index] == (uint8_t)level) {
+    if (level == 0 && (now_ms - s_last_ms[pin_index]) < MORI_TCA9555_IRQ_DEBOUNCE_MS) {
         return;
     }
 
@@ -2209,10 +2211,10 @@ static void tca9555_input_irq_cb(uint16_t pin_mask, int level, void *user_ctx)
     if (!tca9555_is_known_button(pin_mask)) {
         return;
     }
-    if (level == 0) {
+    {
         ui_button_t button = UI_BUTTON_SELECT;
         if (tca9555_button_to_ui_button(pin_mask, &button)) {
-            ui_post_button(button, true);
+            ui_post_button(button, level == 0);
         }
     }
 #if !MORI_TCA9555_IRQ_LOG_RELEASE
@@ -2236,7 +2238,6 @@ static void boot_key_task(void *arg)
     int last_raw = 1;
     int stable_level = 1;
     uint32_t last_change_ms = 0;
-    uint32_t press_start_ms = 0;
 
     (void)arg;
 
@@ -2262,14 +2263,7 @@ static void boot_key_task(void *arg)
 
         if (raw != stable_level && (now_ms - last_change_ms) >= MORI_BOOT_KEY_DEBOUNCE_MS) {
             stable_level = raw;
-            if (stable_level == 0) {
-                press_start_ms = now_ms;
-            } else {
-                uint32_t held_ms = now_ms - press_start_ms;
-                ui_post_button(
-                    (held_ms >= MORI_BOOT_KEY_LONG_PRESS_MS) ? UI_BUTTON_SELECT : UI_BUTTON_RIGHT,
-                    true);
-            }
+            ui_post_button(UI_BUTTON_RIGHT, stable_level == 0);
         }
 
         vTaskDelay(pdMS_TO_TICKS(MORI_BOOT_KEY_POLL_MS));
@@ -2282,13 +2276,14 @@ static void start_boot_key_task(void)
         return;
     }
 
-    if (xTaskCreate(
+    if (xTaskCreatePinnedToCore(
             boot_key_task,
             "boot_key",
             MORI_BOOT_KEY_TASK_STACK_SIZE,
             NULL,
             MORI_BOOT_KEY_TASK_PRIORITY,
-            &s_boot_key_task) != pdPASS) {
+            &s_boot_key_task,
+            MORI_BOOT_KEY_TASK_CORE_ID) != pdPASS) {
         s_boot_key_task = NULL;
         ESP_LOGW("main", "create BOOT key task failed");
     }
@@ -2418,13 +2413,14 @@ static void trigger_web_start_async(void)
     }
 
     s_web_starting = true;
-    create_ret = xTaskCreate(
+    create_ret = xTaskCreatePinnedToCore(
         web_start_task,
         "web_start",
         WEB_START_TASK_STACK_SIZE,
         NULL,
         WEB_START_TASK_PRIORITY,
-        NULL);
+        NULL,
+        WEB_START_TASK_CORE_ID);
     if (create_ret != pdPASS) {
         s_web_starting = false;
         ui_set_status_text("web task create failed");
@@ -2519,6 +2515,11 @@ void app_main(void)
     ui_set_wifi_state(UI_WIFI_STATE_UNKNOWN);
     ui_set_ip_text("--");
     ui_set_burn_progress(0, 0, 0);
+
+    ESP_LOGI("main", "boot step: mount assets");
+    if (assets_fs_init() != ESP_OK) {
+        ESP_LOGW("main", "assets partition unavailable, continue without built-in assets");
+    }
 
     ESP_LOGI("main", "boot step: mount sdcard");
     mount_sdcard_if_possible();

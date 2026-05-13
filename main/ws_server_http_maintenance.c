@@ -27,7 +27,7 @@ static void burner_restart_task(void *arg)
 void burner_schedule_restart(void)
 {
     TaskHandle_t task = NULL;
-    if (xTaskCreate(burner_restart_task, "web_reboot", 2048, NULL, 3, &task) != pdPASS) {
+    if (xTaskCreatePinnedToCore(burner_restart_task, "web_reboot", 2048, NULL, 3, &task, 0) != pdPASS) {
         ESP_LOGW(BURNER_TAG, "schedule reboot task failed");
     }
 }

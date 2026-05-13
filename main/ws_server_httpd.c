@@ -339,6 +339,7 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
 
     config.max_uri_handlers = 60;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
+    config.core_id = 0;
     // Browser WebSocket handshake headers can be longer than default.
     config.max_req_hdr_len = 4096;
     config.max_uri_len = 512;

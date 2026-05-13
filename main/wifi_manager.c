@@ -12,6 +12,7 @@
 
 #define MAX_CONNECT_RETRY 5
 #define MAX_SCAN_AP 20
+#define WIFI_SCAN_TASK_CORE_ID 0
 
 #define WIFI_CFG_NAMESPACE "wifi_cfg"
 #define WIFI_CFG_KEY_SSID "ssid"
@@ -226,6 +227,7 @@ static esp_err_t start_provision_http_server(void)
 
     config.max_uri_handlers = 8;
     config.lru_purge_enable = true;
+    config.core_id = 0;
 
     err = httpd_start(&provision_httpd, &config);
     if (err != ESP_OK) {
@@ -777,7 +779,7 @@ esp_err_t wifi_maneger_scan(p_wifi_scan_cb f)
     }
 
     esp_wifi_clear_ap_list();
-    task_ret = xTaskCreatePinnedToCore(scan_task, "wifi_scan", 4096, f, 3, NULL, 1);
+    task_ret = xTaskCreatePinnedToCore(scan_task, "wifi_scan", 4096, f, 3, NULL, WIFI_SCAN_TASK_CORE_ID);
     if (task_ret != pdPASS) {
         xSemaphoreGive(scan_sem);
         return ESP_FAIL;

@@ -69,10 +69,12 @@
 #define BURN_GBA_DUMP_CHUNK_BYTES 65536U
 #define BURN_GBA_BANK_BYTES (32U * 1024U * 1024U)
 #define BURN_PSRAM_WINDOW_BYTES_PER_MB (1024U * 1024U)
+#define BURN_PSRAM_WINDOW_AUTO_MB 0U
 #define BURN_PSRAM_WINDOW_MIN_MB 1U
 #define BURN_PSRAM_WINDOW_MAX_MB 8U
-#define BURN_PSRAM_WINDOW_DEFAULT_MB 4U
-#define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES (BURN_PSRAM_WINDOW_DEFAULT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
+#define BURN_PSRAM_WINDOW_DEFAULT_MB BURN_PSRAM_WINDOW_AUTO_MB
+#define BURN_PSRAM_WINDOW_RESERVE_BYTES (256U * 1024U)
+#define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES 0U
 #define BURN_READ_PSRAM_FRAGMENT_MB 7U
 #define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
 #define BURN_VERIFY_PSRAM_WINDOW_MB 7U
@@ -544,6 +546,7 @@ uint32_t burner_mbc5_program_chunk_kb_to_bytes(uint32_t kb);
 bool burner_is_supported_dump_chunk_bytes(uint32_t bytes);
 uint32_t burner_dump_chunk_kb_to_bytes(uint32_t kb);
 uint32_t burner_dump_chunk_bytes_to_kb(uint32_t bytes);
+uint32_t burner_psram_auto_window_mb(void);
 uint32_t burner_psram_window_mb_to_bytes(uint32_t mb);
 uint32_t burner_psram_window_bytes_to_mb(uint32_t bytes);
 const char *burner_core_affinity_to_str(burner_core_affinity_t affinity);

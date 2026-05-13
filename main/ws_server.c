@@ -68,15 +68,18 @@
 #define BURN_GBA_DUMP_CHUNK_BYTES 65536U
 #define BURN_GBA_BANK_BYTES (32U * 1024U * 1024U)
 #define BURN_PSRAM_WINDOW_BYTES_PER_MB (1024U * 1024U)
+#define BURN_PSRAM_WINDOW_AUTO_MB 0U
 #define BURN_PSRAM_WINDOW_MIN_MB 1U
 #define BURN_PSRAM_WINDOW_MAX_MB 8U
-#define BURN_PSRAM_WINDOW_DEFAULT_MB 4U
-#define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES (BURN_PSRAM_WINDOW_DEFAULT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
+#define BURN_PSRAM_WINDOW_DEFAULT_MB BURN_PSRAM_WINDOW_AUTO_MB
+#define BURN_PSRAM_WINDOW_RESERVE_BYTES (256U * 1024U)
+#define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES 0U
 #define BURN_READ_PSRAM_FRAGMENT_MB 7U
 #define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
 #define BURN_VERIFY_PSRAM_WINDOW_MB 7U
 #define BURN_VERIFY_PSRAM_WINDOW_BYTES (BURN_VERIFY_PSRAM_WINDOW_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
 #define BURN_TASK_STACK_BYTES (16U * 1024U)
+#define BURNER_TASK_CORE_ID 1
 #define VERIFY_LOG_DIR_REL ".log"
 #define ROM_OUTPUT_TEMP_ROOT_REL ".temp/ROM_OUTPUT"
 #define TF_PATH_LEN_MAX 240
@@ -148,6 +151,7 @@ typedef struct {
 /* #define BURNER_SPI_CLOCK_HZ (20 * 1000 * 1000) */
 #define BURNER_SPI_MAX_XFER (16 * 1024)
 #define BURNER_SPI_STREAM_CHUNK_BYTES 2048U
+#define BURNER_CPU_YIELD_INTERVAL_US 20000ULL
 #define BURNER_ROM_POLL_TIMEOUT_MS 2000
 #define BURNER_ROM_POLL_INTERVAL_US 50
 #define BURNER_ROM_ERASE_TIMEOUT_MS 20000
@@ -478,9 +482,9 @@ static const size_t s_mcu_spi_rw_shadow_size = sizeof(s_mcu_spi_rw_shadow_storag
 const uint32_t s_mcu_spi_clock_hz = BURNER_SPI_CLOCK_HZ;
 uint32_t s_mcu_spi_actual_hz = BURNER_SPI_CLOCK_HZ;
 burner_core_config_t s_burn_core_cfg = {
-    .erase_core = BURNER_CORE_AFFINITY_AUTO,
-    .tf_core = BURNER_CORE_AFFINITY_AUTO,
-    .psram_core = BURNER_CORE_AFFINITY_AUTO,
+    .erase_core = BURNER_CORE_AFFINITY_CPU1,
+    .tf_core = BURNER_CORE_AFFINITY_CPU1,
+    .psram_core = BURNER_CORE_AFFINITY_CPU1,
 };
 TickType_t s_bacon_last_active_tick = 0;
 bool s_bacon_idle_powered_down = false;
@@ -527,6 +531,7 @@ void burner_status_update(
     const char *rom_name,
     const char *rom_path);
 esp_err_t burner_spi_init(void);
+void burner_task_yield_if_due(void);
 void burner_spi_lock_take(void);
 void burner_spi_lock_give(void);
 void burner_bacon_restore_3v3_power(void);
@@ -534,6 +539,7 @@ esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset,
 esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job);
 esp_err_t burner_spi_prepare_burn_gba(const burner_task_param_t *job);
 esp_err_t burner_bacon_mbc5_read_block(uint8_t *out, size_t len, uint32_t offset);
+uint32_t burner_psram_auto_window_mb(void);
 burner_status_t s_status = {
     .state = BURNER_STATE_IDLE,
     .progress = 0,
@@ -544,6 +550,7 @@ burner_status_t s_status = {
     .message = "idle",
     .cancel_requested = false,
 };
+static uint64_t s_burn_task_last_yield_us = 0;
 const char *const s_system_migrate_rel_dirs[] = {
     WEB_LANG_DIR_REL,
     WEB_ROOT_DIR_REL,
@@ -1465,27 +1472,66 @@ uint32_t burner_psram_window_mb_to_bytes(uint32_t mb)
     if (mb < BURN_PSRAM_WINDOW_MIN_MB || mb > BURN_PSRAM_WINDOW_MAX_MB) {
         mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     }
+    if (mb == BURN_PSRAM_WINDOW_AUTO_MB) {
+        mb = burner_psram_auto_window_mb();
+    }
     if (mb > max_mb) {
         mb = max_mb;
     }
     return mb * BURN_PSRAM_WINDOW_BYTES_PER_MB;
 }
 
+uint32_t burner_psram_auto_window_mb(void)
+{
+    size_t free_bytes;
+    size_t largest_bytes;
+    size_t usable_bytes;
+    uint32_t mb;
+
+    if (!esp_psram_is_initialized()) {
+        return BURN_PSRAM_WINDOW_MIN_MB;
+    }
+
+    free_bytes = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    largest_bytes = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    usable_bytes = (largest_bytes < free_bytes) ? largest_bytes : free_bytes;
+    if (usable_bytes > BURN_PSRAM_WINDOW_RESERVE_BYTES) {
+        usable_bytes -= BURN_PSRAM_WINDOW_RESERVE_BYTES;
+    }
+
+    mb = (uint32_t)(usable_bytes / BURN_PSRAM_WINDOW_BYTES_PER_MB);
+    if (mb < BURN_PSRAM_WINDOW_MIN_MB) {
+        mb = BURN_PSRAM_WINDOW_MIN_MB;
+    } else if (mb > BURN_PSRAM_WINDOW_MAX_MB) {
+        mb = BURN_PSRAM_WINDOW_MAX_MB;
+    }
+
+    ESP_LOGI(
+        BURNER_TAG,
+        "PSRAM auto window: free=%u largest=%u reserve=%u -> %" PRIu32 "MB",
+        (unsigned)free_bytes,
+        (unsigned)largest_bytes,
+        (unsigned)BURN_PSRAM_WINDOW_RESERVE_BYTES,
+        mb);
+    return mb;
+}
+
 uint32_t burner_psram_window_bytes_to_mb(uint32_t bytes)
 {
     uint32_t mb;
 
-    if (bytes == 0u || (bytes % BURN_PSRAM_WINDOW_BYTES_PER_MB) != 0u) {
-        return burner_psram_window_mb_to_bytes(BURN_PSRAM_WINDOW_DEFAULT_MB) /
-               BURN_PSRAM_WINDOW_BYTES_PER_MB;
+    if (bytes == 0u) {
+        return BURN_PSRAM_WINDOW_AUTO_MB;
+    }
+    if ((bytes % BURN_PSRAM_WINDOW_BYTES_PER_MB) != 0u) {
+        return BURN_PSRAM_WINDOW_DEFAULT_MB;
     }
 
     mb = bytes / BURN_PSRAM_WINDOW_BYTES_PER_MB;
     if (mb < BURN_PSRAM_WINDOW_MIN_MB || mb > BURN_PSRAM_WINDOW_MAX_MB) {
-        return burner_psram_window_mb_to_bytes(BURN_PSRAM_WINDOW_DEFAULT_MB) /
-               BURN_PSRAM_WINDOW_BYTES_PER_MB;
+        return BURN_PSRAM_WINDOW_DEFAULT_MB;
     }
-    return burner_psram_window_mb_to_bytes(mb) / BURN_PSRAM_WINDOW_BYTES_PER_MB;
+    return mb;
 }
 
 const char *burner_core_affinity_to_str(burner_core_affinity_t affinity)
@@ -1953,6 +1999,7 @@ void burner_status_mark_task_begin(void)
     burner_status_speed_reset_locked();
     s_status.task_start_us = now_us;
     xSemaphoreGive(s_status_lock);
+    s_burn_task_last_yield_us = now_us;
 }
 
 void burner_status_mark_task_end(void)
@@ -1972,6 +2019,22 @@ void burner_status_mark_task_end(void)
         s_status.task_start_us = 0u;
     }
     xSemaphoreGive(s_status_lock);
+}
+
+void burner_task_yield_if_due(void)
+{
+    uint64_t now_us = (uint64_t)esp_timer_get_time();
+
+    if (s_burn_task_last_yield_us == 0u) {
+        s_burn_task_last_yield_us = now_us;
+        return;
+    }
+    if (now_us - s_burn_task_last_yield_us < BURNER_CPU_YIELD_INTERVAL_US) {
+        return;
+    }
+
+    s_burn_task_last_yield_us = now_us;
+    vTaskDelay(1);
 }
 
 uint32_t burner_erase_sector_count_from_bytes(uint64_t bytes, uint32_t sector_size)
@@ -4792,13 +4855,14 @@ esp_err_t burner_backend_init(void)
     s_bacon_idle_powered_down = false;
 
     if (s_bacon_idle_task == NULL) {
-        if (xTaskCreate(
+        if (xTaskCreatePinnedToCore(
                 burner_bacon_idle_task_entry,
                 "bacon_idle",
                 3072,
                 NULL,
                 2,
-                &s_bacon_idle_task) != pdPASS) {
+                &s_bacon_idle_task,
+                BURNER_TASK_CORE_ID) != pdPASS) {
             return ESP_ERR_NO_MEM;
         }
     }
@@ -6175,6 +6239,7 @@ static esp_err_t burner_bacon_wait_u16(uint32_t byte_addr, uint16_t expected, ui
             return ESP_OK;
         }
         esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        burner_task_yield_if_due();
     }
 
     return ESP_ERR_TIMEOUT;
@@ -7568,6 +7633,7 @@ static esp_err_t burner_bacon_wait_u8(uint16_t addr, uint8_t expected, uint32_t 
             return ESP_OK;
         }
         esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        burner_task_yield_if_due();
     }
 
     return ESP_ERR_TIMEOUT;
@@ -8084,12 +8150,14 @@ static esp_err_t burner_bacon_gbc_rom_program(
                     if (err != ESP_OK) {
                         return err;
                     }
+                    burner_task_yield_if_due();
                 }
             } else {
                 burner_status_record_mbc5_buffer_write(false);
             }
 
             i += write_len;
+            burner_task_yield_if_due();
         }
     }
 
@@ -8321,6 +8389,7 @@ static esp_err_t burner_bacon_gba_rom_program(
             }
 
             i += write_len;
+            burner_task_yield_if_due();
         }
     }
 
@@ -8369,6 +8438,7 @@ static esp_err_t burner_bacon_gba_program_block(
         }
 
         programmed += chunk;
+        burner_task_yield_if_due();
     }
 
     return ESP_OK;
@@ -8875,6 +8945,7 @@ static esp_err_t burner_bacon_mbc5_program_block(const uint8_t *data, size_t len
         }
 
         programmed += chunk;
+        burner_task_yield_if_due();
     }
 
     return ESP_OK;
@@ -13994,7 +14065,7 @@ esp_err_t burner_start_task_ex(
     } else if (mode == BURNER_JOB_ERASE_ROM) {
         burn_task_affinity = s_burn_core_cfg.erase_core;
     } else {
-        burn_task_affinity = BURNER_CORE_AFFINITY_AUTO;
+        burn_task_affinity = BURNER_CORE_AFFINITY_CPU1;
     }
 
     job->task_with_caps = true;

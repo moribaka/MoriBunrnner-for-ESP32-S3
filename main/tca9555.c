@@ -22,6 +22,7 @@ static void *s_irq_user_ctx = NULL;
 #define TCA9555_XFER_TIMEOUT_MS 500
 #define TCA9555_SCL_HZ 100000
 #define TCA9555_IRQ_EVENT_BIT BIT0
+#define TCA9555_IRQ_TASK_CORE_ID 0
 
 static void IRAM_ATTR tca9555_int_handler(void *param)
 {
@@ -61,8 +62,8 @@ static void tca9555_irq_task(void *param)
             continue;
         }
 
-        /* Match sample debounce strategy. */
-        esp_rom_delay_us(10000);
+        /* Debounce without busy-waiting on the UI/system core. */
+        vTaskDelay(pdMS_TO_TICKS(10));
         if (s_irq_gpio != GPIO_NUM_NC && gpio_get_level(s_irq_gpio) != 0) {
             continue;
         }
@@ -365,7 +366,7 @@ esp_err_t tca9555_enable_irq(gpio_num_t irq_gpio, tca9555_input_cb_t cb, void *u
         NULL,
         3,
         &s_irq_task,
-        1);
+        TCA9555_IRQ_TASK_CORE_ID);
     if (task_ok != pdPASS) {
         (void)tca9555_disable_irq();
         return ESP_ERR_NO_MEM;
