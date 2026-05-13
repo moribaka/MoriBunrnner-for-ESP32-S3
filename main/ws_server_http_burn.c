@@ -316,9 +316,10 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "write_path must be direct or psram");
     }
     if (psram_mb_arg[0] != '\0') {
-        if (!burner_parse_u32_text(psram_mb_arg, &psram_mb) || psram_mb < BURN_PSRAM_WINDOW_MIN_MB ||
-            psram_mb > BURN_PSRAM_WINDOW_MAX_MB) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "psram_mb must be integer 1..8");
+        if (!burner_parse_u32_text(psram_mb_arg, &psram_mb) ||
+            (psram_mb != BURN_PSRAM_WINDOW_AUTO_MB &&
+             (psram_mb < BURN_PSRAM_WINDOW_MIN_MB || psram_mb > BURN_PSRAM_WINDOW_MAX_MB))) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "psram_mb must be integer 0..8");
         }
     }
     if (mbc5_chunk_kb_arg[0] != '\0') {

@@ -55,6 +55,14 @@
 #define UI_TILE_ARROW_Y 214
 #define UI_TILE_BAR_H 2
 #define UI_TILE_SELECT_LINE 5
+#define UI_TILE_HEADER_Y0 0
+#define UI_TILE_HEADER_H 38
+#define UI_TILE_ICON_DYNAMIC_Y0 (UI_TILE_ICON_Y - UI_TILE_SELECTOR_MARGIN)
+#define UI_TILE_ICON_DYNAMIC_H (UI_TILE_ICON_SIZE + UI_TILE_SELECTOR_MARGIN * 2)
+#define UI_TILE_TEXT_DYNAMIC_Y0 UI_TILE_TITLE_Y
+#define UI_TILE_TEXT_DYNAMIC_H (UI_TILE_HINT_Y - UI_TILE_TITLE_Y + 8)
+#define UI_TILE_DOT_DYNAMIC_Y0 (UI_TILE_DOTTED_Y - 1)
+#define UI_TILE_DOT_DYNAMIC_H 4
 
 #define UI_LIST_LINE_H 16
 #define UI_LIST_TEXT_X 4
@@ -67,6 +75,7 @@
 #define UI_STATUS_TEXT_MAX_LEN 96
 #define UI_IP_TEXT_MAX_LEN 32
 #define UI_TIME_TEXT_MAX_LEN 8
+#define UI_FPS_TEXT_MAX_LEN 12
 #define UI_TITLE_TEXT_MAX_LEN 32
 
 #define UI_ROOT_ITEM_COUNT 6
@@ -81,7 +90,7 @@
 #define UI_ROW_COUNT UI_LIST_VISIBLE_COUNT
 #define UI_ROW_TEXT_MAX_LEN 96
 #define UI_FILE_NAME_MAX_LEN 128
-#define UI_FILE_WINDOW_COUNT UI_ROW_COUNT
+#define UI_FILE_WINDOW_COUNT (UI_ROW_COUNT * 3U)
 #define UI_FILE_SCAN_LIMIT 512U
 #define UI_FILE_START_TASK_STACK_SIZE (16U * 1024U)
 #define UI_FILE_START_TASK_PRIORITY 4
@@ -89,12 +98,38 @@
 #define UI_WIFI_TASK_PRIORITY 3
 #define UI_STORAGE_TASK_STACK_SIZE 4096U
 #define UI_STORAGE_TASK_PRIORITY 3
+#define UI_SYSTEM_TASK_CORE_ID 0
+#define UI_BURN_TASK_CORE_ID 1
 #define UI_BUTTON_QUEUE_LEN 16
 #define UI_BUTTONS_PER_FRAME 8
+#define UI_BUTTON_REPEAT_START_FRAMES 16U
+#define UI_BUTTON_REPEAT_INTERVAL_FRAMES 3U
+#define UI_BUTTON_COUNT ((uint8_t)UI_BUTTON_MENU + 1U)
 #define UI_CLOCK_REFRESH_MS 1000U
+#define UI_FPS_REFRESH_MS 1000U
 #define UI_BATTERY_REFRESH_MS 5000U
 #define UI_LIVE_REFRESH_MS 250U
 #define UI_FILE_PSRAM_WINDOW_MB 4U
+#define UI_TILE_CAMERA_SPEED 92.0f
+#define UI_TILE_BAR_SPEED 88.0f
+#define UI_TILE_FORE_SPEED 90.0f
+#define UI_LIST_SELECTOR_Y_SPEED 96.0f
+#define UI_LIST_SELECTOR_W_SPEED 94.0f
+#define UI_LIST_BAR_SPEED 92.0f
+#define UI_ASCII_ADVANCE 6
+#define UI_CJK_ADVANCE 17
+#define UI_CJK_Y_OFFSET (-4)
+#define UI_HZK16_PATH "/assets/hzk16.bin"
+#define UI_HZK16_W 16
+#define UI_HZK16_H 16
+#define UI_HZK16_BYTES_PER_GLYPH 32U
+#define UI_HZK16_QH_MIN 0xA1U
+#define UI_HZK16_QH_MAX 0xF7U
+#define UI_HZK16_WH_MIN 0xA1U
+#define UI_HZK16_WH_MAX 0xFEU
+#define UI_HZK16_COLS 94U
+#define UI_HZK16_GLYPH_COUNT (((UI_HZK16_QH_MAX - UI_HZK16_QH_MIN) + 1U) * UI_HZK16_COLS)
+#define UI_HZK16_FILE_SIZE (UI_HZK16_GLYPH_COUNT * UI_HZK16_BYTES_PER_GLYPH)
 
 typedef enum {
     UI_PAGE_ROOT = 0,
@@ -176,6 +211,7 @@ typedef struct {
     uint16_t file_selected;
     uint16_t file_scroll;
     uint16_t file_total;
+    uint16_t file_window_start;
     uint16_t file_loaded_count;
     char file_path[TF_PATH_LEN_MAX];
     ui_file_entry_t file_window[UI_FILE_WINDOW_COUNT];
@@ -185,18 +221,28 @@ typedef struct {
     char ip_text[UI_IP_TEXT_MAX_LEN];
     char status_text[UI_STATUS_TEXT_MAX_LEN];
     char time_text[UI_TIME_TEXT_MAX_LEN];
+    char fps_text[UI_FPS_TEXT_MAX_LEN];
     int burn_progress;
     uint32_t burn_processed;
     uint32_t burn_total;
+    uint64_t burn_elapsed_us;
     uint8_t battery_percent;
     bool battery_valid;
     bool battery_charging;
     bool dirty;
+    bool motion_dirty;
+    bool content_dirty;
 } ui_model_t;
 
 typedef struct {
     ui_button_t button;
+    bool pressed;
 } ui_button_event_t;
+
+typedef struct {
+    bool pressed;
+    uint16_t frames_until_repeat;
+} ui_button_state_t;
 
 typedef enum {
     UI_WORK_WIFI_CONNECT_SAVED = 0,
@@ -243,15 +289,22 @@ typedef struct {
     float list_camera_target_y;
     ui_page_t page;
     bool page_changed;
+    int32_t list_prev_selector_y;
+    int32_t list_prev_selector_w;
+    int32_t list_prev_bar_h;
+    int32_t list_prev_bar_x;
 } ui_anim_state_t;
 
 static SemaphoreHandle_t s_model_lock = NULL;
 static QueueHandle_t s_button_queue = NULL;
+static ui_button_state_t s_button_states[UI_BUTTON_COUNT];
 static bool s_ui_inited = false;
 static bool s_file_start_active = false;
 static bool s_wifi_work_active = false;
 static bool s_storage_work_active = false;
 static uint32_t s_last_clock_refresh_ms = 0;
+static uint32_t s_last_fps_refresh_ms = 0;
+static uint32_t s_render_frames_this_second = 0;
 static uint32_t s_last_battery_refresh_ms = 0;
 static uint32_t s_last_live_refresh_ms = 0;
 static uint32_t s_last_button_queue_full_log_ms = 0;
@@ -269,6 +322,7 @@ static ui_model_t s_model = {
     .ip_text = "--",
     .status_text = "system initializing",
     .time_text = "--:--",
+    .fps_text = "FPS --",
     .dirty = true,
 };
 
@@ -283,7 +337,17 @@ static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
 
 static const uint32_t s_rom_size_mib_options[] = {1U, 2U, 4U, 8U, 16U, 32U};
 static const uint32_t s_save_size_kib_options[] = {32U, 64U, 128U, 256U, 512U};
-static const uint32_t s_psram_mb_options[] = {1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U};
+static const uint32_t s_psram_mb_options[] = {
+    BURN_PSRAM_WINDOW_AUTO_MB,
+    1U,
+    2U,
+    3U,
+    4U,
+    5U,
+    6U,
+    7U,
+    8U,
+};
 static const uint32_t s_mbc5_chunk_kb_options[] = {4U, 8U, 16U, 32U, 64U, 128U};
 static const uint32_t s_dump_chunk_kb_options[] = {32U, 64U, 128U, 256U};
 
@@ -303,7 +367,7 @@ static bool s_ram_fram = false;
 static uint32_t s_cart_slot = 0;
 static uint32_t s_rom_size_mib = 32;
 static uint32_t s_save_size_kib = 128;
-static uint32_t s_psram_mb = UI_FILE_PSRAM_WINDOW_MB;
+static uint32_t s_psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
 static uint32_t s_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
 static uint32_t s_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
 static uint8_t s_ram_latency = 10;
@@ -339,6 +403,22 @@ static void ui_set_status_locked(ui_model_t *model, const char *text)
     model->dirty = true;
 }
 
+static void ui_mark_motion_dirty(ui_model_t *model)
+{
+    if (model == NULL) {
+        return;
+    }
+    model->motion_dirty = true;
+}
+
+static void ui_mark_content_dirty(ui_model_t *model)
+{
+    if (model == NULL) {
+        return;
+    }
+    model->content_dirty = true;
+}
+
 static bool ui_ensure_button_queue(void)
 {
     if (s_button_queue != NULL) {
@@ -360,6 +440,79 @@ static void ui_px_clear(void)
     }
     for (uint32_t i = 0; i < UI_CANVAS_PIXELS; ++i) {
         s_canvas_buf[i] = UI_COLOR_BLACK;
+    }
+}
+
+static void ui_px_clear_rect(int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    int32_t x0 = x;
+    int32_t y0 = y;
+    int32_t x1 = x + w;
+    int32_t y1 = y + h;
+
+    if (s_canvas_buf == NULL || w <= 0 || h <= 0) {
+        return;
+    }
+    if (x0 < 0) {
+        x0 = 0;
+    }
+    if (y0 < 0) {
+        y0 = 0;
+    }
+    if (x1 > UI_CANVAS_W) {
+        x1 = UI_CANVAS_W;
+    }
+    if (y1 > UI_CANVAS_H) {
+        y1 = UI_CANVAS_H;
+    }
+    if (x0 >= x1 || y0 >= y1) {
+        return;
+    }
+    for (int32_t yy = y0; yy < y1; ++yy) {
+        uint16_t *row = &s_canvas_buf[(uint32_t)yy * UI_CANVAS_W + (uint32_t)x0];
+        for (int32_t xx = x0; xx < x1; ++xx) {
+            *row++ = UI_COLOR_BLACK;
+        }
+    }
+}
+
+static void ui_px_invalidate_rect(int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    lv_area_t area;
+    int32_t x0 = x;
+    int32_t y0 = y;
+    int32_t x1 = x + w - 1;
+    int32_t y1 = y + h - 1;
+
+    if (s_canvas == NULL || w <= 0 || h <= 0) {
+        return;
+    }
+    if (x0 < 0) {
+        x0 = 0;
+    }
+    if (y0 < 0) {
+        y0 = 0;
+    }
+    if (x1 >= UI_CANVAS_W) {
+        x1 = UI_CANVAS_W - 1;
+    }
+    if (y1 >= UI_CANVAS_H) {
+        y1 = UI_CANVAS_H - 1;
+    }
+    if (x0 > x1 || y0 > y1) {
+        return;
+    }
+    area.x1 = x0;
+    area.y1 = y0;
+    area.x2 = x1;
+    area.y2 = y1;
+    lv_obj_invalidate_area(s_canvas, &area);
+}
+
+static void ui_px_invalidate_full(void)
+{
+    if (s_canvas != NULL) {
+        lv_obj_invalidate(s_canvas);
     }
 }
 
@@ -503,20 +656,173 @@ static const uint8_t *ui_font5x7(char ch)
     return table[c];
 }
 
+static uint8_t *s_hzk16_data = NULL;
+static bool s_hzk16_load_attempted = false;
+
+static bool ui_utf8_next_codepoint(const char **cursor, uint32_t *codepoint)
+{
+    const uint8_t *p;
+
+    if (cursor == NULL || *cursor == NULL || codepoint == NULL || **cursor == '\0') {
+        return false;
+    }
+
+    p = (const uint8_t *)*cursor;
+    if (p[0] < 0x80U) {
+        *codepoint = p[0];
+        *cursor += 1;
+        return true;
+    }
+
+    if (p[0] >= 0xC2U && p[0] <= 0xDFU && (p[1] & 0xC0U) == 0x80U) {
+        *codepoint = ((uint32_t)(p[0] & 0x1FU) << 6) | (uint32_t)(p[1] & 0x3FU);
+        *cursor += 2;
+        return true;
+    }
+
+    if (p[0] >= 0xE0U && p[0] <= 0xEFU &&
+        (p[1] & 0xC0U) == 0x80U &&
+        (p[2] & 0xC0U) == 0x80U &&
+        !(p[0] == 0xE0U && p[1] < 0xA0U) &&
+        !(p[0] == 0xEDU && p[1] >= 0xA0U)) {
+        *codepoint = ((uint32_t)(p[0] & 0x0FU) << 12) |
+                     ((uint32_t)(p[1] & 0x3FU) << 6) |
+                     (uint32_t)(p[2] & 0x3FU);
+        *cursor += 3;
+        return true;
+    }
+
+    if (p[0] >= 0xF0U && p[0] <= 0xF4U &&
+        (p[1] & 0xC0U) == 0x80U &&
+        (p[2] & 0xC0U) == 0x80U &&
+        (p[3] & 0xC0U) == 0x80U &&
+        !(p[0] == 0xF0U && p[1] < 0x90U) &&
+        !(p[0] == 0xF4U && p[1] >= 0x90U)) {
+        *codepoint = ((uint32_t)(p[0] & 0x07U) << 18) |
+                     ((uint32_t)(p[1] & 0x3FU) << 12) |
+                     ((uint32_t)(p[2] & 0x3FU) << 6) |
+                     (uint32_t)(p[3] & 0x3FU);
+        *cursor += 4;
+        return true;
+    }
+
+    *codepoint = '?';
+    *cursor += 1;
+    return true;
+}
+
+static bool ui_hzk16_offset_for_codepoint(uint32_t codepoint, size_t *offset_out)
+{
+    WCHAR oem;
+    uint8_t qh;
+    uint8_t wh;
+    size_t index;
+
+    if (codepoint < 0x80U || codepoint > 0xFFFFU) {
+        return false;
+    }
+
+    oem = ff_uni2oem((DWORD)codepoint, FF_CODE_PAGE);
+    if (oem <= 0xFFU) {
+        return false;
+    }
+
+    qh = (uint8_t)((oem >> 8) & 0xFFU);
+    wh = (uint8_t)(oem & 0xFFU);
+    if (qh < UI_HZK16_QH_MIN || qh > UI_HZK16_QH_MAX ||
+        wh < UI_HZK16_WH_MIN || wh > UI_HZK16_WH_MAX) {
+        return false;
+    }
+
+    index = ((size_t)(qh - UI_HZK16_QH_MIN) * UI_HZK16_COLS) + (size_t)(wh - UI_HZK16_WH_MIN);
+    if (index >= UI_HZK16_GLYPH_COUNT) {
+        return false;
+    }
+
+    if (offset_out != NULL) {
+        *offset_out = index * UI_HZK16_BYTES_PER_GLYPH;
+    }
+    return true;
+}
+
+static const uint8_t *ui_hzk16_data(void)
+{
+    FILE *file;
+    uint8_t *data;
+    size_t read_len;
+
+    if (s_hzk16_data != NULL) {
+        return s_hzk16_data;
+    }
+    if (s_hzk16_load_attempted) {
+        return NULL;
+    }
+    s_hzk16_load_attempted = true;
+
+    file = fopen(UI_HZK16_PATH, "rb");
+    if (file == NULL) {
+        ESP_LOGW(UI_TAG, "Chinese font missing: %s", UI_HZK16_PATH);
+        return NULL;
+    }
+
+    data = (uint8_t *)heap_caps_malloc(UI_HZK16_FILE_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (data == NULL) {
+        data = (uint8_t *)heap_caps_malloc(UI_HZK16_FILE_SIZE, MALLOC_CAP_8BIT);
+    }
+    if (data == NULL) {
+        ESP_LOGW(UI_TAG, "no memory for Chinese font (%u bytes)", (unsigned)UI_HZK16_FILE_SIZE);
+        fclose(file);
+        return NULL;
+    }
+
+    read_len = fread(data, 1, UI_HZK16_FILE_SIZE, file);
+    fclose(file);
+    if (read_len != UI_HZK16_FILE_SIZE) {
+        ESP_LOGW(UI_TAG, "Chinese font size mismatch: %u/%u", (unsigned)read_len, (unsigned)UI_HZK16_FILE_SIZE);
+        heap_caps_free(data);
+        return NULL;
+    }
+
+    s_hzk16_data = data;
+    ESP_LOGI(UI_TAG, "Chinese font loaded: %s (%u bytes)", UI_HZK16_PATH, (unsigned)UI_HZK16_FILE_SIZE);
+    return s_hzk16_data;
+}
+
+static const uint8_t *ui_hzk16_glyph(uint32_t codepoint)
+{
+    size_t offset;
+    const uint8_t *data;
+
+    if (!ui_hzk16_offset_for_codepoint(codepoint, &offset)) {
+        return NULL;
+    }
+
+    data = ui_hzk16_data();
+    if (data == NULL) {
+        return NULL;
+    }
+    return &data[offset];
+}
+
+static int32_t ui_px_codepoint_advance(uint32_t codepoint)
+{
+    return ui_hzk16_offset_for_codepoint(codepoint, NULL) ? UI_CJK_ADVANCE : UI_ASCII_ADVANCE;
+}
+
 static int32_t ui_px_text_width(const char *text)
 {
     int32_t w = 0;
+    const char *p = text;
 
     if (text == NULL) {
         return 0;
     }
-    for (const char *p = text; *p != '\0'; ++p) {
-        unsigned char c = (unsigned char)*p;
-        if (c >= 0x80U) {
-            c = '?';
+    while (*p != '\0') {
+        uint32_t codepoint = 0;
+        if (!ui_utf8_next_codepoint(&p, &codepoint)) {
+            break;
         }
-        (void)c;
-        w += 6;
+        w += ui_px_codepoint_advance(codepoint);
     }
     return (w > 0) ? (w - 1) : 0;
 }
@@ -538,40 +844,99 @@ static void ui_px_draw_char(int32_t x, int32_t y, char ch, bool on)
     }
 }
 
+static void ui_px_draw_hzk16(int32_t x, int32_t y, const uint8_t *glyph, bool on)
+{
+    if (glyph == NULL) {
+        return;
+    }
+    for (int32_t row = 0; row < UI_HZK16_H; ++row) {
+        uint8_t left = glyph[row * 2];
+        uint8_t right = glyph[row * 2 + 1];
+        for (int32_t bit = 0; bit < 8; ++bit) {
+            if ((left & (uint8_t)(0x80U >> bit)) != 0U) {
+                ui_px_set(x + bit, y + row, on);
+            }
+            if ((right & (uint8_t)(0x80U >> bit)) != 0U) {
+                ui_px_set(x + 8 + bit, y + row, on);
+            }
+        }
+    }
+}
+
+static void ui_px_draw_codepoint(int32_t x, int32_t y, uint32_t codepoint, bool on)
+{
+    const uint8_t *glyph;
+
+    if (codepoint < 0x80U) {
+        ui_px_draw_char(x, y, (char)codepoint, on);
+        return;
+    }
+
+    glyph = ui_hzk16_glyph(codepoint);
+    if (glyph != NULL) {
+        ui_px_draw_hzk16(x, y + UI_CJK_Y_OFFSET, glyph, on);
+        return;
+    }
+
+    ui_px_draw_char(x, y, '?', on);
+}
+
 static void ui_px_text(int32_t x, int32_t y, const char *text, bool on)
 {
+    const char *p = text;
+
     if (text == NULL) {
         return;
     }
-    for (const char *p = text; *p != '\0'; ++p) {
-        char ch = *p;
-        if ((unsigned char)ch >= 0x80U) {
-            ch = '?';
+    while (*p != '\0') {
+        uint32_t codepoint = 0;
+        int32_t advance;
+        if (!ui_utf8_next_codepoint(&p, &codepoint)) {
+            break;
         }
-        ui_px_draw_char(x, y, ch, on);
-        x += 6;
+        advance = ui_px_codepoint_advance(codepoint);
+        ui_px_draw_codepoint(x, y, codepoint, on);
+        x += advance;
     }
 }
 
 static void ui_px_text_clipped(int32_t x, int32_t y, int32_t max_w, const char *text, bool on)
 {
-    char clipped[UI_ROW_TEXT_MAX_LEN] = {0};
-    size_t out = 0;
+    const char *p = text;
     int32_t remaining = max_w;
 
     if (text == NULL || max_w <= 0) {
         return;
     }
-    while (*text != '\0' && remaining >= 5 && out + 1U < sizeof(clipped)) {
-        char ch = *text++;
-        if ((unsigned char)ch >= 0x80U) {
-            ch = '?';
+    while (*p != '\0') {
+        uint32_t codepoint = 0;
+        int32_t advance;
+        int32_t draw_w;
+
+        if (!ui_utf8_next_codepoint(&p, &codepoint)) {
+            break;
         }
-        clipped[out++] = ch;
-        remaining -= 6;
+        advance = ui_px_codepoint_advance(codepoint);
+        draw_w = (advance == UI_CJK_ADVANCE) ? UI_HZK16_W : 5;
+        if (remaining < draw_w) {
+            break;
+        }
+        ui_px_draw_codepoint(x, y, codepoint, on);
+        x += advance;
+        remaining -= advance;
     }
-    clipped[out] = '\0';
-    ui_px_text(x, y, clipped, on);
+}
+
+static void ui_px_draw_fps_overlay(const ui_model_t *model)
+{
+    const char *fps = (model != NULL && model->fps_text[0] != '\0') ? model->fps_text : "FPS --";
+    int32_t w = ui_px_text_width(fps);
+    int32_t x = UI_CANVAS_W - w - 4;
+
+    if (x < 0) {
+        x = 0;
+    }
+    ui_px_text(x, 5, fps, true);
 }
 
 static void ui_format_file_size(uint32_t size, char *out, size_t out_len)
@@ -604,6 +969,18 @@ static void ui_format_speed_text(uint32_t bps, char *out, size_t out_len)
     }
 }
 
+static const char *ui_psram_window_label(uint32_t mb, char *out, size_t out_len)
+{
+    if (mb == BURN_PSRAM_WINDOW_AUTO_MB) {
+        return "Auto";
+    }
+    if (out == NULL || out_len == 0U) {
+        return "";
+    }
+    snprintf(out, out_len, "%" PRIu32 " MB", mb);
+    return out;
+}
+
 static void ui_format_bytes_text(uint32_t bytes, char *out, size_t out_len)
 {
     ui_format_file_size(bytes, out, out_len);
@@ -622,6 +999,22 @@ static void ui_format_u64_size(uint64_t bytes, char *out, size_t out_len)
         snprintf(out, out_len, "%.1f KB", (double)bytes / 1024.0);
     } else {
         snprintf(out, out_len, "%" PRIu64 " B", bytes);
+    }
+}
+
+static void ui_format_elapsed(uint64_t elapsed_us, char *out, size_t out_len)
+{
+    uint64_t seconds = elapsed_us / 1000000ULL;
+    uint64_t minutes = seconds / 60ULL;
+    uint64_t hours = minutes / 60ULL;
+
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (hours > 0ULL) {
+        snprintf(out, out_len, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64, hours, minutes % 60ULL, seconds % 60ULL);
+    } else {
+        snprintf(out, out_len, "%02" PRIu64 ":%02" PRIu64, minutes, seconds % 60ULL);
     }
 }
 
@@ -691,6 +1084,29 @@ static void ui_anim_move(float *value, float target, float speed)
     *value += diff / divisor;
 }
 
+static bool ui_anim_value_active(float value, float target)
+{
+    float diff = target - value;
+
+    return diff > 0.5f || diff < -0.5f;
+}
+
+static bool ui_anim_active_for_page(const ui_model_t *model)
+{
+    if (model == NULL) {
+        return false;
+    }
+    if (model->page == UI_PAGE_ROOT) {
+        return ui_anim_value_active(s_anim.tile_camera_x, s_anim.tile_camera_target_x) ||
+               ui_anim_value_active(s_anim.tile_bar_w, s_anim.tile_bar_target_w) ||
+               ui_anim_value_active(s_anim.tile_fore_y, s_anim.tile_fore_target_y);
+    }
+    return ui_anim_value_active(s_anim.list_selector_y, s_anim.list_selector_target_y) ||
+           ui_anim_value_active(s_anim.list_selector_w, s_anim.list_selector_target_w) ||
+           ui_anim_value_active(s_anim.list_bar_h, s_anim.list_bar_target_h) ||
+           ui_anim_value_active(s_anim.list_bar_x, s_anim.list_bar_target_x);
+}
+
 static uint16_t ui_current_selected(const ui_model_t *model)
 {
     if (model == NULL) {
@@ -705,6 +1121,22 @@ static uint16_t ui_current_scroll(const ui_model_t *model)
         return 0;
     }
     return (model->page == UI_PAGE_FILES) ? model->file_scroll : model->scroll;
+}
+
+static uint16_t ui_scroll_for_selected(uint16_t selected, uint16_t scroll, uint16_t count)
+{
+    if (count == 0U || count <= UI_ROW_COUNT) {
+        return 0;
+    }
+
+    if (selected < scroll) {
+        return (uint16_t)((selected / UI_ROW_COUNT) * UI_ROW_COUNT);
+    }
+
+    if (selected >= scroll + UI_ROW_COUNT) {
+        return (uint16_t)((selected / UI_ROW_COUNT) * UI_ROW_COUNT);
+    }
+    return scroll;
 }
 
 static size_t ui_utf8_sequence_len(const uint8_t *src, size_t remaining)
@@ -1199,6 +1631,7 @@ static void ui_scan_file_window_locked(ui_model_t *model)
     }
 
     memset(model->file_window, 0, sizeof(model->file_window));
+    model->file_window_start = model->file_scroll;
     model->file_loaded_count = 0;
     model->file_total = 0;
 
@@ -1243,14 +1676,13 @@ static void ui_scan_file_window_locked(ui_model_t *model)
         model->file_selected = 0;
         model->file_scroll = 0;
     } else {
-        if (model->file_selected < model->file_scroll) {
-            model->file_scroll = model->file_selected;
-        }
-        if (model->file_selected >= model->file_scroll + UI_FILE_WINDOW_COUNT) {
-            model->file_scroll = model->file_selected - UI_FILE_WINDOW_COUNT + 1U;
-        }
+        model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, total);
     }
     visible_begin = model->file_scroll;
+    if (total > UI_FILE_WINDOW_COUNT && visible_begin + UI_FILE_WINDOW_COUNT > total) {
+        visible_begin = total - UI_FILE_WINDOW_COUNT;
+    }
+    model->file_window_start = visible_begin;
 
     rewinddir(dir);
     total = 0;
@@ -1293,23 +1725,68 @@ static bool ui_current_file_locked(const ui_model_t *model, ui_file_entry_t *ent
     return false;
 }
 
+static bool ui_file_visible_window_loaded_locked(const ui_model_t *model)
+{
+    uint16_t visible_end;
+
+    if (model == NULL) {
+        return false;
+    }
+    if (model->file_total == 0U) {
+        return true;
+    }
+    visible_end = model->file_scroll + UI_ROW_COUNT;
+    if (visible_end > model->file_total) {
+        visible_end = model->file_total;
+    }
+    return model->file_scroll >= model->file_window_start &&
+           visible_end <= model->file_window_start + model->file_loaded_count;
+}
+
+static void ui_file_ensure_window_locked(ui_model_t *model, bool force_scan)
+{
+    if (model == NULL) {
+        return;
+    }
+    if (force_scan || !ui_file_visible_window_loaded_locked(model)) {
+        uint16_t cached_selected = model->file_selected;
+
+        ui_scan_file_window_locked(model);
+        if (model->file_total > 0U && cached_selected < model->file_total) {
+            model->file_selected = cached_selected;
+            model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, model->file_total);
+        }
+        model->dirty = true;
+    }
+}
+
 static void ui_file_move_locked(ui_model_t *model, int delta)
 {
     int selected;
+    int total;
+    uint16_t old_scroll;
+    uint16_t old_window_start;
 
-    if (model == NULL || model->file_total == 0U) {
+    if (model == NULL || model->file_total == 0U || delta == 0) {
         return;
     }
-    selected = (int)model->file_selected + delta;
+    total = (int)model->file_total;
+    selected = ((int)model->file_selected + delta) % total;
     if (selected < 0) {
-        selected = 0;
-    }
-    if (selected >= (int)model->file_total) {
-        selected = (int)model->file_total - 1;
+        selected += total;
     }
     if ((uint16_t)selected != model->file_selected) {
         model->file_selected = (uint16_t)selected;
-        ui_scan_file_window_locked(model);
+        old_scroll = model->file_scroll;
+        old_window_start = model->file_window_start;
+        model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, model->file_total);
+        ui_file_ensure_window_locked(model, false);
+        if (model->file_scroll == old_scroll && model->file_window_start == old_window_start &&
+            ui_file_visible_window_loaded_locked(model)) {
+            ui_mark_motion_dirty(model);
+        } else {
+            ui_mark_content_dirty(model);
+        }
     }
 }
 
@@ -1418,7 +1895,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->cart_mode = ui_file_cart_mode_for_kind(model->action_kind);
     request->slot = 0;
     request->write_path = (action == UI_FILE_ACTION_BURN_PSRAM) ? BURNER_WRITE_PATH_PSRAM : BURNER_WRITE_PATH_DIRECT;
-    request->psram_mb = UI_FILE_PSRAM_WINDOW_MB;
+    request->psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
     request->mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     request->gba_force_no_cfi = false;
     request->ram_fram = false;
@@ -1430,6 +1907,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     model->burn_progress = 0;
     model->burn_processed = 0;
     model->burn_total = request->size;
+    model->burn_elapsed_us = 0;
     ui_set_status_locked(model, "starting burn task");
     *request_out = request;
     return ESP_OK;
@@ -1455,15 +1933,16 @@ static void ui_finish_file_start_task(
         s_model.burn_progress = 0;
         s_model.burn_processed = 0;
         s_model.burn_total = (result != NULL) ? result->effective_size : 0U;
+        s_model.burn_elapsed_us = 0;
         snprintf(s_model.status_text, sizeof(s_model.status_text), "%s started", label);
     } else {
         s_model.burn_progress = 0;
         s_model.burn_processed = 0;
         s_model.burn_total = 0;
+        s_model.burn_elapsed_us = 0;
         snprintf(s_model.status_text, sizeof(s_model.status_text), "start failed: %.72s", msg);
         ESP_LOGW(UI_TAG, "LCD file action start failed (%s): %s", label, msg);
     }
-    s_model.dirty = true;
     xSemaphoreGive(s_model_lock);
 }
 
@@ -1570,26 +2049,28 @@ static void ui_start_file_action_async(ui_file_start_request_t *request)
     }
 
     request->task_with_caps = true;
-    ret = xTaskCreateWithCaps(
+    ret = xTaskCreatePinnedToCoreWithCaps(
         ui_start_file_action_task,
         "ui_file_start",
         UI_FILE_START_TASK_STACK_SIZE,
         request,
         UI_FILE_START_TASK_PRIORITY,
         NULL,
+        UI_BURN_TASK_CORE_ID,
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (ret == pdPASS) {
         return;
     }
 
     request->task_with_caps = false;
-    ret = xTaskCreate(
+    ret = xTaskCreatePinnedToCore(
         ui_start_file_action_task,
         "ui_file_start",
         UI_FILE_START_TASK_STACK_SIZE,
         request,
         UI_FILE_START_TASK_PRIORITY,
-        NULL);
+        NULL,
+        UI_BURN_TASK_CORE_ID);
     if (ret != pdPASS) {
         size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -1619,6 +2100,7 @@ static void ui_set_task_page_starting(const char *text, uint32_t total)
     s_model.burn_progress = 0;
     s_model.burn_processed = 0;
     s_model.burn_total = total;
+    s_model.burn_elapsed_us = 0;
     ui_set_status_locked(&s_model, text);
     xSemaphoreGive(s_model_lock);
 }
@@ -1975,7 +2457,7 @@ static void ui_start_work_async(ui_work_type_t type)
     }
     request->type = type;
 
-    if (xTaskCreate(
+    if (xTaskCreatePinnedToCore(
             ui_work_task,
             "ui_work",
             (type == UI_WORK_WIFI_CONNECT_SAVED || type == UI_WORK_WIFI_START_AP ||
@@ -1987,7 +2469,12 @@ static void ui_start_work_async(ui_work_type_t type)
              type == UI_WORK_WIFI_DISCONNECT || type == UI_WORK_WIFI_CLEAR_SAVED) ?
                 UI_WIFI_TASK_PRIORITY :
                 UI_STORAGE_TASK_PRIORITY,
-            NULL) != pdPASS) {
+            NULL,
+            (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_ERASE_CHIP ||
+             type == UI_WORK_BURN_DUMP_ROM || type == UI_WORK_BURN_DUMP_SAVE ||
+             type == UI_WORK_BURN_UNLOCK_PPB) ?
+                UI_BURN_TASK_CORE_ID :
+                UI_SYSTEM_TASK_CORE_ID) != pdPASS) {
         free(request);
         ui_finish_work_task(type, ESP_ERR_NO_MEM, NULL);
     }
@@ -2043,7 +2530,7 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
         case UI_PAGE_SETTINGS:
             return UI_SETTINGS_ITEM_COUNT;
         case UI_PAGE_TASK_STATUS:
-            return 7;
+            return 8;
         default:
             return 0;
     }
@@ -2100,42 +2587,6 @@ static void ui_open_root_locked(ui_model_t *model)
     ui_set_status_locked(model, "ready");
 }
 
-static void ui_ensure_visible_locked(ui_model_t *model)
-{
-    uint16_t count;
-    uint16_t *selected = NULL;
-    uint16_t *scroll = NULL;
-
-    if (model == NULL) {
-        return;
-    }
-    if (model->page == UI_PAGE_FILES) {
-        selected = &model->file_selected;
-        scroll = &model->file_scroll;
-    } else {
-        selected = &model->selected;
-        scroll = &model->scroll;
-    }
-    count = ui_page_item_count(model);
-    if (count == 0U) {
-        *selected = 0;
-        *scroll = 0;
-        return;
-    }
-    if (*selected >= count) {
-        *selected = count - 1U;
-    }
-    if (*selected < *scroll) {
-        *scroll = *selected;
-    }
-    if (*selected >= *scroll + UI_ROW_COUNT) {
-        *scroll = *selected - UI_ROW_COUNT + 1U;
-    }
-    if (model->page == UI_PAGE_FILES) {
-        ui_scan_file_window_locked(model);
-    }
-}
-
 static void ui_menu_move_locked(ui_model_t *model, int delta)
 {
     uint16_t count;
@@ -2156,25 +2607,21 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
     if (count == 0U || delta == 0) {
         return;
     }
-    selected = (int)model->selected + delta;
-    if (model->page == UI_PAGE_ROOT) {
-        if (selected < 0) {
-            selected = (int)count - 1;
-        }
-        if (selected >= (int)count) {
-            selected = 0;
-        }
-    } else {
-        if (selected < 0) {
-            selected = 0;
-        }
-        if (selected >= (int)count) {
-            selected = (int)count - 1;
+    selected = ((int)model->selected + delta) % (int)count;
+    if (selected < 0) {
+        selected += (int)count;
+    }
+    if ((uint16_t)selected != model->selected) {
+        uint16_t old_scroll = model->scroll;
+
+        model->selected = (uint16_t)selected;
+        model->scroll = ui_scroll_for_selected(model->selected, model->scroll, count);
+        if (model->scroll == old_scroll) {
+            ui_mark_motion_dirty(model);
+        } else {
+            ui_mark_content_dirty(model);
         }
     }
-    model->selected = (uint16_t)selected;
-    ui_ensure_visible_locked(model);
-    model->dirty = true;
 }
 
 static void ui_back_locked(ui_model_t *model)
@@ -2280,6 +2727,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
     model->burn_progress = 0;
     model->burn_processed = 0;
     model->burn_total = request->size;
+    model->burn_elapsed_us = 0;
     ui_set_status_locked(model, "starting burn task");
     *request_out = request;
     return ESP_OK;
@@ -2523,13 +2971,19 @@ static void ui_refresh_current_locked(ui_model_t *model)
     model->dirty = true;
 }
 
-static void ui_handle_button_now(ui_button_t button, bool pressed)
+static bool ui_button_is_repeatable(ui_button_t button)
+{
+    return button == UI_BUTTON_LEFT || button == UI_BUTTON_RIGHT ||
+           button == UI_BUTTON_UP || button == UI_BUTTON_DOWN;
+}
+
+static void ui_handle_button_action(ui_button_t button)
 {
     ui_file_start_request_t *start_request = NULL;
     ui_work_type_t work_type = UI_WORK_WIFI_CONNECT_SAVED;
     bool start_work = false;
 
-    if (!pressed || button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
         return;
     }
     if (!ui_take_model_lock()) {
@@ -2566,7 +3020,6 @@ static void ui_handle_button_now(ui_button_t button, bool pressed)
             break;
     }
 
-    s_model.dirty = true;
     xSemaphoreGive(s_model_lock);
 
     if (start_request != NULL) {
@@ -2574,6 +3027,59 @@ static void ui_handle_button_now(ui_button_t button, bool pressed)
     }
     if (start_work) {
         ui_start_work_async(work_type);
+    }
+}
+
+static void ui_handle_button_event(ui_button_t button, bool pressed)
+{
+    ui_button_state_t *state = NULL;
+
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+        return;
+    }
+    state = &s_button_states[(uint8_t)button];
+    if (state->pressed == pressed) {
+        return;
+    }
+
+    state->pressed = pressed;
+    if (!pressed) {
+        state->frames_until_repeat = 0;
+        return;
+    }
+
+    state->frames_until_repeat = UI_BUTTON_REPEAT_START_FRAMES;
+    ui_handle_button_action(button);
+}
+
+static void ui_clear_stuck_button_state(ui_button_t button)
+{
+    ui_button_state_t *state = NULL;
+
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+        return;
+    }
+    state = &s_button_states[(uint8_t)button];
+    state->pressed = false;
+    state->frames_until_repeat = 0;
+}
+
+static void ui_process_button_repeats(void)
+{
+    for (uint8_t i = 0; i < UI_BUTTON_COUNT; ++i) {
+        ui_button_state_t *state = &s_button_states[i];
+        ui_button_t button = (ui_button_t)i;
+
+        if (!state->pressed || !ui_button_is_repeatable(button)) {
+            continue;
+        }
+        if (state->frames_until_repeat > 0U) {
+            state->frames_until_repeat--;
+            continue;
+        }
+
+        ui_handle_button_action(button);
+        state->frames_until_repeat = UI_BUTTON_REPEAT_INTERVAL_FRAMES;
     }
 }
 
@@ -2587,7 +3093,7 @@ static void ui_process_button_queue(void)
     }
 
     while (processed < UI_BUTTONS_PER_FRAME && xQueueReceive(s_button_queue, &event, 0) == pdTRUE) {
-        ui_handle_button_now(event.button, true);
+        ui_handle_button_event(event.button, event.pressed);
         processed++;
     }
 }
@@ -2613,6 +3119,36 @@ static void ui_update_clock_if_needed(uint32_t now_ms)
     }
     if (strcmp(s_model.time_text, time_text) != 0) {
         snprintf(s_model.time_text, sizeof(s_model.time_text), "%s", time_text);
+        s_model.dirty = true;
+    }
+    xSemaphoreGive(s_model_lock);
+}
+
+static void ui_update_fps_if_needed(uint32_t now_ms)
+{
+    char fps_text[UI_FPS_TEXT_MAX_LEN] = {0};
+    uint32_t elapsed_ms;
+    uint32_t fps;
+
+    if (s_last_fps_refresh_ms == 0U) {
+        s_last_fps_refresh_ms = now_ms;
+        return;
+    }
+    elapsed_ms = now_ms - s_last_fps_refresh_ms;
+    if (elapsed_ms < UI_FPS_REFRESH_MS) {
+        return;
+    }
+
+    fps = (s_render_frames_this_second * 1000U + (elapsed_ms / 2U)) / elapsed_ms;
+    s_render_frames_this_second = 0;
+    s_last_fps_refresh_ms = now_ms;
+    snprintf(fps_text, sizeof(fps_text), "FPS %02u", (unsigned)fps);
+
+    if (!ui_take_model_lock()) {
+        return;
+    }
+    if (strcmp(s_model.fps_text, fps_text) != 0) {
+        snprintf(s_model.fps_text, sizeof(s_model.fps_text), "%s", fps_text);
         s_model.dirty = true;
     }
     xSemaphoreGive(s_model_lock);
@@ -2681,10 +3217,12 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     }
     if (s_model.burn_progress != progress ||
         s_model.burn_processed != status.processed_bytes ||
-        s_model.burn_total != status.total_bytes) {
+        s_model.burn_total != status.total_bytes ||
+        s_model.burn_elapsed_us != status.task_elapsed_us) {
         s_model.burn_progress = progress;
         s_model.burn_processed = status.processed_bytes;
         s_model.burn_total = status.total_bytes;
+        s_model.burn_elapsed_us = status.task_elapsed_us;
         s_model.dirty = true;
     }
     if (s_model.page == UI_PAGE_TASK_STATUS) {
@@ -2702,6 +3240,7 @@ static void ui_refresh_sources(void)
     uint32_t now_ms = esp_log_timestamp();
 
     ui_update_clock_if_needed(now_ms);
+    ui_update_fps_if_needed(now_ms);
     ui_update_battery_if_needed(now_ms);
     ui_update_burn_snapshot_if_needed(now_ms);
 }
@@ -2747,9 +3286,14 @@ static void ui_fill_wifi_row(const ui_model_t *model, uint16_t index, char *titl
 static void ui_fill_file_row(const ui_model_t *model, uint16_t visible_index, char *title, size_t title_len, char *hint, size_t hint_len, const char **symbol, uint32_t *accent)
 {
     const ui_file_entry_t *entry = NULL;
+    uint16_t ordinal;
+    uint16_t window_index;
     char size_text[24] = {0};
 
-    if (visible_index >= model->file_loaded_count) {
+    ordinal = model->file_scroll + visible_index;
+    if (ordinal >= model->file_total ||
+        ordinal < model->file_window_start ||
+        ordinal >= model->file_window_start + model->file_loaded_count) {
         if (title_len > 0U) {
             title[0] = '\0';
         }
@@ -2761,7 +3305,8 @@ static void ui_fill_file_row(const ui_model_t *model, uint16_t visible_index, ch
         return;
     }
 
-    entry = &model->file_window[visible_index];
+    window_index = ordinal - model->file_window_start;
+    entry = &model->file_window[window_index];
     snprintf(title, title_len, "%s", entry->name);
     if (entry->is_dir) {
         snprintf(hint, hint_len, "dir");
@@ -2932,6 +3477,7 @@ static void ui_fill_burner_row(const ui_model_t *model, uint16_t index, char *ti
 static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
     char mode[12] = {0};
+    char psram_label[16] = {0};
     (void)model;
     ui_format_cart_mode(mode, sizeof(mode));
     switch (index) {
@@ -2965,7 +3511,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             break;
         case 7:
             snprintf(title, title_len, "PSRAM window");
-            snprintf(hint, hint_len, "%" PRIu32 " MB", s_psram_mb);
+            snprintf(hint, hint_len, "%s", ui_psram_window_label(s_psram_mb, psram_label, sizeof(psram_label)));
             break;
         case 8:
             snprintf(title, title_len, "MBC5 chunk");
@@ -3030,8 +3576,10 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
     char size_a[24] = {0};
     char size_b[24] = {0};
     char speed[24] = {0};
+    char elapsed[24] = {0};
 
     burner_status_snapshot(&status);
+    ui_format_elapsed(status.task_elapsed_us > 0ULL ? status.task_elapsed_us : model->burn_elapsed_us, elapsed, sizeof(elapsed));
     switch (index) {
         case 0:
             snprintf(title, title_len, "State");
@@ -3048,16 +3596,20 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
             snprintf(hint, hint_len, "%s/%s", size_a, size_b);
             break;
         case 3:
+            snprintf(title, title_len, "Elapsed");
+            snprintf(hint, hint_len, "%s", elapsed);
+            break;
+        case 4:
             snprintf(title, title_len, "Speed");
             ui_format_speed_text(status.speed_current_bps, speed, sizeof(speed));
             snprintf(hint, hint_len, "%s", speed);
             break;
-        case 4:
+        case 5:
             snprintf(title, title_len, "Average");
             ui_format_speed_text(status.speed_avg_bps, speed, sizeof(speed));
             snprintf(hint, hint_len, "%s", speed);
             break;
-        case 5:
+        case 6:
             snprintf(title, title_len, "ROM/File");
             snprintf(hint, hint_len, "%s", status.rom_name[0] != '\0' ? status.rom_name : "--");
             break;
@@ -3179,12 +3731,13 @@ static void ui_px_apply_tile(const ui_model_t *model)
     s_anim.tile_camera_target_x = (float)selected * (float)(UI_TILE_ICON_SIZE + UI_TILE_ICON_SPACING - UI_TILE_ICON_SIZE);
     s_anim.tile_bar_target_w = (float)(((uint32_t)(selected + 1U) * (uint32_t)UI_CANVAS_W) / UI_ROOT_ITEM_COUNT);
     s_anim.tile_fore_target_y = 0.0f;
-    ui_anim_move(&s_anim.tile_camera_x, s_anim.tile_camera_target_x, 80.0f);
-    ui_anim_move(&s_anim.tile_bar_w, s_anim.tile_bar_target_w, 70.0f);
-    ui_anim_move(&s_anim.tile_fore_y, s_anim.tile_fore_target_y, 70.0f);
+    ui_anim_move(&s_anim.tile_camera_x, s_anim.tile_camera_target_x, UI_TILE_CAMERA_SPEED);
+    ui_anim_move(&s_anim.tile_bar_w, s_anim.tile_bar_target_w, UI_TILE_BAR_SPEED);
+    ui_anim_move(&s_anim.tile_fore_y, s_anim.tile_fore_target_y, UI_TILE_FORE_SPEED);
 
     ui_px_text(8, 10, "MORI", true);
-    ui_px_text_clipped(UI_CANVAS_W - 78, 10, 70, model->time_text, true);
+    ui_px_text_clipped(UI_CANVAS_W - 118, 10, 58, model->time_text, true);
+    ui_px_draw_fps_overlay(model);
     ui_px_text((UI_CANVAS_W - ui_px_text_width("ad astra per aspera")) / 2, 28, "ad astra per aspera", true);
     ui_px_box(0, 0, progress_w, UI_TILE_BAR_H, true);
     for (uint16_t i = 0; i < UI_ROOT_ITEM_COUNT; ++i) {
@@ -3214,6 +3767,19 @@ static void ui_px_apply_tile(const ui_model_t *model)
     ui_px_set(UI_CANVAS_W - 5, UI_TILE_ARROW_Y + 1, true);
     ui_px_set(UI_CANVAS_W - 6, UI_TILE_ARROW_Y + 2, true);
     ui_px_text(UI_CANVAS_W - 22, UI_TILE_ARROW_Y - 4, "|", true);
+}
+
+static void ui_px_apply_tile_dynamic(const ui_model_t *model)
+{
+    ui_px_clear_rect(0, UI_TILE_HEADER_Y0, UI_CANVAS_W, UI_TILE_HEADER_H);
+    ui_px_clear_rect(0, UI_TILE_ICON_DYNAMIC_Y0, UI_CANVAS_W, UI_TILE_ICON_DYNAMIC_H);
+    ui_px_clear_rect(0, UI_TILE_TEXT_DYNAMIC_Y0, UI_CANVAS_W, UI_TILE_TEXT_DYNAMIC_H);
+    ui_px_clear_rect(0, UI_TILE_DOT_DYNAMIC_Y0, UI_CANVAS_W, UI_TILE_DOT_DYNAMIC_H);
+    ui_px_apply_tile(model);
+    ui_px_invalidate_rect(0, UI_TILE_HEADER_Y0, UI_CANVAS_W, UI_TILE_HEADER_H);
+    ui_px_invalidate_rect(0, UI_TILE_ICON_DYNAMIC_Y0, UI_CANVAS_W, UI_TILE_ICON_DYNAMIC_H);
+    ui_px_invalidate_rect(0, UI_TILE_TEXT_DYNAMIC_Y0, UI_CANVAS_W, UI_TILE_TEXT_DYNAMIC_H);
+    ui_px_invalidate_rect(0, UI_TILE_DOT_DYNAMIC_Y0, UI_CANVAS_W, UI_TILE_DOT_DYNAMIC_H);
 }
 
 static void ui_px_fill_row(
@@ -3289,7 +3855,8 @@ static void ui_px_apply_list(const ui_model_t *model)
     }
 
     ui_px_text(4, 5, header, true);
-    ui_px_text_clipped(UI_CANVAS_W - 92, 5, 84, model->time_text, true);
+    ui_px_text_clipped(UI_CANVAS_W - 118, 5, 58, model->time_text, true);
+    ui_px_draw_fps_overlay(model);
     ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - UI_LIST_BAR_W - 2, true);
     for (int32_t x = 0; x < UI_CANVAS_W - UI_LIST_BAR_W; x += 6) {
         ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
@@ -3308,8 +3875,8 @@ static void ui_px_apply_list(const ui_model_t *model)
         s_anim.list_bar_target_h = (float)bar_h;
         s_anim.list_bar_target_x = (float)(UI_CANVAS_W - UI_LIST_BAR_W);
     }
-    ui_anim_move(&s_anim.list_bar_h, s_anim.list_bar_target_h, 70.0f);
-    ui_anim_move(&s_anim.list_bar_x, s_anim.list_bar_target_x, 70.0f);
+    ui_anim_move(&s_anim.list_bar_h, s_anim.list_bar_target_h, UI_LIST_BAR_SPEED);
+    ui_anim_move(&s_anim.list_bar_x, s_anim.list_bar_target_x, UI_LIST_BAR_SPEED);
     ui_px_box((int32_t)s_anim.list_bar_x, UI_LIST_HEADER_H, UI_LIST_BAR_W, (int32_t)s_anim.list_bar_h, true);
 
     for (uint16_t row = 0; row < UI_ROW_COUNT; ++row) {
@@ -3358,22 +3925,172 @@ static void ui_px_apply_list(const ui_model_t *model)
     }
     s_anim.list_selector_target_y = (float)selector_y;
     s_anim.list_selector_target_w = (float)selector_w;
-    ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, 60.0f);
-    ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, 70.0f);
+    ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, UI_LIST_SELECTOR_Y_SPEED);
+    ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, UI_LIST_SELECTOR_W_SPEED);
     ui_px_invert_rect(0, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
     if (model->status_text[0] != '\0') {
         ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
     }
 }
 
+static void ui_px_draw_visible_row(const ui_model_t *model, uint16_t row)
+{
+    uint16_t scroll = ui_current_scroll(model);
+    uint16_t count = ui_page_item_count(model);
+    uint16_t index = scroll + row;
+    int32_t y = UI_LIST_HEADER_H + (int32_t)row * UI_LIST_LINE_H;
+    char title[UI_ROW_TEXT_MAX_LEN] = {0};
+    char hint[UI_ROW_TEXT_MAX_LEN] = {0};
+    int32_t title_w;
+
+    ui_px_clear_rect(0, y, UI_CANVAS_W - UI_LIST_BAR_W - 1, UI_LIST_LINE_H);
+    if (index >= count) {
+        return;
+    }
+    ui_px_fill_row(model, index, row, title, sizeof(title), hint, sizeof(hint));
+    title_w = ui_px_text_width(title) + UI_LIST_SELECTOR_MARGIN * 2;
+    if (title_w < 18) {
+        title_w = 18;
+    }
+    if (title_w > UI_CANVAS_W - UI_LIST_BAR_W - 2) {
+        title_w = UI_CANVAS_W - UI_LIST_BAR_W - 2;
+    }
+    ui_px_text_clipped(UI_LIST_TEXT_X, y + 4, UI_CANVAS_W - UI_LIST_BAR_W - 12, title, true);
+    if (hint[0] != '\0') {
+        int32_t hint_w = ui_px_text_width(hint);
+        int32_t hint_x = UI_CANVAS_W - UI_LIST_BAR_W - 8 - hint_w;
+        if (hint_x > title_w + 4) {
+            ui_px_text_clipped(hint_x, y + 4, hint_w, hint, true);
+        }
+    }
+}
+
+static void ui_px_apply_list_dynamic(const ui_model_t *model)
+{
+    uint16_t count = ui_page_item_count(model);
+    uint16_t selected = ui_current_selected(model);
+    uint16_t scroll = ui_current_scroll(model);
+    int32_t list_h = UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H;
+    int32_t selected_row = (int32_t)selected - (int32_t)scroll;
+    int32_t selector_y = UI_LIST_HEADER_H + selected_row * UI_LIST_LINE_H;
+    int32_t selector_w;
+    int32_t prev_selector_y = s_anim.list_prev_selector_y;
+    int32_t prev_selector_w = s_anim.list_prev_selector_w;
+    int32_t redraw_y0;
+    int32_t redraw_y1;
+    int32_t redraw_row0;
+    int32_t redraw_row1;
+    int32_t redraw_w;
+    int32_t bar_h = 1;
+
+    if (selected_row < 0 || selected_row >= UI_ROW_COUNT) {
+        selector_y = UI_LIST_HEADER_H;
+    }
+    {
+        char title[UI_ROW_TEXT_MAX_LEN] = {0};
+        char hint[UI_ROW_TEXT_MAX_LEN] = {0};
+        ui_px_fill_row(
+            model,
+            selected,
+            (uint16_t)((selected >= scroll) ? (selected - scroll) : 0U),
+            title,
+            sizeof(title),
+            hint,
+            sizeof(hint));
+        selector_w = ui_px_text_width(title) + UI_LIST_SELECTOR_MARGIN * 2;
+        if (selector_w < 22) {
+            selector_w = 22;
+        }
+        if (selector_w > UI_CANVAS_W - UI_LIST_BAR_W - 2) {
+            selector_w = UI_CANVAS_W - UI_LIST_BAR_W - 2;
+        }
+    }
+    if (count > 0U) {
+        bar_h = (int32_t)(((uint32_t)(selected + 1U) * (uint32_t)list_h) / count);
+        if (bar_h < 1) {
+            bar_h = 1;
+        } else if (bar_h > list_h) {
+            bar_h = list_h;
+        }
+    }
+
+    s_anim.list_selector_target_y = (float)selector_y;
+    s_anim.list_selector_target_w = (float)selector_w;
+    s_anim.list_bar_target_h = (float)bar_h;
+    s_anim.list_bar_target_x = (float)(UI_CANVAS_W - UI_LIST_BAR_W);
+
+    ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, UI_LIST_SELECTOR_Y_SPEED);
+    ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, UI_LIST_SELECTOR_W_SPEED);
+    ui_anim_move(&s_anim.list_bar_h, s_anim.list_bar_target_h, UI_LIST_BAR_SPEED);
+    ui_anim_move(&s_anim.list_bar_x, s_anim.list_bar_target_x, UI_LIST_BAR_SPEED);
+
+    redraw_y0 = prev_selector_y < (int32_t)s_anim.list_selector_y ? prev_selector_y : (int32_t)s_anim.list_selector_y;
+    redraw_y1 = (prev_selector_y + UI_LIST_LINE_H) > ((int32_t)s_anim.list_selector_y + UI_LIST_LINE_H) ?
+                    (prev_selector_y + UI_LIST_LINE_H) :
+                    ((int32_t)s_anim.list_selector_y + UI_LIST_LINE_H);
+    if (redraw_y0 < UI_LIST_HEADER_H) {
+        redraw_y0 = UI_LIST_HEADER_H;
+    }
+    if (redraw_y1 > UI_CANVAS_H - UI_HINT_H) {
+        redraw_y1 = UI_CANVAS_H - UI_HINT_H;
+    }
+    redraw_row0 = (redraw_y0 - UI_LIST_HEADER_H) / UI_LIST_LINE_H;
+    redraw_row1 = (redraw_y1 - UI_LIST_HEADER_H) / UI_LIST_LINE_H;
+    if (redraw_row0 < 0) {
+        redraw_row0 = 0;
+    }
+    if (redraw_row1 >= UI_ROW_COUNT) {
+        redraw_row1 = UI_ROW_COUNT - 1;
+    }
+    for (int32_t row = redraw_row0; row <= redraw_row1; ++row) {
+        ui_px_draw_visible_row(model, (uint16_t)row);
+    }
+
+    ui_px_clear_rect(UI_CANVAS_W - UI_LIST_BAR_W, UI_LIST_HEADER_H, UI_LIST_BAR_W, list_h);
+    ui_px_hline(UI_CANVAS_W - UI_LIST_BAR_W, UI_LIST_HEADER_H, UI_LIST_BAR_W, true);
+    ui_px_hline(UI_CANVAS_W - UI_LIST_BAR_W, UI_CANVAS_H - UI_HINT_H - 1, UI_LIST_BAR_W, true);
+    ui_px_vline(UI_CANVAS_W - 3, UI_LIST_HEADER_H, list_h, true);
+    ui_px_box((int32_t)s_anim.list_bar_x, UI_LIST_HEADER_H, UI_LIST_BAR_W, (int32_t)s_anim.list_bar_h, true);
+
+    ui_px_invert_rect(0, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    redraw_w = prev_selector_w > (int32_t)s_anim.list_selector_w ? prev_selector_w : (int32_t)s_anim.list_selector_w;
+    ui_px_invalidate_rect(0, redraw_y0, redraw_w + 2, redraw_y1 - redraw_y0);
+    ui_px_invalidate_rect(UI_CANVAS_W - UI_LIST_BAR_W, UI_LIST_HEADER_H, UI_LIST_BAR_W, list_h);
+
+    s_anim.list_prev_selector_y = (int32_t)s_anim.list_selector_y;
+    s_anim.list_prev_selector_w = (int32_t)s_anim.list_selector_w;
+    s_anim.list_prev_bar_h = (int32_t)s_anim.list_bar_h;
+    s_anim.list_prev_bar_x = (int32_t)s_anim.list_bar_x;
+}
+
+static void ui_px_apply_list_content_dynamic(const ui_model_t *model)
+{
+    int32_t list_y = UI_LIST_HEADER_H;
+    int32_t list_h = UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H;
+
+    ui_px_clear_rect(0, list_y, UI_CANVAS_W, list_h);
+    for (uint16_t row = 0; row < UI_ROW_COUNT; ++row) {
+        ui_px_draw_visible_row(model, row);
+    }
+    ui_px_hline(UI_CANVAS_W - UI_LIST_BAR_W, UI_LIST_HEADER_H, UI_LIST_BAR_W, true);
+    ui_px_hline(UI_CANVAS_W - UI_LIST_BAR_W, UI_CANVAS_H - UI_HINT_H - 1, UI_LIST_BAR_W, true);
+    ui_px_vline(UI_CANVAS_W - 3, UI_LIST_HEADER_H, list_h, true);
+
+    ui_px_apply_list_dynamic(model);
+    ui_px_invalidate_rect(0, list_y, UI_CANVAS_W, list_h);
+}
+
 static void ui_px_render(const ui_model_t *model)
 {
+    bool full_redraw = false;
+
     if (s_canvas == NULL || s_canvas_buf == NULL) {
         return;
     }
     if (s_anim.page != model->page) {
         s_anim.page = model->page;
         s_anim.page_changed = true;
+        full_redraw = true;
         if (model->page == UI_PAGE_ROOT) {
             s_anim.tile_fore_y = (float)UI_CANVAS_H;
         } else {
@@ -3382,13 +4099,34 @@ static void ui_px_render(const ui_model_t *model)
             s_anim.list_selector_w = 18.0f;
         }
     }
+    full_redraw = full_redraw || model->dirty || s_anim.page_changed;
+    if (!full_redraw && !model->motion_dirty && !model->content_dirty && !ui_anim_active_for_page(model)) {
+        return;
+    }
+    if (!full_redraw) {
+        if (model->page == UI_PAGE_ROOT) {
+            ui_px_apply_tile_dynamic(model);
+        } else if (model->content_dirty) {
+            ui_px_apply_list_content_dynamic(model);
+        } else {
+            ui_px_apply_list_dynamic(model);
+        }
+        s_anim.page_changed = false;
+        return;
+    }
     ui_px_clear();
     if (model->page == UI_PAGE_ROOT) {
         ui_px_apply_tile(model);
     } else {
         ui_px_apply_list(model);
     }
-    lv_obj_invalidate(s_canvas);
+    if (model->page != UI_PAGE_ROOT) {
+        s_anim.list_prev_selector_y = (int32_t)s_anim.list_selector_y;
+        s_anim.list_prev_selector_w = (int32_t)s_anim.list_selector_w;
+        s_anim.list_prev_bar_h = (int32_t)s_anim.list_bar_h;
+        s_anim.list_prev_bar_x = (int32_t)s_anim.list_bar_x;
+    }
+    ui_px_invalidate_full();
     s_anim.page_changed = false;
 }
 
@@ -3436,33 +4174,43 @@ esp_err_t ui_init(void)
 void ui_process(void)
 {
     static ui_model_t snapshot;
+    bool should_render;
 
     if (!s_ui_inited) {
         return;
     }
 
     ui_process_button_queue();
+    ui_process_button_repeats();
     ui_refresh_sources();
 
     if (!ui_take_model_lock()) {
         return;
     }
     snapshot = s_model;
+    should_render = s_model.dirty || s_model.motion_dirty || s_model.content_dirty ||
+                    ui_anim_active_for_page(&s_model) || s_anim.page != s_model.page ||
+                    s_anim.page_changed;
+    snapshot.motion_dirty = s_model.motion_dirty;
+    snapshot.content_dirty = s_model.content_dirty;
     s_model.dirty = false;
+    s_model.motion_dirty = false;
+    s_model.content_dirty = false;
     xSemaphoreGive(s_model_lock);
 
-    ui_apply_snapshot(&snapshot);
+    if (should_render) {
+        ui_apply_snapshot(&snapshot);
+        s_render_frames_this_second++;
+    }
 }
 
 void ui_post_button(ui_button_t button, bool pressed)
 {
     ui_button_event_t event = {
         .button = button,
+        .pressed = pressed,
     };
 
-    if (!pressed) {
-        return;
-    }
     if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
         return;
     }
@@ -3475,6 +4223,9 @@ void ui_post_button(ui_button_t button, bool pressed)
 
         (void)xQueueReceive(s_button_queue, &dropped, 0);
         if (xQueueSend(s_button_queue, &event, 0) != pdTRUE) {
+            if (!pressed) {
+                ui_clear_stuck_button_state(button);
+            }
             return;
         }
         if (s_last_button_queue_full_log_ms == 0U ||
@@ -3532,6 +4283,9 @@ void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total)
     s_model.burn_progress = progress;
     s_model.burn_processed = processed;
     s_model.burn_total = total;
+    if (processed == 0U) {
+        s_model.burn_elapsed_us = 0;
+    }
     s_model.dirty = true;
     xSemaphoreGive(s_model_lock);
 }

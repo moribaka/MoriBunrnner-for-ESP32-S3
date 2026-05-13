@@ -2,6 +2,7 @@
 
 sdmmc_card_t *card = NULL;
 static uint8_t sdmmc_mount_flag = 0x00;
+static bool assets_mount_flag = false;
 
 esp_err_t sdmmc_init(void)
 {
@@ -59,4 +60,47 @@ esp_err_t sdmmc_unmount(void)
     ESP_ERROR_CHECK(esp_vfs_fat_sdcard_unmount(mount_point, card));
     sdmmc_mount_flag = 0x00;
     return ESP_OK;
+}
+
+esp_err_t assets_fs_init(void)
+{
+    if (assets_mount_flag) {
+        return ESP_OK;
+    }
+
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = assets_mount_point,
+        .partition_label = assets_partition_label,
+        .max_files = 4,
+        .format_if_mount_failed = false,
+    };
+
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+    if (ret != ESP_OK) {
+        if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE("assets", "SPIFFS partition '%s' not found", assets_partition_label);
+        } else if (ret == ESP_FAIL) {
+            ESP_LOGE("assets", "failed to mount SPIFFS partition '%s'", assets_partition_label);
+        } else {
+            ESP_LOGE("assets", "failed to initialize SPIFFS partition '%s': %s", assets_partition_label, esp_err_to_name(ret));
+        }
+        return ret;
+    }
+
+    assets_mount_flag = true;
+    assets_fs_print_info();
+    return ESP_OK;
+}
+
+void assets_fs_print_info(void)
+{
+    size_t total = 0;
+    size_t used = 0;
+    esp_err_t ret = esp_spiffs_info(assets_partition_label, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGW("assets", "failed to read SPIFFS info: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    ESP_LOGI("assets", "mounted %s: total=%u used=%u", assets_mount_point, (unsigned)total, (unsigned)used);
 }
