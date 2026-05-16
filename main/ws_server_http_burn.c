@@ -313,7 +313,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
     }
     if (!burner_parse_write_path_text(write_path_arg, &write_path)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "write_path must be direct or psram");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "write_path must be direct, psram, or pipeline");
     }
     if (psram_mb_arg[0] != '\0') {
         if (!burner_parse_u32_text(psram_mb_arg, &psram_mb) ||
@@ -704,8 +704,13 @@ esp_err_t burner_start_write_from_tf(
         return burner_start_error(ESP_ERR_INVALID_STATE, "tf busy by usb host", error_msg, error_msg_len);
     }
 
-    psram_window_bytes = burner_psram_window_mb_to_bytes(psram_mb);
-    psram_mb = burner_psram_window_bytes_to_mb(psram_window_bytes);
+    if (write_path == BURNER_WRITE_PATH_PIPELINE) {
+        psram_window_bytes = 0u;
+        psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
+    } else {
+        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_mb);
+        psram_mb = burner_psram_window_bytes_to_mb(psram_window_bytes);
+    }
     mbc5_program_chunk_bytes = burner_mbc5_program_chunk_kb_to_bytes(mbc5_chunk_kb);
     if (cart_mode != BURNER_CART_MODE_GBA) {
         gba_force_no_cfi = false;

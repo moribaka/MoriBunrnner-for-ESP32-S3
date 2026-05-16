@@ -333,13 +333,15 @@ esp_err_t burner_cart_unlock_ppb_handler(httpd_req_t *req)
         n = snprintf(
             resp,
             sizeof(resp),
-            "{\"ok\":%s,\"mode\":\"mbc5\",\"power\":{\"v5\":true,\"v3\":false},"
+            "{\"ok\":%s,\"mode\":\"mbc5\",\"power\":{\"v5\":%s,\"v3\":%s},"
             "\"id\":\"%s\",\"chip\":\"%s\",\"cfi_ok\":%s,"
             "\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
             "\"sector_count\":%" PRIu32 ",\"ppb_lock_status\":\"0x%02X\","
             "\"ppb_needs_unlock_before\":%" PRIu32 ",\"ppb_needs_unlock_after\":%" PRIu32 ","
             "\"message\":\"%s\"}",
             (err == ESP_OK) ? "true" : "false",
+            (s_mbc5_power_5v_enabled != 0u) ? "true" : "false",
+            (s_mbc5_power_5v_enabled != 0u) ? "false" : "true",
             id_hex,
             burner_mbc5_chip_name(report.mbc5_id),
             report.cfi_ok ? "true" : "false",
@@ -421,7 +423,7 @@ static esp_err_t burner_cart_debug_read_sample_locked(
     }
 
     if (cart_mode == BURNER_CART_MODE_GBA) {
-        is_multi = (device_size > BURN_GBA_BANK_BYTES) || (sample_addr >= BURN_GBA_BANK_BYTES);
+        is_multi = (device_size > BURN_GBA_LINEAR_ADDR_BYTES) || (sample_addr >= BURN_GBA_LINEAR_ADDR_BYTES);
         /* Match the dump/export path so sampled bytes reflect the real ROM contents. */
         err = burner_bacon_gba_verify_read_block_hoststyle(sample_buf, actual_len, sample_addr, is_multi);
     } else {

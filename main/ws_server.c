@@ -62,17 +62,22 @@
 #define BURN_MBC5_DUMP_CHUNK_BYTES (64U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
+#define BURN_ERASE_ALWAYS_DEFAULT 0U
 #define BURN_MBC5_ERASE_PROBE_BYTES 512U
+#define BURN_ERASE_BLANK_SAMPLE_BYTES 512U
 #define BURN_MBC5_RAM_CHUNK_BYTES 4096U
 #define BURN_GBA_PROGRAM_CHUNK_BYTES 65536U
 #define BURN_GBA_DUMP_CHUNK_BYTES 65536U
-#define BURN_GBA_BANK_BYTES (32U * 1024U * 1024U)
+#define BURN_GBA_LINEAR_ADDR_BYTES (32U * 1024U * 1024U)
+#define BURN_GBA_BANK_BYTES BURN_GBA_LINEAR_ADDR_BYTES
 #define BURN_PSRAM_WINDOW_BYTES_PER_MB (1024U * 1024U)
 #define BURN_PSRAM_WINDOW_AUTO_MB 0U
 #define BURN_PSRAM_WINDOW_MIN_MB 1U
 #define BURN_PSRAM_WINDOW_MAX_MB 8U
 #define BURN_PSRAM_WINDOW_DEFAULT_MB BURN_PSRAM_WINDOW_AUTO_MB
 #define BURN_PSRAM_WINDOW_RESERVE_BYTES (256U * 1024U)
+#define BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT 1U
+#define BURN_GBA_FIXED_ERASE_WINDOW_MB 4U
 #define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES 0U
 #define BURN_READ_PSRAM_FRAGMENT_MB 7U
 #define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
@@ -107,7 +112,7 @@
 #define WIFI_SCAN_AP_MAX 24
 #define WEB_LANG_DIR_REL ".setting"
 #define WEB_LANG_SYSTEM_INI_REL WEB_LANG_DIR_REL "/mori_system.ini"
-#define WEB_LANG_DEFAULT_INI "lang_en_us.ini"
+#define WEB_LANG_DEFAULT_INI "lang_zh_cn.ini"
 #define WEB_LANG_FALLBACK_EN_INI "lang_en_us.ini"
 #define WEB_LANG_FILE_NAME_MAX 64
 #define WEB_LANG_VERSION_MAX 24
@@ -115,7 +120,7 @@
 #define WEB_LANG_LINE_MAX 512
 #define WEB_NTP_SERVER_MAX 96
 #define WEB_NTP_ENABLE_MAX 8
-#define WEB_NTP_SERVER_DEFAULT "pool.ntp.org"
+#define WEB_NTP_SERVER_DEFAULT "ntp.aliyun.com"
 #define SYSTEM_MIGRATE_ZIP_NAME "mori_system_migration.zip"
 #define ZIP_VERSION_NEEDED 20U
 #define ZIP_GP_FLAG_DATA_DESCRIPTOR 0x0008U
@@ -154,13 +159,14 @@ typedef struct {
 #define BURNER_CPU_YIELD_INTERVAL_US 20000ULL
 #define BURNER_ROM_POLL_TIMEOUT_MS 2000
 #define BURNER_ROM_POLL_INTERVAL_US 50
-#define BURNER_ROM_ERASE_TIMEOUT_MS 20000
-#define BURNER_ROM_CHIP_ERASE_TIMEOUT_MS (5 * 60 * 1000)
+#define BURNER_ROM_ERASE_TIMEOUT_PER_MB_MS 20000U
+#define BURNER_ROM_ERASE_TIMEOUT_MAX_MS (5U * 60U * 1000U)
+#define BURNER_ROM_CHIP_ERASE_TIMEOUT_MS BURNER_ROM_ERASE_TIMEOUT_MAX_MS
 #define BURNER_GBA_HOST_UNLOCK_ADDR0 0x555u
 #define BURNER_GBA_HOST_UNLOCK_ADDR1 0x2AAu
 #define BURNER_GBA_HOST_CFI_ENTER_ADDR 0x055u
 #define BURNER_GBA_CFI_RETRY_COUNT 3U
-#define BURNER_GBA_BANK_SWITCH_SETTLE_MS 1U
+#define BURNER_GBA_BANK_SWITCH_SETTLE_MS 8U
 #define BURNER_GBA_READ_TURNAROUND_HOLD_BYTES 0U
 #define BURNER_GBA_CMD_WRITE_SETUP_HOLD_BYTES 2U
 #define BURNER_GBA_CMD_WRITE_STROBE_HOLD_BYTES 4U
@@ -239,6 +245,7 @@ typedef struct {
 typedef enum {
     BURNER_WRITE_PATH_DIRECT = 0,
     BURNER_WRITE_PATH_PSRAM,
+    BURNER_WRITE_PATH_PIPELINE,
 } burner_write_path_t;
 
 typedef enum {
@@ -313,9 +320,19 @@ typedef struct {
     uint8_t verify_sample_cart_byte;
     bool verify_sample_valid;
     bool verify_sample_equal;
+    burner_cart_mode_t probe_cart_mode;
+    bool probe_valid;
+    bool probe_cfi_ok;
+    bool probe_gba_multi;
+    bool probe_gba_force_multi;
+    uint32_t probe_device_size;
+    uint32_t probe_sector_size;
+    uint16_t probe_buffer_write_bytes;
+    uint8_t probe_id[8];
     char rom_name[BURNER_FILE_NAME_LEN];
     char rom_path[BURNER_FILE_PATH_LEN];
     char message[96];
+    bool erase_phase_planned;
     bool erase_phase_active;
     bool cancel_requested;
 } burner_status_t;
@@ -486,6 +503,9 @@ burner_core_config_t s_burn_core_cfg = {
     .tf_core = BURNER_CORE_AFFINITY_CPU1,
     .psram_core = BURNER_CORE_AFFINITY_CPU1,
 };
+uint8_t s_burn_erase_always = BURN_ERASE_ALWAYS_DEFAULT;
+uint8_t s_gba_fixed_erase_window_enabled = BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT;
+uint8_t s_mbc5_power_5v_enabled = 0;
 TickType_t s_bacon_last_active_tick = 0;
 bool s_bacon_idle_powered_down = false;
 burner_cart_ctx_t s_cart_ctx = {
@@ -540,6 +560,7 @@ esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job);
 esp_err_t burner_spi_prepare_burn_gba(const burner_task_param_t *job);
 esp_err_t burner_bacon_mbc5_read_block(uint8_t *out, size_t len, uint32_t offset);
 uint32_t burner_psram_auto_window_mb(void);
+static bool burner_is_gba_multi_card(const burner_task_param_t *job);
 burner_status_t s_status = {
     .state = BURNER_STATE_IDLE,
     .progress = 0,
@@ -1064,7 +1085,7 @@ const char __attribute__((unused)) s_tf_html[] =
     "}"
     "function renderRows(entries){"
     "listEl.innerHTML='';"
-    "entries.sort((a,b)=>{if(!!a.is_dir!==!!b.is_dir)return a.is_dir?-1:1;return String(a.name).localeCompare(String(b.name));});"
+    "entries.sort((a,b)=>{const ra=Number.isFinite(+a.sort_rank)?+a.sort_rank:(a.is_dir?0:4);const rb=Number.isFinite(+b.sort_rank)?+b.sort_rank:(b.is_dir?0:4);if(ra!==rb)return ra-rb;return String(a.name).localeCompare(String(b.name),undefined,{sensitivity:'base',numeric:true});});"
     "if(entries.length===0){"
     "const empty=document.createElement('div');"
     "empty.className='item';"
@@ -1368,6 +1389,8 @@ bool burner_parse_cart_mode_text(const char *text, burner_cart_mode_t *mode_out)
 const char *burner_write_path_to_str(burner_write_path_t path)
 {
     switch (path) {
+    case BURNER_WRITE_PATH_PIPELINE:
+        return "pipeline";
     case BURNER_WRITE_PATH_PSRAM:
         return "psram";
     case BURNER_WRITE_PATH_DIRECT:
@@ -1387,6 +1410,10 @@ bool burner_parse_write_path_text(const char *text, burner_write_path_t *path_ou
     }
     if (strcasecmp(text, "psram") == 0) {
         *path_out = BURNER_WRITE_PATH_PSRAM;
+        return true;
+    }
+    if (strcasecmp(text, "pipeline") == 0 || strcasecmp(text, "pipe") == 0) {
+        *path_out = BURNER_WRITE_PATH_PIPELINE;
         return true;
     }
     return false;
@@ -1832,6 +1859,7 @@ void burner_status_phase_reset_locked(void)
     s_status.erase_sector_size = 0u;
     s_status.erase_phase_total_sectors = 0u;
     s_status.erase_phase_done_sectors = 0u;
+    s_status.erase_phase_planned = false;
     s_status.erase_phase_active = false;
     s_status.erase_start_us = 0u;
     s_status.erase_elapsed_us = 0u;
@@ -1862,6 +1890,53 @@ void burner_status_phase_reset_locked(void)
     burner_status_verify_sample_reset_locked();
 }
 
+void burner_status_probe_reset_locked(void)
+{
+    s_status.probe_cart_mode = BURNER_CART_MODE_MBC5;
+    s_status.probe_valid = false;
+    s_status.probe_cfi_ok = false;
+    s_status.probe_gba_multi = false;
+    s_status.probe_gba_force_multi = false;
+    s_status.probe_device_size = 0u;
+    s_status.probe_sector_size = 0u;
+    s_status.probe_buffer_write_bytes = 0u;
+    memset(s_status.probe_id, 0, sizeof(s_status.probe_id));
+}
+
+void burner_status_set_probe_info(
+    burner_cart_mode_t cart_mode,
+    const uint8_t *id,
+    size_t id_len,
+    uint32_t device_size,
+    uint32_t sector_size,
+    uint16_t buffer_write_bytes,
+    bool cfi_ok,
+    bool gba_multi,
+    bool gba_force_multi)
+{
+    size_t copy_len;
+
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.probe_cart_mode = cart_mode;
+    s_status.probe_valid = true;
+    s_status.probe_cfi_ok = cfi_ok;
+    s_status.probe_gba_multi = gba_multi;
+    s_status.probe_gba_force_multi = gba_force_multi;
+    s_status.probe_device_size = device_size;
+    s_status.probe_sector_size = sector_size;
+    s_status.probe_buffer_write_bytes = buffer_write_bytes;
+    memset(s_status.probe_id, 0, sizeof(s_status.probe_id));
+    if (id != NULL && id_len > 0u) {
+        copy_len = (id_len < sizeof(s_status.probe_id)) ? id_len : sizeof(s_status.probe_id);
+        memcpy(s_status.probe_id, id, copy_len);
+    }
+    xSemaphoreGive(s_status_lock);
+}
+
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal)
 {
     if (s_status_lock == NULL) {
@@ -1884,8 +1959,29 @@ void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t sector_siz
     }
 
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    if (!s_status.erase_phase_planned) {
+        s_status.erase_phase_total_sectors = total_sectors;
+        s_status.erase_phase_done_sectors = 0u;
+    } else if (s_status.erase_phase_total_sectors == 0u) {
+        s_status.erase_phase_total_sectors = total_sectors;
+    }
+    if (sector_size > 0u) {
+        s_status.erase_sector_size = sector_size;
+    }
+    s_status.erase_phase_active = false;
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t sector_size)
+{
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
     s_status.erase_phase_total_sectors = total_sectors;
     s_status.erase_phase_done_sectors = 0u;
+    s_status.erase_phase_planned = total_sectors > 0u;
     if (sector_size > 0u) {
         s_status.erase_sector_size = sector_size;
     }
@@ -1941,7 +2037,8 @@ void burner_status_mark_erase_end(void)
         }
         s_status.erase_start_us = 0u;
     }
-    if (s_status.erase_phase_total_sectors > 0u &&
+    if (!s_status.erase_phase_planned &&
+        s_status.erase_phase_total_sectors > 0u &&
         s_status.erase_phase_done_sectors < s_status.erase_phase_total_sectors) {
         s_status.erase_phase_done_sectors = s_status.erase_phase_total_sectors;
     }
@@ -2054,10 +2151,73 @@ uint32_t burner_erase_sector_count_from_bytes(uint64_t bytes, uint32_t sector_si
 
 uint32_t burner_erase_sector_count_from_range(uint32_t addr_begin, uint32_t addr_end, uint32_t sector_size)
 {
+    uint32_t sector_mask;
+    uint32_t aligned_begin;
+    uint32_t aligned_end;
+
     if (addr_end < addr_begin) {
         return 0u;
     }
-    return burner_erase_sector_count_from_bytes((uint64_t)addr_end - (uint64_t)addr_begin + 1u, sector_size);
+    if (sector_size == 0u) {
+        return 0u;
+    }
+    if ((sector_size & (sector_size - 1u)) != 0u) {
+        return burner_erase_sector_count_from_bytes((uint64_t)addr_end - (uint64_t)addr_begin + 1u, sector_size);
+    }
+    sector_mask = sector_size - 1u;
+    aligned_begin = addr_begin & ~sector_mask;
+    aligned_end = addr_end & ~sector_mask;
+    if (aligned_end < aligned_begin) {
+        return 0u;
+    }
+    return burner_erase_sector_count_from_bytes((uint64_t)aligned_end - (uint64_t)aligned_begin + (uint64_t)sector_size, sector_size);
+}
+
+static uint32_t burner_planned_stage_erase_sector_count(
+    uint32_t addr_begin,
+    uint32_t total_bytes,
+    uint32_t sector_size,
+    uint32_t stage_capacity)
+{
+    uint32_t processed = 0u;
+    uint64_t total_sectors = 0u;
+
+    if (total_bytes == 0u || sector_size == 0u || stage_capacity == 0u ||
+        (sector_size & (sector_size - 1u)) != 0u) {
+        return 0u;
+    }
+
+    while (processed < total_bytes) {
+        uint32_t stage_addr = addr_begin + processed;
+        uint32_t stage_bytes = total_bytes - processed;
+        uint32_t stage_erase_begin = stage_addr;
+        uint32_t stage_erase_end;
+
+        if (stage_bytes > stage_capacity) {
+            stage_bytes = stage_capacity;
+        }
+        stage_erase_end = stage_addr + stage_bytes - 1u;
+        if (processed > 0u) {
+            uint32_t mask = sector_size - 1u;
+            uint64_t ceil_begin_u64 = (uint64_t)stage_addr + (uint64_t)mask;
+            if (ceil_begin_u64 > UINT32_MAX) {
+                stage_erase_begin = UINT32_MAX;
+            } else {
+                stage_erase_begin = (uint32_t)ceil_begin_u64 & ~mask;
+            }
+            if (stage_erase_begin > stage_erase_end) {
+                stage_erase_begin = stage_erase_end;
+            }
+        }
+
+        total_sectors += burner_erase_sector_count_from_range(stage_erase_begin, stage_erase_end, sector_size);
+        if (total_sectors > UINT32_MAX) {
+            return UINT32_MAX;
+        }
+        processed += stage_bytes;
+    }
+
+    return (uint32_t)total_sectors;
 }
 
 void burner_status_record_erase_sectors(uint32_t sector_count, uint32_t sector_size)
@@ -2323,6 +2483,7 @@ void burner_status_reset(void)
     s_status.processed_bytes = 0;
     burner_status_phase_reset_locked();
     burner_status_speed_reset_locked();
+    burner_status_probe_reset_locked();
     burner_cancel_reset_locked();
     s_status.rom_name[0] = '\0';
     s_status.rom_path[0] = '\0';
@@ -2641,7 +2802,7 @@ bool burner_try_probe_cart_title(
                 header,
                 header_len,
                 addr_begin + BURNER_GBA_TITLE_OFFSET,
-                gba_force_multi);
+                burner_is_gba_multi_card(&probe_job));
         }
     } else {
         header_len = BURNER_MBC5_TITLE_LEN;
@@ -4204,11 +4365,23 @@ static void burner_lang_load_meta_from_system(burner_lang_meta_t *meta)
     }
 }
 
+static uint8_t burner_lang_ui_language_for_ini(const char *language_ini)
+{
+    if (language_ini != NULL && strcmp(language_ini, WEB_LANG_FALLBACK_EN_INI) == 0) {
+        return UI_LANGUAGE_EN;
+    }
+    if (language_ini != NULL && strcmp(language_ini, WEB_LANG_DEFAULT_INI) == 0) {
+        return UI_LANGUAGE_ZH;
+    }
+    return ui_get_language();
+}
+
 static esp_err_t burner_lang_write_system_ini(
     const char *language_ini,
     burner_lang_meta_t *saved_meta)
 {
     burner_lang_meta_t meta = {0};
+    uint8_t ui_language = UI_LANGUAGE_DEFAULT;
     char ntp_enable[WEB_NTP_ENABLE_MAX] = {0};
     char ntp_server[WEB_NTP_SERVER_MAX] = {0};
     char setting_path[WEB_FILE_PATH_LEN_MAX] = {0};
@@ -4224,6 +4397,7 @@ static esp_err_t burner_lang_write_system_ini(
 
     burner_lang_load_meta_from_system(&meta);
     burner_lang_copy(meta.language_ini, sizeof(meta.language_ini), language_ini);
+    ui_language = burner_lang_ui_language_for_ini(meta.language_ini);
 
     if (!burner_build_full_path(WEB_LANG_DIR_REL, setting_path, sizeof(setting_path))) {
         return ESP_ERR_INVALID_SIZE;
@@ -4251,9 +4425,10 @@ static esp_err_t burner_lang_write_system_ini(
 
     if (fprintf(
             fp,
-            "# MORI system settings\nlanguage_version=%s\nlanguage_ini=%s\nntp_enable=%s\nntp_server=%s\n",
+            "# MORI system settings\nlanguage_version=%s\nlanguage_ini=%s\nui_language=%u\nntp_enable=%s\nntp_server=%s\n",
             meta.language_version,
             meta.language_ini,
+            (unsigned)ui_language,
             ntp_enable,
             ntp_server) > 0 &&
         fflush(fp) == 0) {
@@ -4282,6 +4457,7 @@ static esp_err_t burner_lang_write_system_ini(
     if (saved_meta != NULL) {
         *saved_meta = meta;
     }
+    ui_set_language(ui_language);
     return ESP_OK;
 }
 
@@ -4786,22 +4962,6 @@ static uint8_t burner_bacon_option_byte0(
     return ret;
 }
 
-static bool burner_all_ff(const uint8_t *buf, size_t len)
-{
-    size_t i;
-
-    if (buf == NULL) {
-        return false;
-    }
-
-    for (i = 0; i < len; ++i) {
-        if (buf[i] != 0xFFu) {
-            return false;
-        }
-    }
-    return true;
-}
-
 void burner_spi_lock_take(void)
 {
     if (s_spi_lock != NULL) {
@@ -5214,7 +5374,7 @@ static esp_err_t burner_spi_transfer_cs_legacy(
     size_t len)
 {
 #if BURNER_SPI_ENABLE
-    esp_err_t err;
+    esp_err_t err = ESP_OK;
     spi_transaction_t trans = {0};
     const uint8_t *tx_buf = tx;
     uint8_t *rx_buf = rx;
@@ -5262,7 +5422,7 @@ static esp_err_t burner_spi_transfer_cs_legacy(
 
 static esp_err_t burner_spi_write_read(uint8_t *io_buf, size_t len)
 {
-    esp_err_t err;
+    esp_err_t err = ESP_OK;
     uint8_t *tx_buf = s_mcu_spi_tx_shadow;
     bool use_shadow = (tx_buf != NULL && len <= s_mcu_spi_tx_shadow_size);
 
@@ -5782,18 +5942,20 @@ esp_err_t burner_bacon_gba_prepare_power(void)
 esp_err_t burner_bacon_mbc5_prepare_power(void)
 {
     esp_err_t err;
+    bool use_5v = (s_mbc5_power_5v_enabled != 0u);
 
-    /* Match host mission: power rails off first, then enable 5V for flash. */
+    /* Match host mission: power rails off first, then enable the selected GBC rail. */
     err = burner_bacon_gba_power_cmd(false, false);
     if (err != ESP_OK) {
         return err;
     }
     vTaskDelay(pdMS_TO_TICKS(BURNER_POWER_SETTLE_MS));
 
-    err = burner_bacon_gba_power_cmd(true, false);
+    err = burner_bacon_gba_power_cmd(use_5v, !use_5v);
     if (err != ESP_OK) {
         return err;
     }
+    ESP_LOGI(BURNER_TAG, "MBC5 power rail: %s", use_5v ? "5V" : "3V3");
     vTaskDelay(pdMS_TO_TICKS(BURNER_POWER_SETTLE_MS));
     return ESP_OK;
 }
@@ -6223,7 +6385,7 @@ static esp_err_t burner_bacon_wait_u16(uint32_t byte_addr, uint16_t expected, ui
 {
     int64_t deadline_us;
     uint16_t read_back = 0;
-    esp_err_t err;
+    esp_err_t err = ESP_OK;
 
     deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000);
     while (esp_timer_get_time() < deadline_us) {
@@ -6242,6 +6404,14 @@ static esp_err_t burner_bacon_wait_u16(uint32_t byte_addr, uint16_t expected, ui
         burner_task_yield_if_due();
     }
 
+    ESP_LOGW(
+        BURNER_TAG,
+        "GBA program wait timeout @0x%08" PRIX32 ": expected=0x%04X read=0x%04X timeout=%" PRIu32 "ms",
+        byte_addr,
+        expected,
+        read_back,
+        timeout_ms);
+    (void)burner_bacon_rom_write_u16(0x000u, 0x00F0u);
     return ESP_ERR_TIMEOUT;
 }
 
@@ -6249,13 +6419,101 @@ static esp_err_t burner_bacon_gba_rom_switch_bank(uint8_t bank)
 {
     uint8_t high = (uint8_t)((bank & 0x0Fu) << 4);
     uint8_t low = 0x40u;
-    esp_err_t err;
+    esp_err_t err = ESP_OK;
 
     err = burner_bacon_ram_write(0x0002u, &high, 1u);
     if (err != ESP_OK) {
         return err;
     }
     return burner_bacon_ram_write(0x0003u, &low, 1u);
+}
+
+static size_t burner_gba_program_safe_chunk_bytes(uint32_t byte_addr, size_t requested_len, size_t write_unit_bytes)
+{
+    size_t chunk = requested_len;
+    uint32_t boundary_remain;
+
+    if (chunk == 0u) {
+        return 0u;
+    }
+
+    if (write_unit_bytes >= 2u && (write_unit_bytes & (write_unit_bytes - 1u)) == 0u) {
+        boundary_remain = (uint32_t)(write_unit_bytes - (byte_addr & (uint32_t)(write_unit_bytes - 1u)));
+        if (boundary_remain > 0u && chunk > boundary_remain) {
+            chunk = boundary_remain;
+        }
+    }
+
+    boundary_remain = BURN_GBA_BANK_BYTES - (byte_addr % BURN_GBA_BANK_BYTES);
+    if (boundary_remain > 0u && chunk > boundary_remain) {
+        chunk = boundary_remain;
+    }
+
+    chunk &= ~((size_t)0x1u);
+    return (chunk == 0u) ? 2u : chunk;
+}
+
+static void burner_gba_resolve_write_addr(
+    uint32_t rom_addr,
+    bool is_multi_card,
+    uint32_t *bank_out,
+    uint32_t *bank_remain_out)
+{
+    uint32_t bank = 0u;
+    uint32_t bank_remain = UINT32_MAX - rom_addr;
+    uint32_t bank_off;
+
+    if (is_multi_card) {
+        bank = rom_addr / BURN_GBA_BANK_BYTES;
+        bank_off = rom_addr % BURN_GBA_BANK_BYTES;
+        bank_remain = BURN_GBA_BANK_BYTES - bank_off;
+    }
+
+    if (bank_out != NULL) {
+        *bank_out = bank;
+    }
+    if (bank_remain_out != NULL) {
+        *bank_remain_out = bank_remain;
+    }
+}
+
+static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank)
+{
+    esp_err_t err;
+
+    if (bank > UINT8_MAX) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (bank == (uint32_t)s_cart_ctx.current_bank) {
+        return ESP_OK;
+    }
+
+    err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
+    if (err != ESP_OK) {
+        return err;
+    }
+    vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
+    (void)burner_bacon_rom_write_u16(0x000u, 0x00F0u);
+    vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
+    s_cart_ctx.current_bank = (uint16_t)bank;
+    return ESP_OK;
+}
+
+static bool burner_gba_should_log_program_boundary(uint32_t byte_addr, size_t bytes, uint32_t processed, uint32_t total)
+{
+    uint32_t chunk_end;
+
+    if (bytes == 0u) {
+        return false;
+    }
+    if (processed == 0u || processed + (uint32_t)bytes >= total) {
+        return true;
+    }
+    if ((byte_addr % BURN_GBA_BANK_BYTES) == 0u) {
+        return true;
+    }
+    chunk_end = byte_addr + (uint32_t)bytes;
+    return (chunk_end % BURN_GBA_BANK_BYTES) == 0u;
 }
 
 const char *burner_gba_cmd_addr_mode_name(burner_gba_cmd_addr_mode_t mode)
@@ -7486,6 +7744,26 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         id[6],
         id[7]);
 
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA mapping: %s bank=%uMB force_multi=%d range=0x%08" PRIX32 "-0x%08" PRIX32,
+        burner_is_gba_multi_card(job) ? "32MB-bank multicart" : "linear single-card",
+        (unsigned)(BURN_GBA_BANK_BYTES / (1024u * 1024u)),
+        job->gba_force_multi ? 1 : 0,
+        job->addr_begin,
+        (uint32_t)(requested_top64 - 1u));
+
+    burner_status_set_probe_info(
+        BURNER_CART_MODE_GBA,
+        id,
+        sizeof(id),
+        device_size,
+        sector_size,
+        buffer_write_bytes,
+        cfi_ok,
+        burner_is_gba_multi_card(job),
+        job->gba_force_multi);
+
     return ESP_OK;
 }
 
@@ -7637,6 +7915,36 @@ static esp_err_t burner_bacon_wait_u8(uint16_t addr, uint8_t expected, uint32_t 
     }
 
     return ESP_ERR_TIMEOUT;
+}
+
+static uint32_t burner_erase_timeout_ms_for_bytes(uint32_t bytes)
+{
+    uint32_t mb;
+    uint64_t timeout_ms;
+
+    if (bytes == 0u) {
+        return BURNER_ROM_ERASE_TIMEOUT_PER_MB_MS;
+    }
+
+    mb = (bytes + ((1024u * 1024u) - 1u)) / (1024u * 1024u);
+    if (mb == 0u) {
+        mb = 1u;
+    }
+    timeout_ms = (uint64_t)mb * (uint64_t)BURNER_ROM_ERASE_TIMEOUT_PER_MB_MS;
+    if (timeout_ms > BURNER_ROM_ERASE_TIMEOUT_MAX_MS) {
+        timeout_ms = BURNER_ROM_ERASE_TIMEOUT_MAX_MS;
+    }
+    return (uint32_t)timeout_ms;
+}
+
+static uint32_t burner_erase_remaining_timeout_ms(int64_t deadline_us)
+{
+    int64_t remaining_us = deadline_us - esp_timer_get_time();
+
+    if (remaining_us <= 0) {
+        return 0u;
+    }
+    return (uint32_t)((remaining_us + 999LL) / 1000LL);
 }
 
 esp_err_t burner_bacon_mbc5_get_id(uint8_t id_out[4])
@@ -7830,12 +8138,16 @@ cfi_out:
     return err;
 }
 
-static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr)
+static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr, uint32_t timeout_ms)
 {
     uint16_t bank = (uint16_t)(flash_addr >> 14);
     uint16_t cart_addr = (uint16_t)(0x4000u + (flash_addr & 0x3FFFu));
     uint8_t cmd;
     esp_err_t err;
+
+    if (timeout_ms == 0u) {
+        return ESP_ERR_TIMEOUT;
+    }
 
     err = burner_bacon_mbc5_switch_bank(bank);
     if (err != ESP_OK) {
@@ -7874,16 +8186,126 @@ static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr)
         return err;
     }
 
-    return burner_bacon_wait_u8(cart_addr, 0xFFu, BURNER_ROM_ERASE_TIMEOUT_MS);
+    err = burner_bacon_wait_u8(cart_addr, 0xFFu, timeout_ms);
+    if (err == ESP_ERR_TIMEOUT) {
+        uint8_t read_back = 0u;
+        (void)burner_bacon_gbc_read_u8(cart_addr, &read_back);
+        ESP_LOGW(
+            BURNER_TAG,
+            "MBC5 erase timeout flash=0x%08" PRIX32 " bank=%u cart_addr=0x%04X read=0x%02X timeout=%ums",
+            flash_addr,
+            (unsigned)bank,
+            (unsigned)cart_addr,
+            (unsigned)read_back,
+            (unsigned)timeout_ms);
+    }
+    return err;
 }
 
-static esp_err_t burner_bacon_mbc5_erase_range(uint32_t addr_begin, uint32_t addr_end, uint32_t sector_size)
+static esp_err_t burner_buffer_all_ff(const uint8_t *buf, size_t len, bool *all_ff_out)
+{
+    if (buf == NULL || all_ff_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    for (size_t i = 0; i < len; ++i) {
+        if (buf[i] != 0xFFu) {
+            *all_ff_out = false;
+            return ESP_OK;
+        }
+    }
+    *all_ff_out = true;
+    return ESP_OK;
+}
+
+static bool burner_all_ff(const uint8_t *buf, size_t len)
+{
+    bool all_ff = false;
+
+    if (burner_buffer_all_ff(buf, len, &all_ff) != ESP_OK) {
+        return false;
+    }
+    return all_ff;
+}
+
+static esp_err_t burner_mbc5_sector_is_blank(
+    uint32_t sector_addr,
+    uint32_t sector_size,
+    uint8_t *scratch,
+    size_t scratch_len,
+    bool *blank_out)
+{
+    uint32_t sample_offsets[3];
+    size_t sample_count = 0u;
+    size_t sample_len;
+    esp_err_t err;
+
+    if (scratch == NULL || scratch_len == 0u || blank_out == NULL || sector_size == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    sample_len = (sector_size < scratch_len) ? (size_t)sector_size : scratch_len;
+    if (sample_len == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    sample_offsets[sample_count++] = 0u;
+    if (sector_size > (uint32_t)sample_len) {
+        uint32_t middle = (sector_size / 2u) & ~((uint32_t)0x1u);
+        if (middle + (uint32_t)sample_len > sector_size) {
+            middle = sector_size - (uint32_t)sample_len;
+        }
+        if (middle != sample_offsets[sample_count - 1u]) {
+            sample_offsets[sample_count++] = middle;
+        }
+    }
+    if (sector_size > (uint32_t)sample_len) {
+        uint32_t tail = sector_size - (uint32_t)sample_len;
+        if (tail != sample_offsets[sample_count - 1u]) {
+            sample_offsets[sample_count++] = tail;
+        }
+    }
+
+    *blank_out = true;
+    for (size_t i = 0u; i < sample_count; ++i) {
+        bool chunk_blank = false;
+
+        err = burner_bacon_mbc5_read_block(scratch, sample_len, sector_addr + sample_offsets[i]);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_buffer_all_ff(scratch, sample_len, &chunk_blank);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if (!chunk_blank) {
+            *blank_out = false;
+            return ESP_OK;
+        }
+        burner_task_yield_if_due();
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t burner_bacon_mbc5_erase_range(
+    uint32_t addr_begin,
+    uint32_t addr_end,
+    uint32_t sector_size,
+    bool sample_blank_sectors)
 {
     uint32_t sector_mask;
     uint32_t aligned_begin;
     int64_t sa;
     uint32_t aligned_end;
-    esp_err_t err;
+    uint8_t *blank_check_buf = NULL;
+    size_t blank_check_len = 0u;
+    uint32_t skipped_blank = 0u;
+    uint32_t erased = 0u;
+    uint32_t erase_bytes;
+    uint32_t timeout_ms;
+    int64_t erase_deadline_us;
+    esp_err_t err = ESP_OK;
 
     if (sector_size == 0u || addr_end < addr_begin) {
         return ESP_ERR_INVALID_ARG;
@@ -7896,20 +8318,71 @@ static esp_err_t burner_bacon_mbc5_erase_range(uint32_t addr_begin, uint32_t add
     sector_mask = sector_size - 1u;
     aligned_begin = addr_begin & ~sector_mask;
     aligned_end = addr_end & ~sector_mask;
+    erase_bytes = (aligned_end - aligned_begin) + sector_size;
+    timeout_ms = burner_erase_timeout_ms_for_bytes(erase_bytes);
+    erase_deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
+    ESP_LOGI(
+        BURNER_TAG,
+        "MBC5 erase timeout budget: bytes=%" PRIu32 " timeout=%" PRIu32 "ms",
+        erase_bytes,
+        timeout_ms);
+
+    if (sample_blank_sectors && s_burn_erase_always == 0u) {
+        blank_check_len = (sector_size < BURN_ERASE_BLANK_SAMPLE_BYTES)
+                              ? (size_t)sector_size
+                              : (size_t)BURN_ERASE_BLANK_SAMPLE_BYTES;
+        blank_check_buf = (uint8_t *)malloc(blank_check_len);
+        if (blank_check_buf == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
 
     for (sa = (int64_t)aligned_end; sa >= (int64_t)aligned_begin; sa -= (int64_t)sector_size) {
         err = burner_cancel_poll();
         if (err != ESP_OK) {
-            return err;
+            goto erase_range_out;
         }
-        err = burner_bacon_mbc5_erase_sector((uint32_t)sa);
+        if (blank_check_buf != NULL) {
+            bool blank = false;
+            err = burner_mbc5_sector_is_blank(
+                (uint32_t)sa,
+                sector_size,
+                blank_check_buf,
+                blank_check_len,
+                &blank);
+            if (err != ESP_OK) {
+                goto erase_range_out;
+            }
+            if (blank) {
+                skipped_blank++;
+                burner_status_advance_erase_phase(1u);
+                continue;
+            }
+        }
+        err = burner_bacon_mbc5_erase_sector(
+            (uint32_t)sa,
+            burner_erase_remaining_timeout_ms(erase_deadline_us));
         if (err != ESP_OK) {
-            return err;
+            goto erase_range_out;
         }
+        erased++;
         burner_status_advance_erase_phase(1u);
     }
 
-    return ESP_OK;
+erase_range_out:
+    if (blank_check_buf != NULL) {
+        free(blank_check_buf);
+    }
+    if (err == ESP_OK && sample_blank_sectors && s_burn_erase_always == 0u &&
+        (erased > 0u || skipped_blank > 0u)) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "MBC5 erase sector-sample: sample=%u erased=%" PRIu32 " skipped_blank=%" PRIu32,
+            (unsigned)blank_check_len,
+            erased,
+            skipped_blank);
+    }
+    return err;
 }
 
 static esp_err_t burner_bacon_mbc5_chip_erase(void)
@@ -8268,10 +8741,10 @@ static esp_err_t burner_bacon_gba_rom_program(
             if (write_len > buffer_write_bytes) {
                 write_len = buffer_write_bytes;
             }
-            write_len &= ~((size_t)0x1u);
-            if (write_len == 0u) {
-                write_len = 2u;
-            }
+            write_len = burner_gba_program_safe_chunk_bytes(
+                starting_address,
+                write_len,
+                (size_t)buffer_write_bytes);
             write_words = write_len / 2u;
 
             if (BURNER_SPI_MAX_XFER > 57u) {
@@ -8418,18 +8891,19 @@ static esp_err_t burner_bacon_gba_program_block(
             return err;
         }
         uint32_t rom_addr = offset + (uint32_t)programmed;
-        uint32_t bank = rom_addr / BURN_GBA_BANK_BYTES;
-        uint32_t bank_off = rom_addr % BURN_GBA_BANK_BYTES;
+        uint32_t bank = 0u;
+        uint32_t bank_remain = UINT32_MAX - rom_addr;
         size_t remain = len - programmed;
-        size_t bank_remain = BURN_GBA_BANK_BYTES - bank_off;
-        size_t chunk = (remain < bank_remain) ? remain : bank_remain;
+        size_t chunk;
 
-        if (is_multi_card && bank != (uint32_t)s_cart_ctx.current_bank) {
-            err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        chunk = (remain < bank_remain) ? remain : bank_remain;
+
+        if (is_multi_card) {
+            err = burner_gba_switch_bank_if_needed(bank);
             if (err != ESP_OK) {
                 return err;
             }
-            s_cart_ctx.current_bank = (uint16_t)bank;
         }
 
         err = burner_bacon_gba_rom_program(rom_addr, data + programmed, chunk, s_cart_ctx.buffer_write_bytes);
@@ -8459,19 +8933,20 @@ esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset,
             return err;
         }
         uint32_t rom_addr = offset + (uint32_t)copied;
-        uint32_t bank = rom_addr / BURN_GBA_BANK_BYTES;
-        uint32_t bank_off = rom_addr % BURN_GBA_BANK_BYTES;
+        uint32_t bank = 0u;
+        uint32_t bank_remain = UINT32_MAX - rom_addr;
         size_t remain = len - copied;
-        size_t bank_remain = BURN_GBA_BANK_BYTES - bank_off;
-        size_t chunk = (remain < bank_remain) ? remain : bank_remain;
+        size_t chunk;
         size_t read_words;
 
-        if (is_multi_card && bank != (uint32_t)s_cart_ctx.current_bank) {
-            err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        chunk = (remain < bank_remain) ? remain : bank_remain;
+
+        if (is_multi_card) {
+            err = burner_gba_switch_bank_if_needed(bank);
             if (err != ESP_OK) {
                 return err;
             }
-            s_cart_ctx.current_bank = (uint16_t)bank;
         }
 
         read_words = chunk / 2u;
@@ -8514,19 +8989,20 @@ static esp_err_t burner_bacon_gba_verify_read_block(uint8_t *out, size_t len, ui
             return err;
         }
         uint32_t rom_addr = offset + (uint32_t)copied;
-        uint32_t bank = rom_addr / BURN_GBA_BANK_BYTES;
-        uint32_t bank_off = rom_addr % BURN_GBA_BANK_BYTES;
+        uint32_t bank = 0u;
+        uint32_t bank_remain = UINT32_MAX - rom_addr;
         size_t remain = len - copied;
-        size_t bank_remain = BURN_GBA_BANK_BYTES - bank_off;
-        size_t chunk = (remain < bank_remain) ? remain : bank_remain;
+        size_t chunk;
         size_t read_words;
 
-        if (is_multi_card && bank != (uint32_t)s_cart_ctx.current_bank) {
-            err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        chunk = (remain < bank_remain) ? remain : bank_remain;
+
+        if (is_multi_card) {
+            err = burner_gba_switch_bank_if_needed(bank);
             if (err != ESP_OK) {
                 return err;
             }
-            s_cart_ctx.current_bank = (uint16_t)bank;
         }
 
         read_words = chunk / 2u;
@@ -8565,9 +9041,8 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
     while (copied < len) {
         uint32_t rom_addr;
         uint32_t bank;
-        uint32_t bank_off;
+        uint32_t bank_remain;
         size_t remain;
-        size_t bank_remain;
         size_t chunk;
         size_t read_words;
 
@@ -8577,18 +9052,15 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
         }
 
         rom_addr = offset + (uint32_t)copied;
-        bank = rom_addr / BURN_GBA_BANK_BYTES;
-        bank_off = rom_addr % BURN_GBA_BANK_BYTES;
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
         remain = len - copied;
-        bank_remain = BURN_GBA_BANK_BYTES - bank_off;
         chunk = (remain < bank_remain) ? remain : bank_remain;
 
-        if (is_multi_card && bank != (uint32_t)s_cart_ctx.current_bank) {
-            err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
+        if (is_multi_card) {
+            err = burner_gba_switch_bank_if_needed(bank);
             if (err != ESP_OK) {
                 return err;
             }
-            s_cart_ctx.current_bank = (uint16_t)bank;
         }
 
         read_words = chunk / 2u;
@@ -8614,20 +9086,25 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
     return ESP_OK;
 }
 
-static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card)
+static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms)
 {
-    uint32_t bank = flash_addr / BURN_GBA_BANK_BYTES;
+    uint32_t bank = 0u;
     uint32_t sa_word = flash_addr >> 1;
     uint16_t read_back = 0;
     int64_t deadline_us;
     esp_err_t err;
 
-    if (is_multi_card && bank != (uint32_t)s_cart_ctx.current_bank) {
-        err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
+    if (timeout_ms == 0u) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    burner_gba_resolve_write_addr(flash_addr, is_multi_card, &bank, NULL);
+
+    if (is_multi_card) {
+        err = burner_gba_switch_bank_if_needed(bank);
         if (err != ESP_OK) {
             return err;
         }
-        s_cart_ctx.current_bank = (uint16_t)bank;
     }
 
     err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
@@ -8655,7 +9132,7 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         return err;
     }
 
-    deadline_us = esp_timer_get_time() + ((int64_t)BURNER_ROM_ERASE_TIMEOUT_MS * 1000);
+    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
     while (esp_timer_get_time() < deadline_us) {
         err = burner_cancel_poll();
         if (err != ESP_OK) {
@@ -8671,20 +9148,103 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 
+    ESP_LOGW(
+        BURNER_TAG,
+        "GBA erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32 " read=0x%04X multi=%u timeout=%ums",
+        flash_addr,
+        bank,
+        sa_word,
+        read_back,
+        is_multi_card ? 1u : 0u,
+        (unsigned)timeout_ms);
     return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t burner_gba_sector_is_blank(
+    uint32_t sector_addr,
+    uint32_t sector_size,
+    bool is_multi_card,
+    uint8_t *scratch,
+    size_t scratch_len,
+    bool *blank_out)
+{
+    uint32_t sample_offsets[3];
+    size_t sample_count = 0u;
+    size_t sample_len;
+    esp_err_t err;
+
+    if (scratch == NULL || scratch_len == 0u || blank_out == NULL || sector_size == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    sample_len = (sector_size < scratch_len) ? (size_t)sector_size : scratch_len;
+    sample_len &= ~((size_t)0x1u);
+    if (sample_len == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    sample_offsets[sample_count++] = 0u;
+    if (sector_size > (uint32_t)sample_len) {
+        uint32_t middle = (sector_size / 2u) & ~((uint32_t)0x1u);
+        if (middle + (uint32_t)sample_len > sector_size) {
+            middle = (sector_size - (uint32_t)sample_len) & ~((uint32_t)0x1u);
+        }
+        if (middle != sample_offsets[sample_count - 1u]) {
+            sample_offsets[sample_count++] = middle;
+        }
+    }
+    if (sector_size > (uint32_t)sample_len) {
+        uint32_t tail = (sector_size - (uint32_t)sample_len) & ~((uint32_t)0x1u);
+        if (tail != sample_offsets[sample_count - 1u]) {
+            sample_offsets[sample_count++] = tail;
+        }
+    }
+
+    *blank_out = true;
+    for (size_t i = 0u; i < sample_count; ++i) {
+        bool chunk_blank = false;
+
+        err = burner_bacon_gba_read_block(
+            scratch,
+            sample_len,
+            sector_addr + sample_offsets[i],
+            is_multi_card);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_buffer_all_ff(scratch, sample_len, &chunk_blank);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if (!chunk_blank) {
+            *blank_out = false;
+            return ESP_OK;
+        }
+        burner_task_yield_if_due();
+    }
+
+    return ESP_OK;
 }
 
 static esp_err_t burner_bacon_gba_erase_range(
     uint32_t addr_begin,
     uint32_t addr_end,
     uint32_t sector_size,
-    bool is_multi_card)
+    bool is_multi_card,
+    bool sample_blank_sectors)
 {
     uint32_t sector_mask;
     uint32_t aligned_begin;
     int64_t sa;
     uint32_t aligned_end;
-    esp_err_t err;
+    uint8_t *blank_check_buf = NULL;
+    size_t blank_check_len = 0u;
+    uint32_t skipped_blank = 0u;
+    uint32_t erased = 0u;
+    uint32_t erase_bytes;
+    uint32_t timeout_ms;
+    int64_t erase_deadline_us;
+    esp_err_t err = ESP_OK;
 
     if (sector_size == 0u || addr_end < addr_begin) {
         return ESP_ERR_INVALID_ARG;
@@ -8696,20 +9256,77 @@ static esp_err_t burner_bacon_gba_erase_range(
     sector_mask = sector_size - 1u;
     aligned_begin = addr_begin & ~sector_mask;
     aligned_end = addr_end & ~sector_mask;
+    erase_bytes = (aligned_end - aligned_begin) + sector_size;
+    timeout_ms = burner_erase_timeout_ms_for_bytes(erase_bytes);
+    erase_deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA erase timeout budget: bytes=%" PRIu32 " timeout=%" PRIu32 "ms",
+        erase_bytes,
+        timeout_ms);
+
+    if (sample_blank_sectors && s_burn_erase_always == 0u) {
+        blank_check_len = (sector_size < BURN_ERASE_BLANK_SAMPLE_BYTES)
+                              ? (size_t)sector_size
+                              : (size_t)BURN_ERASE_BLANK_SAMPLE_BYTES;
+        blank_check_len &= ~((size_t)0x1u);
+        if (blank_check_len == 0u) {
+            return ESP_ERR_INVALID_SIZE;
+        }
+        blank_check_buf = (uint8_t *)malloc(blank_check_len);
+        if (blank_check_buf == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
 
     for (sa = (int64_t)aligned_end; sa >= (int64_t)aligned_begin; sa -= (int64_t)sector_size) {
         err = burner_cancel_poll();
         if (err != ESP_OK) {
-            return err;
+            goto erase_range_out;
         }
-        err = burner_bacon_gba_erase_sector((uint32_t)sa, is_multi_card);
+        if (blank_check_buf != NULL) {
+            bool blank = false;
+            err = burner_gba_sector_is_blank(
+                (uint32_t)sa,
+                sector_size,
+                is_multi_card,
+                blank_check_buf,
+                blank_check_len,
+                &blank);
+            if (err != ESP_OK) {
+                goto erase_range_out;
+            }
+            if (blank) {
+                skipped_blank++;
+                burner_status_advance_erase_phase(1u);
+                continue;
+            }
+        }
+        err = burner_bacon_gba_erase_sector(
+            (uint32_t)sa,
+            is_multi_card,
+            burner_erase_remaining_timeout_ms(erase_deadline_us));
         if (err != ESP_OK) {
-            return err;
+            goto erase_range_out;
         }
+        erased++;
         burner_status_advance_erase_phase(1u);
     }
 
-    return ESP_OK;
+erase_range_out:
+    if (blank_check_buf != NULL) {
+        free(blank_check_buf);
+    }
+    if (err == ESP_OK && sample_blank_sectors && s_burn_erase_always == 0u &&
+        (erased > 0u || skipped_blank > 0u)) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA erase sector-sample: sample=%u erased=%" PRIu32 " skipped_blank=%" PRIu32,
+            (unsigned)blank_check_len,
+            erased,
+            skipped_blank);
+    }
+    return err;
 }
 
 static esp_err_t burner_bacon_gba_chip_erase_once(void)
@@ -8899,6 +9516,17 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         id[3],
         using_id_fallback ? " (id-fallback)" : "");
 
+    burner_status_set_probe_info(
+        BURNER_CART_MODE_MBC5,
+        id,
+        sizeof(id),
+        device_size,
+        sector_size,
+        buffer_write_bytes,
+        !using_id_fallback,
+        false,
+        false);
+
     return ESP_OK;
 }
 
@@ -8959,7 +9587,7 @@ static bool burner_is_gba_multi_card(const burner_task_param_t *job)
     if (job->gba_force_multi) {
         return true;
     }
-    return s_cart_ctx.device_size > BURN_GBA_BANK_BYTES;
+    return s_cart_ctx.device_size > BURN_GBA_LINEAR_ADDR_BYTES;
 }
 
 esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job)
@@ -9198,19 +9826,18 @@ static esp_err_t burner_bacon_gba_scan_ppb_locked(
     sector_count = burner_erase_sector_count_from_bytes(device_size, sector_size);
     for (sector_idx = 0u; sector_idx < sector_count; ++sector_idx) {
         uint32_t sector_addr = sector_idx * sector_size;
+        uint32_t ppb_addr = sector_addr;
 
         err = burner_cancel_poll();
         if (err != ESP_OK) {
             return err;
         }
-        if (device_size > BURN_GBA_BANK_BYTES) {
-            uint32_t bank = sector_addr / BURN_GBA_BANK_BYTES;
-            if (bank != (uint32_t)s_cart_ctx.current_bank) {
-                err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
-                if (err != ESP_OK) {
-                    return err;
-                }
-                s_cart_ctx.current_bank = (uint16_t)bank;
+        if (device_size > BURN_GBA_LINEAR_ADDR_BYTES) {
+            uint32_t bank = 0u;
+            burner_gba_resolve_write_addr(sector_addr, true, &bank, NULL);
+            err = burner_gba_switch_bank_if_needed(bank);
+            if (err != ESP_OK) {
+                return err;
             }
         }
 
@@ -9226,7 +9853,7 @@ static esp_err_t burner_bacon_gba_scan_ppb_locked(
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_rom_read_u16(sector_addr >> 1, &ppb);
+        err = burner_bacon_rom_read_u16(ppb_addr >> 1, &ppb);
         if (err != ESP_OK) {
             return err;
         }
@@ -10693,6 +11320,7 @@ typedef struct {
     uint32_t addr_end;
     uint32_t sector_size;
     bool gba_multi;
+    bool sample_blank_sectors;
     esp_err_t err;
     SemaphoreHandle_t done;
 } burner_erase_task_ctx_t;
@@ -10853,14 +11481,19 @@ static void burner_erase_task(void *arg)
     burner_spi_lock_take();
     switch (ctx->op) {
     case BURNER_ERASE_OP_MBC5_RANGE:
-        ctx->err = burner_bacon_mbc5_erase_range(ctx->addr_begin, ctx->addr_end, ctx->sector_size);
+        ctx->err = burner_bacon_mbc5_erase_range(
+            ctx->addr_begin,
+            ctx->addr_end,
+            ctx->sector_size,
+            ctx->sample_blank_sectors);
         break;
     case BURNER_ERASE_OP_GBA_RANGE:
         ctx->err = burner_bacon_gba_erase_range(
             ctx->addr_begin,
             ctx->addr_end,
             ctx->sector_size,
-            ctx->gba_multi);
+            ctx->gba_multi,
+            ctx->sample_blank_sectors);
         break;
     case BURNER_ERASE_OP_MBC5_CHIP:
         ctx->err = burner_bacon_mbc5_chip_erase();
@@ -10886,14 +11519,19 @@ static esp_err_t burner_erase_exec_in_current_task(burner_erase_task_ctx_t *ctx)
     burner_spi_lock_take();
     switch (ctx->op) {
     case BURNER_ERASE_OP_MBC5_RANGE:
-        ctx->err = burner_bacon_mbc5_erase_range(ctx->addr_begin, ctx->addr_end, ctx->sector_size);
+        ctx->err = burner_bacon_mbc5_erase_range(
+            ctx->addr_begin,
+            ctx->addr_end,
+            ctx->sector_size,
+            ctx->sample_blank_sectors);
         break;
     case BURNER_ERASE_OP_GBA_RANGE:
         ctx->err = burner_bacon_gba_erase_range(
             ctx->addr_begin,
             ctx->addr_end,
             ctx->sector_size,
-            ctx->gba_multi);
+            ctx->gba_multi,
+            ctx->sample_blank_sectors);
         break;
     case BURNER_ERASE_OP_MBC5_CHIP:
         ctx->err = burner_bacon_mbc5_chip_erase();
@@ -10946,7 +11584,11 @@ static esp_err_t burner_run_erase_task(burner_erase_task_ctx_t *ctx)
     return ctx->err;
 }
 
-static esp_err_t burner_run_mbc5_range_erase(uint32_t addr_begin, uint32_t addr_end, uint32_t sector_size)
+static esp_err_t burner_run_mbc5_range_erase(
+    uint32_t addr_begin,
+    uint32_t addr_end,
+    uint32_t sector_size,
+    bool sample_blank_sectors)
 {
     burner_erase_task_ctx_t ctx = {
         .op = BURNER_ERASE_OP_MBC5_RANGE,
@@ -10954,6 +11596,7 @@ static esp_err_t burner_run_mbc5_range_erase(uint32_t addr_begin, uint32_t addr_
         .addr_end = addr_end,
         .sector_size = sector_size,
         .gba_multi = false,
+        .sample_blank_sectors = sample_blank_sectors,
         .err = ESP_FAIL,
         .done = NULL,
     };
@@ -10974,7 +11617,8 @@ static esp_err_t burner_run_gba_range_erase(
     uint32_t addr_begin,
     uint32_t addr_end,
     uint32_t sector_size,
-    bool gba_multi)
+    bool gba_multi,
+    bool sample_blank_sectors)
 {
     burner_erase_task_ctx_t ctx = {
         .op = BURNER_ERASE_OP_GBA_RANGE,
@@ -10982,6 +11626,7 @@ static esp_err_t burner_run_gba_range_erase(
         .addr_end = addr_end,
         .sector_size = sector_size,
         .gba_multi = gba_multi,
+        .sample_blank_sectors = sample_blank_sectors,
         .err = ESP_FAIL,
         .done = NULL,
     };
@@ -11313,6 +11958,7 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
     esp_err_t err = ESP_OK;
     bool should_erase = false;
     bool use_psram_stage = false;
+    bool use_pipeline_stage = false;
     size_t stage_capacity = 0;
     size_t program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
     size_t probe_len;
@@ -11337,10 +11983,17 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
     if (job == NULL || job->total_bytes == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
-    use_psram_stage = (job->write_path == BURNER_WRITE_PATH_PSRAM);
+    use_psram_stage = (job->write_path == BURNER_WRITE_PATH_PSRAM ||
+                       job->write_path == BURNER_WRITE_PATH_PIPELINE);
+    use_pipeline_stage = (job->write_path == BURNER_WRITE_PATH_PIPELINE);
     program_chunk_bytes = (size_t)burner_clamp_mbc5_program_chunk_bytes(job->mbc5_program_chunk_bytes);
-    psram_window_mb = burner_psram_window_bytes_to_mb(job->psram_window_bytes);
-    psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+    if (use_pipeline_stage) {
+        psram_window_mb = BURN_PSRAM_WINDOW_AUTO_MB;
+        psram_window_bytes = 0u;
+    } else {
+        psram_window_mb = burner_psram_window_bytes_to_mb(job->psram_window_bytes);
+        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+    }
     (void)snprintf(
         direct_copy_msg,
         sizeof(direct_copy_msg),
@@ -11354,22 +12007,23 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
     (void)snprintf(
         psram_program_msg,
         sizeof(psram_program_msg),
-        "psram->cart (%uKB chunk)",
+        "%s->cart (%uKB chunk)",
+        use_pipeline_stage ? "pipeline psram" : "psram",
         (unsigned)(program_chunk_bytes / 1024u));
     (void)snprintf(
         psram_alloc_fail_msg,
         sizeof(psram_alloc_fail_msg),
-        "alloc %uMB psram staging failed",
+        use_pipeline_stage ? "alloc pipeline psram staging failed" : "alloc %uMB psram staging failed",
         (unsigned)psram_window_mb);
     (void)snprintf(
         psram_erase_prefetch_msg,
         sizeof(psram_erase_prefetch_msg),
-        "erasing flash sectors (%uMB) + prefetch tf->psram",
+        use_pipeline_stage ? "pipeline erase sector + prefetch tf->psram" : "erasing flash sectors (%uMB) + prefetch tf->psram",
         (unsigned)psram_window_mb);
     (void)snprintf(
         psram_copy_msg,
         sizeof(psram_copy_msg),
-        "copy tf->psram (%uMB window)",
+        use_pipeline_stage ? "pipeline copy tf->psram (sector window)" : "copy tf->psram (%uMB window)",
         (unsigned)psram_window_mb);
     addr_begin = job->addr_begin;
     if (addr_begin > (UINT32_MAX - (job->total_bytes - 1u))) {
@@ -11440,9 +12094,27 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
     tf_reader_started = true;
 
     if (use_psram_stage) {
-        stage_capacity = (job->total_bytes < psram_window_bytes)
-                             ? (size_t)job->total_bytes
-                             : (size_t)psram_window_bytes;
+        if (use_pipeline_stage) {
+            if (s_cart_ctx.sector_size == 0u || (s_cart_ctx.sector_size & (s_cart_ctx.sector_size - 1u)) != 0u) {
+                burner_status_update(
+                    BURNER_STATE_ERROR,
+                    0,
+                    0,
+                    job->total_bytes,
+                    "pipeline requires power-of-two sector geometry",
+                    job->rom_name,
+                    job->rom_path);
+                err = ESP_ERR_INVALID_SIZE;
+                goto write_done;
+            }
+            stage_capacity = (job->total_bytes < s_cart_ctx.sector_size)
+                                 ? (size_t)job->total_bytes
+                                 : (size_t)s_cart_ctx.sector_size;
+        } else {
+            stage_capacity = (job->total_bytes < psram_window_bytes)
+                                 ? (size_t)job->total_bytes
+                                 : (size_t)psram_window_bytes;
+        }
         psram_stage_buf = (uint8_t *)heap_caps_malloc(
             stage_capacity,
             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -11474,32 +12146,60 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
         }
     }
 
-    probe_len = (job->total_bytes < BURN_MBC5_ERASE_PROBE_BYTES) ? (size_t)job->total_bytes : BURN_MBC5_ERASE_PROBE_BYTES;
-    burner_status_update(
-        BURNER_STATE_BURNING,
-        0,
-        0,
-        job->total_bytes,
-        "checking flash blank state",
-        job->rom_name,
-        job->rom_path);
-
-    burner_spi_lock_take();
-    err = burner_bacon_mbc5_read_block(probe_buf, probe_len, addr_begin);
-    burner_spi_lock_give();
-    if (err != ESP_OK) {
+    if (use_pipeline_stage) {
+        should_erase = true;
+        ESP_LOGI(
+            BURNER_TAG,
+            "MBC5 burn erase policy: pipeline direct sector erase/write");
+    } else {
+        probe_len = (job->total_bytes < BURN_MBC5_ERASE_PROBE_BYTES)
+                        ? (size_t)job->total_bytes
+                        : BURN_MBC5_ERASE_PROBE_BYTES;
         burner_status_update(
-            BURNER_STATE_ERROR,
+            BURNER_STATE_BURNING,
             0,
             0,
             job->total_bytes,
-            "read flash probe failed",
+            "checking flash blank state",
             job->rom_name,
             job->rom_path);
-        goto write_done;
-    }
 
-    should_erase = !burner_all_ff(probe_buf, probe_len);
+        burner_spi_lock_take();
+        err = burner_bacon_mbc5_read_block(probe_buf, probe_len, addr_begin);
+        burner_spi_lock_give();
+        if (err != ESP_OK) {
+            burner_status_update(
+                BURNER_STATE_ERROR,
+                0,
+                0,
+                job->total_bytes,
+                "read flash probe failed",
+                job->rom_name,
+                job->rom_path);
+            goto write_done;
+        }
+
+        should_erase = !burner_all_ff(probe_buf, probe_len);
+        ESP_LOGI(
+            BURNER_TAG,
+            "MBC5 burn erase policy: legacy start-probe erase=%s",
+            should_erase ? "yes" : "no");
+    }
+    if (should_erase && s_cart_ctx.sector_size > 0u) {
+        uint32_t planned_erase_sectors = use_psram_stage
+                                             ? burner_planned_stage_erase_sector_count(
+                                                   addr_begin,
+                                                   job->total_bytes,
+                                                   s_cart_ctx.sector_size,
+                                                   (uint32_t)stage_capacity)
+                                             : burner_erase_sector_count_from_range(
+                                                   addr_begin,
+                                                   addr_begin + job->total_bytes - 1u,
+                                                   s_cart_ctx.sector_size);
+        burner_status_plan_erase_phase(
+            planned_erase_sectors,
+            s_cart_ctx.sector_size);
+    }
 
     if (should_erase && !use_psram_stage) {
         burner_status_mark_erase_begin();
@@ -11516,7 +12216,8 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
         err = burner_run_mbc5_range_erase(
             addr_begin,
             addr_begin + job->total_bytes - 1u,
-            s_cart_ctx.sector_size);
+            s_cart_ctx.sector_size,
+            false);
         burner_status_mark_erase_end();
         erase_timer_started = false;
 
@@ -11608,7 +12309,8 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
                 err = burner_run_mbc5_range_erase(
                     stage_erase_begin,
                     stage_erase_end,
-                    s_cart_ctx.sector_size);
+                    s_cart_ctx.sector_size,
+                    false);
                 burner_status_mark_erase_end();
                 erase_timer_started = false;
 
@@ -11856,6 +12558,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     esp_err_t err = ESP_OK;
     bool should_erase = false;
     bool use_psram_stage = false;
+    bool use_pipeline_stage = false;
     size_t stage_capacity = 0;
     size_t probe_len;
     uint8_t probe_buf[BURN_MBC5_ERASE_PROBE_BYTES];
@@ -11877,24 +12580,41 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     if (job == NULL || job->total_bytes == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
-    use_psram_stage = (job->write_path == BURNER_WRITE_PATH_PSRAM);
-    psram_window_mb = burner_psram_window_bytes_to_mb(job->psram_window_bytes);
-    psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+    use_psram_stage = (job->write_path == BURNER_WRITE_PATH_PSRAM ||
+                       job->write_path == BURNER_WRITE_PATH_PIPELINE);
+    use_pipeline_stage = (job->write_path == BURNER_WRITE_PATH_PIPELINE);
+    if (use_pipeline_stage) {
+        psram_window_mb = BURN_PSRAM_WINDOW_AUTO_MB;
+        psram_window_bytes = 0u;
+    } else if (s_gba_fixed_erase_window_enabled != 0u) {
+        psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
+        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+    } else {
+        psram_window_mb = burner_psram_window_bytes_to_mb(job->psram_window_bytes);
+        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+    }
     (void)snprintf(
         psram_alloc_fail_msg,
         sizeof(psram_alloc_fail_msg),
-        "alloc %uMB psram staging failed",
+        use_pipeline_stage ? "alloc pipeline psram staging failed" : "alloc %uMB psram staging failed",
         (unsigned)psram_window_mb);
     (void)snprintf(
         psram_erase_prefetch_msg,
         sizeof(psram_erase_prefetch_msg),
-        "erasing gba flash sectors (%uMB) + prefetch tf->psram",
+        use_pipeline_stage ? "pipeline erase gba sector + prefetch tf->psram" : "erasing gba flash sectors (%uMB) + prefetch tf->psram",
         (unsigned)psram_window_mb);
     (void)snprintf(
         psram_copy_msg,
         sizeof(psram_copy_msg),
-        "copy tf->psram (%uMB window)",
+        use_pipeline_stage ? "pipeline copy tf->psram (sector window)" : "copy tf->psram (%uMB window)",
         (unsigned)psram_window_mb);
+    if (use_psram_stage && !use_pipeline_stage) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA psram erase window policy: %s window=%uMB",
+            s_gba_fixed_erase_window_enabled != 0u ? "fixed" : "dynamic",
+            (unsigned)psram_window_mb);
+    }
     addr_begin = job->addr_begin;
     if (addr_begin > (UINT32_MAX - (job->total_bytes - 1u))) {
         return ESP_ERR_INVALID_ARG;
@@ -11975,9 +12695,27 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     tf_reader_started = true;
 
     if (use_psram_stage) {
-        stage_capacity = (job->total_bytes < psram_window_bytes)
-                             ? (size_t)job->total_bytes
-                             : (size_t)psram_window_bytes;
+        if (use_pipeline_stage) {
+            if (s_cart_ctx.sector_size == 0u || (s_cart_ctx.sector_size & (s_cart_ctx.sector_size - 1u)) != 0u) {
+                burner_status_update(
+                    BURNER_STATE_ERROR,
+                    0,
+                    0,
+                    job->total_bytes,
+                    "pipeline requires power-of-two gba sector geometry",
+                    job->rom_name,
+                    job->rom_path);
+                err = ESP_ERR_INVALID_SIZE;
+                goto write_gba_done;
+            }
+            stage_capacity = (job->total_bytes < s_cart_ctx.sector_size)
+                                 ? (size_t)job->total_bytes
+                                 : (size_t)s_cart_ctx.sector_size;
+        } else {
+            stage_capacity = (job->total_bytes < psram_window_bytes)
+                                 ? (size_t)job->total_bytes
+                                 : (size_t)psram_window_bytes;
+        }
         psram_stage_buf = (uint8_t *)heap_caps_malloc(
             stage_capacity,
             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -12009,32 +12747,45 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         }
     }
 
-    probe_len = (job->total_bytes < BURN_MBC5_ERASE_PROBE_BYTES) ? (size_t)job->total_bytes : BURN_MBC5_ERASE_PROBE_BYTES;
-    burner_status_update(
-        BURNER_STATE_BURNING,
-        0,
-        0,
-        job->total_bytes,
-        "checking gba flash blank state",
-        job->rom_name,
-        job->rom_path);
-
-    burner_spi_lock_take();
-    err = burner_bacon_gba_read_block(probe_buf, probe_len, addr_begin, burner_is_gba_multi_card(job));
-    burner_spi_lock_give();
-    if (err != ESP_OK) {
+    if (use_pipeline_stage) {
+        should_erase = true;
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA burn erase policy: pipeline direct sector erase/write");
+    } else {
+        probe_len = (job->total_bytes < BURN_MBC5_ERASE_PROBE_BYTES)
+                        ? (size_t)job->total_bytes
+                        : BURN_MBC5_ERASE_PROBE_BYTES;
         burner_status_update(
-            BURNER_STATE_ERROR,
+            BURNER_STATE_BURNING,
             0,
             0,
             job->total_bytes,
-            "read gba flash probe failed",
+            "checking gba flash blank state",
             job->rom_name,
             job->rom_path);
-        goto write_gba_done;
-    }
 
-    should_erase = !burner_all_ff(probe_buf, probe_len);
+        burner_spi_lock_take();
+        err = burner_bacon_gba_read_block(probe_buf, probe_len, addr_begin, burner_is_gba_multi_card(job));
+        burner_spi_lock_give();
+        if (err != ESP_OK) {
+            burner_status_update(
+                BURNER_STATE_ERROR,
+                0,
+                0,
+                job->total_bytes,
+                "read gba flash probe failed",
+                job->rom_name,
+                job->rom_path);
+            goto write_gba_done;
+        }
+
+        should_erase = !burner_all_ff(probe_buf, probe_len);
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA burn erase policy: legacy start-probe erase=%s",
+            should_erase ? "yes" : "no");
+    }
     sector_geometry_valid =
         (s_cart_ctx.sector_size > 0u) && ((s_cart_ctx.sector_size & (s_cart_ctx.sector_size - 1u)) == 0u);
     if (should_erase && !sector_geometry_valid) {
@@ -12082,6 +12833,21 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             goto write_gba_done;
         }
     }
+    if (should_erase && sector_geometry_valid) {
+        uint32_t planned_erase_sectors = use_psram_stage
+                                             ? burner_planned_stage_erase_sector_count(
+                                                   addr_begin,
+                                                   job->total_bytes,
+                                                   s_cart_ctx.sector_size,
+                                                   (uint32_t)stage_capacity)
+                                             : burner_erase_sector_count_from_range(
+                                                   addr_begin,
+                                                   addr_begin + job->total_bytes - 1u,
+                                                   s_cart_ctx.sector_size);
+        burner_status_plan_erase_phase(
+            planned_erase_sectors,
+            s_cart_ctx.sector_size);
+    }
     if (should_erase && !use_psram_stage) {
         burner_status_mark_erase_begin();
         erase_timer_started = true;
@@ -12098,7 +12864,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             addr_begin,
             addr_begin + job->total_bytes - 1u,
             s_cart_ctx.sector_size,
-            burner_is_gba_multi_card(job));
+            burner_is_gba_multi_card(job),
+            false);
         burner_status_mark_erase_end();
         erase_timer_started = false;
 
@@ -12126,6 +12893,17 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 
             if (stage_bytes > stage_capacity) {
                 stage_bytes = stage_capacity;
+            }
+            if (burner_gba_should_log_program_boundary(stage_addr, stage_bytes, processed, job->total_bytes)) {
+                ESP_LOGI(
+                    BURNER_TAG,
+                    "GBA write stage: addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "/%" PRIu32 " path=%s erase=%s",
+                    stage_addr,
+                    (unsigned)stage_bytes,
+                    processed,
+                    job->total_bytes,
+                    burner_write_path_to_str(job->write_path),
+                    should_erase ? "yes" : "no");
             }
 
             if (should_erase) {
@@ -12190,7 +12968,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                     stage_erase_begin,
                     stage_erase_end,
                     s_cart_ctx.sector_size,
-                    burner_is_gba_multi_card(job));
+                    burner_is_gba_multi_card(job),
+                    false);
                 burner_status_mark_erase_end();
                 erase_timer_started = false;
 
@@ -12266,27 +13045,49 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 
             while (stage_off < stage_bytes) {
                 size_t chunk_bytes = stage_bytes - stage_off;
+                uint32_t write_addr = addr_begin + processed + (uint32_t)stage_off;
                 uint32_t now_processed;
                 int progress;
 
                 if (chunk_bytes > BURN_GBA_PROGRAM_CHUNK_BYTES) {
                     chunk_bytes = BURN_GBA_PROGRAM_CHUNK_BYTES;
                 }
+                if (burner_gba_should_log_program_boundary(
+                        write_addr,
+                        chunk_bytes,
+                        processed + (uint32_t)stage_off,
+                        job->total_bytes)) {
+                    ESP_LOGI(
+                        BURNER_TAG,
+                        "GBA program chunk: addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "/%" PRIu32 " path=%s",
+                        write_addr,
+                        (unsigned)chunk_bytes,
+                        processed + (uint32_t)stage_off,
+                        job->total_bytes,
+                        burner_write_path_to_str(job->write_path));
+                }
 
                 burner_spi_lock_take();
                 err = burner_bacon_gba_program_block(
                     psram_stage_buf + stage_off,
                     chunk_bytes,
-                    addr_begin + processed + (uint32_t)stage_off,
+                    write_addr,
                     burner_is_gba_multi_card(job));
                 burner_spi_lock_give();
                 if (err != ESP_OK) {
+                    char program_err_msg[96];
+                    (void)snprintf(
+                        program_err_msg,
+                        sizeof(program_err_msg),
+                        "program gba failed @0x%08" PRIX32 " (%s)",
+                        write_addr,
+                        esp_err_to_name(err));
                     burner_status_update(
                         BURNER_STATE_ERROR,
                         0,
                         processed + (uint32_t)stage_off,
                         job->total_bytes,
-                        "program gba cart failed",
+                        program_err_msg,
                         job->rom_name,
                         job->rom_path);
                     goto write_gba_done;
@@ -12314,10 +13115,21 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     } else {
         while (processed < job->total_bytes) {
             size_t chunk_bytes = (size_t)(job->total_bytes - processed);
+            uint32_t write_addr = addr_begin + processed;
             int progress;
 
             if (chunk_bytes > BURN_GBA_PROGRAM_CHUNK_BYTES) {
                 chunk_bytes = BURN_GBA_PROGRAM_CHUNK_BYTES;
+            }
+            if (burner_gba_should_log_program_boundary(write_addr, chunk_bytes, processed, job->total_bytes)) {
+                ESP_LOGI(
+                    BURNER_TAG,
+                    "GBA program chunk: addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "/%" PRIu32 " path=%s",
+                    write_addr,
+                    (unsigned)chunk_bytes,
+                    processed,
+                    job->total_bytes,
+                    burner_write_path_to_str(job->write_path));
             }
 
             burner_status_update(
@@ -12346,16 +13158,23 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             err = burner_bacon_gba_program_block(
                 buf,
                 chunk_bytes,
-                addr_begin + processed,
+                write_addr,
                 burner_is_gba_multi_card(job));
             burner_spi_lock_give();
             if (err != ESP_OK) {
+                char program_err_msg[96];
+                (void)snprintf(
+                    program_err_msg,
+                    sizeof(program_err_msg),
+                    "program gba failed @0x%08" PRIX32 " (%s)",
+                    write_addr,
+                    esp_err_to_name(err));
                 burner_status_update(
                     BURNER_STATE_ERROR,
                     0,
                     processed,
                     job->total_bytes,
-                    "program gba cart failed",
+                    program_err_msg,
                     job->rom_name,
                     job->rom_path);
                 goto write_gba_done;
@@ -13849,9 +14668,13 @@ static void burner_task(void *param)
     switch (job->mode) {
     case BURNER_JOB_WRITE_ROM:
         done_msg = "burn finished";
-        start_msg = (job->write_path == BURNER_WRITE_PATH_PSRAM)
-                        ? "burn task started (psram staging)"
-                        : "burn task started";
+        if (job->write_path == BURNER_WRITE_PATH_PIPELINE) {
+            start_msg = "burn task started (pipeline erase/write)";
+        } else if (job->write_path == BURNER_WRITE_PATH_PSRAM) {
+            start_msg = "burn task started (psram staging)";
+        } else {
+            start_msg = "burn task started";
+        }
         break;
     case BURNER_JOB_READ_ROM:
         done_msg = "dump finished";
@@ -14049,8 +14872,12 @@ esp_err_t burner_start_task_ex(
     job->mbc5_program_chunk_bytes = burner_clamp_mbc5_program_chunk_bytes(mbc5_program_chunk_bytes);
     job->read_chunk_bytes = burner_dump_chunk_kb_to_bytes(
         burner_dump_chunk_bytes_to_kb(read_chunk_bytes));
-    job->psram_window_bytes = burner_psram_window_mb_to_bytes(
-        burner_psram_window_bytes_to_mb(psram_window_bytes));
+    if (write_path == BURNER_WRITE_PATH_PIPELINE) {
+        job->psram_window_bytes = 0u;
+    } else {
+        job->psram_window_bytes = burner_psram_window_mb_to_bytes(
+            burner_psram_window_bytes_to_mb(psram_window_bytes));
+    }
     snprintf(job->rom_name, sizeof(job->rom_name), "%s", rom_name);
     snprintf(job->rom_path, sizeof(job->rom_path), "%s", rom_path);
     job->addr_begin = addr_begin;
