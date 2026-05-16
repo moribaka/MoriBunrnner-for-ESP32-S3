@@ -64,7 +64,8 @@
 #define MORI_INI_LINE_MAX 192
 #define MORI_LOCAL_TZ "CST-8"
 #define MORI_NTP_SERVER_MAX 96
-#define MORI_NTP_DEFAULT_SERVER "pool.ntp.org"
+#define MORI_NTP_DEFAULT_SERVER "ntp.aliyun.com"
+#define MORI_NTP_LEGACY_DEFAULT_SERVER "pool.ntp.org"
 #define MORI_NTP_SYNC_INTERVAL_MS (6U * 60U * 60U * 1000U)
 #define MORI_IP5306_FIXED_CHARGE_CURRENT_MA 450U
 #define MORI_IP5306_FIXED_CHG_DIG_BITS 0x04U
@@ -125,7 +126,8 @@ static const char *main_reset_reason_str(esp_reset_reason_t reason)
 static const char s_default_system_ini[] =
     "# MORI system settings\n"
     "language_version=1\n"
-    "language_ini=lang_en_us.ini\n"
+    "language_ini=lang_zh_cn.ini\n"
+    "ui_language=1\n"
     "ntp_enable=1\n"
     "ntp_server=" MORI_NTP_DEFAULT_SERVER "\n";
 
@@ -455,6 +457,7 @@ static const mori_ini_kv_line_t s_lang_zh_core_upgrade_items[] = {
 };
 
 static const mori_ini_kv_line_t s_system_upgrade_items[] = {
+    {"ui_language", "ui_language=1\n"},
     {"ntp_enable", "ntp_enable=1\n"},
     {"ntp_server", "ntp_server=" MORI_NTP_DEFAULT_SERVER "\n"},
 };
@@ -1200,6 +1203,9 @@ static void mori_apply_ntp_service(void)
     if (!mori_ntp_server_valid(cfg.server)) {
         snprintf(cfg.server, sizeof(cfg.server), "%s", MORI_NTP_DEFAULT_SERVER);
     }
+    if (strcmp(cfg.server, MORI_NTP_LEGACY_DEFAULT_SERVER) == 0) {
+        snprintf(cfg.server, sizeof(cfg.server), "%s", MORI_NTP_DEFAULT_SERVER);
+    }
 
     if (s_ntp_active && esp_sntp_enabled() &&
         strcmp(s_ntp_active_server, cfg.server) == 0) {
@@ -1210,16 +1216,18 @@ static void mori_apply_ntp_service(void)
         esp_sntp_stop();
     }
 
+    snprintf(s_ntp_active_server, sizeof(s_ntp_active_server), "%s", cfg.server);
+
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, cfg.server);
+    /* lwIP keeps this hostname pointer instead of copying it. Keep it in static storage. */
+    esp_sntp_setservername(0, s_ntp_active_server);
     esp_sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
     esp_sntp_set_sync_interval(MORI_NTP_SYNC_INTERVAL_MS);
     esp_sntp_set_time_sync_notification_cb(mori_ntp_sync_notification_cb);
     esp_sntp_init();
 
-    snprintf(s_ntp_active_server, sizeof(s_ntp_active_server), "%s", cfg.server);
     s_ntp_active = true;
-    ESP_LOGI("main", "NTP started, server=%s interval=%" PRIu32 "ms", cfg.server, MORI_NTP_SYNC_INTERVAL_MS);
+    ESP_LOGI("main", "NTP started, server=%s interval=%" PRIu32 "ms", s_ntp_active_server, MORI_NTP_SYNC_INTERVAL_MS);
 }
 
 static bool mori_parse_ip5306_light_load_setting(
@@ -1526,6 +1534,207 @@ static void mori_upgrade_lang_ini_file(
             }
         }
     }
+}
+
+static uint8_t mori_load_ui_language_from_system_ini(bool *found_out)
+{
+    FILE *fp = NULL;
+    char line[MORI_INI_LINE_MAX];
+    uint8_t language = UI_LANGUAGE_DEFAULT;
+    bool found = false;
+
+    if (card == NULL) {
+        if (found_out != NULL) {
+            *found_out = false;
+        }
+        return language;
+    }
+
+    fp = fopen(MORI_SYSTEM_INI_PATH, "rb");
+    if (fp == NULL) {
+        if (found_out != NULL) {
+            *found_out = false;
+        }
+        return language;
+    }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        size_t len = strlen(line);
+        bool line_truncated = (len > 0 && len == sizeof(line) - 1 && line[len - 1] != '\n');
+        char *key = NULL;
+        char *value = NULL;
+
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[--len] = '\0';
+        }
+
+        if (mori_ini_split_line(line, &key, &value) && strcmp(key, "ui_language") == 0) {
+            uint8_t parsed = UI_LANGUAGE_DEFAULT;
+            if (mori_parse_u8_text(value, &parsed)) {
+                language = (parsed == UI_LANGUAGE_EN) ? UI_LANGUAGE_EN : UI_LANGUAGE_ZH;
+                found = true;
+            }
+            break;
+        }
+
+        if (line_truncated) {
+            int ch = 0;
+            while ((ch = fgetc(fp)) != EOF && ch != '\n') {
+            }
+        }
+    }
+
+    fclose(fp);
+    if (found_out != NULL) {
+        *found_out = found;
+    }
+    return language;
+}
+
+static void mori_sync_system_language_ini_with_ui_default(void)
+{
+    uint8_t language = mori_load_ui_language_from_system_ini(NULL);
+    mori_ntp_cfg_t ntp = {0};
+    char content[256] = {0};
+
+    if (card == NULL || language != UI_LANGUAGE_ZH) {
+        return;
+    }
+    if (text_file_contains(MORI_SYSTEM_INI_PATH, "language_ini=lang_zh_cn.ini")) {
+        return;
+    }
+    if (!text_file_contains(MORI_SYSTEM_INI_PATH, "language_ini=lang_en_us.ini")) {
+        return;
+    }
+
+    mori_load_ntp_cfg_from_system_ini(&ntp);
+    snprintf(
+        content,
+        sizeof(content),
+        "# MORI system settings\nlanguage_version=1\nlanguage_ini=lang_zh_cn.ini\nui_language=1\nntp_enable=%u\nntp_server=%s\n",
+        ntp.enable ? 1U : 0U,
+        ntp.server);
+    if (write_text_file_force(MORI_SYSTEM_INI_PATH, content) == ESP_OK) {
+        ESP_LOGI("main", "system language default migrated to zh");
+    }
+}
+
+static void mori_fix_empty_ntp_server_for_ui_language(void)
+{
+    char *file = NULL;
+    char *out = NULL;
+    size_t file_len = 0;
+    size_t out_cap = 0;
+    size_t out_len = 0;
+    bool changed = false;
+    bool ntp_server_empty = false;
+    uint8_t language;
+
+    if (card == NULL) {
+        return;
+    }
+
+    language = mori_load_ui_language_from_system_ini(NULL);
+    if (language != UI_LANGUAGE_ZH) {
+        return;
+    }
+    if (!text_file_read_small(MORI_SYSTEM_INI_PATH, &file, &file_len)) {
+        return;
+    }
+
+    out_cap = file_len + strlen(MORI_NTP_DEFAULT_SERVER) + 32U;
+    out = (char *)calloc(1, out_cap);
+    if (out == NULL) {
+        free(file);
+        return;
+    }
+
+    for (size_t pos = 0; pos < file_len;) {
+        size_t line_start = pos;
+        size_t line_len = 0;
+        size_t copy_len = 0;
+        bool has_newline = false;
+        char line[MORI_INI_LINE_MAX];
+        char *key = NULL;
+        char *value = NULL;
+
+        while (pos < file_len && file[pos] != '\n') {
+            pos++;
+        }
+        line_len = pos - line_start;
+        if (pos < file_len && file[pos] == '\n') {
+            has_newline = true;
+            pos++;
+        }
+
+        copy_len = line_len;
+        while (copy_len > 0U && file[line_start + copy_len - 1U] == '\r') {
+            copy_len--;
+        }
+
+        if (copy_len < sizeof(line)) {
+            memcpy(line, file + line_start, copy_len);
+            line[copy_len] = '\0';
+            if (mori_ini_split_line(line, &key, &value) &&
+                strcmp(key, "ntp_server") == 0 && value[0] == '\0') {
+                int n = snprintf(out + out_len, out_cap - out_len, "ntp_server=%s", MORI_NTP_DEFAULT_SERVER);
+                if (n <= 0 || (size_t)n >= out_cap - out_len) {
+                    free(out);
+                    free(file);
+                    return;
+                }
+                out_len += (size_t)n;
+                if (line_len > copy_len) {
+                    if (out_len + 1U >= out_cap) {
+                        free(out);
+                        free(file);
+                        return;
+                    }
+                    out[out_len++] = '\r';
+                }
+                if (has_newline) {
+                    if (out_len + 1U >= out_cap) {
+                        free(out);
+                        free(file);
+                        return;
+                    }
+                    out[out_len++] = '\n';
+                }
+                changed = true;
+                ntp_server_empty = true;
+                continue;
+            }
+        }
+
+        if (out_len + line_len + (has_newline ? 1U : 0U) >= out_cap) {
+            free(out);
+            free(file);
+            return;
+        }
+        memcpy(out + out_len, file + line_start, line_len);
+        out_len += line_len;
+        if (has_newline) {
+            out[out_len++] = '\n';
+        }
+    }
+
+    if (changed) {
+        out[out_len] = '\0';
+        if (write_text_file_force(MORI_SYSTEM_INI_PATH, out) == ESP_OK && ntp_server_empty) {
+            ESP_LOGI("main", "empty ntp_server fixed for zh UI: %s", MORI_NTP_DEFAULT_SERVER);
+        }
+    }
+
+    free(out);
+    free(file);
+}
+
+static void mori_apply_ui_language_from_system_ini(void)
+{
+    uint8_t language = mori_load_ui_language_from_system_ini(NULL);
+
+    ui_set_language(language);
+    ESP_LOGI("main", "UI language=%u (%s)", (unsigned)language, language == UI_LANGUAGE_ZH ? "zh" : "en");
 }
 
 static void apply_ip5306_ini_if_present(void)
@@ -2019,6 +2228,8 @@ static void ensure_setting_files(void)
         MORI_SYSTEM_INI_PATH,
         s_system_upgrade_items,
         sizeof(s_system_upgrade_items) / sizeof(s_system_upgrade_items[0]));
+    mori_sync_system_language_ini_with_ui_default();
+    mori_fix_empty_ntp_server_for_ui_language();
 
     err = write_text_file_if_missing(MORI_LANG_ZH_INI_PATH, s_default_lang_zh_ini);
     if (err != ESP_OK) {
@@ -2153,6 +2364,8 @@ static bool tca9555_button_to_ui_button(uint16_t pin_mask, ui_button_t *button)
             *button = UI_BUTTON_RIGHT;
             return true;
         case TCA9555_IO0_4:
+            *button = UI_BUTTON_PANEL_TOGGLE;
+            return true;
         case TCA9555_IO0_5:
         case TCA9555_IO0_7:
         case TCA9555_IO1_0:
@@ -2486,6 +2699,7 @@ static void mount_sdcard_if_possible(void)
     }
 
     ensure_setting_files();
+    mori_apply_ui_language_from_system_ini();
 }
 
 static void init_nvs_storage(void)

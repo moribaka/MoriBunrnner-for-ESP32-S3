@@ -63,17 +63,22 @@
 #define BURN_MBC5_DUMP_CHUNK_BYTES (64U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
+#define BURN_ERASE_ALWAYS_DEFAULT 0U
 #define BURN_MBC5_ERASE_PROBE_BYTES 512U
+#define BURN_ERASE_BLANK_SAMPLE_BYTES 512U
 #define BURN_MBC5_RAM_CHUNK_BYTES 4096U
 #define BURN_GBA_PROGRAM_CHUNK_BYTES 65536U
 #define BURN_GBA_DUMP_CHUNK_BYTES 65536U
-#define BURN_GBA_BANK_BYTES (32U * 1024U * 1024U)
+#define BURN_GBA_LINEAR_ADDR_BYTES (32U * 1024U * 1024U)
+#define BURN_GBA_BANK_BYTES BURN_GBA_LINEAR_ADDR_BYTES
 #define BURN_PSRAM_WINDOW_BYTES_PER_MB (1024U * 1024U)
 #define BURN_PSRAM_WINDOW_AUTO_MB 0U
 #define BURN_PSRAM_WINDOW_MIN_MB 1U
 #define BURN_PSRAM_WINDOW_MAX_MB 8U
 #define BURN_PSRAM_WINDOW_DEFAULT_MB BURN_PSRAM_WINDOW_AUTO_MB
 #define BURN_PSRAM_WINDOW_RESERVE_BYTES (256U * 1024U)
+#define BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT 1U
+#define BURN_GBA_FIXED_ERASE_WINDOW_MB 4U
 #define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES 0U
 #define BURN_READ_PSRAM_FRAGMENT_MB 7U
 #define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
@@ -106,7 +111,7 @@
 #define WIFI_SCAN_AP_MAX 24
 #define WEB_LANG_DIR_REL ".setting"
 #define WEB_LANG_SYSTEM_INI_REL WEB_LANG_DIR_REL "/mori_system.ini"
-#define WEB_LANG_DEFAULT_INI "lang_en_us.ini"
+#define WEB_LANG_DEFAULT_INI "lang_zh_cn.ini"
 #define WEB_LANG_FALLBACK_EN_INI "lang_en_us.ini"
 #define WEB_LANG_FILE_NAME_MAX 64
 #define WEB_LANG_VERSION_MAX 24
@@ -114,7 +119,7 @@
 #define WEB_LANG_LINE_MAX 512
 #define WEB_NTP_SERVER_MAX 96
 #define WEB_NTP_ENABLE_MAX 8
-#define WEB_NTP_SERVER_DEFAULT "pool.ntp.org"
+#define WEB_NTP_SERVER_DEFAULT "ntp.aliyun.com"
 #define SYSTEM_MIGRATE_ZIP_NAME "mori_system_migration.zip"
 #define ZIP_VERSION_NEEDED 20U
 #define ZIP_GP_FLAG_DATA_DESCRIPTOR 0x0008U
@@ -153,13 +158,14 @@ typedef struct {
 #define BURNER_SPI_STREAM_CHUNK_BYTES 2048U
 #define BURNER_ROM_POLL_TIMEOUT_MS 2000
 #define BURNER_ROM_POLL_INTERVAL_US 50
-#define BURNER_ROM_ERASE_TIMEOUT_MS 20000
-#define BURNER_ROM_CHIP_ERASE_TIMEOUT_MS (5 * 60 * 1000)
+#define BURNER_ROM_ERASE_TIMEOUT_PER_MB_MS 20000U
+#define BURNER_ROM_ERASE_TIMEOUT_MAX_MS (5U * 60U * 1000U)
+#define BURNER_ROM_CHIP_ERASE_TIMEOUT_MS BURNER_ROM_ERASE_TIMEOUT_MAX_MS
 #define BURNER_GBA_HOST_UNLOCK_ADDR0 0x555u
 #define BURNER_GBA_HOST_UNLOCK_ADDR1 0x2AAu
 #define BURNER_GBA_HOST_CFI_ENTER_ADDR 0x055u
 #define BURNER_GBA_CFI_RETRY_COUNT 3U
-#define BURNER_GBA_BANK_SWITCH_SETTLE_MS 1U
+#define BURNER_GBA_BANK_SWITCH_SETTLE_MS 8U
 #define BURNER_GBA_READ_TURNAROUND_HOLD_BYTES 0U
 #define BURNER_GBA_CMD_WRITE_SETUP_HOLD_BYTES 2U
 #define BURNER_GBA_CMD_WRITE_STROBE_HOLD_BYTES 4U
@@ -238,6 +244,7 @@ typedef struct {
 typedef enum {
     BURNER_WRITE_PATH_DIRECT = 0,
     BURNER_WRITE_PATH_PSRAM,
+    BURNER_WRITE_PATH_PIPELINE,
 } burner_write_path_t;
 
 typedef enum {
@@ -312,9 +319,19 @@ typedef struct {
     uint8_t verify_sample_cart_byte;
     bool verify_sample_valid;
     bool verify_sample_equal;
+    burner_cart_mode_t probe_cart_mode;
+    bool probe_valid;
+    bool probe_cfi_ok;
+    bool probe_gba_multi;
+    bool probe_gba_force_multi;
+    uint32_t probe_device_size;
+    uint32_t probe_sector_size;
+    uint16_t probe_buffer_write_bytes;
+    uint8_t probe_id[8];
     char rom_name[BURNER_FILE_NAME_LEN];
     char rom_path[BURNER_FILE_PATH_LEN];
     char message[96];
+    bool erase_phase_planned;
     bool erase_phase_active;
     bool cancel_requested;
 } burner_status_t;
@@ -486,6 +503,9 @@ extern uint8_t *s_mcu_spi_rw_shadow;
 extern const uint32_t s_mcu_spi_clock_hz;
 extern uint32_t s_mcu_spi_actual_hz;
 extern burner_core_config_t s_burn_core_cfg;
+extern uint8_t s_burn_erase_always;
+extern uint8_t s_gba_fixed_erase_window_enabled;
+extern uint8_t s_mbc5_power_5v_enabled;
 extern TickType_t s_bacon_last_active_tick;
 extern bool s_bacon_idle_powered_down;
 extern burner_cart_ctx_t s_cart_ctx;
@@ -620,7 +640,19 @@ uint32_t burner_us_to_ms_clamped(uint64_t us);
 void burner_status_speed_reset_locked(void);
 void burner_status_verify_sample_reset_locked(void);
 void burner_status_phase_reset_locked(void);
+void burner_status_probe_reset_locked(void);
+void burner_status_set_probe_info(
+    burner_cart_mode_t cart_mode,
+    const uint8_t *id,
+    size_t id_len,
+    uint32_t device_size,
+    uint32_t sector_size,
+    uint16_t buffer_write_bytes,
+    bool cfi_ok,
+    bool gba_multi,
+    bool gba_force_multi);
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal);
+void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t sector_size);
 void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t sector_size);
 void burner_status_advance_erase_phase(uint32_t sectors_done);
 void burner_status_mark_erase_begin(void);

@@ -47,17 +47,125 @@ esp_err_t burner_settings_page_handler(httpd_req_t *req)
     return burner_business_page_handler(req);
 }
 
+typedef struct {
+    char name[TF_PATH_LEN_MAX];
+    char path[TF_PATH_LEN_MAX];
+    bool is_dir;
+    long long size;
+    long long mtime;
+    uint8_t sort_rank;
+} burner_tf_list_entry_t;
+
+typedef struct {
+    burner_tf_list_entry_t *items;
+    size_t count;
+    size_t cap;
+} burner_tf_list_entries_t;
+
+static const char *burner_tf_file_ext(const char *name)
+{
+    const char *dot = NULL;
+
+    if (name == NULL) {
+        return "";
+    }
+    dot = strrchr(name, '.');
+    if (dot == NULL || dot[1] == '\0') {
+        return "";
+    }
+    return dot + 1;
+}
+
+static uint8_t burner_tf_sort_rank(bool is_dir, const char *name)
+{
+    const char *ext = burner_tf_file_ext(name);
+
+    if (is_dir) {
+        return 0U;
+    }
+    if (strcasecmp(ext, "gba") == 0) {
+        return 1U;
+    }
+    if (strcasecmp(ext, "gb") == 0 || strcasecmp(ext, "gbc") == 0) {
+        return 2U;
+    }
+    if (strcasecmp(ext, "sav") == 0 || strcasecmp(ext, "srm") == 0) {
+        return 3U;
+    }
+    return 4U;
+}
+
+static int burner_tf_list_entry_compare(const void *lhs, const void *rhs)
+{
+    const burner_tf_list_entry_t *a = (const burner_tf_list_entry_t *)lhs;
+    const burner_tf_list_entry_t *b = (const burner_tf_list_entry_t *)rhs;
+    int cmp;
+
+    if (a->sort_rank != b->sort_rank) {
+        return (a->sort_rank < b->sort_rank) ? -1 : 1;
+    }
+    cmp = strcasecmp(a->name, b->name);
+    if (cmp != 0) {
+        return cmp;
+    }
+    cmp = strcmp(a->name, b->name);
+    if (cmp != 0) {
+        return cmp;
+    }
+    return strcmp(a->path, b->path);
+}
+
+static bool burner_tf_list_entries_append(
+    burner_tf_list_entries_t *list,
+    const char *name,
+    const char *path,
+    bool is_dir,
+    long long size,
+    long long mtime)
+{
+    burner_tf_list_entry_t *item = NULL;
+
+    if (list == NULL || name == NULL || path == NULL) {
+        return false;
+    }
+    if (list->count >= list->cap) {
+        size_t next_cap = (list->cap == 0U) ? 32U : (list->cap * 2U);
+        burner_tf_list_entry_t *new_items =
+            (burner_tf_list_entry_t *)realloc(list->items, next_cap * sizeof(*list->items));
+        if (new_items == NULL) {
+            return false;
+        }
+        list->items = new_items;
+        list->cap = next_cap;
+    }
+
+    item = &list->items[list->count];
+    memset(item, 0, sizeof(*item));
+    if (snprintf(item->name, sizeof(item->name), "%s", name) >= (int)sizeof(item->name) ||
+        snprintf(item->path, sizeof(item->path), "%s", path) >= (int)sizeof(item->path)) {
+        return false;
+    }
+    item->is_dir = is_dir;
+    item->size = size;
+    item->mtime = mtime;
+    item->sort_rank = burner_tf_sort_rank(is_dir, name);
+    list->count++;
+    return true;
+}
+
 esp_err_t burner_tf_list_handler(httpd_req_t *req)
 {
     char path_arg[TF_PATH_LEN_MAX] = {0};
     char rel_path[TF_PATH_LEN_MAX] = {0};
     char dir_path[TF_PATH_LEN_MAX + 64] = {0};
     burner_tf_list_buf_t *bufs = NULL;
+    burner_tf_list_entries_t entries = {0};
     DIR *dir = NULL;
     struct dirent *entry;
     bool first = true;
     time_t server_now = 0;
     long long server_time = 0;
+    esp_err_t send_err = ESP_OK;
     int n;
 
     {
@@ -118,7 +226,6 @@ esp_err_t burner_tf_list_handler(httpd_req_t *req)
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    httpd_resp_sendstr_chunk(req, bufs->head);
 
     while ((entry = readdir(dir)) != NULL) {
         struct stat st;
@@ -149,35 +256,59 @@ esp_err_t burner_tf_list_handler(httpd_req_t *req)
             mtime = burner_fixup_file_mtime_for_api(bufs->child_full, &st);
         }
 
-        if (!burner_json_escape(entry->d_name, bufs->esc_name, sizeof(bufs->esc_name))) {
+        if (!burner_tf_list_entries_append(&entries, entry->d_name, bufs->child_rel, is_dir, size, mtime)) {
+            closedir(dir);
+            free(entries.items);
+            free(bufs);
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no memory");
+        }
+    }
+    closedir(dir);
+    dir = NULL;
+
+    if (entries.count > 1U) {
+        qsort(entries.items, entries.count, sizeof(entries.items[0]), burner_tf_list_entry_compare);
+    }
+
+    send_err = httpd_resp_sendstr_chunk(req, bufs->head);
+    for (size_t i = 0; send_err == ESP_OK && i < entries.count; ++i) {
+        const burner_tf_list_entry_t *item = &entries.items[i];
+
+        if (!burner_json_escape(item->name, bufs->esc_name, sizeof(bufs->esc_name))) {
             continue;
         }
-        if (!burner_json_escape(bufs->child_rel, bufs->esc_child, sizeof(bufs->esc_child))) {
+        if (!burner_json_escape(item->path, bufs->esc_child, sizeof(bufs->esc_child))) {
             continue;
         }
 
         n = snprintf(
             bufs->line,
             sizeof(bufs->line),
-            "%s{\"name\":\"%s\",\"path\":\"%s\",\"is_dir\":%s,\"size\":%lld,\"mtime\":%lld}",
+            "%s{\"name\":\"%s\",\"path\":\"%s\",\"is_dir\":%s,\"size\":%lld,\"mtime\":%lld,\"sort_rank\":%u}",
             first ? "" : ",",
             bufs->esc_name,
             bufs->esc_child,
-            is_dir ? "true" : "false",
-            size,
-            mtime);
+            item->is_dir ? "true" : "false",
+            item->size,
+            item->mtime,
+            (unsigned)item->sort_rank);
         if (n <= 0 || n >= (int)sizeof(bufs->line)) {
             continue;
         }
 
-        httpd_resp_sendstr_chunk(req, bufs->line);
+        send_err = httpd_resp_sendstr_chunk(req, bufs->line);
         first = false;
     }
 
-    closedir(dir);
+    free(entries.items);
     free(bufs);
-    httpd_resp_sendstr_chunk(req, "]}");
-    return httpd_resp_send_chunk(req, NULL, 0);
+    if (send_err == ESP_OK) {
+        send_err = httpd_resp_sendstr_chunk(req, "]}");
+    }
+    if (send_err == ESP_OK) {
+        send_err = httpd_resp_send_chunk(req, NULL, 0);
+    }
+    return send_err;
 }
 
 esp_err_t burner_tf_upload_handler(httpd_req_t *req)

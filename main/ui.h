@@ -19,14 +19,21 @@ typedef enum {
     UI_BUTTON_UP,
     UI_BUTTON_DOWN,
     UI_BUTTON_SELECT,
+    UI_BUTTON_PANEL_TOGGLE,
     UI_BUTTON_BACK,
     UI_BUTTON_MENU,
 } ui_button_t;
+
+#define UI_LANGUAGE_EN 0U
+#define UI_LANGUAGE_ZH 1U
+#define UI_LANGUAGE_DEFAULT UI_LANGUAGE_ZH
 
 esp_err_t ui_init(void);
 void ui_process(void);
 void ui_handle_button(ui_button_t button, bool pressed);
 void ui_post_button(ui_button_t button, bool pressed);
+uint8_t ui_get_language(void);
+void ui_set_language(uint8_t language);
 void ui_set_wifi_state(ui_wifi_state_t state);
 void ui_set_ip_text(const char *ip);
 void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total);
