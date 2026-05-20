@@ -507,6 +507,7 @@ esp_err_t burner_read_handler(httpd_req_t *req)
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         false,
         0u);
     if (err != ESP_OK) {
@@ -820,6 +821,7 @@ esp_err_t burner_start_write_from_tf(
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         false,
         0u);
     if (err != ESP_OK) {
@@ -919,6 +921,7 @@ esp_err_t burner_start_verify_from_tf(
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         false,
         0u);
     if (err != ESP_OK) {
@@ -997,6 +1000,7 @@ static esp_err_t burner_start_ram_file_from_tf(
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         fram_mode,
         ram_latency);
     if (err != ESP_OK) {
@@ -1289,6 +1293,7 @@ esp_err_t burner_ram_read_handler(httpd_req_t *req)
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         fram_mode,
         (uint8_t)ram_latency);
     if (err != ESP_OK) {
@@ -1416,6 +1421,7 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
         "/cart",
         0u,
         1u,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         false,
         0u);
     if (err != ESP_OK) {
