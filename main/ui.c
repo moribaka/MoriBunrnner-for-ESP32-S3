@@ -85,6 +85,7 @@
 #define UI_BURN_ROW_PROMPT_MS 2000U
 #define UI_HINT_H 14
 #define UI_LIST_HEADER_H 28
+#define UI_LIST_HEADER_TEXT_Y 7
 #define UI_LIST_VISIBLE_COUNT ((UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H) / UI_LIST_LINE_H)
 
 #define UI_STATUS_TEXT_MAX_LEN 96
@@ -215,6 +216,8 @@ typedef enum {
     UI_FILE_ACTION_VERIFY_ROM,
     UI_FILE_ACTION_WRITE_SAVE,
     UI_FILE_ACTION_VERIFY_SAVE,
+    UI_FILE_ACTION_WRITE_GBA_SAVE_NEW,
+    UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW,
 } ui_file_action_t;
 
 typedef enum {
@@ -231,6 +234,7 @@ typedef enum {
     UI_BURN_ROM_OP_VERIFY_SAVE,
     UI_BURN_ROM_OP_DUMP_SAVE,
     UI_BURN_ROM_OP_SAVE_SIZE,
+    UI_BURN_ROM_OP_GBA_SAVE_TYPE,
     UI_BURN_ROM_OP_RAM_TYPE,
     UI_BURN_ROM_OP_RAM_LATENCY,
     UI_BURN_ROM_OP_SETTINGS,
@@ -267,6 +271,8 @@ typedef struct {
     uint32_t psram_mb;
     uint32_t mbc5_chunk_kb;
     bool gba_force_no_cfi;
+    burner_gba_save_type_t gba_save_type;
+    uint32_t gba_save_size;
     bool ram_fram;
     uint8_t ram_latency;
     bool task_with_caps;
@@ -552,6 +558,7 @@ static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
 static burner_write_path_t s_write_path = BURNER_WRITE_PATH_DIRECT;
 static bool s_ram_fram = false;
+static burner_gba_save_type_t s_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
 static uint32_t s_cart_slot = 0;
 static uint32_t s_rom_size_mib = 32;
 static uint32_t s_save_size_kib = 128;
@@ -1262,7 +1269,7 @@ static void ui_px_draw_fps_overlay(const ui_model_t *model)
     if (x < 0) {
         x = 0;
     }
-    ui_px_text(x, 5, fps, true);
+    ui_px_text(x, UI_LIST_HEADER_TEXT_Y, fps, true);
 }
 
 static void ui_format_file_size(uint32_t size, char *out, size_t out_len)
@@ -1319,6 +1326,31 @@ static const char *ui_mbc5_voltage_label(void)
     return (s_mbc5_power_5v_enabled != 0u) ? "5V" : "3V3";
 }
 
+static const char *ui_gba_save_type_label(burner_gba_save_type_t save_type)
+{
+    switch (save_type) {
+        case BURNER_GBA_SAVE_TYPE_SRAM:
+            return "SRAM";
+        case BURNER_GBA_SAVE_TYPE_EEPROM:
+            return "EEPROM";
+        case BURNER_GBA_SAVE_TYPE_FLASH:
+            return "FLASH";
+        case BURNER_GBA_SAVE_TYPE_BATTERYLESS:
+            return "BATTERYLESS";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static const char *ui_gba_save_type_probe_label(const burner_status_t *status)
+{
+    if (status == NULL || !status->probe_valid || status->probe_cart_mode != BURNER_CART_MODE_GBA ||
+        !status->probe_gba_save_detected) {
+        return ui_tr("unknown", "未知");
+    }
+    return ui_gba_save_type_label(status->probe_gba_save_type);
+}
+
 static const char *ui_cart_mode_label(burner_cart_mode_t mode)
 {
     return (mode == BURNER_CART_MODE_GBA) ? "GBA" : "GBC";
@@ -1371,6 +1403,20 @@ static void ui_format_probe_id(const burner_status_t *status, char *out, size_t 
         if (i + 1U < id_len) {
             strncat(out, " ", out_len - strlen(out) - 1U);
         }
+    }
+}
+
+static void ui_format_gba_d0d1_text(const burner_status_t *status, char *out, size_t out_len)
+{
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (status == NULL || !status->probe_valid || status->probe_cart_mode != BURNER_CART_MODE_GBA) {
+        snprintf(out, out_len, "--");
+    } else if (!status->probe_gba_d0d1_known) {
+        snprintf(out, out_len, "%s", ui_tr("unknown", "未知"));
+    } else {
+        snprintf(out, out_len, "%s", status->probe_gba_d0d1_swapped ? ui_tr("swapped", "对调") : ui_tr("normal", "正常"));
     }
 }
 
@@ -1918,6 +1964,9 @@ static uint8_t ui_file_action_count_for_kind(ui_file_kind_t kind)
 static ui_file_action_t ui_file_action_for_kind(ui_file_kind_t kind, uint8_t index)
 {
     if (kind == UI_FILE_KIND_SAVE) {
+        if (s_cart_mode == BURNER_CART_MODE_GBA) {
+            return (index == 0U) ? UI_FILE_ACTION_WRITE_GBA_SAVE_NEW : UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW;
+        }
         return (index == 0U) ? UI_FILE_ACTION_WRITE_SAVE : UI_FILE_ACTION_VERIFY_SAVE;
     }
     switch (index) {
@@ -1948,6 +1997,10 @@ static const char *ui_file_action_label(ui_file_action_t action)
             return ui_tr("Write save", "写入存档");
         case UI_FILE_ACTION_VERIFY_SAVE:
             return ui_tr("Verify save", "校验存档");
+        case UI_FILE_ACTION_WRITE_GBA_SAVE_NEW:
+            return ui_tr("Write GBA save", "写入GBA存档");
+        case UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW:
+            return ui_tr("Verify GBA save", "校验GBA存档");
         default:
             return "--";
     }
@@ -2081,6 +2134,8 @@ static const char *ui_strip_burner_status_prefix(const char *text)
 
 static const char *ui_status_text_to_display(const char *text)
 {
+    static char connected_ip_text[48];
+
     if (text == NULL || text[0] == '\0') {
         return "";
     }
@@ -2096,6 +2151,10 @@ static const char *ui_status_text_to_display(const char *text)
         }
         if (strcmp(text, "wifi connected") == 0) {
             return "Wi-Fi connected";
+        }
+        if (strncmp(text, "wifi connected ", strlen("wifi connected ")) == 0) {
+            snprintf(connected_ip_text, sizeof(connected_ip_text), "Wi-Fi connected %s", text + strlen("wifi connected "));
+            return connected_ip_text;
         }
         if (strcmp(text, "wifi disconnected") == 0) {
             return "Wi-Fi disconnected";
@@ -2121,6 +2180,10 @@ static const char *ui_status_text_to_display(const char *text)
     if (strcmp(text, "wifi connected") == 0 || strcmp(text, "Wi-Fi connected") == 0) {
         return "Wi-Fi已连接";
     }
+    if (strncmp(text, "wifi connected ", strlen("wifi connected ")) == 0) {
+        snprintf(connected_ip_text, sizeof(connected_ip_text), "Wi-Fi已连接 %s", text + strlen("wifi connected "));
+        return connected_ip_text;
+    }
     if (strcmp(text, "wifi disconnected") == 0 || strcmp(text, "Wi-Fi disconnected") == 0) {
         return "Wi-Fi已断开";
     }
@@ -2142,6 +2205,10 @@ static const char *ui_status_text_to_display(const char *text)
     }
     if (strcmp(text, "wifi connected") == 0) {
         return "Wi-Fi connected";
+    }
+    if (strncmp(text, "wifi connected ", strlen("wifi connected ")) == 0) {
+        snprintf(connected_ip_text, sizeof(connected_ip_text), "Wi-Fi connected %s", text + strlen("wifi connected "));
+        return connected_ip_text;
     }
     if (strcmp(text, "wifi disconnected") == 0) {
         return "Wi-Fi disconnected";
@@ -2560,6 +2627,8 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
     request->mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     request->gba_force_no_cfi = false;
+    request->gba_save_type = s_gba_save_type;
+    request->gba_save_size = model->action_file.size;
     request->ram_fram = false;
     request->ram_latency = 10U;
 
@@ -2705,6 +2774,24 @@ static void ui_start_file_action_task(void *param)
                 error_msg,
                 sizeof(error_msg));
             break;
+        case UI_FILE_ACTION_WRITE_GBA_SAVE_NEW:
+            err = burner_start_gba_save_write_from_tf_new(
+                request->path,
+                request->gba_save_type,
+                request->gba_save_size,
+                &result,
+                error_msg,
+                sizeof(error_msg));
+            break;
+        case UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW:
+            err = burner_start_gba_save_verify_from_tf_new(
+                request->path,
+                request->gba_save_type,
+                request->gba_save_size,
+                &result,
+                error_msg,
+                sizeof(error_msg));
+            break;
         default:
             err = ESP_ERR_NOT_SUPPORTED;
             break;
@@ -2846,6 +2933,7 @@ static esp_err_t ui_start_dump_rom_task(void)
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         false,
         0U);
     if (err == ESP_OK) {
@@ -2864,6 +2952,39 @@ static esp_err_t ui_start_dump_save_task(void)
     uint32_t effective_size = 0;
     esp_err_t err;
 
+    if (s_cart_mode == BURNER_CART_MODE_GBA) {
+        if (card == NULL) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        if (usb_msc_tf_in_use_by_host()) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        err = burner_ensure_dump_dir();
+        if (err != ESP_OK) {
+            return err;
+        }
+        burner_build_output_timestamp(timestamp, sizeof(timestamp));
+        snprintf(safe_name, sizeof(safe_name), "cart_gba_save_%s.sav", timestamp);
+        err = burner_resolve_unique_output_path(
+            DUMP_DIR_PATH,
+            safe_name,
+            safe_name,
+            sizeof(safe_name),
+            full_path,
+            sizeof(full_path));
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_start_gba_save_dump_new(
+            safe_name,
+            full_path,
+            s_gba_save_type,
+            s_save_size_kib * 1024U);
+        if (err == ESP_OK) {
+            ui_set_task_page_starting("GBA save dump started", s_save_size_kib * 1024U);
+        }
+        return err;
+    }
     if (s_cart_mode != BURNER_CART_MODE_MBC5) {
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -2899,6 +3020,7 @@ static esp_err_t ui_start_dump_save_task(void)
         full_path,
         addr_begin,
         effective_size,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         s_ram_fram,
         s_ram_latency);
     if (err == ESP_OK) {
@@ -2922,6 +3044,7 @@ static esp_err_t ui_start_chip_erase_task(void)
         "/cart",
         0U,
         1U,
+        BURNER_GBA_SAVE_TYPE_SRAM,
         false,
         0U);
 
@@ -2938,6 +3061,10 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
     uint32_t device_size = 0;
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
+    burner_gba_save_type_t gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+    uint32_t gba_save_size = 0;
+    bool gba_d0d1_known = false;
+    bool gba_d0d1_swapped = false;
     bool cfi_ok = false;
     esp_err_t err;
 
@@ -2967,6 +3094,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
         err = burner_bacon_gba_prepare_power();
         if (err == ESP_OK) {
             err = burner_bacon_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+            burner_bacon_gba_d0d1_status(&gba_d0d1_known, &gba_d0d1_swapped);
         }
     }
     burner_bacon_restore_3v3_power();
@@ -2984,6 +3112,8 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
             sector_size,
             buffer_write_bytes,
             cfi_ok,
+            false,
+            false,
             false,
             false);
         snprintf(
@@ -3006,7 +3136,17 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
             buffer_write_bytes,
             cfi_ok,
             false,
-            false);
+            false,
+            gba_d0d1_known,
+            gba_d0d1_swapped);
+        {
+            bool detected = false;
+            if (burner_probe_gba_save_type(&gba_save_type, &gba_save_size, &detected) == ESP_OK) {
+                burner_status_set_gba_save_probe(gba_save_type, gba_save_size, detected);
+            } else {
+                burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
+            }
+        }
         snprintf(
             out,
             out_len,
@@ -3055,6 +3195,8 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
             report.buffer_write_bytes,
             report.cfi_ok,
             false,
+            false,
+            false,
             false);
     } else {
         burner_status_set_probe_info(
@@ -3066,7 +3208,9 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
             report.buffer_write_bytes,
             report.cfi_ok,
             false,
-            false);
+            false,
+            report.gba_d0d1_known,
+            report.gba_d0d1_swapped);
     }
 
     if (report.ppb_needs_unlock_before == 0U && report.ppb_needs_unlock_after == 0U) {
@@ -3619,7 +3763,8 @@ static esp_err_t ui_prepare_last_file_action_locked(
     ui_file_start_request_t **request_out)
 {
     ui_file_start_request_t *request = NULL;
-    bool want_save = (action == UI_FILE_ACTION_WRITE_SAVE || action == UI_FILE_ACTION_VERIFY_SAVE);
+    bool want_save = (action == UI_FILE_ACTION_WRITE_SAVE || action == UI_FILE_ACTION_VERIFY_SAVE ||
+                      action == UI_FILE_ACTION_WRITE_GBA_SAVE_NEW || action == UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW);
     ui_file_entry_t selected_file = {0};
     ui_file_kind_t selected_kind = UI_FILE_KIND_UNSUPPORTED;
     bool is_rom;
@@ -3684,6 +3829,8 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->psram_mb = s_psram_mb;
     request->mbc5_chunk_kb = s_mbc5_chunk_kb;
     request->gba_force_no_cfi = false;
+    request->gba_save_type = s_gba_save_type;
+    request->gba_save_size = selected_file.size;
     request->ram_fram = s_ram_fram;
     request->ram_latency = s_ram_latency;
 
@@ -3838,7 +3985,7 @@ static ui_burn_rom_op_t ui_burn_ram_op_for_index(uint16_t index)
         case 4:
             return UI_BURN_ROM_OP_SAVE_SIZE;
         case 5:
-            return UI_BURN_ROM_OP_RAM_TYPE;
+            return (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_BURN_ROM_OP_GBA_SAVE_TYPE : UI_BURN_ROM_OP_RAM_TYPE;
         case 6:
             return UI_BURN_ROM_OP_RAM_LATENCY;
         default:
@@ -4112,10 +4259,16 @@ static void ui_select_locked(
                         model->parent_page = UI_PAGE_BURN_ROM;
                         break;
                     case UI_BURN_ROM_OP_WRITE_SAVE:
-                        (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_WRITE_SAVE, start_request);
+                        (void)ui_prepare_last_file_action_locked(
+                            model,
+                            (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_ACTION_WRITE_GBA_SAVE_NEW : UI_FILE_ACTION_WRITE_SAVE,
+                            start_request);
                         break;
                     case UI_BURN_ROM_OP_VERIFY_SAVE:
-                        (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_VERIFY_SAVE, start_request);
+                        (void)ui_prepare_last_file_action_locked(
+                            model,
+                            (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW : UI_FILE_ACTION_VERIFY_SAVE,
+                            start_request);
                         break;
                     case UI_BURN_ROM_OP_DUMP_SAVE:
                         *work_type = UI_WORK_BURN_DUMP_SAVE;
@@ -4133,8 +4286,17 @@ static void ui_select_locked(
                         s_ram_fram = !s_ram_fram;
                         ui_set_status_locked(model, s_ram_fram ? "FRAM" : "SRAM");
                         break;
+                    case UI_BURN_ROM_OP_GBA_SAVE_TYPE:
+                        s_gba_save_type = (burner_gba_save_type_t)(((uint32_t)s_gba_save_type + 1U) % 4U);
+                        ui_set_status_locked(model, ui_gba_save_type_label(s_gba_save_type));
+                        break;
                     case UI_BURN_ROM_OP_RAM_LATENCY:
-                        s_ram_latency = (uint8_t)((s_ram_latency >= 255U) ? 0U : (s_ram_latency + 1U));
+                        if (s_cart_mode == BURNER_CART_MODE_MBC5) {
+                            s_ram_latency = (uint8_t)((s_ram_latency >= 255U) ? 0U : (s_ram_latency + 1U));
+                        } else {
+                            ui_set_status_locked(model, "GBA save path does not use FRAM latency");
+                            break;
+                        }
                         ui_set_status_locked(model, ui_tr("latency changed", "延迟已改变"));
                         break;
                     case UI_BURN_ROM_OP_ANALYZE:
@@ -4197,10 +4359,16 @@ static void ui_select_locked(
                         ui_burn_rom_open_ram_menu_locked(model);
                         break;
                     case UI_BURN_ROM_OP_WRITE_SAVE:
-                        (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_WRITE_SAVE, start_request);
+                        (void)ui_prepare_last_file_action_locked(
+                            model,
+                            (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_ACTION_WRITE_GBA_SAVE_NEW : UI_FILE_ACTION_WRITE_SAVE,
+                            start_request);
                         break;
                     case UI_BURN_ROM_OP_VERIFY_SAVE:
-                        (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_VERIFY_SAVE, start_request);
+                        (void)ui_prepare_last_file_action_locked(
+                            model,
+                            (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW : UI_FILE_ACTION_VERIFY_SAVE,
+                            start_request);
                         break;
                     case UI_BURN_ROM_OP_DUMP_SAVE:
                         *work_type = UI_WORK_BURN_DUMP_SAVE;
@@ -4232,9 +4400,15 @@ static void ui_select_locked(
                 ui_open_files_with_filter_locked(model, model->file_path, false, UI_FILE_FILTER_SAVE);
                 model->parent_page = UI_PAGE_BURN_SAVE;
             } else if (model->selected == 1U) {
-                (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_WRITE_SAVE, start_request);
+                (void)ui_prepare_last_file_action_locked(
+                    model,
+                    (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_ACTION_WRITE_GBA_SAVE_NEW : UI_FILE_ACTION_WRITE_SAVE,
+                    start_request);
             } else if (model->selected == 2U) {
-                (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_VERIFY_SAVE, start_request);
+                (void)ui_prepare_last_file_action_locked(
+                    model,
+                    (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW : UI_FILE_ACTION_VERIFY_SAVE,
+                    start_request);
             } else if (model->selected == 3U) {
                 *work_type = UI_WORK_BURN_DUMP_SAVE;
                 *start_work = true;
@@ -4242,10 +4416,19 @@ static void ui_select_locked(
                 s_save_size_kib = ui_next_option_u32(s_save_size_kib_options, sizeof(s_save_size_kib_options) / sizeof(s_save_size_kib_options[0]), s_save_size_kib, 1);
                 ui_set_status_locked(model, ui_tr("save size changed", "存档大小已改变"));
             } else if (model->selected == 5U) {
-                s_ram_fram = !s_ram_fram;
-                ui_set_status_locked(model, s_ram_fram ? "FRAM" : "SRAM");
+                if (s_cart_mode == BURNER_CART_MODE_GBA) {
+                    s_gba_save_type = (burner_gba_save_type_t)(((uint32_t)s_gba_save_type + 1U) % 4U);
+                    ui_set_status_locked(model, ui_gba_save_type_label(s_gba_save_type));
+                } else {
+                    s_ram_fram = !s_ram_fram;
+                    ui_set_status_locked(model, s_ram_fram ? "FRAM" : "SRAM");
+                }
             } else if (model->selected == 6U) {
-                s_ram_latency = (uint8_t)((s_ram_latency >= 255U) ? 0U : (s_ram_latency + 1U));
+                if (s_cart_mode == BURNER_CART_MODE_GBA) {
+                    ui_set_status_locked(model, "GBA save path does not use FRAM latency");
+                } else {
+                    s_ram_latency = (uint8_t)((s_ram_latency >= 255U) ? 0U : (s_ram_latency + 1U));
+                }
                 ui_set_status_locked(model, ui_tr("latency changed", "延迟已改变"));
             } else if (model->selected == 7U) {
                 s_cart_slot = (s_cart_slot >= BURNER_MBC5_SLOT_MAX) ? 0U : (s_cart_slot + 1U);
@@ -4963,7 +5146,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         return;
     }
     if (index == 0U) {
-        snprintf(title, title_len, "%s", ui_tr("Analyze cart", "分析卡带"));
+        snprintf(title, title_len, "%s", (s_cart_analyzed && s_analyzed_cart_mode == s_cart_mode) ? "重新分析" : ui_tr("Analyze cart", "分析卡带"));
         snprintf(hint, hint_len, "%s", ui_cart_is_unlocked() ? ui_tr("done", "已完成") : "");
         return;
     }
@@ -5359,7 +5542,6 @@ static void ui_px_apply_tile(const ui_model_t *model)
     ui_px_text(8, 10, "MORI", true);
     ui_px_text_clipped(UI_CANVAS_W - 118, 10, 58, model->time_text, true);
     ui_px_draw_fps_overlay(model);
-    ui_px_text((UI_CANVAS_W - ui_px_text_width("ad astra per aspera")) / 2, 28, "ad astra per aspera", true);
     ui_px_box(0, 0, progress_w, UI_TILE_BAR_H, true);
     for (uint16_t i = 0; i < UI_ROOT_ITEM_COUNT; ++i) {
         int32_t x = center_x + (int32_t)((float)i * (float)UI_TILE_ICON_SPACING - s_anim.tile_camera_x);
@@ -5790,6 +5972,7 @@ static void ui_px_draw_burner_cart_info(const ui_model_t *model)
     char size_text[24] = {0};
     char sector_text[24] = {0};
     char sector_count_text[32] = {0};
+    char d0d1_text[24] = {0};
     char id_text[32] = {0};
     int32_t y0 = UI_LIST_HEADER_H + (int32_t)(UI_BURN_ROM_ACTION_ROWS + 1U) * UI_LIST_LINE_H;
     int32_t w = UI_CANVAS_W - UI_LIST_BAR_W - 12;
@@ -5812,15 +5995,31 @@ static void ui_px_draw_burner_cart_info(const ui_model_t *model)
             snprintf(sector_count_text, sizeof(sector_count_text), "--");
         }
         ui_format_probe_id(&status, id_text, sizeof(id_text));
+        ui_format_gba_d0d1_text(&status, d0d1_text, sizeof(d0d1_text));
         ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 20, w, s_analyzed_cart_info[0] != '\0' ? s_analyzed_cart_info : ui_cart_mode_label(s_cart_mode), true);
-        ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 36, w, ui_tr("Capacity", "容量"), true);
-        ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 36, w - 72, size_text, true);
-        ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 52, w, ui_tr("Sector", "扇区大小"), true);
-        ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 52, w - 72, sector_text, true);
-        ui_px_text_clipped(UI_LIST_TEXT_X + 148, y0 + 52, w - 148, ui_tr("Count", "扇区数"), true);
-        ui_px_text_clipped(UI_LIST_TEXT_X + 216, y0 + 52, w - 216, sector_count_text, true);
-        ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 68, w, "NOR ID", true);
-        ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 68, w - 72, id_text, true);
+        if (status.probe_cart_mode == BURNER_CART_MODE_GBA) {
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 36, w, "D1/D0", true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 36, w - 72, d0d1_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 52, w, ui_tr("Capacity", "容量"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 52, w - 72, size_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 68, w, ui_tr("Sector", "扇区大小"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 68, w - 72, sector_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 148, y0 + 68, w - 148, ui_tr("Count", "扇区数"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 216, y0 + 68, w - 216, sector_count_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 84, w, "NOR ID", true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 84, w - 72, id_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 148, y0 + 36, w - 148, ui_tr("Save", "存档"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 216, y0 + 36, w - 216, ui_gba_save_type_probe_label(&status), true);
+        } else {
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 36, w, ui_tr("Capacity", "容量"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 36, w - 72, size_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 52, w, ui_tr("Sector", "扇区大小"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 52, w - 72, sector_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 148, y0 + 52, w - 148, ui_tr("Count", "扇区数"), true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 216, y0 + 52, w - 216, sector_count_text, true);
+            ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 68, w, "NOR ID", true);
+            ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 68, w - 72, id_text, true);
+        }
     } else {
         ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 20, w, s_analyzed_cart_info[0] != '\0' ? s_analyzed_cart_info : ui_tr("analyzed", "已分析"), true);
     }
@@ -5874,6 +6073,8 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
     char size_text[24] = {0};
     char sector_text[24] = {0};
     char sector_count_text[32] = {0};
+    char d0d1_text[24] = {0};
+    char save_size_text[24] = {0};
     char id_text[32] = {0};
     int32_t text_x = x + 5;
     int32_t text_w = w - 10;
@@ -5909,7 +6110,21 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
             snprintf(sector_count_text, sizeof(sector_count_text), "--");
         }
         ui_format_probe_id(&status, id_text, sizeof(id_text));
+        ui_format_gba_d0d1_text(&status, d0d1_text, sizeof(d0d1_text));
 
+        if (status.probe_cart_mode == BURNER_CART_MODE_GBA) {
+            ui_px_info_line(text_x, yy, text_w, ui_tr("D1/D0:", "D1/D0:"), d0d1_text);
+            yy += UI_LIST_LINE_H;
+            if (status.probe_gba_save_detected && status.probe_gba_save_size > 0u) {
+                ui_format_bytes_text(status.probe_gba_save_size, save_size_text, sizeof(save_size_text));
+            } else {
+                snprintf(save_size_text, sizeof(save_size_text), "--");
+            }
+            ui_px_info_line(text_x, yy, text_w, ui_tr("Save:", "存档:"), ui_gba_save_type_probe_label(&status));
+            yy += UI_LIST_LINE_H;
+            ui_px_info_line(text_x, yy, text_w, ui_tr("Size:", "大小:"), save_size_text);
+            yy += UI_LIST_LINE_H;
+        }
         ui_px_info_line(text_x, yy, text_w, ui_tr("Capacity:", "容量:"), size_text);
         yy += UI_LIST_LINE_H;
         ui_px_info_line(text_x, yy, text_w, ui_tr("Sector:", "扇区大小:"), sector_text);
@@ -5968,7 +6183,7 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
             char key = ui_burn_dump_key_for_index(i);
 
             if (key == '\n') {
-                snprintf(label, sizeof(label), "%s", ui_tr("OK", "OK"));
+                snprintf(label, sizeof(label), "%s", ui_tr("OK", "确定"));
             } else {
                 snprintf(label, sizeof(label), "%c", key);
             }
@@ -6031,8 +6246,8 @@ static void ui_px_draw_burn_rom_split_chrome(const ui_model_t *model)
     char header[UI_ROW_TEXT_MAX_LEN] = {0};
 
     snprintf(header, sizeof(header), "%s", ui_page_title(model->page));
-    ui_px_text(4, 5, header, true);
-    ui_px_text_clipped(UI_CANVAS_W - 118, 5, 58, model->time_text, true);
+    ui_px_text(4, UI_LIST_HEADER_TEXT_Y, header, true);
+    ui_px_text_clipped(UI_CANVAS_W - 118, UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
     ui_px_draw_fps_overlay(model);
     ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - 2, true);
     for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
@@ -6098,8 +6313,8 @@ static void ui_px_apply_chrome_dynamic(const ui_model_t *model)
     } else if (model->page == UI_PAGE_BURNER) {
         snprintf(header, sizeof(header), "%s", ui_tr("Burner", "烧录器"));
     }
-    ui_px_text(4, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : 5, header, true);
-    ui_px_text_clipped(UI_CANVAS_W - 118, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : 5, 58, model->time_text, true);
+    ui_px_text(4, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : UI_LIST_HEADER_TEXT_Y, header, true);
+    ui_px_text_clipped(UI_CANVAS_W - 118, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
     ui_px_draw_fps_overlay(model);
     ui_px_clear_rect(0, UI_CANVAS_H - UI_HINT_H, UI_CANVAS_W, UI_HINT_H);
     if (model->status_text[0] != '\0') {
@@ -6129,8 +6344,8 @@ static void ui_px_apply_list(const ui_model_t *model)
         strncat(header, model->file_path, sizeof(header) - strlen(header) - 1U);
     }
 
-    ui_px_text(4, 5, header, true);
-    ui_px_text_clipped(UI_CANVAS_W - 118, 5, 58, model->time_text, true);
+    ui_px_text(4, UI_LIST_HEADER_TEXT_Y, header, true);
+    ui_px_text_clipped(UI_CANVAS_W - 118, UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
     ui_px_draw_fps_overlay(model);
     ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - UI_LIST_BAR_W - 2, true);
     for (int32_t x = 0; x < UI_CANVAS_W - UI_LIST_BAR_W; x += 6) {
@@ -6619,6 +6834,7 @@ void ui_set_ip_text(const char *ip)
     }
     if (strcmp(s_model.ip_text, safe_ip) != 0) {
         snprintf(s_model.ip_text, sizeof(s_model.ip_text), "%s", safe_ip);
+        ui_mark_chrome_dirty(&s_model);
         ui_mark_content_dirty(&s_model);
     }
     xSemaphoreGive(s_model_lock);

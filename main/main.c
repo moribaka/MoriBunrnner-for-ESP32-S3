@@ -2654,9 +2654,17 @@ static void ui_update_sta_ip(void)
 static void wifi_state_handler(WIFI_STATE state)
 {
     if (state == WIFI_STATE_CONNECTED) {
+        char ip[UI_IP_BUF_LEN] = {0};
+        char status[64] = {0};
+
         ui_set_wifi_state(UI_WIFI_STATE_CONNECTED);
         ui_update_sta_ip();
-        ui_set_status_text("wifi connected");
+        if (wifi_maneger_get_sta_ip(ip, sizeof(ip)) == ESP_OK) {
+            snprintf(status, sizeof(status), "wifi connected %s", ip);
+            ui_set_status_text(status);
+        } else {
+            ui_set_status_text("wifi connected");
+        }
         ESP_LOGI(wifi_manager_tag, "Wi-Fi connected");
         mori_apply_ntp_service();
         trigger_web_start_async();

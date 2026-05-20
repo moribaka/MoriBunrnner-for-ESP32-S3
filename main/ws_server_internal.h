@@ -200,6 +200,8 @@ typedef struct {
     uint8_t mbc5_id[4];
     burner_gba_cmd_addr_mode_t gba_cmd_addr_mode;
     burner_gba_cmd_data_lane_t gba_cmd_data_lane;
+    bool d0d1_known;   /* D0/D1 detection completed */
+    bool d0d1_swapped; /* D0/D1 data lines swapped */
 } burner_cart_ctx_t;
 
 typedef enum {
@@ -219,7 +221,17 @@ typedef enum {
     BURNER_JOB_WRITE_RAM,
     BURNER_JOB_READ_RAM,
     BURNER_JOB_VERIFY_RAM,
+    BURNER_JOB_WRITE_GBA_SAVE_NEW,
+    BURNER_JOB_READ_GBA_SAVE_NEW,
+    BURNER_JOB_VERIFY_GBA_SAVE_NEW,
 } burner_job_mode_t;
+
+typedef enum {
+    BURNER_GBA_SAVE_TYPE_SRAM = 0,
+    BURNER_GBA_SAVE_TYPE_EEPROM,
+    BURNER_GBA_SAVE_TYPE_FLASH,
+    BURNER_GBA_SAVE_TYPE_BATTERYLESS,
+} burner_gba_save_type_t;
 
 typedef enum {
     BURNER_CART_MODE_MBC5 = 0,
@@ -237,6 +249,8 @@ typedef struct {
     uint32_t ppb_needs_unlock_after;
     uint16_t gba_lock_status;
     uint8_t mbc5_lock_status;
+    bool gba_d0d1_known;
+    bool gba_d0d1_swapped;
     uint8_t gba_id[8];
     uint8_t mbc5_id[4];
 } burner_ppb_unlock_report_t;
@@ -324,6 +338,11 @@ typedef struct {
     bool probe_cfi_ok;
     bool probe_gba_multi;
     bool probe_gba_force_multi;
+    bool probe_gba_d0d1_known;
+    bool probe_gba_d0d1_swapped;
+    burner_gba_save_type_t probe_gba_save_type;
+    uint32_t probe_gba_save_size;
+    bool probe_gba_save_detected;
     uint32_t probe_device_size;
     uint32_t probe_sector_size;
     uint16_t probe_buffer_write_bytes;
@@ -358,6 +377,7 @@ typedef struct {
     uint32_t total_bytes;
     bool ram_fram;
     uint8_t ram_latency;
+    burner_gba_save_type_t gba_save_type;
     bool gba_force_multi;
     bool gba_force_no_cfi;
     bool task_with_caps;
@@ -628,6 +648,25 @@ esp_err_t burner_start_ram_verify_from_tf(
     burner_task_start_result_t *result,
     char *error_msg,
     size_t error_msg_len);
+esp_err_t burner_start_gba_save_write_from_tf_new(
+    const char *raw_name,
+    burner_gba_save_type_t save_type,
+    uint32_t save_size,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len);
+esp_err_t burner_start_gba_save_verify_from_tf_new(
+    const char *raw_name,
+    burner_gba_save_type_t save_type,
+    uint32_t save_size,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len);
+esp_err_t burner_start_gba_save_dump_new(
+    const char *safe_name,
+    const char *full_path,
+    burner_gba_save_type_t save_type,
+    uint32_t save_size);
 bool burner_status_tracks_speed(burner_state_t state);
 bool burner_status_is_operation_active_state(burner_state_t state);
 bool burner_status_is_operation_active_locked(void);
@@ -650,7 +689,13 @@ void burner_status_set_probe_info(
     uint16_t buffer_write_bytes,
     bool cfi_ok,
     bool gba_multi,
-    bool gba_force_multi);
+    bool gba_force_multi,
+    bool gba_d0d1_known,
+    bool gba_d0d1_swapped);
+void burner_status_set_gba_save_probe(
+    burner_gba_save_type_t save_type,
+    uint32_t save_size,
+    bool detected);
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal);
 void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t sector_size);
 void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t sector_size);
@@ -799,6 +844,11 @@ esp_err_t burner_bacon_gba_probe_locked(
     uint32_t *sector_size,
     uint16_t *buffer_write_bytes,
     bool *cfi_ok_out);
+void burner_bacon_gba_d0d1_status(bool *known_out, bool *swapped_out);
+esp_err_t burner_probe_gba_save_type(
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *detected_out);
 bool burner_mbc5_geometry_from_id(
     const uint8_t id[4],
     uint32_t *device_size,
@@ -835,6 +885,7 @@ esp_err_t burner_start_task_ex(
     const char *rom_path,
     uint32_t addr_begin,
     uint32_t total_bytes,
+    burner_gba_save_type_t gba_save_type,
     bool ram_fram,
     uint8_t ram_latency);
 esp_err_t burner_start_task(
@@ -843,6 +894,7 @@ esp_err_t burner_start_task(
     const char *rom_path,
     uint32_t addr_begin,
     uint32_t total_bytes,
+    burner_gba_save_type_t gba_save_type,
     bool ram_fram,
     uint8_t ram_latency);
 

@@ -95,6 +95,8 @@
 #define BURNER_VALID_WALLCLOCK_MIN ((time_t)1700000000)
 #define BURNER_SUSPECT_FILE_MTIME_MAX ((time_t)631152000)
 #define BURNER_GBA_TITLE_OFFSET 0xA0u
+#define BURNER_GBA_SAVE_SCAN_WINDOW_BYTES 0x10000u
+#define BURNER_GBA_SAVE_SCAN_STEP_BYTES 0x1000u
 #define BURNER_GBA_TITLE_LEN 12u
 #define BURNER_MBC5_TITLE_OFFSET 0x134u
 #define BURNER_MBC5_TITLE_LEN 16u
@@ -201,6 +203,8 @@ typedef struct {
     uint8_t mbc5_id[4];
     burner_gba_cmd_addr_mode_t gba_cmd_addr_mode;
     burner_gba_cmd_data_lane_t gba_cmd_data_lane;
+    bool d0d1_known;   /* D0/D1 detection completed */
+    bool d0d1_swapped; /* D0/D1 data lines swapped */
 } burner_cart_ctx_t;
 
 typedef enum {
@@ -220,7 +224,17 @@ typedef enum {
     BURNER_JOB_WRITE_RAM,
     BURNER_JOB_READ_RAM,
     BURNER_JOB_VERIFY_RAM,
+    BURNER_JOB_WRITE_GBA_SAVE_NEW,
+    BURNER_JOB_READ_GBA_SAVE_NEW,
+    BURNER_JOB_VERIFY_GBA_SAVE_NEW,
 } burner_job_mode_t;
+
+typedef enum {
+    BURNER_GBA_SAVE_TYPE_SRAM = 0,
+    BURNER_GBA_SAVE_TYPE_EEPROM,
+    BURNER_GBA_SAVE_TYPE_FLASH,
+    BURNER_GBA_SAVE_TYPE_BATTERYLESS,
+} burner_gba_save_type_t;
 
 typedef enum {
     BURNER_CART_MODE_MBC5 = 0,
@@ -238,6 +252,8 @@ typedef struct {
     uint32_t ppb_needs_unlock_after;
     uint16_t gba_lock_status;
     uint8_t mbc5_lock_status;
+    bool gba_d0d1_known;
+    bool gba_d0d1_swapped;
     uint8_t gba_id[8];
     uint8_t mbc5_id[4];
 } burner_ppb_unlock_report_t;
@@ -325,6 +341,11 @@ typedef struct {
     bool probe_cfi_ok;
     bool probe_gba_multi;
     bool probe_gba_force_multi;
+    bool probe_gba_d0d1_known;
+    bool probe_gba_d0d1_swapped;
+    burner_gba_save_type_t probe_gba_save_type;
+    uint32_t probe_gba_save_size;
+    bool probe_gba_save_detected;
     uint32_t probe_device_size;
     uint32_t probe_sector_size;
     uint16_t probe_buffer_write_bytes;
@@ -336,6 +357,15 @@ typedef struct {
     bool erase_phase_active;
     bool cancel_requested;
 } burner_status_t;
+
+typedef struct {
+    char safe_name[BURNER_FILE_NAME_LEN];
+    char full_path[BURNER_FILE_PATH_LEN];
+    uint32_t effective_size;
+    uint32_t psram_mb;
+    uint32_t mbc5_chunk_kb;
+    bool gba_force_no_cfi;
+} burner_task_start_result_t;
 
 typedef struct {
     burner_job_mode_t mode;
@@ -350,6 +380,7 @@ typedef struct {
     uint32_t total_bytes;
     bool ram_fram;
     uint8_t ram_latency;
+    burner_gba_save_type_t gba_save_type;
     bool gba_force_multi;
     bool gba_force_no_cfi;
     bool task_with_caps;
@@ -558,6 +589,7 @@ void burner_bacon_restore_3v3_power(void);
 esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card);
 esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job);
 esp_err_t burner_spi_prepare_burn_gba(const burner_task_param_t *job);
+esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_t *device_size_out);
 esp_err_t burner_bacon_mbc5_read_block(uint8_t *out, size_t len, uint32_t offset);
 uint32_t burner_psram_auto_window_mb(void);
 static bool burner_is_gba_multi_card(const burner_task_param_t *job);
@@ -1897,6 +1929,11 @@ void burner_status_probe_reset_locked(void)
     s_status.probe_cfi_ok = false;
     s_status.probe_gba_multi = false;
     s_status.probe_gba_force_multi = false;
+    s_status.probe_gba_d0d1_known = false;
+    s_status.probe_gba_d0d1_swapped = false;
+    s_status.probe_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+    s_status.probe_gba_save_size = 0u;
+    s_status.probe_gba_save_detected = false;
     s_status.probe_device_size = 0u;
     s_status.probe_sector_size = 0u;
     s_status.probe_buffer_write_bytes = 0u;
@@ -1912,7 +1949,9 @@ void burner_status_set_probe_info(
     uint16_t buffer_write_bytes,
     bool cfi_ok,
     bool gba_multi,
-    bool gba_force_multi)
+    bool gba_force_multi,
+    bool gba_d0d1_known,
+    bool gba_d0d1_swapped)
 {
     size_t copy_len;
 
@@ -1926,6 +1965,13 @@ void burner_status_set_probe_info(
     s_status.probe_cfi_ok = cfi_ok;
     s_status.probe_gba_multi = gba_multi;
     s_status.probe_gba_force_multi = gba_force_multi;
+    s_status.probe_gba_d0d1_known = (cart_mode == BURNER_CART_MODE_GBA) ? gba_d0d1_known : false;
+    s_status.probe_gba_d0d1_swapped = (cart_mode == BURNER_CART_MODE_GBA && gba_d0d1_known) ? gba_d0d1_swapped : false;
+    if (cart_mode != BURNER_CART_MODE_GBA) {
+        s_status.probe_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+        s_status.probe_gba_save_size = 0u;
+        s_status.probe_gba_save_detected = false;
+    }
     s_status.probe_device_size = device_size;
     s_status.probe_sector_size = sector_size;
     s_status.probe_buffer_write_bytes = buffer_write_bytes;
@@ -1934,6 +1980,22 @@ void burner_status_set_probe_info(
         copy_len = (id_len < sizeof(s_status.probe_id)) ? id_len : sizeof(s_status.probe_id);
         memcpy(s_status.probe_id, id, copy_len);
     }
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_set_gba_save_probe(
+    burner_gba_save_type_t save_type,
+    uint32_t save_size,
+    bool detected)
+{
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.probe_gba_save_type = save_type;
+    s_status.probe_gba_save_size = save_size;
+    s_status.probe_gba_save_detected = detected;
     xSemaphoreGive(s_status_lock);
 }
 
@@ -2828,6 +2890,147 @@ bool burner_try_probe_cart_title(
     }
 
     return burner_extract_ascii_cart_title(header, header_len, title, title_len);
+}
+
+static bool burner_memmem_ascii(
+    const uint8_t *buf,
+    size_t buf_len,
+    const char *needle)
+{
+    size_t needle_len;
+    size_t i;
+
+    if (buf == NULL || needle == NULL) {
+        return false;
+    }
+    needle_len = strlen(needle);
+    if (needle_len == 0u || buf_len < needle_len) {
+        return false;
+    }
+
+    for (i = 0u; i + needle_len <= buf_len; ++i) {
+        if (memcmp(buf + i, needle, needle_len) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool burner_detect_gba_save_type_from_rom_locked(
+    const burner_task_param_t *job,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out)
+{
+    uint8_t *buf = NULL;
+    uint32_t scan_total = BURNER_GBA_SAVE_SCAN_WINDOW_BYTES;
+    uint32_t offset = 0u;
+    bool detected = false;
+
+    if (job == NULL || save_type_out == NULL || save_size_out == NULL) {
+        return false;
+    }
+
+    *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
+    *save_size_out = 0u;
+
+    if (job->total_bytes < scan_total) {
+        scan_total = job->total_bytes;
+    }
+    if (scan_total < 16u) {
+        return false;
+    }
+
+    buf = (uint8_t *)malloc(BURNER_GBA_SAVE_SCAN_STEP_BYTES);
+    if (buf == NULL) {
+        return false;
+    }
+
+    while (offset < scan_total) {
+        size_t chunk = scan_total - offset;
+        if (chunk > BURNER_GBA_SAVE_SCAN_STEP_BYTES) {
+            chunk = BURNER_GBA_SAVE_SCAN_STEP_BYTES;
+        }
+
+        if (burner_bacon_gba_read_block(buf, chunk, job->addr_begin + offset, burner_is_gba_multi_card(job)) != ESP_OK) {
+            break;
+        }
+
+        if (burner_memmem_ascii(buf, chunk, "FLASH1M_V")) {
+            *save_type_out = BURNER_GBA_SAVE_TYPE_FLASH;
+            *save_size_out = 128u * 1024u;
+            detected = true;
+            break;
+        }
+        if (burner_memmem_ascii(buf, chunk, "FLASH512_V") || burner_memmem_ascii(buf, chunk, "FLASH_V")) {
+            *save_type_out = BURNER_GBA_SAVE_TYPE_FLASH;
+            *save_size_out = 64u * 1024u;
+            detected = true;
+            break;
+        }
+        if (burner_memmem_ascii(buf, chunk, "EEPROM_V")) {
+            *save_type_out = BURNER_GBA_SAVE_TYPE_EEPROM;
+            *save_size_out = 8u * 1024u;
+            detected = true;
+            break;
+        }
+        if (burner_memmem_ascii(buf, chunk, "SRAM_V")) {
+            *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
+            *save_size_out = 32u * 1024u;
+            detected = true;
+            break;
+        }
+
+        offset += (uint32_t)chunk;
+    }
+
+    free(buf);
+    return detected;
+}
+
+esp_err_t burner_probe_gba_save_type(
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *detected_out)
+{
+    burner_task_param_t probe_job = {0};
+    burner_gba_save_type_t save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+    uint32_t save_size = 0u;
+    bool detected = false;
+    uint32_t device_size = 0u;
+    esp_err_t err;
+
+    if (save_type_out == NULL || save_size_out == NULL || detected_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
+    *save_size_out = 0u;
+    *detected_out = false;
+
+    err = burner_probe_cart_capacity_bytes(BURNER_CART_MODE_GBA, &device_size);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    probe_job.cart_mode = BURNER_CART_MODE_GBA;
+    probe_job.addr_begin = 0u;
+    probe_job.total_bytes = (device_size != 0u) ? device_size : BURNER_GBA_SAVE_SCAN_WINDOW_BYTES;
+
+    burner_spi_lock_take();
+    err = burner_spi_prepare_burn_gba(&probe_job);
+    if (err == ESP_OK) {
+        detected = burner_detect_gba_save_type_from_rom_locked(&probe_job, &save_type, &save_size);
+    }
+    burner_bacon_restore_3v3_power();
+    burner_spi_lock_give();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    *save_type_out = save_type;
+    *save_size_out = save_size;
+    *detected_out = detected;
+    return ESP_OK;
 }
 
 void burner_build_default_dump_name(
@@ -5986,6 +6189,7 @@ static esp_err_t burner_bacon_rom_write_u16(uint32_t word_addr, uint16_t value)
 }
 
 static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_value);
+static esp_err_t burner_bacon_gba_command_write_u16(uint32_t word_addr, uint16_t value);
 
 static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, size_t len)
 {
@@ -6411,7 +6615,7 @@ static esp_err_t burner_bacon_wait_u16(uint32_t byte_addr, uint16_t expected, ui
         expected,
         read_back,
         timeout_ms);
-    (void)burner_bacon_rom_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
     return ESP_ERR_TIMEOUT;
 }
 
@@ -6493,7 +6697,7 @@ static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank)
         return err;
     }
     vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
-    (void)burner_bacon_rom_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
     vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
     s_cart_ctx.current_bank = (uint16_t)bank;
     return ESP_OK;
@@ -6866,9 +7070,29 @@ static void burner_log_gba_diag_compare_word(const char *phase, uint32_t word_ad
     }
 }
 
+/*
+ * Some repro GBA flash carts swap D0/D1 between the cart edge and the flash
+ * chip. Commands and chip-generated data (ID/CFI/PPB) must be translated, but
+ * normal ROM payload bytes are left as the cart-edge logical data.
+ */
+#define SWAP_D0D1_U8(data) (((data) & 0xFCU) | (((data) & 0x01U) << 1) | (((data) & 0x02U) >> 1))
+#define SWAP_D0D1_U16(data) ((SWAP_D0D1_U8((data) & 0xFFU)) | ((uint16_t)SWAP_D0D1_U8(((data) >> 8) & 0xFFU) << 8))
+
+static inline uint16_t burner_apply_d0d1_swap_on_read(uint16_t data, bool is_swapped)
+{
+    return is_swapped ? SWAP_D0D1_U16(data) : data;
+}
+
+static inline uint16_t burner_apply_d0d1_swap_on_write(uint16_t data, bool is_swapped)
+{
+    return is_swapped ? SWAP_D0D1_U16(data) : data;
+}
+
 static esp_err_t burner_bacon_gba_command_write_u16(uint32_t word_addr, uint16_t value)
 {
-    return burner_bacon_rom_write_u16(word_addr, value);
+    return burner_bacon_rom_write_u16(
+        word_addr,
+        burner_apply_d0d1_swap_on_write(value, s_cart_ctx.d0d1_swapped));
 }
 
 static void burner_readid_trace_begin(const char *name, int64_t *start_us, int64_t *last_us)
@@ -7075,7 +7299,91 @@ cfi_window_out:
     (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
 }
 
-static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8])
+static bool burner_gba_detect_qry_words(uint16_t q, uint16_t r, uint16_t y, bool *is_swapped_out, bool *high_byte_lane_out)
+{
+    for (uint8_t lane = 0u; lane < 2u; ++lane) {
+        bool high_byte_lane = (lane != 0u);
+        uint8_t q_byte = high_byte_lane ? (uint8_t)((q >> 8) & 0xFFu) : (uint8_t)(q & 0xFFu);
+        uint8_t r_byte = high_byte_lane ? (uint8_t)((r >> 8) & 0xFFu) : (uint8_t)(r & 0xFFu);
+        uint8_t y_byte = high_byte_lane ? (uint8_t)((y >> 8) & 0xFFu) : (uint8_t)(y & 0xFFu);
+        uint8_t q_swap = SWAP_D0D1_U8(q_byte);
+        uint8_t r_swap = SWAP_D0D1_U8(r_byte);
+        uint8_t y_swap = SWAP_D0D1_U8(y_byte);
+
+        if (q_byte == 0x51u && r_byte == 0x52u && y_byte == 0x59u) {
+            *is_swapped_out = false;
+            *high_byte_lane_out = high_byte_lane;
+            return true;
+        }
+        if (q_swap == 0x51u && r_swap == 0x52u && y_swap == 0x59u) {
+            *is_swapped_out = true;
+            *high_byte_lane_out = high_byte_lane;
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * Detect D0/D1 swap by reading the CFI "QRY" signature. Keep this aligned with
+ * burner_bacon_gba_get_cfi(): GBA flash is probed in word-address mode, so the
+ * canonical signature words are 0x010/0x011/0x012 after entering CFI at 0x055.
+ */
+static esp_err_t burner_gba_detect_d0d1_swap(bool *is_swapped_out)
+{
+    esp_err_t err;
+    uint16_t q = 0;
+    uint16_t r = 0;
+    uint16_t y = 0;
+    bool high_byte_lane = false;
+
+    if (is_swapped_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(BURNER_TAG, "D0/D1 swap detection: entering CFI mode (word addr 0x%03" PRIX32 ")", burner_gba_cfi_enter_addr());
+
+    err = burner_bacon_gba_command_write_u16(burner_gba_cfi_enter_addr(), 0x0098u);
+    if (err != ESP_OK) {
+        ESP_LOGW(BURNER_TAG, "D0/D1 swap detection: CFI entry write failed: %s", esp_err_to_name(err));
+        goto reset_out;
+    }
+
+    err = burner_bacon_rom_read_u16(0x010u, &q);
+    if (err != ESP_OK) {
+        goto reset_out;
+    }
+    err = burner_bacon_rom_read_u16(0x011u, &r);
+    if (err != ESP_OK) {
+        goto reset_out;
+    }
+    err = burner_bacon_rom_read_u16(0x012u, &y);
+    if (err != ESP_OK) {
+        goto reset_out;
+    }
+
+    if (burner_gba_detect_qry_words(q, r, y, is_swapped_out, &high_byte_lane)) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "D0/D1 swap detection: CFI 'QRY' detected (%s, %s-byte lane) [010]=%04X [011]=%04X [012]=%04X",
+            *is_swapped_out ? "SWAPPED" : "normal",
+            high_byte_lane ? "high" : "low",
+            q,
+            r,
+            y);
+        err = ESP_OK;
+        goto reset_out;
+    }
+
+    ESP_LOGW(BURNER_TAG, "D0/D1 swap detection: CFI 'QRY' not detected [010]=%04X [011]=%04X [012]=%04X", q, r, y);
+    err = ESP_ERR_NOT_FOUND;
+
+reset_out:
+    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    return err;
+}
+
+static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8], bool is_swapped)
 {
     esp_err_t err;
     uint16_t w0 = 0;
@@ -7105,8 +7413,11 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8])
      * There is no explicit inter-command delay in host code. Each step is one
      * independent logical SPI transaction on spi_cs=0, with CS released at the
      * end of that transaction.
+     *
+     * Note: command writes are mapped by burner_bacon_gba_command_write_u16();
+     * data read from the chip is restored below when D0/D1 is swapped.
      */
-    err = burner_bacon_rom_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
     if (err != ESP_OK) {
         ESP_LOGW(
             BURNER_TAG,
@@ -7117,7 +7428,7 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8])
         return err;
     }
     burner_readid_trace_log_u16("GBA ReadID trace", "write", burner_gba_unlock_addr0(), 0x00AAu, &trace_last_us);
-    err = burner_bacon_rom_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
     if (err != ESP_OK) {
         ESP_LOGW(
             BURNER_TAG,
@@ -7128,7 +7439,7 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8])
         return err;
     }
     burner_readid_trace_log_u16("GBA ReadID trace", "write", burner_gba_unlock_addr1(), 0x0055u, &trace_last_us);
-    err = burner_bacon_rom_write_u16(burner_gba_unlock_addr0(), 0x0090u);
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0090u);
     if (err != ESP_OK) {
         ESP_LOGW(
             BURNER_TAG,
@@ -7165,6 +7476,12 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8])
     }
     burner_readid_trace_log_u16("GBA ReadID trace", "read", 0x00Fu, w3, &trace_last_us);
 
+    /* Apply D0/D1 swap to read data */
+    w0 = burner_apply_d0d1_swap_on_read(w0, is_swapped);
+    w1 = burner_apply_d0d1_swap_on_read(w1, is_swapped);
+    w2 = burner_apply_d0d1_swap_on_read(w2, is_swapped);
+    w3 = burner_apply_d0d1_swap_on_read(w3, is_swapped);
+
     id_out[0] = (uint8_t)(w0 & 0xFFu);
     id_out[1] = (uint8_t)((w0 >> 8) & 0xFFu);
     id_out[2] = (uint8_t)(w1 & 0xFFu);
@@ -7176,7 +7493,7 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8])
 
 reset_out:
     {
-        esp_err_t reset_err = burner_bacon_rom_write_u16(0x000u, 0x00F0u);
+        esp_err_t reset_err = burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
         if (reset_err == ESP_OK) {
             burner_readid_trace_log_u16("GBA ReadID trace", "write", 0x000u, 0x00F0u, &trace_last_us);
         } else {
@@ -7228,6 +7545,9 @@ static esp_err_t burner_bacon_gba_get_cfi(
     if (err != ESP_OK) {
         goto cfi_reset;
     }
+    w10 = burner_apply_d0d1_swap_on_read(w10, s_cart_ctx.d0d1_swapped);
+    w11 = burner_apply_d0d1_swap_on_read(w11, s_cart_ctx.d0d1_swapped);
+    w12 = burner_apply_d0d1_swap_on_read(w12, s_cart_ctx.d0d1_swapped);
 
     if (((w10 & 0x00FFu) == 0x51u) && ((w11 & 0x00FFu) == 0x52u) && ((w12 & 0x00FFu) == 0x59u)) {
         high_byte_lane = false;
@@ -7262,6 +7582,10 @@ static esp_err_t burner_bacon_gba_get_cfi(
     if (err != ESP_OK) {
         goto cfi_reset;
     }
+    w27 = burner_apply_d0d1_swap_on_read(w27, s_cart_ctx.d0d1_swapped);
+    w2a = burner_apply_d0d1_swap_on_read(w2a, s_cart_ctx.d0d1_swapped);
+    w2f = burner_apply_d0d1_swap_on_read(w2f, s_cart_ctx.d0d1_swapped);
+    w30 = burner_apply_d0d1_swap_on_read(w30, s_cart_ctx.d0d1_swapped);
 
     cfi27 = high_byte_lane ? (uint8_t)((w27 >> 8) & 0xFFu) : (uint8_t)(w27 & 0xFFu);
     cfi2a = high_byte_lane ? (uint8_t)((w2a >> 8) & 0xFFu) : (uint8_t)(w2a & 0xFFu);
@@ -7479,12 +7803,27 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     /* Lock GBA probe to the legacy command lane/address mapping. */
     s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
+    s_cart_ctx.d0d1_known = false;
+    s_cart_ctx.d0d1_swapped = false; /* Default: no swap */
 
     memset(id_out, 0, 8u);
     *device_size = 0u;
     *sector_size = 0u;
     *buffer_write_bytes = 0u;
     *cfi_ok_out = false;
+
+    /* Detect D0/D1 swap before reading ID */
+    ESP_LOGI(BURNER_TAG, "GBA D0/D1 swap detection starting...");
+    err = burner_gba_detect_d0d1_swap(&s_cart_ctx.d0d1_swapped);
+    if (err == ESP_OK) {
+        s_cart_ctx.d0d1_known = true;
+        ESP_LOGI(BURNER_TAG, "GBA D0/D1 swap detection: %s",
+                 s_cart_ctx.d0d1_swapped ? "SWAPPED (D0<->D1)" : "NORMAL (no swap)");
+    } else {
+        ESP_LOGW(BURNER_TAG, "GBA D0/D1 swap detection failed, assuming normal (no swap)");
+        s_cart_ctx.d0d1_known = false;
+        s_cart_ctx.d0d1_swapped = false;
+    }
 
     for (attempt = 0u; attempt < BURNER_GBA_CFI_RETRY_COUNT; ++attempt) {
         if (attempt > 0u) {
@@ -7510,7 +7849,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             }
         }
 
-        err = burner_bacon_gba_read_id(id_out);
+        err = burner_bacon_gba_read_id(id_out, s_cart_ctx.d0d1_swapped);
         if (err != ESP_OK) {
             ESP_LOGW(
                 BURNER_TAG,
@@ -7624,6 +7963,16 @@ esp_err_t burner_bacon_gba_probe_locked(
         sector_size,
         buffer_write_bytes,
         cfi_ok_out);
+}
+
+void burner_bacon_gba_d0d1_status(bool *known_out, bool *swapped_out)
+{
+    if (known_out != NULL) {
+        *known_out = s_cart_ctx.d0d1_known;
+    }
+    if (swapped_out != NULL) {
+        *swapped_out = s_cart_ctx.d0d1_swapped;
+    }
 }
 
 static bool burner_bacon_gba_prepare_can_use_size_hint(const burner_task_param_t *job)
@@ -7762,7 +8111,9 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         buffer_write_bytes,
         cfi_ok,
         burner_is_gba_multi_card(job),
-        job->gba_force_multi);
+        job->gba_force_multi,
+        s_cart_ctx.d0d1_known,
+        s_cart_ctx.d0d1_swapped);
 
     return ESP_OK;
 }
@@ -8661,6 +9012,9 @@ static esp_err_t burner_bacon_gba_rom_program(
         if (buffer_write_bytes < 2u) {
             uint8_t seq[41];
             uint16_t pd = (uint16_t)((uint16_t)buf[i] | ((uint16_t)buf[i + 1u] << 8));
+            uint16_t cmd_aa = burner_apply_d0d1_swap_on_write(0x00AAu, s_cart_ctx.d0d1_swapped);
+            uint16_t cmd_55 = burner_apply_d0d1_swap_on_write(0x0055u, s_cart_ctx.d0d1_swapped);
+            uint16_t cmd_a0 = burner_apply_d0d1_swap_on_write(0x00A0u, s_cart_ctx.d0d1_swapped);
             uint8_t addr0 = (uint8_t)(starting_word_address & 0xFFu);
             uint8_t addr1 = (uint8_t)((starting_word_address >> 8) & 0xFFu);
             uint8_t addr2 = (uint8_t)((starting_word_address >> 16) & 0xFFu);
@@ -8671,8 +9025,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[3] = 0x00u;
             seq[4] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[5] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[6] = 0xAAu;
-            seq[7] = 0x00u;
+            seq[6] = (uint8_t)(cmd_aa & 0xFFu);
+            seq[7] = (uint8_t)((cmd_aa >> 8) & 0xFFu);
             seq[8] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[9] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[10] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8681,8 +9035,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[13] = 0x00u;
             seq[14] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[15] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[16] = 0x55u;
-            seq[17] = 0x00u;
+            seq[16] = (uint8_t)(cmd_55 & 0xFFu);
+            seq[17] = (uint8_t)((cmd_55 >> 8) & 0xFFu);
             seq[18] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[19] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[20] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8691,8 +9045,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[23] = 0x00u;
             seq[24] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[25] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[26] = 0xA0u;
-            seq[27] = 0x00u;
+            seq[26] = (uint8_t)(cmd_a0 & 0xFFu);
+            seq[27] = (uint8_t)((cmd_a0 >> 8) & 0xFFu);
             seq[28] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[29] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[30] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8735,6 +9089,11 @@ static esp_err_t burner_bacon_gba_rom_program(
             uint8_t unlock1_addr1;
             uint8_t unlock1_addr2;
             uint16_t last_word;
+            uint16_t cmd_aa = burner_apply_d0d1_swap_on_write(0x00AAu, s_cart_ctx.d0d1_swapped);
+            uint16_t cmd_55 = burner_apply_d0d1_swap_on_write(0x0055u, s_cart_ctx.d0d1_swapped);
+            uint16_t cmd_25 = burner_apply_d0d1_swap_on_write(0x0025u, s_cart_ctx.d0d1_swapped);
+            uint16_t cmd_29 = burner_apply_d0d1_swap_on_write(0x0029u, s_cart_ctx.d0d1_swapped);
+            uint16_t write_count_word;
             uint32_t unlock0_addr = burner_gba_unlock_addr0();
             uint32_t unlock1_addr = burner_gba_unlock_addr1();
 
@@ -8776,6 +9135,9 @@ static esp_err_t burner_bacon_gba_rom_program(
             unlock1_addr0 = (uint8_t)(unlock1_addr & 0xFFu);
             unlock1_addr1 = (uint8_t)((unlock1_addr >> 8) & 0xFFu);
             unlock1_addr2 = (uint8_t)((unlock1_addr >> 16) & 0xFFu);
+            write_count_word = burner_apply_d0d1_swap_on_write(
+                (uint16_t)(write_words - 1u),
+                s_cart_ctx.d0d1_swapped);
 
             seq[0] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
             seq[1] = unlock0_addr0;
@@ -8783,8 +9145,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[3] = unlock0_addr2;
             seq[4] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[5] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[6] = 0xAAu;
-            seq[7] = 0x00u;
+            seq[6] = (uint8_t)(cmd_aa & 0xFFu);
+            seq[7] = (uint8_t)((cmd_aa >> 8) & 0xFFu);
             seq[8] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[9] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[10] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8793,8 +9155,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[13] = unlock1_addr2;
             seq[14] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[15] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[16] = 0x55u;
-            seq[17] = 0x00u;
+            seq[16] = (uint8_t)(cmd_55 & 0xFFu);
+            seq[17] = (uint8_t)((cmd_55 >> 8) & 0xFFu);
             seq[18] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[19] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[20] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8803,8 +9165,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[23] = addr2;
             seq[24] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[25] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[26] = 0x25u;
-            seq[27] = 0x00u;
+            seq[26] = (uint8_t)(cmd_25 & 0xFFu);
+            seq[27] = (uint8_t)((cmd_25 >> 8) & 0xFFu);
             seq[28] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[29] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[30] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8813,8 +9175,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[33] = addr2;
             seq[34] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[35] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[36] = (uint8_t)((write_words - 1u) & 0xFFu);
-            seq[37] = (uint8_t)(((write_words - 1u) >> 8) & 0xFFu);
+            seq[36] = (uint8_t)(write_count_word & 0xFFu);
+            seq[37] = (uint8_t)((write_count_word >> 8) & 0xFFu);
             seq[38] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[39] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[40] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
@@ -8839,8 +9201,8 @@ static esp_err_t burner_bacon_gba_rom_program(
             seq[49u + 5u * write_words] = addr2;
             seq[50u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[51u + 5u * write_words] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[52u + 5u * write_words] = 0x29u;
-            seq[53u + 5u * write_words] = 0x00u;
+            seq[52u + 5u * write_words] = (uint8_t)(cmd_29 & 0xFFu);
+            seq[53u + 5u * write_words] = (uint8_t)((cmd_29 >> 8) & 0xFFu);
             seq[54u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
             seq[55u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
             seq[56u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
@@ -9384,7 +9746,7 @@ static esp_err_t burner_bacon_gba_chip_erase(void)
     uint8_t id[8] = {0};
     esp_err_t err;
 
-    err = burner_bacon_gba_read_id(id);
+    err = burner_bacon_gba_read_id(id, s_cart_ctx.d0d1_swapped);
     if (err != ESP_OK) {
         return err;
     }
@@ -9524,6 +9886,8 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         sector_size,
         buffer_write_bytes,
         !using_id_fallback,
+        false,
+        false,
         false,
         false);
 
@@ -9771,6 +10135,7 @@ static esp_err_t burner_bacon_gba_get_ppb_lock_status_locked(uint16_t *lock_stat
     if (err != ESP_OK) {
         return err;
     }
+    *lock_status_out = burner_apply_d0d1_swap_on_read(*lock_status_out, s_cart_ctx.d0d1_swapped);
     return burner_bacon_gba_reset_aso_locked();
 }
 
@@ -9857,6 +10222,7 @@ static esp_err_t burner_bacon_gba_scan_ppb_locked(
         if (err != ESP_OK) {
             return err;
         }
+        ppb = burner_apply_d0d1_swap_on_read(ppb, s_cart_ctx.d0d1_swapped);
         err = burner_bacon_gba_reset_aso_locked();
         if (err != ESP_OK) {
             return err;
@@ -10033,6 +10399,8 @@ esp_err_t burner_cart_unlock_ppb_locked(
         if (err != ESP_OK) {
             return err;
         }
+        report->gba_d0d1_known = s_cart_ctx.d0d1_known;
+        report->gba_d0d1_swapped = s_cart_ctx.d0d1_swapped;
         if (report->device_size == 0u || report->sector_size == 0u) {
             return ESP_ERR_INVALID_SIZE;
         }
@@ -14648,6 +15016,24 @@ verify_ram_done:
     return err;
 }
 
+static esp_err_t burner_run_write_gba_save_job_new(const burner_task_param_t *job)
+{
+    (void)job;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+static esp_err_t burner_run_read_gba_save_job_new(const burner_task_param_t *job)
+{
+    (void)job;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+static esp_err_t burner_run_verify_gba_save_job_new(const burner_task_param_t *job)
+{
+    (void)job;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
 static void burner_task(void *param)
 {
     burner_task_param_t *job = (burner_task_param_t *)param;
@@ -14700,6 +15086,18 @@ static void burner_task(void *param)
         done_msg = "ram verify finished";
         start_msg = "ram verify task started";
         break;
+    case BURNER_JOB_WRITE_GBA_SAVE_NEW:
+        done_msg = "gba save write finished";
+        start_msg = "gba save write task started";
+        break;
+    case BURNER_JOB_READ_GBA_SAVE_NEW:
+        done_msg = "gba save dump finished";
+        start_msg = "gba save dump task started";
+        break;
+    case BURNER_JOB_VERIFY_GBA_SAVE_NEW:
+        done_msg = "gba save verify finished";
+        start_msg = "gba save verify task started";
+        break;
     default:
         break;
     }
@@ -14742,6 +15140,12 @@ static void burner_task(void *param)
         err = burner_run_read_ram_job(job);
     } else if (job->mode == BURNER_JOB_VERIFY_RAM) {
         err = burner_run_verify_ram_job(job);
+    } else if (job->mode == BURNER_JOB_WRITE_GBA_SAVE_NEW) {
+        err = burner_run_write_gba_save_job_new(job);
+    } else if (job->mode == BURNER_JOB_READ_GBA_SAVE_NEW) {
+        err = burner_run_read_gba_save_job_new(job);
+    } else if (job->mode == BURNER_JOB_VERIFY_GBA_SAVE_NEW) {
+        err = burner_run_verify_gba_save_job_new(job);
     } else {
         err = ESP_ERR_INVALID_ARG;
     }
@@ -14832,6 +15236,7 @@ esp_err_t burner_start_task_ex(
     const char *rom_path,
     uint32_t addr_begin,
     uint32_t total_bytes,
+    burner_gba_save_type_t gba_save_type,
     bool ram_fram,
     uint8_t ram_latency)
 {
@@ -14882,6 +15287,7 @@ esp_err_t burner_start_task_ex(
     snprintf(job->rom_path, sizeof(job->rom_path), "%s", rom_path);
     job->addr_begin = addr_begin;
     job->total_bytes = total_bytes;
+    job->gba_save_type = gba_save_type;
     job->ram_fram = ram_fram;
     job->ram_latency = ram_latency;
     job->gba_force_multi = gba_force_multi;
@@ -14945,6 +15351,7 @@ esp_err_t burner_start_task(
     const char *rom_path,
     uint32_t addr_begin,
     uint32_t total_bytes,
+    burner_gba_save_type_t gba_save_type,
     bool ram_fram,
     uint8_t ram_latency)
 {
@@ -14961,8 +15368,69 @@ esp_err_t burner_start_task(
         rom_path,
         addr_begin,
         total_bytes,
+        gba_save_type,
         ram_fram,
         ram_latency);
+}
+
+esp_err_t burner_start_gba_save_write_from_tf_new(
+    const char *raw_name,
+    burner_gba_save_type_t save_type,
+    uint32_t save_size,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    (void)raw_name;
+    (void)save_type;
+    (void)save_size;
+    (void)result;
+    if (error_msg != NULL && error_msg_len > 0u) {
+        snprintf(error_msg, error_msg_len, "%s", "new GBA save write not implemented");
+    }
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t burner_start_gba_save_verify_from_tf_new(
+    const char *raw_name,
+    burner_gba_save_type_t save_type,
+    uint32_t save_size,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    (void)raw_name;
+    (void)save_type;
+    (void)save_size;
+    (void)result;
+    if (error_msg != NULL && error_msg_len > 0u) {
+        snprintf(error_msg, error_msg_len, "%s", "new GBA save verify not implemented");
+    }
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t burner_start_gba_save_dump_new(
+    const char *safe_name,
+    const char *full_path,
+    burner_gba_save_type_t save_type,
+    uint32_t save_size)
+{
+    return burner_start_task_ex(
+        BURNER_JOB_READ_GBA_SAVE_NEW,
+        BURNER_CART_MODE_GBA,
+        BURNER_WRITE_PATH_DIRECT,
+        false,
+        false,
+        BURN_MBC5_PROGRAM_CHUNK_BYTES,
+        BURN_GBA_DUMP_CHUNK_BYTES,
+        BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES,
+        safe_name,
+        full_path,
+        0u,
+        save_size,
+        save_type,
+        false,
+        0u);
 }
 
 esp_err_t burner_reject_if_tf_busy(httpd_req_t *req)
