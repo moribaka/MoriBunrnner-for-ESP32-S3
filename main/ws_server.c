@@ -37,6 +37,7 @@
 #include "freertos/task.h"
 
 #include "file_system.h"
+#include "burner_nor_db.h"
 #include "ip5306.h"
 #include "lcd_display.h"
 #include "mcu_debug.h"
@@ -95,7 +96,8 @@
 #define BURNER_VALID_WALLCLOCK_MIN ((time_t)1700000000)
 #define BURNER_SUSPECT_FILE_MTIME_MAX ((time_t)631152000)
 #define BURNER_GBA_TITLE_OFFSET 0xA0u
-#define BURNER_GBA_SAVE_SCAN_WINDOW_BYTES 0x10000u
+#define BURNER_GBA_SAVE_HEADER_SCAN_BYTES (64u * 1024u)
+#define BURNER_GBA_ANALYSIS_HEAD_BYTES (1u * 1024u * 1024u)
 #define BURNER_GBA_SAVE_SCAN_STEP_BYTES 0x1000u
 #define BURNER_GBA_TITLE_LEN 12u
 #define BURNER_MBC5_TITLE_OFFSET 0x134u
@@ -159,6 +161,7 @@ typedef struct {
 #define BURNER_SPI_MAX_XFER (16 * 1024)
 #define BURNER_SPI_STREAM_CHUNK_BYTES 2048U
 #define BURNER_CPU_YIELD_INTERVAL_US 20000ULL
+#define BURNER_PROBE_SCAN_WINDOW_BYTES (64u * 1024u)
 #define BURNER_ROM_POLL_TIMEOUT_MS 2000
 #define BURNER_ROM_POLL_INTERVAL_US 50
 #define BURNER_ROM_ERASE_TIMEOUT_PER_MB_MS 20000U
@@ -201,6 +204,7 @@ typedef struct {
     uint32_t sector_size;
     uint32_t device_size;
     uint8_t mbc5_id[4];
+    burner_nor_cmdset_t gba_cmdset;
     burner_gba_cmd_addr_mode_t gba_cmd_addr_mode;
     burner_gba_cmd_data_lane_t gba_cmd_data_lane;
     bool d0d1_known;   /* D0/D1 detection completed */
@@ -235,6 +239,12 @@ typedef enum {
     BURNER_GBA_SAVE_TYPE_FLASH,
     BURNER_GBA_SAVE_TYPE_BATTERYLESS,
 } burner_gba_save_type_t;
+
+typedef enum {
+    BURNER_GBA_SRAM_PATCH_NONE = 0,
+    BURNER_GBA_SRAM_PATCH_GBATA,
+    BURNER_GBA_SRAM_PATCH_FLASH1M_REPRO,
+} burner_gba_sram_patch_kind_t;
 
 typedef enum {
     BURNER_CART_MODE_MBC5 = 0,
@@ -284,6 +294,16 @@ typedef struct {
     burner_core_affinity_t tf_core;
     burner_core_affinity_t psram_core;
 } burner_core_config_t;
+
+typedef struct {
+    bool active;
+    bool multi_card;
+    bool pre_erased_valid;
+    uint32_t sector_size;
+    uint32_t range_end;
+    uint32_t erased_sector_addr;
+    uint32_t pre_erased_sector_addr;
+} burner_gba_sector_erase_ctx_t;
 
 typedef struct {
     burner_state_t state;
@@ -346,6 +366,9 @@ typedef struct {
     burner_gba_save_type_t probe_gba_save_type;
     uint32_t probe_gba_save_size;
     bool probe_gba_save_detected;
+    burner_gba_sram_patch_kind_t probe_gba_sram_patch_kind;
+    bool probe_gba_sram_patch_scanned;
+    bool probe_gba_sram_patch_detected;
     uint32_t probe_device_size;
     uint32_t probe_sector_size;
     uint16_t probe_buffer_write_bytes;
@@ -546,9 +569,11 @@ burner_cart_ctx_t s_cart_ctx = {
     .sector_size = 0,
     .device_size = 0,
     .mbc5_id = {0},
+    .gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN,
     .gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD,
     .gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW,
 };
+static burner_gba_sector_erase_ctx_t s_gba_sector_erase_ctx = {0};
 esp_err_t burner_reject_if_tf_busy(httpd_req_t *req);
 void burner_schedule_restart(void);
 void burner_bacon_mark_activity_locked(void);
@@ -567,7 +592,6 @@ esp_err_t burner_tf_writer_start(burner_tf_writer_ctx_t *ctx, int fd);
 esp_err_t burner_tf_writer_submit(burner_tf_writer_ctx_t *ctx, const uint8_t *src, size_t bytes);
 esp_err_t burner_tf_writer_wait(burner_tf_writer_ctx_t *ctx);
 void burner_tf_writer_stop(burner_tf_writer_ctx_t *ctx);
-const char *burner_mbc5_chip_name(const uint8_t id[4]);
 const char *burner_rom_dump_ext_for_mode(burner_cart_mode_t cart_mode);
 bool burner_task_is_running_snapshot(void);
 bool burner_build_full_path(const char *rel_path, char *full_path, size_t full_path_len);
@@ -1934,6 +1958,9 @@ void burner_status_probe_reset_locked(void)
     s_status.probe_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
     s_status.probe_gba_save_size = 0u;
     s_status.probe_gba_save_detected = false;
+    s_status.probe_gba_sram_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+    s_status.probe_gba_sram_patch_scanned = false;
+    s_status.probe_gba_sram_patch_detected = false;
     s_status.probe_device_size = 0u;
     s_status.probe_sector_size = 0u;
     s_status.probe_buffer_write_bytes = 0u;
@@ -1971,6 +1998,9 @@ void burner_status_set_probe_info(
         s_status.probe_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
         s_status.probe_gba_save_size = 0u;
         s_status.probe_gba_save_detected = false;
+        s_status.probe_gba_sram_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+        s_status.probe_gba_sram_patch_scanned = false;
+        s_status.probe_gba_sram_patch_detected = false;
     }
     s_status.probe_device_size = device_size;
     s_status.probe_sector_size = sector_size;
@@ -1996,6 +2026,22 @@ void burner_status_set_gba_save_probe(
     s_status.probe_gba_save_type = save_type;
     s_status.probe_gba_save_size = save_size;
     s_status.probe_gba_save_detected = detected;
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_set_gba_sram_patch_probe(
+    burner_gba_sram_patch_kind_t patch_kind,
+    bool scanned,
+    bool detected)
+{
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.probe_gba_sram_patch_scanned = scanned;
+    s_status.probe_gba_sram_patch_kind = detected ? patch_kind : BURNER_GBA_SRAM_PATCH_NONE;
+    s_status.probe_gba_sram_patch_detected = detected;
     xSemaphoreGive(s_status_lock);
 }
 
@@ -2916,75 +2962,712 @@ static bool burner_memmem_ascii(
     return false;
 }
 
-static bool burner_detect_gba_save_type_from_rom_locked(
-    const burner_task_param_t *job,
+static void burner_probe_scan_yield_if_needed(uint64_t *last_yield_us)
+{
+    uint64_t now_us;
+
+    if (last_yield_us == NULL) {
+        return;
+    }
+
+    now_us = esp_timer_get_time();
+    if (*last_yield_us != 0u && (now_us - *last_yield_us) < BURNER_CPU_YIELD_INTERVAL_US) {
+        return;
+    }
+
+    *last_yield_us = now_us;
+    vTaskDelay(1);
+}
+
+static bool burner_memmem_ascii_windowed(
+    const uint8_t *buf,
+    size_t buf_len,
+    const char *needle)
+{
+    size_t needle_len;
+    size_t offset = 0u;
+    uint64_t last_yield_us = 0u;
+
+    if (buf == NULL || needle == NULL) {
+        return false;
+    }
+    needle_len = strlen(needle);
+    if (needle_len == 0u || buf_len < needle_len) {
+        return false;
+    }
+
+    while (offset < buf_len) {
+        size_t scan_start = (offset > (needle_len - 1u)) ? (offset - (needle_len - 1u)) : 0u;
+        size_t covered = offset - scan_start;
+        size_t scan_len = buf_len - scan_start;
+        size_t window_len = BURNER_PROBE_SCAN_WINDOW_BYTES + covered;
+
+        if (scan_len > window_len) {
+            scan_len = window_len;
+        }
+        if (burner_memmem_ascii(buf + scan_start, scan_len, needle)) {
+            return true;
+        }
+        offset += BURNER_PROBE_SCAN_WINDOW_BYTES;
+        burner_probe_scan_yield_if_needed(&last_yield_us);
+    }
+
+    return false;
+}
+
+static bool burner_detect_gba_save_type_in_span(
+    const uint8_t *buf,
+    size_t buf_len,
     burner_gba_save_type_t *save_type_out,
     uint32_t *save_size_out)
 {
-    uint8_t *buf = NULL;
-    uint32_t scan_total = BURNER_GBA_SAVE_SCAN_WINDOW_BYTES;
-    uint32_t offset = 0u;
-    bool detected = false;
-
-    if (job == NULL || save_type_out == NULL || save_size_out == NULL) {
+    if (save_type_out == NULL || save_size_out == NULL) {
         return false;
     }
 
     *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
     *save_size_out = 0u;
 
-    if (job->total_bytes < scan_total) {
-        scan_total = job->total_bytes;
-    }
-    if (scan_total < 16u) {
+    if (buf == NULL || buf_len == 0u) {
         return false;
     }
 
-    buf = (uint8_t *)malloc(BURNER_GBA_SAVE_SCAN_STEP_BYTES);
+    if (burner_memmem_ascii_windowed(buf, buf_len, "FLASH1M_V")) {
+        *save_type_out = BURNER_GBA_SAVE_TYPE_FLASH;
+        *save_size_out = 128u * 1024u;
+        return true;
+    }
+    if (burner_memmem_ascii_windowed(buf, buf_len, "FLASH512_V") ||
+        burner_memmem_ascii_windowed(buf, buf_len, "FLASH_V")) {
+        *save_type_out = BURNER_GBA_SAVE_TYPE_FLASH;
+        *save_size_out = 64u * 1024u;
+        return true;
+    }
+    if (burner_memmem_ascii_windowed(buf, buf_len, "EEPROM_V")) {
+        *save_type_out = BURNER_GBA_SAVE_TYPE_EEPROM;
+        *save_size_out = 8u * 1024u;
+        return true;
+    }
+    if (burner_memmem_ascii_windowed(buf, buf_len, "SRAM_V")) {
+        *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
+        *save_size_out = 32u * 1024u;
+        return true;
+    }
+
+    return false;
+}
+
+static bool burner_detect_gba_save_type_from_rom_locked(
+    const burner_task_param_t *job,
+    const uint8_t *prefix,
+    size_t prefix_len,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out)
+{
+    static const char *const s_save_signatures[] = {
+        "FLASH1M_V",
+        "FLASH512_V",
+        "FLASH_V",
+        "EEPROM_V",
+        "SRAM_V",
+    };
+    uint8_t *scan_buf = NULL;
+    uint32_t scan_total = 0u;
+    uint32_t offset = 0u;
+    size_t carry_len = 0u;
+    size_t overlap = 0u;
+    bool detected = false;
+    uint64_t last_yield_us = 0u;
+    size_t i;
+
+    if (job == NULL || save_type_out == NULL || save_size_out == NULL) {
+        return false;
+    }
+
+    scan_total = job->total_bytes;
+    if (scan_total == 0u) {
+        return false;
+    }
+
+    for (i = 0u; i < sizeof(s_save_signatures) / sizeof(s_save_signatures[0]); ++i) {
+        size_t needle_len = strlen(s_save_signatures[i]);
+        if (needle_len > 0u && overlap < needle_len - 1u) {
+            overlap = needle_len - 1u;
+        }
+    }
+
+    if (prefix != NULL && prefix_len > overlap) {
+        prefix += prefix_len - overlap;
+        prefix_len = overlap;
+    }
+
+    scan_buf = (uint8_t *)malloc(BURNER_GBA_SAVE_SCAN_STEP_BYTES + overlap);
+    if (scan_buf == NULL) {
+        return false;
+    }
+    if (prefix != NULL && prefix_len > 0u) {
+        memcpy(scan_buf, prefix, prefix_len);
+        carry_len = prefix_len;
+    }
+
+    while (offset < scan_total) {
+        size_t chunk = scan_total - offset;
+        size_t scan_len;
+        if (chunk > BURNER_GBA_SAVE_SCAN_STEP_BYTES) {
+            chunk = BURNER_GBA_SAVE_SCAN_STEP_BYTES;
+        }
+
+        if (burner_bacon_gba_read_block(
+                scan_buf + carry_len,
+                chunk,
+                job->addr_begin + offset,
+                burner_is_gba_multi_card(job)) != ESP_OK) {
+            break;
+        }
+
+        scan_len = carry_len + chunk;
+        if (burner_detect_gba_save_type_in_span(scan_buf, scan_len, save_type_out, save_size_out)) {
+            detected = true;
+            break;
+        }
+
+        if (scan_len <= overlap) {
+            carry_len = scan_len;
+        } else {
+            carry_len = overlap;
+            memmove(scan_buf, scan_buf + scan_len - carry_len, carry_len);
+        }
+        offset += (uint32_t)chunk;
+        burner_probe_scan_yield_if_needed(&last_yield_us);
+    }
+
+    free(scan_buf);
+    return detected;
+}
+
+static bool burner_memmem_binary(const uint8_t *haystack, size_t haystack_len, const uint8_t *needle, size_t needle_len)
+{
+    size_t i;
+
+    if (haystack == NULL || needle == NULL || needle_len == 0u || haystack_len < needle_len) {
+        return false;
+    }
+    for (i = 0u; i + needle_len <= haystack_len; ++i) {
+        if (memcmp(haystack + i, needle, needle_len) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool burner_memmem_binary_windowed(
+    const uint8_t *haystack,
+    size_t haystack_len,
+    const uint8_t *needle,
+    size_t needle_len)
+{
+    size_t offset = 0u;
+    uint64_t last_yield_us = 0u;
+
+    if (haystack == NULL || needle == NULL || needle_len == 0u || haystack_len < needle_len) {
+        return false;
+    }
+
+    while (offset < haystack_len) {
+        size_t scan_start = (offset > (needle_len - 1u)) ? (offset - (needle_len - 1u)) : 0u;
+        size_t covered = offset - scan_start;
+        size_t scan_len = haystack_len - scan_start;
+        size_t window_len = BURNER_PROBE_SCAN_WINDOW_BYTES + covered;
+
+        if (scan_len > window_len) {
+            scan_len = window_len;
+        }
+        if (burner_memmem_binary(haystack + scan_start, scan_len, needle, needle_len)) {
+            return true;
+        }
+        offset += BURNER_PROBE_SCAN_WINDOW_BYTES;
+        burner_probe_scan_yield_if_needed(&last_yield_us);
+    }
+
+    return false;
+}
+
+static bool burner_detect_gbata_sram_patch_in_span(const uint8_t *buf, size_t buf_len)
+{
+    static const uint8_t s_gbata_flash512_stub1[] = {
+        0x70, 0xB5, 0xA0, 0xB0, 0x00, 0x03, 0x40, 0x18,
+        0xE0, 0x21, 0x09, 0x05, 0x09, 0x18, 0x08, 0x78,
+        0x10, 0x70, 0x01, 0x3B, 0x01, 0x32, 0x01, 0x31,
+        0x00, 0x2B, 0xF8, 0xD1, 0x00, 0x20, 0x20, 0xB0,
+    };
+    static const uint8_t s_gbata_flash_v121_stub[] = {
+        0x70, 0xB5, 0x90, 0xB0, 0x00, 0x03, 0x0A, 0x1C,
+        0xE0, 0x21, 0x09, 0x05, 0x09, 0x18, 0x01, 0x23,
+        0x1B, 0x03, 0x10, 0x78, 0x08, 0x70, 0x01, 0x3B,
+        0x01, 0x32, 0x01, 0x31, 0x00, 0x2B, 0xF8, 0xD1,
+    };
+    static const uint8_t s_gbata_flash512_ret_stub[] = {
+        0x00, 0x03, 0x40, 0x18, 0xE0, 0x21, 0x09, 0x05,
+        0x09, 0x18, 0x08, 0x78, 0x10, 0x70, 0x01, 0x3B,
+        0x01, 0x32, 0x01, 0x31, 0x00, 0x2B, 0xF8, 0xD1,
+        0x00, 0x20, 0x20, 0xB0, 0x70, 0xBC, 0x02, 0xBC,
+        0x08, 0x47,
+    };
+    static const uint8_t s_gbata_flash_v121_ret_stub[] = {
+        0x00, 0x03, 0x0A, 0x1C, 0xE0, 0x21, 0x09, 0x05,
+        0x09, 0x18, 0x01, 0x23, 0x1B, 0x03, 0x10, 0x78,
+        0x08, 0x70, 0x01, 0x3B, 0x01, 0x32, 0x01, 0x31,
+        0x00, 0x2B, 0xF8, 0xD1, 0x00, 0x20, 0x10, 0xB0,
+        0x7C, 0xBC, 0x02, 0xBC, 0x08, 0x47,
+    };
+
+    if (buf == NULL || buf_len < sizeof(s_gbata_flash_v121_stub)) {
+        return false;
+    }
+
+    return burner_memmem_binary_windowed(buf, buf_len, s_gbata_flash512_stub1, sizeof(s_gbata_flash512_stub1)) ||
+           burner_memmem_binary_windowed(buf, buf_len, s_gbata_flash_v121_stub, sizeof(s_gbata_flash_v121_stub)) ||
+           burner_memmem_binary_windowed(buf, buf_len, s_gbata_flash512_ret_stub, sizeof(s_gbata_flash512_ret_stub)) ||
+           burner_memmem_binary_windowed(buf, buf_len, s_gbata_flash_v121_ret_stub, sizeof(s_gbata_flash_v121_ret_stub));
+}
+
+static bool burner_detect_gbata_sram_patch_from_rom_locked(const burner_task_param_t *job)
+{
+    static const uint8_t s_gbata_flash512_stub1[] = {
+        0x70, 0xB5, 0xA0, 0xB0, 0x00, 0x03, 0x40, 0x18,
+        0xE0, 0x21, 0x09, 0x05, 0x09, 0x18, 0x08, 0x78,
+        0x10, 0x70, 0x01, 0x3B, 0x01, 0x32, 0x01, 0x31,
+        0x00, 0x2B, 0xF8, 0xD1, 0x00, 0x20, 0x20, 0xB0,
+    };
+    static const uint8_t s_gbata_flash_v121_stub[] = {
+        0x70, 0xB5, 0x90, 0xB0, 0x00, 0x03, 0x0A, 0x1C,
+        0xE0, 0x21, 0x09, 0x05, 0x09, 0x18, 0x01, 0x23,
+        0x1B, 0x03, 0x10, 0x78, 0x08, 0x70, 0x01, 0x3B,
+        0x01, 0x32, 0x01, 0x31, 0x00, 0x2B, 0xF8, 0xD1,
+    };
+    uint8_t *buf = NULL;
+    uint32_t scan_total;
+    uint32_t offset = 0u;
+    size_t carry_len = 0u;
+    size_t overlap;
+    bool detected = false;
+    uint64_t last_yield_us = 0u;
+
+    if (job == NULL || job->total_bytes < sizeof(s_gbata_flash512_stub1)) {
+        return false;
+    }
+
+    scan_total = job->total_bytes;
+    overlap = sizeof(s_gbata_flash512_stub1) - 1u;
+    if (overlap < sizeof(s_gbata_flash_v121_stub) - 1u) {
+        overlap = sizeof(s_gbata_flash_v121_stub) - 1u;
+    }
+    buf = (uint8_t *)malloc(BURNER_GBA_SAVE_SCAN_STEP_BYTES + overlap);
     if (buf == NULL) {
         return false;
     }
 
     while (offset < scan_total) {
         size_t chunk = scan_total - offset;
+        size_t scan_len;
         if (chunk > BURNER_GBA_SAVE_SCAN_STEP_BYTES) {
             chunk = BURNER_GBA_SAVE_SCAN_STEP_BYTES;
         }
-
-        if (burner_bacon_gba_read_block(buf, chunk, job->addr_begin + offset, burner_is_gba_multi_card(job)) != ESP_OK) {
+        if (burner_bacon_gba_read_block(buf + carry_len, chunk, job->addr_begin + offset, burner_is_gba_multi_card(job)) != ESP_OK) {
             break;
         }
-
-        if (burner_memmem_ascii(buf, chunk, "FLASH1M_V")) {
-            *save_type_out = BURNER_GBA_SAVE_TYPE_FLASH;
-            *save_size_out = 128u * 1024u;
+        scan_len = carry_len + chunk;
+        if (burner_detect_gbata_sram_patch_in_span(buf, scan_len)) {
             detected = true;
             break;
         }
-        if (burner_memmem_ascii(buf, chunk, "FLASH512_V") || burner_memmem_ascii(buf, chunk, "FLASH_V")) {
-            *save_type_out = BURNER_GBA_SAVE_TYPE_FLASH;
-            *save_size_out = 64u * 1024u;
-            detected = true;
-            break;
+        if (scan_len <= overlap) {
+            carry_len = scan_len;
+        } else {
+            carry_len = overlap;
+            memmove(buf, buf + scan_len - carry_len, carry_len);
         }
-        if (burner_memmem_ascii(buf, chunk, "EEPROM_V")) {
-            *save_type_out = BURNER_GBA_SAVE_TYPE_EEPROM;
-            *save_size_out = 8u * 1024u;
-            detected = true;
-            break;
-        }
-        if (burner_memmem_ascii(buf, chunk, "SRAM_V")) {
-            *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
-            *save_size_out = 32u * 1024u;
-            detected = true;
-            break;
-        }
-
         offset += (uint32_t)chunk;
+        burner_probe_scan_yield_if_needed(&last_yield_us);
     }
 
     free(buf);
     return detected;
+}
+
+static bool burner_detect_flash1m_repro_sram_patch_in_span(const uint8_t *buf, size_t buf_len)
+{
+    static const uint8_t s_flash1m_repro_patch_a[] = {
+        0x80, 0x21, 0x09, 0x02, 0x09, 0x22, 0x12, 0x06,
+        0x9F, 0x44, 0x90, 0x21, 0x09, 0x05, 0x00, 0x00,
+        0x00, 0x00, 0x08, 0x70, 0x70, 0x47, 0xFE, 0xFF,
+        0xFF, 0x01, 0x00, 0x00, 0x00, 0x00,
+    };
+    static const uint8_t s_flash1m_repro_patch_b[] = {
+        0x0E, 0x21, 0x09, 0x06, 0xFF, 0x24, 0x80, 0x22,
+        0x13, 0x4B, 0x52, 0x02, 0x01, 0x3A, 0x8C, 0x54,
+        0xFC, 0xD1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    static const uint8_t s_flash1m_repro_patch_c[] = {
+        0x08, 0x22, 0x00, 0x00, 0x52, 0x02, 0x01, 0x3A,
+        0xA5, 0x54, 0xFC, 0xD1, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+    };
+    static const char *const s_flash1m_repro_source_signatures[] = {
+        "FLASH1M_V",
+        "FLASH512_V",
+    };
+    size_t i;
+    bool found_source_signature = false;
+
+    if (buf == NULL || buf_len < sizeof(s_flash1m_repro_patch_a)) {
+        return false;
+    }
+
+    for (i = 0u; i < sizeof(s_flash1m_repro_source_signatures) / sizeof(s_flash1m_repro_source_signatures[0]); ++i) {
+        if (burner_memmem_ascii_windowed(buf, buf_len, s_flash1m_repro_source_signatures[i])) {
+            found_source_signature = true;
+            break;
+        }
+    }
+    if (!found_source_signature) {
+        return false;
+    }
+
+    return burner_memmem_binary_windowed(buf, buf_len, s_flash1m_repro_patch_a, sizeof(s_flash1m_repro_patch_a)) &&
+           burner_memmem_binary_windowed(buf, buf_len, s_flash1m_repro_patch_b, sizeof(s_flash1m_repro_patch_b)) &&
+           burner_memmem_binary_windowed(buf, buf_len, s_flash1m_repro_patch_c, sizeof(s_flash1m_repro_patch_c));
+}
+
+static bool burner_detect_flash1m_repro_sram_patch_from_rom_locked(const burner_task_param_t *job)
+{
+    static const uint8_t s_flash1m_repro_patch_a[] = {
+        0x80, 0x21, 0x09, 0x02, 0x09, 0x22, 0x12, 0x06,
+        0x9F, 0x44, 0x90, 0x21, 0x09, 0x05, 0x00, 0x00,
+        0x00, 0x00, 0x08, 0x70, 0x70, 0x47, 0xFE, 0xFF,
+        0xFF, 0x01, 0x00, 0x00, 0x00, 0x00,
+    };
+    static const uint8_t s_flash1m_repro_patch_b[] = {
+        0x0E, 0x21, 0x09, 0x06, 0xFF, 0x24, 0x80, 0x22,
+        0x13, 0x4B, 0x52, 0x02, 0x01, 0x3A, 0x8C, 0x54,
+        0xFC, 0xD1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    static const uint8_t s_flash1m_repro_patch_c[] = {
+        0x08, 0x22, 0x00, 0x00, 0x52, 0x02, 0x01, 0x3A,
+        0xA5, 0x54, 0xFC, 0xD1, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+    };
+    static const char *const s_flash1m_repro_source_signatures[] = {
+        "FLASH1M_V",
+        "FLASH512_V",
+    };
+    uint8_t *buf = NULL;
+    uint32_t scan_total;
+    uint32_t offset = 0u;
+    size_t carry_len = 0u;
+    size_t overlap = sizeof(s_flash1m_repro_patch_a) - 1u;
+    size_t i;
+    uint64_t last_yield_us = 0u;
+
+    if (job == NULL || job->total_bytes < sizeof(s_flash1m_repro_patch_a)) {
+        return false;
+    }
+
+    if (overlap < sizeof(s_flash1m_repro_patch_b) - 1u) {
+        overlap = sizeof(s_flash1m_repro_patch_b) - 1u;
+    }
+    if (overlap < sizeof(s_flash1m_repro_patch_c) - 1u) {
+        overlap = sizeof(s_flash1m_repro_patch_c) - 1u;
+    }
+    for (i = 0u; i < sizeof(s_flash1m_repro_source_signatures) / sizeof(s_flash1m_repro_source_signatures[0]); ++i) {
+        size_t needle_len = strlen(s_flash1m_repro_source_signatures[i]);
+        if (overlap + 1u < needle_len) {
+            overlap = needle_len - 1u;
+        }
+    }
+
+    scan_total = job->total_bytes;
+    buf = (uint8_t *)malloc(BURNER_GBA_SAVE_SCAN_STEP_BYTES + overlap);
+    if (buf == NULL) {
+        return false;
+    }
+
+    while (offset < scan_total) {
+        size_t chunk = scan_total - offset;
+        size_t scan_len;
+
+        if (chunk > BURNER_GBA_SAVE_SCAN_STEP_BYTES) {
+            chunk = BURNER_GBA_SAVE_SCAN_STEP_BYTES;
+        }
+        if (burner_bacon_gba_read_block(buf + carry_len, chunk, job->addr_begin + offset, burner_is_gba_multi_card(job)) != ESP_OK) {
+            break;
+        }
+
+        scan_len = carry_len + chunk;
+        if (burner_detect_flash1m_repro_sram_patch_in_span(buf, scan_len)) {
+            free(buf);
+            return true;
+        }
+
+        if (scan_len <= overlap) {
+            carry_len = scan_len;
+        } else {
+            carry_len = overlap;
+            memmove(buf, buf + scan_len - carry_len, carry_len);
+        }
+        offset += (uint32_t)chunk;
+        burner_probe_scan_yield_if_needed(&last_yield_us);
+    }
+
+    free(buf);
+    return false;
+}
+
+static bool burner_detect_gba_sram_patch_in_span(
+    const uint8_t *buf,
+    size_t buf_len,
+    burner_gba_sram_patch_kind_t *patch_kind_out)
+{
+    if (patch_kind_out == NULL) {
+        return false;
+    }
+
+    *patch_kind_out = BURNER_GBA_SRAM_PATCH_NONE;
+    if (burner_detect_gbata_sram_patch_in_span(buf, buf_len)) {
+        *patch_kind_out = BURNER_GBA_SRAM_PATCH_GBATA;
+        return true;
+    }
+    if (burner_detect_flash1m_repro_sram_patch_in_span(buf, buf_len)) {
+        *patch_kind_out = BURNER_GBA_SRAM_PATCH_FLASH1M_REPRO;
+        return true;
+    }
+    return false;
+}
+
+static esp_err_t burner_read_gba_rom_to_buffer_locked(
+    const burner_task_param_t *job,
+    uint8_t *dst,
+    uint32_t offset,
+    size_t total_len)
+{
+    size_t done = 0u;
+    uint64_t last_yield_us = 0u;
+
+    if (job == NULL || dst == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    while (done < total_len) {
+        size_t chunk = total_len - done;
+        if (chunk > BURNER_GBA_SAVE_SCAN_STEP_BYTES) {
+            chunk = BURNER_GBA_SAVE_SCAN_STEP_BYTES;
+        }
+        if (burner_bacon_gba_read_block(
+                dst + done,
+                chunk,
+                job->addr_begin + offset + (uint32_t)done,
+                burner_is_gba_multi_card(job)) != ESP_OK) {
+            return ESP_FAIL;
+        }
+        done += chunk;
+        burner_probe_scan_yield_if_needed(&last_yield_us);
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t burner_probe_gba_rom_analysis_locked(
+    uint32_t device_size,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *save_detected_out,
+    burner_gba_sram_patch_kind_t *patch_kind_out,
+    bool *patch_detected_out)
+{
+    uint8_t *head_cache = NULL;
+    uint32_t head_scan_bytes = 0u;
+    burner_gba_save_type_t save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+    uint32_t save_size = 0u;
+    bool save_detected = false;
+    burner_gba_sram_patch_kind_t patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+    bool patch_detected = false;
+    esp_err_t err;
+
+    if (save_type_out == NULL || save_size_out == NULL || save_detected_out == NULL ||
+        patch_kind_out == NULL || patch_detected_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
+    *save_size_out = 0u;
+    *save_detected_out = false;
+    *patch_kind_out = BURNER_GBA_SRAM_PATCH_NONE;
+    *patch_detected_out = false;
+
+    if (device_size == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    head_scan_bytes = device_size;
+    if (head_scan_bytes > BURNER_GBA_ANALYSIS_HEAD_BYTES) {
+        head_scan_bytes = BURNER_GBA_ANALYSIS_HEAD_BYTES;
+    }
+
+    err = ESP_OK;
+    if (head_scan_bytes > 0u) {
+        head_cache = (uint8_t *)heap_caps_malloc(head_scan_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (head_cache != NULL) {
+            err = burner_read_gba_rom_to_buffer_locked(
+                &(burner_task_param_t){
+                    .cart_mode = BURNER_CART_MODE_GBA,
+                    .addr_begin = 0u,
+                    .total_bytes = device_size,
+                },
+                head_cache,
+                0u,
+                head_scan_bytes);
+            if (err == ESP_OK) {
+                save_detected = burner_detect_gba_save_type_in_span(head_cache, head_scan_bytes, &save_type, &save_size);
+                patch_detected = burner_detect_gba_sram_patch_in_span(head_cache, head_scan_bytes, &patch_kind);
+            }
+        } else {
+            burner_task_param_t head_job = {
+                .cart_mode = BURNER_CART_MODE_GBA,
+                .addr_begin = 0u,
+                .total_bytes = device_size,
+            };
+
+            head_job.total_bytes = head_scan_bytes;
+            save_detected = burner_detect_gba_save_type_from_rom_locked(&head_job, NULL, 0u, &save_type, &save_size);
+            patch_detected = burner_detect_gbata_sram_patch_from_rom_locked(&head_job);
+            if (patch_detected) {
+                patch_kind = BURNER_GBA_SRAM_PATCH_GBATA;
+            } else if (burner_detect_flash1m_repro_sram_patch_from_rom_locked(&head_job)) {
+                patch_detected = true;
+                patch_kind = BURNER_GBA_SRAM_PATCH_FLASH1M_REPRO;
+            }
+        }
+    }
+    if (head_cache != NULL) {
+        free(head_cache);
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    *save_type_out = save_type;
+    *save_size_out = save_size;
+    *save_detected_out = save_detected;
+    *patch_kind_out = patch_detected ? patch_kind : BURNER_GBA_SRAM_PATCH_NONE;
+    *patch_detected_out = patch_detected;
+    return ESP_OK;
+}
+
+esp_err_t burner_probe_gba_rom_analysis(
+    uint32_t device_size,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *save_detected_out,
+    burner_gba_sram_patch_kind_t *patch_kind_out,
+    bool *patch_detected_out)
+{
+    burner_task_param_t probe_job = {0};
+    esp_err_t err;
+
+    if (device_size == 0u) {
+        err = burner_probe_cart_capacity_bytes(BURNER_CART_MODE_GBA, &device_size);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    probe_job.cart_mode = BURNER_CART_MODE_GBA;
+    probe_job.addr_begin = 0u;
+    probe_job.total_bytes = device_size;
+
+    burner_spi_lock_take();
+    err = burner_spi_prepare_burn_gba(&probe_job);
+    if (err == ESP_OK) {
+        err = burner_probe_gba_rom_analysis_locked(
+            device_size,
+            save_type_out,
+            save_size_out,
+            save_detected_out,
+            patch_kind_out,
+            patch_detected_out);
+    }
+    burner_bacon_restore_3v3_power();
+    burner_spi_lock_give();
+    return err;
+}
+
+esp_err_t burner_probe_gba_save_type_head_locked(
+    uint32_t device_size,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *detected_out)
+{
+    uint8_t *head_cache = NULL;
+    uint32_t head_scan_bytes = 0u;
+    burner_gba_save_type_t save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+    uint32_t save_size = 0u;
+    bool detected = false;
+    esp_err_t err = ESP_OK;
+
+    if (save_type_out == NULL || save_size_out == NULL || detected_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *save_type_out = BURNER_GBA_SAVE_TYPE_SRAM;
+    *save_size_out = 0u;
+    *detected_out = false;
+
+    if (device_size == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    head_scan_bytes = device_size;
+    if (head_scan_bytes > BURNER_GBA_SAVE_HEADER_SCAN_BYTES) {
+        head_scan_bytes = BURNER_GBA_SAVE_HEADER_SCAN_BYTES;
+    }
+
+    if (head_scan_bytes == 0u) {
+        return ESP_OK;
+    }
+
+    head_cache = (uint8_t *)heap_caps_malloc(head_scan_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (head_cache != NULL) {
+        err = burner_read_gba_rom_to_buffer_locked(
+            &(burner_task_param_t){
+                .cart_mode = BURNER_CART_MODE_GBA,
+                .addr_begin = 0u,
+                .total_bytes = device_size,
+            },
+            head_cache,
+            0u,
+            head_scan_bytes);
+        if (err == ESP_OK) {
+            detected = burner_detect_gba_save_type_in_span(head_cache, head_scan_bytes, &save_type, &save_size);
+        }
+        free(head_cache);
+    } else {
+        burner_task_param_t head_job = {
+            .cart_mode = BURNER_CART_MODE_GBA,
+            .addr_begin = 0u,
+            .total_bytes = head_scan_bytes,
+        };
+
+        detected = burner_detect_gba_save_type_from_rom_locked(&head_job, NULL, 0u, &save_type, &save_size);
+    }
+
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    *save_type_out = save_type;
+    *save_size_out = save_size;
+    *detected_out = detected;
+    return ESP_OK;
 }
 
 esp_err_t burner_probe_gba_save_type(
@@ -2992,11 +3675,8 @@ esp_err_t burner_probe_gba_save_type(
     uint32_t *save_size_out,
     bool *detected_out)
 {
-    burner_task_param_t probe_job = {0};
-    burner_gba_save_type_t save_type = BURNER_GBA_SAVE_TYPE_SRAM;
-    uint32_t save_size = 0u;
-    bool detected = false;
-    uint32_t device_size = 0u;
+    burner_gba_sram_patch_kind_t patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+    bool patch_detected = false;
     esp_err_t err;
 
     if (save_type_out == NULL || save_size_out == NULL || detected_out == NULL) {
@@ -3007,30 +3687,40 @@ esp_err_t burner_probe_gba_save_type(
     *save_size_out = 0u;
     *detected_out = false;
 
-    err = burner_probe_cart_capacity_bytes(BURNER_CART_MODE_GBA, &device_size);
-    if (err != ESP_OK) {
-        return err;
+    err = burner_probe_gba_rom_analysis(
+        0u,
+        save_type_out,
+        save_size_out,
+        detected_out,
+        &patch_kind,
+        &patch_detected);
+    return err;
+}
+
+esp_err_t burner_probe_gba_sram_patch(
+    burner_gba_sram_patch_kind_t *patch_kind_out,
+    bool *detected_out)
+{
+    burner_gba_save_type_t save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+    uint32_t save_size = 0u;
+    bool save_detected = false;
+    esp_err_t err;
+
+    if (patch_kind_out == NULL || detected_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
     }
 
-    probe_job.cart_mode = BURNER_CART_MODE_GBA;
-    probe_job.addr_begin = 0u;
-    probe_job.total_bytes = (device_size != 0u) ? device_size : BURNER_GBA_SAVE_SCAN_WINDOW_BYTES;
+    *patch_kind_out = BURNER_GBA_SRAM_PATCH_NONE;
+    *detected_out = false;
 
-    burner_spi_lock_take();
-    err = burner_spi_prepare_burn_gba(&probe_job);
-    if (err == ESP_OK) {
-        detected = burner_detect_gba_save_type_from_rom_locked(&probe_job, &save_type, &save_size);
-    }
-    burner_bacon_restore_3v3_power();
-    burner_spi_lock_give();
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    *save_type_out = save_type;
-    *save_size_out = save_size;
-    *detected_out = detected;
-    return ESP_OK;
+    err = burner_probe_gba_rom_analysis(
+        0u,
+        &save_type,
+        &save_size,
+        &save_detected,
+        patch_kind_out,
+        detected_out);
+    return err;
 }
 
 void burner_build_default_dump_name(
@@ -5093,6 +5783,7 @@ esp_err_t burner_spi_init(void)
     s_cart_ctx.sector_size = 0;
     s_cart_ctx.device_size = 0;
     memset(s_cart_ctx.mbc5_id, 0, sizeof(s_cart_ctx.mbc5_id));
+    s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
     s_mcu_spi_ready = true;
@@ -5404,6 +6095,7 @@ void burner_bacon_idle_task_entry(void *param)
                 s_cart_ctx.prepared = false;
                 s_cart_ctx.current_bank = UINT16_MAX;
                 memset(s_cart_ctx.mbc5_id, 0, sizeof(s_cart_ctx.mbc5_id));
+                s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
                 s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
                 s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
                 ESP_LOGI(BURNER_TAG, "bacon idle timeout reached, cartridge power rails off");
@@ -6190,6 +6882,10 @@ static esp_err_t burner_bacon_rom_write_u16(uint32_t word_addr, uint16_t value)
 
 static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_value);
 static esp_err_t burner_bacon_gba_command_write_u16(uint32_t word_addr, uint16_t value);
+static esp_err_t burner_bacon_gba_reset_to_read_mode(void);
+static bool burner_gba_nor_is_intel_active(void);
+static uint32_t burner_erase_timeout_ms_for_bytes(uint32_t bytes);
+static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms);
 
 static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, size_t len)
 {
@@ -6615,8 +7311,223 @@ static esp_err_t burner_bacon_wait_u16(uint32_t byte_addr, uint16_t expected, ui
         expected,
         read_back,
         timeout_ms);
-    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_reset_to_read_mode();
     return ESP_ERR_TIMEOUT;
+}
+
+static inline uint16_t burner_apply_d0d1_swap_on_read(uint16_t data, bool is_swapped);
+static inline uint16_t burner_apply_d0d1_swap_on_write(uint16_t data, bool is_swapped);
+static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8], bool is_swapped);
+static esp_err_t burner_bacon_gba_read_id_with_cmdset(
+    uint8_t id_out[8],
+    bool is_swapped,
+    burner_nor_cmdset_t cmdset,
+    const char *trace_name);
+
+static esp_err_t burner_bacon_wait_u16_mask(
+    uint32_t byte_addr,
+    uint16_t mask,
+    uint16_t expected,
+    uint32_t timeout_ms,
+    uint16_t *read_back_out)
+{
+    int64_t deadline_us;
+    uint16_t read_back = 0;
+    esp_err_t err = ESP_OK;
+
+    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000);
+    while (esp_timer_get_time() < deadline_us) {
+        err = burner_cancel_poll();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_rom_read_u16(byte_addr >> 1, &read_back);
+        if (err != ESP_OK) {
+            return err;
+        }
+        read_back = burner_apply_d0d1_swap_on_read(read_back, s_cart_ctx.d0d1_swapped);
+        if ((read_back & mask) == expected) {
+            if (read_back_out != NULL) {
+                *read_back_out = read_back;
+            }
+            return ESP_OK;
+        }
+        esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        burner_task_yield_if_due();
+    }
+
+    if (read_back_out != NULL) {
+        *read_back_out = read_back;
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t burner_bacon_gba_intel_reset(void)
+{
+    esp_err_t err;
+
+    err = burner_bacon_gba_command_write_u16(0x000u, 0x0050u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return burner_bacon_gba_command_write_u16(0x000u, 0x00FFu);
+}
+
+static esp_err_t burner_bacon_gba_reset_to_read_mode_for_cmdset(burner_nor_cmdset_t cmdset)
+{
+    if (cmdset == BURNER_NOR_CMDSET_INTEL) {
+        return burner_bacon_gba_intel_reset();
+    }
+    return burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+}
+
+static esp_err_t burner_bacon_gba_reset_to_read_mode(void)
+{
+    return burner_bacon_gba_reset_to_read_mode_for_cmdset(s_cart_ctx.gba_cmdset);
+}
+
+static esp_err_t burner_bacon_gba_intel_wait_ready(uint32_t flash_addr, uint16_t command, uint32_t timeout_ms, uint16_t *status_out)
+{
+    esp_err_t err;
+
+    if (command != 0u) {
+        err = burner_bacon_gba_command_write_u16(flash_addr >> 1, command);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+    return burner_bacon_wait_u16_mask(flash_addr, 0x0080u, 0x0080u, timeout_ms, status_out);
+}
+
+static void burner_gba_sector_erase_ctx_reset(void)
+{
+    memset(&s_gba_sector_erase_ctx, 0, sizeof(s_gba_sector_erase_ctx));
+}
+
+static void burner_gba_sector_erase_ctx_begin(
+    uint32_t range_begin,
+    uint32_t range_end,
+    uint32_t sector_size,
+    bool multi_card)
+{
+    uint32_t sector_mask;
+
+    burner_gba_sector_erase_ctx_reset();
+    if (sector_size == 0u || (sector_size & (sector_size - 1u)) != 0u || range_end < range_begin) {
+        return;
+    }
+
+    sector_mask = sector_size - 1u;
+    s_gba_sector_erase_ctx.active = true;
+    s_gba_sector_erase_ctx.multi_card = multi_card;
+    s_gba_sector_erase_ctx.sector_size = sector_size;
+    s_gba_sector_erase_ctx.range_end = range_end;
+    s_gba_sector_erase_ctx.erased_sector_addr = UINT32_MAX;
+    s_gba_sector_erase_ctx.pre_erased_sector_addr = UINT32_MAX;
+    s_gba_sector_erase_ctx.pre_erased_valid = false;
+    (void)sector_mask;
+}
+
+static bool burner_gba_sector_erase_ctx_should_handle(void)
+{
+    return s_gba_sector_erase_ctx.active && s_gba_sector_erase_ctx.sector_size != 0u;
+}
+
+static esp_err_t burner_gba_sector_erase_now(uint32_t sector_addr)
+{
+    esp_err_t err;
+
+    burner_status_mark_erase_begin();
+    err = burner_bacon_gba_erase_sector(
+        sector_addr,
+        s_gba_sector_erase_ctx.multi_card,
+        burner_erase_timeout_ms_for_bytes(s_gba_sector_erase_ctx.sector_size));
+    burner_status_mark_erase_end();
+    if (err == ESP_OK) {
+        burner_status_advance_erase_phase(1u);
+    }
+    return err;
+}
+
+static esp_err_t burner_gba_sector_erase_prepare_current(uint32_t byte_addr)
+{
+    uint32_t sector_mask;
+    uint32_t sector_addr;
+    esp_err_t err;
+
+    if (!burner_gba_sector_erase_ctx_should_handle()) {
+        return ESP_OK;
+    }
+
+    sector_mask = s_gba_sector_erase_ctx.sector_size - 1u;
+    sector_addr = byte_addr & ~sector_mask;
+    if (s_gba_sector_erase_ctx.erased_sector_addr == sector_addr) {
+        return ESP_OK;
+    }
+
+    if (s_gba_sector_erase_ctx.pre_erased_valid &&
+        s_gba_sector_erase_ctx.pre_erased_sector_addr == sector_addr) {
+        s_gba_sector_erase_ctx.erased_sector_addr = sector_addr;
+        s_gba_sector_erase_ctx.pre_erased_valid = false;
+        s_gba_sector_erase_ctx.pre_erased_sector_addr = UINT32_MAX;
+        burner_status_advance_erase_phase(1u);
+        return ESP_OK;
+    }
+
+    err = burner_gba_sector_erase_now(sector_addr);
+    if (err != ESP_OK) {
+        return err;
+    }
+    s_gba_sector_erase_ctx.erased_sector_addr = sector_addr;
+    return ESP_OK;
+}
+
+static esp_err_t burner_gba_sector_erase_prefetch_next(uint32_t byte_addr, size_t len)
+{
+    uint32_t sector_mask;
+    uint32_t current_sector_addr;
+    uint32_t current_sector_end;
+    uint32_t next_sector_addr;
+    uint32_t chunk_end;
+    esp_err_t err;
+
+    if (!burner_gba_sector_erase_ctx_should_handle() || len == 0u) {
+        return ESP_OK;
+    }
+
+    sector_mask = s_gba_sector_erase_ctx.sector_size - 1u;
+    current_sector_addr = byte_addr & ~sector_mask;
+    current_sector_end = current_sector_addr + s_gba_sector_erase_ctx.sector_size - 1u;
+    chunk_end = byte_addr + (uint32_t)len - 1u;
+    if (chunk_end < current_sector_end) {
+        return ESP_OK;
+    }
+
+    next_sector_addr = current_sector_addr + s_gba_sector_erase_ctx.sector_size;
+    if (next_sector_addr > s_gba_sector_erase_ctx.range_end) {
+        return ESP_OK;
+    }
+    if (s_gba_sector_erase_ctx.pre_erased_valid &&
+        s_gba_sector_erase_ctx.pre_erased_sector_addr == next_sector_addr) {
+        return ESP_OK;
+    }
+    if (s_gba_sector_erase_ctx.erased_sector_addr == next_sector_addr) {
+        return ESP_OK;
+    }
+
+    err = burner_gba_sector_erase_now(next_sector_addr);
+    if (err != ESP_OK) {
+        return err;
+    }
+    s_gba_sector_erase_ctx.pre_erased_valid = true;
+    s_gba_sector_erase_ctx.pre_erased_sector_addr = next_sector_addr;
+    s_gba_sector_erase_ctx.erased_sector_addr = current_sector_addr;
+    return ESP_OK;
+}
+
+static bool burner_gba_nor_is_intel_active(void)
+{
+    return s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL;
 }
 
 static esp_err_t burner_bacon_gba_rom_switch_bank(uint8_t bank)
@@ -6697,7 +7608,7 @@ static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank)
         return err;
     }
     vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
-    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_reset_to_read_mode();
     vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
     s_cart_ctx.current_bank = (uint16_t)bank;
     return ESP_OK;
@@ -7249,7 +8160,7 @@ id_window_out:
     if (entered_id) {
         burner_log_gba_diag_compare_word("id", 0x000u);
     }
-    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_reset_to_read_mode();
 }
 
 static void burner_log_gba_cfi_window(void)
@@ -7296,7 +8207,7 @@ cfi_window_out:
     if (entered_cfi) {
         burner_log_gba_diag_compare_word("cfi", 0x010u);
     }
-    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_reset_to_read_mode();
 }
 
 static bool burner_gba_detect_qry_words(uint16_t q, uint16_t r, uint16_t y, bool *is_swapped_out, bool *high_byte_lane_out)
@@ -7379,11 +8290,15 @@ static esp_err_t burner_gba_detect_d0d1_swap(bool *is_swapped_out)
     err = ESP_ERR_NOT_FOUND;
 
 reset_out:
-    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_reset_to_read_mode();
     return err;
 }
 
-static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8], bool is_swapped)
+static esp_err_t burner_bacon_gba_read_id_with_cmdset(
+    uint8_t id_out[8],
+    bool is_swapped,
+    burner_nor_cmdset_t cmdset,
+    const char *trace_name)
 {
     esp_err_t err;
     uint16_t w0 = 0;
@@ -7392,89 +8307,116 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8], bool is_swapped)
     uint16_t w3 = 0;
     int64_t trace_start_us = 0;
     int64_t trace_last_us = 0;
+    const char *name = (trace_name != NULL) ? trace_name : "GBA ReadID trace";
+    uint16_t reset_word = 0x00F0u;
+    bool entered_id_mode = false;
 
     if (id_out == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    burner_readid_trace_begin("GBA ReadID trace", &trace_start_us, &trace_last_us);
+    burner_readid_trace_begin(name, &trace_start_us, &trace_last_us);
 
-    /*
-     * Match Bacon host exactly:
-     * 1. write  0x555 <- 0x00AA
-     * 2. write  0x2AA <- 0x0055
-     * 3. write  0x555 <- 0x0090
-     * 4. read   word 0x000
-     * 5. read   word 0x001
-     * 6. read   word 0x00E
-     * 7. read   word 0x00F
-     * 8. write  0x000 <- 0x00F0
-     *
-     * There is no explicit inter-command delay in host code. Each step is one
-     * independent logical SPI transaction on spi_cs=0, with CS released at the
-     * end of that transaction.
-     *
-     * Note: command writes are mapped by burner_bacon_gba_command_write_u16();
-     * data read from the chip is restored below when D0/D1 is swapped.
-     */
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
-    if (err != ESP_OK) {
-        ESP_LOGW(
-            BURNER_TAG,
-            "GBA ReadID trace write addr=0x%03" PRIX32 " data=0x00AA failed: %s",
-            burner_gba_unlock_addr0(),
-            esp_err_to_name(err));
-        burner_readid_trace_end("GBA ReadID trace", trace_start_us, err);
-        return err;
+    if (cmdset == BURNER_NOR_CMDSET_INTEL) {
+        reset_word = 0x00FFu;
+
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x0050u);
+        if (err != ESP_OK) {
+            ESP_LOGW(BURNER_TAG, "%s write addr=0x000 data=0x0050 failed: %s", name, esp_err_to_name(err));
+            burner_readid_trace_end(name, trace_start_us, err);
+            return err;
+        }
+        burner_readid_trace_log_u16(name, "write", 0x000u, 0x0050u, &trace_last_us);
+
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x00FFu);
+        if (err != ESP_OK) {
+            ESP_LOGW(BURNER_TAG, "%s write addr=0x000 data=0x00FF failed: %s", name, esp_err_to_name(err));
+            burner_readid_trace_end(name, trace_start_us, err);
+            return err;
+        }
+        burner_readid_trace_log_u16(name, "write", 0x000u, 0x00FFu, &trace_last_us);
+
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x0090u);
+        if (err != ESP_OK) {
+            ESP_LOGW(BURNER_TAG, "%s write addr=0x000 data=0x0090 failed: %s", name, esp_err_to_name(err));
+            goto reset_out;
+        }
+        burner_readid_trace_log_u16(name, "write", 0x000u, 0x0090u, &trace_last_us);
+        entered_id_mode = true;
+    } else {
+        /*
+         * Match Bacon host exactly:
+         * 1. write  0x555 <- 0x00AA
+         * 2. write  0x2AA <- 0x0055
+         * 3. write  0x555 <- 0x0090
+         * 4. read   word 0x000
+         * 5. read   word 0x001
+         * 6. read   word 0x00E
+         * 7. read   word 0x00F
+         * 8. write  0x000 <- 0x00F0
+         */
+        err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+        if (err != ESP_OK) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "%s write addr=0x%03" PRIX32 " data=0x00AA failed: %s",
+                name,
+                burner_gba_unlock_addr0(),
+                esp_err_to_name(err));
+            burner_readid_trace_end(name, trace_start_us, err);
+            return err;
+        }
+        burner_readid_trace_log_u16(name, "write", burner_gba_unlock_addr0(), 0x00AAu, &trace_last_us);
+        err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+        if (err != ESP_OK) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "%s write addr=0x%03" PRIX32 " data=0x0055 failed: %s",
+                name,
+                burner_gba_unlock_addr1(),
+                esp_err_to_name(err));
+            burner_readid_trace_end(name, trace_start_us, err);
+            return err;
+        }
+        burner_readid_trace_log_u16(name, "write", burner_gba_unlock_addr1(), 0x0055u, &trace_last_us);
+        err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0090u);
+        if (err != ESP_OK) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "%s write addr=0x%03" PRIX32 " data=0x0090 failed: %s",
+                name,
+                burner_gba_unlock_addr0(),
+                esp_err_to_name(err));
+            goto reset_out;
+        }
+        burner_readid_trace_log_u16(name, "write", burner_gba_unlock_addr0(), 0x0090u, &trace_last_us);
+        entered_id_mode = true;
     }
-    burner_readid_trace_log_u16("GBA ReadID trace", "write", burner_gba_unlock_addr0(), 0x00AAu, &trace_last_us);
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
-    if (err != ESP_OK) {
-        ESP_LOGW(
-            BURNER_TAG,
-            "GBA ReadID trace write addr=0x%03" PRIX32 " data=0x0055 failed: %s",
-            burner_gba_unlock_addr1(),
-            esp_err_to_name(err));
-        burner_readid_trace_end("GBA ReadID trace", trace_start_us, err);
-        return err;
-    }
-    burner_readid_trace_log_u16("GBA ReadID trace", "write", burner_gba_unlock_addr1(), 0x0055u, &trace_last_us);
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0090u);
-    if (err != ESP_OK) {
-        ESP_LOGW(
-            BURNER_TAG,
-            "GBA ReadID trace write addr=0x%03" PRIX32 " data=0x0090 failed: %s",
-            burner_gba_unlock_addr0(),
-            esp_err_to_name(err));
-        burner_readid_trace_end("GBA ReadID trace", trace_start_us, err);
-        return err;
-    }
-    burner_readid_trace_log_u16("GBA ReadID trace", "write", burner_gba_unlock_addr0(), 0x0090u, &trace_last_us);
 
     err = burner_bacon_rom_read_u16(0x000u, &w0);
     if (err != ESP_OK) {
-        ESP_LOGW(BURNER_TAG, "GBA ReadID trace read addr=0x000 failed: %s", esp_err_to_name(err));
+        ESP_LOGW(BURNER_TAG, "%s read addr=0x000 failed: %s", name, esp_err_to_name(err));
         goto reset_out;
     }
-    burner_readid_trace_log_u16("GBA ReadID trace", "read", 0x000u, w0, &trace_last_us);
+    burner_readid_trace_log_u16(name, "read", 0x000u, w0, &trace_last_us);
     err = burner_bacon_rom_read_u16(0x001u, &w1);
     if (err != ESP_OK) {
-        ESP_LOGW(BURNER_TAG, "GBA ReadID trace read addr=0x001 failed: %s", esp_err_to_name(err));
+        ESP_LOGW(BURNER_TAG, "%s read addr=0x001 failed: %s", name, esp_err_to_name(err));
         goto reset_out;
     }
-    burner_readid_trace_log_u16("GBA ReadID trace", "read", 0x001u, w1, &trace_last_us);
+    burner_readid_trace_log_u16(name, "read", 0x001u, w1, &trace_last_us);
     err = burner_bacon_rom_read_u16(0x00Eu, &w2);
     if (err != ESP_OK) {
-        ESP_LOGW(BURNER_TAG, "GBA ReadID trace read addr=0x00E failed: %s", esp_err_to_name(err));
+        ESP_LOGW(BURNER_TAG, "%s read addr=0x00E failed: %s", name, esp_err_to_name(err));
         goto reset_out;
     }
-    burner_readid_trace_log_u16("GBA ReadID trace", "read", 0x00Eu, w2, &trace_last_us);
+    burner_readid_trace_log_u16(name, "read", 0x00Eu, w2, &trace_last_us);
     err = burner_bacon_rom_read_u16(0x00Fu, &w3);
     if (err != ESP_OK) {
-        ESP_LOGW(BURNER_TAG, "GBA ReadID trace read addr=0x00F failed: %s", esp_err_to_name(err));
+        ESP_LOGW(BURNER_TAG, "%s read addr=0x00F failed: %s", name, esp_err_to_name(err));
         goto reset_out;
     }
-    burner_readid_trace_log_u16("GBA ReadID trace", "read", 0x00Fu, w3, &trace_last_us);
+    burner_readid_trace_log_u16(name, "read", 0x00Fu, w3, &trace_last_us);
 
     /* Apply D0/D1 swap to read data */
     w0 = burner_apply_d0d1_swap_on_read(w0, is_swapped);
@@ -7493,15 +8435,32 @@ static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8], bool is_swapped)
 
 reset_out:
     {
-        esp_err_t reset_err = burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
-        if (reset_err == ESP_OK) {
-            burner_readid_trace_log_u16("GBA ReadID trace", "write", 0x000u, 0x00F0u, &trace_last_us);
-        } else {
-            ESP_LOGW(BURNER_TAG, "GBA ReadID trace write addr=0x000 data=0x00F0 failed: %s", esp_err_to_name(reset_err));
+        esp_err_t reset_err = ESP_OK;
+
+        if (entered_id_mode) {
+            reset_err = burner_bacon_gba_reset_to_read_mode_for_cmdset(cmdset);
+        }
+        if (entered_id_mode && reset_err == ESP_OK) {
+            if (cmdset == BURNER_NOR_CMDSET_INTEL) {
+                burner_readid_trace_log_u16(name, "write", 0x000u, 0x0050u, &trace_last_us);
+            }
+            burner_readid_trace_log_u16(name, "write", 0x000u, reset_word, &trace_last_us);
+        } else if (entered_id_mode && reset_err != ESP_OK) {
+            ESP_LOGW(BURNER_TAG, "%s reset failed: %s", name, esp_err_to_name(reset_err));
         }
     }
-    burner_readid_trace_end("GBA ReadID trace", trace_start_us, err);
+    burner_readid_trace_end(name, trace_start_us, err);
     return err;
+}
+
+static esp_err_t burner_bacon_gba_read_id(uint8_t id_out[8], bool is_swapped)
+{
+    burner_nor_cmdset_t cmdset = s_cart_ctx.gba_cmdset;
+
+    if (cmdset == BURNER_NOR_CMDSET_UNKNOWN) {
+        cmdset = BURNER_NOR_CMDSET_AMD;
+    }
+    return burner_bacon_gba_read_id_with_cmdset(id_out, is_swapped, cmdset, "GBA ReadID trace");
 }
 
 static esp_err_t burner_bacon_gba_get_cfi(
@@ -7523,39 +8482,55 @@ static esp_err_t burner_bacon_gba_get_cfi(
     uint8_t cfi30 = 0;
     bool high_byte_lane = false;
     uint32_t sector_size_tmp = 0;
+    uint32_t enter_addrs[2];
+    size_t enter_idx = 0u;
 
     if (device_size == NULL || sector_size == NULL || buffer_write_bytes == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    err = burner_bacon_gba_command_write_u16(burner_gba_cfi_enter_addr(), 0x0098u);
-    if (err != ESP_OK) {
-        return err;
+    enter_addrs[0] = burner_gba_cfi_enter_addr();
+    enter_addrs[1] = 0x000u;
+
+    for (enter_idx = 0u; enter_idx < (sizeof(enter_addrs) / sizeof(enter_addrs[0])); ++enter_idx) {
+        err = burner_bacon_gba_reset_to_read_mode();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(enter_addrs[enter_idx], 0x0098u);
+        if (err != ESP_OK) {
+            return err;
+        }
+
+        err = burner_bacon_rom_read_u16(0x010u, &w10);
+        if (err != ESP_OK) {
+            goto cfi_reset;
+        }
+        err = burner_bacon_rom_read_u16(0x011u, &w11);
+        if (err != ESP_OK) {
+            goto cfi_reset;
+        }
+        err = burner_bacon_rom_read_u16(0x012u, &w12);
+        if (err != ESP_OK) {
+            goto cfi_reset;
+        }
+        w10 = burner_apply_d0d1_swap_on_read(w10, s_cart_ctx.d0d1_swapped);
+        w11 = burner_apply_d0d1_swap_on_read(w11, s_cart_ctx.d0d1_swapped);
+        w12 = burner_apply_d0d1_swap_on_read(w12, s_cart_ctx.d0d1_swapped);
+
+        if (((w10 & 0x00FFu) == 0x51u) && ((w11 & 0x00FFu) == 0x52u) && ((w12 & 0x00FFu) == 0x59u)) {
+            high_byte_lane = false;
+            break;
+        }
+        if ((((w10 >> 8) & 0x00FFu) == 0x51u) &&
+            (((w11 >> 8) & 0x00FFu) == 0x52u) &&
+            (((w12 >> 8) & 0x00FFu) == 0x59u)) {
+            high_byte_lane = true;
+            break;
+        }
     }
 
-    err = burner_bacon_rom_read_u16(0x010u, &w10);
-    if (err != ESP_OK) {
-        goto cfi_reset;
-    }
-    err = burner_bacon_rom_read_u16(0x011u, &w11);
-    if (err != ESP_OK) {
-        goto cfi_reset;
-    }
-    err = burner_bacon_rom_read_u16(0x012u, &w12);
-    if (err != ESP_OK) {
-        goto cfi_reset;
-    }
-    w10 = burner_apply_d0d1_swap_on_read(w10, s_cart_ctx.d0d1_swapped);
-    w11 = burner_apply_d0d1_swap_on_read(w11, s_cart_ctx.d0d1_swapped);
-    w12 = burner_apply_d0d1_swap_on_read(w12, s_cart_ctx.d0d1_swapped);
-
-    if (((w10 & 0x00FFu) == 0x51u) && ((w11 & 0x00FFu) == 0x52u) && ((w12 & 0x00FFu) == 0x59u)) {
-        high_byte_lane = false;
-    } else if ((((w10 >> 8) & 0x00FFu) == 0x51u) &&
-               (((w11 >> 8) & 0x00FFu) == 0x52u) &&
-               (((w12 >> 8) & 0x00FFu) == 0x59u)) {
-        high_byte_lane = true;
-    } else {
+    if (enter_idx >= (sizeof(enter_addrs) / sizeof(enter_addrs[0]))) {
         ESP_LOGW(
             BURNER_TAG,
             "GBA CFI signature mismatch: [010]=%04X [011]=%04X [012]=%04X",
@@ -7617,121 +8592,13 @@ static esp_err_t burner_bacon_gba_get_cfi(
     err = ESP_OK;
 
 cfi_reset:
-    (void)burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    (void)burner_bacon_gba_reset_to_read_mode();
     return err;
-}
-
-const char *burner_gba_chip_name(const uint8_t id[8])
-{
-    static const uint8_t s29gl128[8] = {0x01u, 0x00u, 0x7Eu, 0x22u, 0x21u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t s29gl256[8] = {0x01u, 0x00u, 0x7Eu, 0x22u, 0x22u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t s29gl512[8] = {0x01u, 0x00u, 0x7Eu, 0x22u, 0x23u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t js28f256[8] = {0x89u, 0x00u, 0x7Eu, 0x22u, 0x22u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t s29gl01[8] = {0x01u, 0x00u, 0x7Eu, 0x22u, 0x28u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t s70gl02[8] = {0x01u, 0x00u, 0x7Eu, 0x22u, 0x48u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t mx29gl256[8] = {0xC2u, 0x00u, 0x7Eu, 0x22u, 0x22u, 0x22u, 0x01u, 0x22u};
-    static const uint8_t m29w256g[8] = {0x20u, 0x00u, 0x7Eu, 0x22u, 0x22u, 0x22u, 0x01u, 0x22u};
-
-    if (id == NULL) {
-        return "unknown";
-    }
-    if (memcmp(id, s29gl128, sizeof(s29gl128)) == 0) {
-        return "S29GL128N/P/S";
-    }
-    if (memcmp(id, s29gl256, sizeof(s29gl256)) == 0) {
-        return "S29GL256N/P/S";
-    }
-    if (memcmp(id, s29gl512, sizeof(s29gl512)) == 0) {
-        return "S29GL512N/P/S";
-    }
-    if (memcmp(id, js28f256, sizeof(js28f256)) == 0) {
-        return "JS28F256 / MT28EW256ABA";
-    }
-    if (memcmp(id, s29gl01, sizeof(s29gl01)) == 0) {
-        return "S29GL01GP/GS";
-    }
-    if (memcmp(id, s70gl02, sizeof(s70gl02)) == 0) {
-        return "S70GL02GS";
-    }
-    if (memcmp(id, mx29gl256, sizeof(mx29gl256)) == 0) {
-        return "MX29GL256E/F";
-    }
-    if (memcmp(id, m29w256g, sizeof(m29w256g)) == 0) {
-        return "M29W256G";
-    }
-    return "unknown";
-}
-
-static bool burner_gba_geometry_from_id(
-    const uint8_t id[8],
-    uint32_t *device_size,
-    uint32_t *sector_size,
-    uint16_t *buffer_write_bytes)
-{
-    if (id == NULL || device_size == NULL || sector_size == NULL || buffer_write_bytes == NULL) {
-        return false;
-    }
-
-    /* IDs below were verified against the local S29GL-S/P/N, S70GL02GS, MT28EW256ABA, and MX29GL256E/F datasheets. */
-    if (id[0] == 0x01u && id[1] == 0x00u && id[2] == 0x7Eu && id[3] == 0x22u && id[7] == 0x22u) {
-        switch (id[4]) {
-            case 0x21u:
-                *device_size = 16u * 1024u * 1024u;
-                *sector_size = 128u * 1024u;
-                *buffer_write_bytes = 512u;
-                return true;
-            case 0x22u:
-                *device_size = 32u * 1024u * 1024u;
-                *sector_size = 128u * 1024u;
-                *buffer_write_bytes = 512u;
-                return true;
-            case 0x23u:
-                *device_size = 64u * 1024u * 1024u;
-                *sector_size = 128u * 1024u;
-                *buffer_write_bytes = 512u;
-                return true;
-            case 0x28u:
-                *device_size = 128u * 1024u * 1024u;
-                *sector_size = 128u * 1024u;
-                *buffer_write_bytes = 512u;
-                return true;
-            case 0x48u:
-                *device_size = 256u * 1024u * 1024u;
-                *sector_size = 128u * 1024u;
-                *buffer_write_bytes = 512u;
-                return true;
-            default:
-                break;
-        }
-    }
-
-    if (id[0] == 0x89u && id[1] == 0x00u && id[2] == 0x7Eu && id[3] == 0x22u &&
-        id[4] == 0x22u && id[5] == 0x22u && id[6] == 0x01u && id[7] == 0x22u) {
-        *device_size = 32u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 1024u;
-        return true;
-    }
-
-    if (id[0] == 0xC2u && id[1] == 0x00u && id[2] == 0x7Eu && id[3] == 0x22u &&
-        id[4] == 0x22u && id[5] == 0x22u && id[6] == 0x01u && id[7] == 0x22u) {
-        *device_size = 32u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 64u;
-        return true;
-    }
-
-    return false;
 }
 
 static bool burner_bacon_gba_is_s70gl02(const uint8_t id[8])
 {
-    static const uint8_t s70gl02[8] = {0x01u, 0x00u, 0x7Eu, 0x22u, 0x48u, 0x22u, 0x01u, 0x22u};
-
-    if (id == NULL) {
-        return false;
-    }
-    return memcmp(id, s70gl02, sizeof(s70gl02)) == 0;
+    return burner_gba_nor_has_flag(id, BURNER_NOR_FLAG_DUAL_DIE);
 }
 
 bool burner_gba_id_looks_like_rom_header(const uint8_t id[8])
@@ -7790,8 +8657,10 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     bool *cfi_ok_out)
 {
     esp_err_t err;
+    const burner_nor_entry_t *nor_entry = NULL;
     bool id_looks_like_header = false;
     bool id_matches_plain_rom = false;
+    burner_nor_cmdset_t attempted_cmdset = BURNER_NOR_CMDSET_AMD;
     uint32_t probe_hz = (s_mcu_spi_actual_hz > 0u) ? s_mcu_spi_actual_hz : s_mcu_spi_clock_hz;
     uint32_t attempt = 0u;
 
@@ -7803,6 +8672,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     /* Lock GBA probe to the legacy command lane/address mapping. */
     s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
+    s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_cart_ctx.d0d1_known = false;
     s_cart_ctx.d0d1_swapped = false; /* Default: no swap */
 
@@ -7849,11 +8719,17 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             }
         }
 
-        err = burner_bacon_gba_read_id(id_out, s_cart_ctx.d0d1_swapped);
+        attempted_cmdset = BURNER_NOR_CMDSET_AMD;
+        err = burner_bacon_gba_read_id_with_cmdset(
+            id_out,
+            s_cart_ctx.d0d1_swapped,
+            attempted_cmdset,
+            "GBA ReadID trace");
         if (err != ESP_OK) {
             ESP_LOGW(
                 BURNER_TAG,
-                "GBA word-address ID read failed @%" PRIu32 "Hz try=%" PRIu32 ": %s",
+                "GBA word-address ID read failed (%s) @%" PRIu32 "Hz try=%" PRIu32 ": %s",
+                burner_nor_cmdset_name(attempted_cmdset),
                 probe_hz,
                 attempt + 1u,
                 esp_err_to_name(err));
@@ -7879,18 +8755,88 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             id_looks_like_header ? "looks-like-rom-header" :
             (id_matches_plain_rom ? "looks-like-plain-rom-data" : "candidate-id"));
 
+        nor_entry = burner_nor_db_lookup_gba(id_out);
+        if (nor_entry == NULL || nor_entry->cmdset == BURNER_NOR_CMDSET_INTEL) {
+            uint8_t intel_id[8] = {0};
+            esp_err_t intel_err;
+
+            attempted_cmdset = BURNER_NOR_CMDSET_INTEL;
+            intel_err = burner_bacon_gba_read_id_with_cmdset(
+                intel_id,
+                s_cart_ctx.d0d1_swapped,
+                attempted_cmdset,
+                "GBA Intel ReadID trace");
+            if (intel_err == ESP_OK) {
+                const burner_nor_entry_t *intel_entry = burner_nor_db_lookup_gba(intel_id);
+                bool prefer_intel = (intel_entry != NULL && intel_entry->cmdset == BURNER_NOR_CMDSET_INTEL);
+
+                if (prefer_intel) {
+                    memcpy(id_out, intel_id, sizeof(intel_id));
+                    nor_entry = intel_entry;
+                    id_looks_like_header = burner_gba_id_looks_like_rom_header(id_out);
+                    id_matches_plain_rom = burner_gba_id_matches_plain_rom_data(id_out);
+                    ESP_LOGI(
+                        BURNER_TAG,
+                        "GBA intel-id probe @%" PRIu32 "Hz try=%" PRIu32
+                        " id=%02X %02X %02X %02X %02X %02X %02X %02X (candidate-id)",
+                        probe_hz,
+                        attempt + 1u,
+                        id_out[0],
+                        id_out[1],
+                        id_out[2],
+                        id_out[3],
+                        id_out[4],
+                        id_out[5],
+                        id_out[6],
+                        id_out[7]);
+                }
+            } else if (nor_entry == NULL) {
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "GBA intel-id read failed @%" PRIu32 "Hz try=%" PRIu32 ": %s",
+                    probe_hz,
+                    attempt + 1u,
+                    esp_err_to_name(intel_err));
+            }
+        }
+
+        if (nor_entry == NULL) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA ID unsupported in word-address mode @%" PRIu32 "Hz try=%" PRIu32
+                ", id=%02X %02X %02X %02X %02X %02X %02X %02X",
+                probe_hz,
+                attempt + 1u,
+                id_out[0],
+                id_out[1],
+                id_out[2],
+                id_out[3],
+                id_out[4],
+                id_out[5],
+                id_out[6],
+                id_out[7]);
+            err = ESP_ERR_NOT_SUPPORTED;
+            continue;
+        }
+
+        *device_size = nor_entry->device_size;
+        *sector_size = nor_entry->sector_size;
+        *buffer_write_bytes = nor_entry->buffer_write_bytes;
+        s_cart_ctx.gba_cmdset = nor_entry->cmdset;
+
         err = burner_bacon_gba_get_cfi(device_size, sector_size, buffer_write_bytes);
         if (err == ESP_OK) {
             *cfi_ok_out = true;
             ESP_LOGI(
                 BURNER_TAG,
                 "GBA CFI ok in word-address mode @%" PRIu32 "Hz try=%" PRIu32
-                ": flash=%" PRIu32 " sector=%" PRIu32 " buf=%u",
+                ": flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cmdset=%s",
                 probe_hz,
                 attempt + 1u,
                 *device_size,
                 *sector_size,
-                (unsigned)*buffer_write_bytes);
+                (unsigned)*buffer_write_bytes,
+                burner_nor_cmdset_name(s_cart_ctx.gba_cmdset));
             return ESP_OK;
         }
 
@@ -7920,29 +8866,23 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
                 attempt + 1u);
         }
 
-    }
-
-    if (burner_gba_geometry_from_id(id_out, device_size, sector_size, buffer_write_bytes)) {
         ESP_LOGW(
             BURNER_TAG,
-            "GBA CFI unavailable; fallback by ID geometry: flash=%" PRIu32
-            " sector=%" PRIu32 " buf=%u id=%02X %02X %02X %02X %02X %02X %02X %02X",
+            "GBA CFI unavailable in word-address mode @%" PRIu32 "Hz try=%" PRIu32
+            ": flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cmdset=%s",
+            probe_hz,
+            attempt + 1u,
             *device_size,
             *sector_size,
             (unsigned)*buffer_write_bytes,
-            id_out[0],
-            id_out[1],
-            id_out[2],
-            id_out[3],
-            id_out[4],
-            id_out[5],
-            id_out[6],
-            id_out[7]);
+            burner_nor_cmdset_name(nor_entry->cmdset));
+        s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     }
 
+    s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     burner_log_gba_id_window();
     burner_log_gba_cfi_window();
-    return ESP_OK;
+    return ESP_FAIL;
 }
 
 esp_err_t burner_bacon_gba_probe_locked(
@@ -7975,20 +8915,6 @@ void burner_bacon_gba_d0d1_status(bool *known_out, bool *swapped_out)
     }
 }
 
-static bool burner_bacon_gba_prepare_can_use_size_hint(const burner_task_param_t *job)
-{
-    if (job == NULL) {
-        return false;
-    }
-    if (job->mode == BURNER_JOB_READ_ROM || job->mode == BURNER_JOB_VERIFY_ROM) {
-        return true;
-    }
-    if (job->mode == BURNER_JOB_WRITE_ROM && job->gba_force_no_cfi) {
-        return true;
-    }
-    return false;
-}
-
 static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
 {
     uint8_t id[8];
@@ -7996,7 +8922,6 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
     uint64_t requested_top64 = 0;
-    bool allow_size_hint = false;
     bool cfi_ok = false;
     esp_err_t err;
 
@@ -8004,10 +8929,9 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         return ESP_ERR_INVALID_ARG;
     }
     requested_top64 = (uint64_t)job->addr_begin + (uint64_t)job->total_bytes;
-    if (requested_top64 > UINT32_MAX) {
+    if (requested_top64 == 0u || requested_top64 > ((uint64_t)UINT32_MAX + 1u)) {
         return ESP_ERR_INVALID_SIZE;
     }
-    allow_size_hint = burner_bacon_gba_prepare_can_use_size_hint(job);
 
     err = burner_bacon_gba_probe_locked(
         id,
@@ -8020,44 +8944,8 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         return err;
     }
     if (!cfi_ok) {
-        if (device_size > 0u && sector_size > 0u && buffer_write_bytes > 0u) {
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBA CFI read failed; using ID geometry fallback: flash=%" PRIu32
-                " sector=%" PRIu32 " buf=%u",
-                device_size,
-                sector_size,
-                (unsigned)buffer_write_bytes);
-        } else if (!allow_size_hint) {
-            ESP_LOGE(
-                BURNER_TAG,
-                "GBA CFI read failed (write/erase blocked), id=%02X %02X %02X %02X %02X %02X %02X %02X",
-                id[0],
-                id[1],
-                id[2],
-                id[3],
-                id[4],
-                id[5],
-                id[6],
-                id[7]);
-            return ESP_FAIL;
-        } else {
-            device_size = (uint32_t)requested_top64;
-            sector_size = 0u;
-            buffer_write_bytes = 0u;
-            if (job->mode == BURNER_JOB_WRITE_ROM && job->gba_force_no_cfi) {
-                ESP_LOGW(
-                    BURNER_TAG,
-                    "GBA CFI read failed; force_no_cfi enabled for write. using size hint=0x%08" PRIX32
-                    ", erase geometry unknown (erase may be skipped)",
-                    device_size);
-            } else {
-                ESP_LOGW(
-                    BURNER_TAG,
-                    "GBA CFI read failed; using read-only size hint up to 0x%08" PRIX32,
-                    device_size);
-            }
-        }
+        ESP_LOGE(BURNER_TAG, "GBA CFI read failed; refusing to continue");
+        return ESP_FAIL;
     }
 
     if (job->total_bytes > device_size) {
@@ -8074,14 +8962,16 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     s_cart_ctx.buffer_write_bytes = buffer_write_bytes;
     s_cart_ctx.sector_size = sector_size;
     s_cart_ctx.device_size = device_size;
+    s_cart_ctx.gba_cmdset = burner_gba_cmdset_from_id(id);
 
     ESP_LOGI(
         BURNER_TAG,
-        "GBA prepared: flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cfi=%s cmd=%s-address %s-lane id=%02X %02X %02X %02X %02X %02X %02X %02X",
+        "GBA prepared: flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cfi=%s nor=%s cmd=%s-address %s-lane id=%02X %02X %02X %02X %02X %02X %02X %02X",
         device_size,
         sector_size,
         (unsigned)buffer_write_bytes,
         cfi_ok ? "ok" : "unavailable",
+        burner_nor_cmdset_name(s_cart_ctx.gba_cmdset),
         burner_gba_cmd_addr_mode_name(s_cart_ctx.gba_cmd_addr_mode),
         burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane),
         id[0],
@@ -8116,106 +9006,6 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         s_cart_ctx.d0d1_swapped);
 
     return ESP_OK;
-}
-
-const char *burner_mbc5_chip_name(const uint8_t id[4])
-{
-    if (id == NULL) {
-        return "unknown";
-    }
-    if (id[0] == 0xC2u && id[1] == 0xCBu) {
-        return "MX29LV640EB";
-    }
-    if (id[0] == 0xC2u && id[1] == 0xC9u) {
-        return "MX29LV640ET";
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x21u && id[3] == 0x01u) {
-        return "S29GL128N/P/S";
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        return "S29GL256N/P/S";
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x23u && id[3] == 0x01u) {
-        return "S29GL512N/P/S";
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x28u && id[3] == 0x01u) {
-        return "S29GL01GP/GS";
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x48u && id[3] == 0x01u) {
-        return "S70GL02GS";
-    }
-    if (id[0] == 0xC2u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        return "MX29GL256E/F";
-    }
-    if (id[0] == 0x89u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        return "JS28F256 / MT28EW256ABA";
-    }
-    return "unknown";
-}
-
-bool burner_mbc5_geometry_from_id(
-    const uint8_t id[4],
-    uint32_t *device_size,
-    uint32_t *sector_size,
-    uint16_t *buffer_write_bytes)
-{
-    if (id == NULL || device_size == NULL || sector_size == NULL || buffer_write_bytes == NULL) {
-        return false;
-    }
-
-    /* Macronix 64Mbit (8MiB), 64KiB uniform sectors, typical x8 write-buffer = 32B. */
-    if ((id[0] == 0xC2u && id[1] == 0xCBu) || (id[0] == 0xC2u && id[1] == 0xC9u)) {
-        *device_size = 8u * 1024u * 1024u;
-        *sector_size = 64u * 1024u;
-        *buffer_write_bytes = 32u;
-        return true;
-    }
-
-    /* Spansion GL-N/P/S families share IDs across generations, so use conservative x8 write-buffer sizes. */
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x21u && id[3] == 0x01u) {
-        *device_size = 16u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 32u;
-        return true;
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        *device_size = 32u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 32u;
-        return true;
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x23u && id[3] == 0x01u) {
-        *device_size = 64u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 32u;
-        return true;
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x28u && id[3] == 0x01u) {
-        *device_size = 128u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 64u;
-        return true;
-    }
-    if (id[0] == 0x01u && id[1] == 0x7Eu && id[2] == 0x48u && id[3] == 0x01u) {
-        *device_size = 256u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 512u;
-        return true;
-    }
-    if (id[0] == 0xC2u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        *device_size = 32u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 64u;
-        return true;
-    }
-    if (id[0] == 0x89u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        *device_size = 32u * 1024u * 1024u;
-        *sector_size = 128u * 1024u;
-        *buffer_write_bytes = 256u;
-        return true;
-    }
-
-    return false;
 }
 
 static esp_err_t burner_bacon_mbc5_switch_bank(uint16_t bank)
@@ -8996,10 +9786,13 @@ static esp_err_t burner_bacon_gba_rom_program(
 {
     size_t i = 0;
     esp_err_t err;
+    bool intel_cmdset;
 
     if (buf == NULL || len == 0u || (byte_addr & 0x1u) != 0u || (len & 0x1u) != 0u) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    intel_cmdset = burner_gba_nor_is_intel_active();
 
     while (i < len) {
         err = burner_cancel_poll();
@@ -9009,7 +9802,101 @@ static esp_err_t burner_bacon_gba_rom_program(
         uint32_t starting_address = byte_addr + (uint32_t)i;
         uint32_t starting_word_address = starting_address >> 1;
 
-        if (buffer_write_bytes < 2u) {
+        if (intel_cmdset) {
+            if (buffer_write_bytes >= 2u) {
+                size_t write_len = len - i;
+                size_t write_words;
+                uint16_t status = 0u;
+                uint16_t confirm_cmd = 0x00D0u;
+                uint16_t write_count_word;
+                size_t wr;
+
+                if (write_len > buffer_write_bytes) {
+                    write_len = buffer_write_bytes;
+                }
+                write_len = burner_gba_program_safe_chunk_bytes(
+                    starting_address,
+                    write_len,
+                    (size_t)buffer_write_bytes);
+                if (write_len < 2u) {
+                    write_len = 2u;
+                }
+                write_words = write_len / 2u;
+                err = burner_bacon_gba_intel_wait_ready(starting_address, 0x00E9u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+                if (err != ESP_OK) {
+                    return err;
+                }
+                write_count_word = burner_apply_d0d1_swap_on_write(
+                    (uint16_t)(write_words - 1u),
+                    s_cart_ctx.d0d1_swapped);
+                err = burner_bacon_gba_command_write_u16(starting_word_address, write_count_word);
+                if (err != ESP_OK) {
+                    return err;
+                }
+                for (wr = 0u; wr < write_words; ++wr) {
+                    uint16_t pd = (uint16_t)((uint16_t)buf[i + wr * 2u] |
+                                             ((uint16_t)buf[i + wr * 2u + 1u] << 8));
+                    err = burner_bacon_rom_write_u16(starting_word_address + (uint32_t)wr, pd);
+                    if (err != ESP_OK) {
+                        return err;
+                    }
+                }
+                err = burner_bacon_gba_command_write_u16(starting_word_address, confirm_cmd);
+                if (err != ESP_OK) {
+                    return err;
+                }
+                err = burner_bacon_gba_intel_wait_ready(starting_address, 0x0070u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+                if (err != ESP_OK) {
+                    ESP_LOGW(
+                        BURNER_TAG,
+                        "GBA intel buffered program timeout @0x%08" PRIX32 " status=0x%04X",
+                        starting_address,
+                        status);
+                    return err;
+                }
+                err = burner_bacon_gba_intel_reset();
+                if (err != ESP_OK) {
+                    return err;
+                }
+                i += write_len;
+                burner_task_yield_if_due();
+                continue;
+            }
+
+            {
+                uint16_t pd = (uint16_t)((uint16_t)buf[i] | ((uint16_t)buf[i + 1u] << 8));
+                uint16_t status = 0u;
+
+                err = burner_bacon_gba_command_write_u16(0x000u, 0x0070u);
+                if (err != ESP_OK) {
+                    return err;
+                }
+                err = burner_bacon_gba_command_write_u16(0x000u, 0x0010u);
+                if (err != ESP_OK) {
+                    return err;
+                }
+                err = burner_bacon_rom_write_u16(starting_word_address, pd);
+                if (err != ESP_OK) {
+                    return err;
+                }
+                err = burner_bacon_gba_intel_wait_ready(starting_address, 0x0000u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+                if (err != ESP_OK) {
+                    ESP_LOGW(
+                        BURNER_TAG,
+                        "GBA intel single-word program timeout @0x%08" PRIX32 " status=0x%04X",
+                        starting_address,
+                        status);
+                    return err;
+                }
+                err = burner_bacon_gba_intel_reset();
+                if (err != ESP_OK) {
+                    return err;
+                }
+                i += 2u;
+                burner_task_yield_if_due();
+                continue;
+            }
+        } else if (buffer_write_bytes < 2u) {
             uint8_t seq[41];
             uint16_t pd = (uint16_t)((uint16_t)buf[i] | ((uint16_t)buf[i + 1u] << 8));
             uint16_t cmd_aa = burner_apply_d0d1_swap_on_write(0x00AAu, s_cart_ctx.d0d1_swapped);
@@ -9268,7 +10155,17 @@ static esp_err_t burner_bacon_gba_program_block(
             }
         }
 
+        err = burner_gba_sector_erase_prepare_current(rom_addr);
+        if (err != ESP_OK) {
+            return err;
+        }
+
         err = burner_bacon_gba_rom_program(rom_addr, data + programmed, chunk, s_cart_ctx.buffer_write_bytes);
+        if (err != ESP_OK) {
+            return err;
+        }
+
+        err = burner_gba_sector_erase_prefetch_next(rom_addr, chunk);
         if (err != ESP_OK) {
             return err;
         }
@@ -9455,11 +10352,13 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     uint16_t read_back = 0;
     int64_t deadline_us;
     esp_err_t err;
+    bool intel_cmdset;
 
     if (timeout_ms == 0u) {
         return ESP_ERR_TIMEOUT;
     }
 
+    intel_cmdset = burner_gba_nor_is_intel_active();
     burner_gba_resolve_write_addr(flash_addr, is_multi_card, &bank, NULL);
 
     if (is_multi_card) {
@@ -9467,6 +10366,48 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         if (err != ESP_OK) {
             return err;
         }
+    }
+
+    if (intel_cmdset) {
+        err = burner_bacon_gba_intel_reset();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(sa_word, 0x0060u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(sa_word, 0x00D0u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(sa_word, 0x0020u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(sa_word, 0x00D0u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_intel_wait_ready(flash_addr, 0x0000u, timeout_ms, &read_back);
+        if (err == ESP_OK) {
+            err = burner_bacon_gba_intel_reset();
+            if (err != ESP_OK) {
+                return err;
+            }
+            return ESP_OK;
+        }
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA intel erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32 " status=0x%04X multi=%u timeout=%ums",
+            flash_addr,
+            bank,
+            sa_word,
+            read_back,
+            is_multi_card ? 1u : 0u,
+            (unsigned)timeout_ms);
+        (void)burner_bacon_gba_intel_reset();
+        return err;
     }
 
     err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
@@ -9696,6 +10637,35 @@ static esp_err_t burner_bacon_gba_chip_erase_once(void)
     uint16_t read_back = 0;
     int64_t deadline_us;
     esp_err_t err;
+    bool intel_cmdset;
+
+    intel_cmdset = burner_gba_nor_is_intel_active();
+
+    if (intel_cmdset) {
+        err = burner_bacon_gba_intel_reset();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x0060u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x00D0u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x0020u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(0x000u, 0x00D0u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_intel_wait_ready(0x000u, 0x0000u, BURNER_ROM_CHIP_ERASE_TIMEOUT_MS, &read_back);
+        (void)burner_bacon_gba_intel_reset();
+        return err;
+    }
 
     err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
     if (err != ESP_OK) {
@@ -9836,8 +10806,14 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
             id[3]);
     }
 
-    if (id[0] == 0x89u && id[1] == 0x7Eu && id[2] == 0x22u && id[3] == 0x01u) {
-        buffer_write_bytes = 256u;
+    if (burner_mbc5_nor_has_flag(id, BURNER_NOR_FLAG_LIMIT_BUFFER_TO_ID)) {
+        uint32_t id_device_size = 0u;
+        uint32_t id_sector_size = 0u;
+        uint16_t id_buffer_write_bytes = 0u;
+        if (burner_mbc5_geometry_from_id(id, &id_device_size, &id_sector_size, &id_buffer_write_bytes) &&
+            id_buffer_write_bytes > 0u) {
+            buffer_write_bytes = id_buffer_write_bytes;
+        }
     }
     if (id_fb_buffer_write_bytes > 0u && buffer_write_bytes > id_fb_buffer_write_bytes) {
         buffer_write_bytes = id_fb_buffer_write_bytes;
@@ -9868,10 +10844,11 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
 
     ESP_LOGI(
         BURNER_TAG,
-        "MBC5 prepared: flash=%" PRIu32 " sector=%" PRIu32 " buf=%u id=%02X %02X %02X %02X%s",
+        "MBC5 prepared: flash=%" PRIu32 " sector=%" PRIu32 " buf=%u nor=%s id=%02X %02X %02X %02X%s",
         device_size,
         sector_size,
         (unsigned)buffer_write_bytes,
+        burner_nor_cmdset_name(burner_mbc5_cmdset_from_id(id)),
         id[0],
         id[1],
         id[2],
@@ -10033,7 +11010,12 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
         if (err == ESP_OK && !cfi_ok) {
             ESP_LOGW(
                 BURNER_TAG,
-                "GBA capacity probe failed: command mode unavailable, id=%02X %02X %02X %02X %02X %02X %02X %02X",
+                "GBA capacity probe: CFI unavailable after strict ID match: flash=%" PRIu32
+                " sector=%" PRIu32 " buf=%u cmdset=%s id=%02X %02X %02X %02X %02X %02X %02X %02X",
+                device_size,
+                sector_size,
+                (unsigned)buffer_write_bytes,
+                burner_nor_cmdset_name(burner_gba_cmdset_from_id(gba_id)),
                 gba_id[0],
                 gba_id[1],
                 gba_id[2],
@@ -10042,7 +11024,6 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
                 gba_id[5],
                 gba_id[6],
                 gba_id[7]);
-            err = ESP_ERR_NOT_SUPPORTED;
         }
     } else {
         uint8_t mbc5_id[4] = {0};
@@ -10090,7 +11071,7 @@ static esp_err_t burner_bacon_gba_reset_aso_locked(void)
     if (err != ESP_OK) {
         return err;
     }
-    return burner_bacon_gba_command_write_u16(0x000u, 0x00F0u);
+    return burner_bacon_gba_reset_to_read_mode();
 }
 
 static esp_err_t burner_bacon_mbc5_reset_aso_locked(void)
@@ -13119,10 +14100,10 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
-            "GBA burn erase policy: pipeline direct sector erase/write");
+            "GBA burn erase policy: pipeline sector-boundary erase/write");
     } else {
         probe_len = (job->total_bytes < BURN_MBC5_ERASE_PROBE_BYTES)
-                        ? (size_t)job->total_bytes
+                       ? (size_t)job->total_bytes
                         : BURN_MBC5_ERASE_PROBE_BYTES;
         burner_status_update(
             BURNER_STATE_BURNING,
@@ -13151,55 +14132,22 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         should_erase = !burner_all_ff(probe_buf, probe_len);
         ESP_LOGI(
             BURNER_TAG,
-            "GBA burn erase policy: legacy start-probe erase=%s",
+            "GBA burn erase policy: sector-boundary erase=%s",
             should_erase ? "yes" : "no");
     }
     sector_geometry_valid =
         (s_cart_ctx.sector_size > 0u) && ((s_cart_ctx.sector_size & (s_cart_ctx.sector_size - 1u)) == 0u);
     if (should_erase && !sector_geometry_valid) {
-        if (job->gba_force_no_cfi) {
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBA force_no_cfi: unknown sector geometry (sector=%" PRIu32 "), trying chip erase fallback",
-                s_cart_ctx.sector_size);
-            burner_status_update(
-                BURNER_STATE_BURNING,
-                0,
-                0,
-                job->total_bytes,
-                "force_no_cfi: unknown sector, trying full chip erase",
-                job->rom_name,
-                job->rom_path);
-            burner_status_mark_erase_begin();
-            erase_timer_started = true;
-            err = burner_run_gba_chip_erase();
-            burner_status_mark_erase_end();
-            erase_timer_started = false;
-            if (err != ESP_OK) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    0,
-                    0,
-                    job->total_bytes,
-                    "force_no_cfi chip erase failed",
-                    job->rom_name,
-                    job->rom_path);
-                goto write_gba_done;
-            }
-            /* Full chip erase completed; skip range erase branch below. */
-            should_erase = false;
-        } else {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                0,
-                0,
-                job->total_bytes,
-                "gba sector geometry unavailable",
-                job->rom_name,
-                job->rom_path);
-            err = ESP_ERR_INVALID_SIZE;
-            goto write_gba_done;
-        }
+        burner_status_update(
+            BURNER_STATE_ERROR,
+            0,
+            0,
+            job->total_bytes,
+            "gba sector geometry unavailable",
+            job->rom_name,
+            job->rom_path);
+        err = ESP_ERR_INVALID_SIZE;
+        goto write_gba_done;
     }
     if (should_erase && sector_geometry_valid) {
         uint32_t planned_erase_sectors = use_psram_stage
@@ -13216,38 +14164,13 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             planned_erase_sectors,
             s_cart_ctx.sector_size);
     }
-    if (should_erase && !use_psram_stage) {
-        burner_status_mark_erase_begin();
-        erase_timer_started = true;
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            0,
-            0,
-            job->total_bytes,
-            "erasing gba flash sectors",
-            job->rom_name,
-            job->rom_path);
-
-        err = burner_run_gba_range_erase(
+    burner_gba_sector_erase_ctx_reset();
+    if (should_erase) {
+        burner_gba_sector_erase_ctx_begin(
             addr_begin,
             addr_begin + job->total_bytes - 1u,
             s_cart_ctx.sector_size,
-            burner_is_gba_multi_card(job),
-            false);
-        burner_status_mark_erase_end();
-        erase_timer_started = false;
-
-        if (err != ESP_OK) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                0,
-                0,
-                job->total_bytes,
-                "erase gba flash failed",
-                job->rom_name,
-                job->rom_path);
-            goto write_gba_done;
-        }
+            burner_is_gba_multi_card(job));
     }
 
     burner_status_mark_write_begin();
@@ -13275,9 +14198,6 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             }
 
             if (should_erase) {
-                uint32_t stage_erase_begin = stage_addr;
-                uint32_t stage_erase_end = stage_addr + (uint32_t)stage_bytes - 1u;
-
                 burner_status_update(
                     BURNER_STATE_BURNING,
                     burner_calc_progress_percent_u64(processed, job->total_bytes),
@@ -13286,97 +14206,61 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                     psram_erase_prefetch_msg,
                     job->rom_name,
                     job->rom_path);
+            }
 
-                prefetch_started = false;
+            prefetch_started = false;
+            prefetch_inflight = false;
+            if (prefetch_done != NULL) {
+                vSemaphoreDelete(prefetch_done);
+                prefetch_done = NULL;
+            }
+
+            prefetch_done = xSemaphoreCreateBinary();
+            if (prefetch_done != NULL) {
+                prefetch.fp = fp;
+                prefetch.dst = psram_stage_buf;
+                prefetch.bytes = stage_bytes;
+                prefetch.read_len = 0u;
+                prefetch.err = ESP_FAIL;
+                prefetch.done = prefetch_done;
+                if (burner_create_task_with_affinity(
+                        burner_tf_prefetch_task,
+                        "tf_prefetch",
+                        4096,
+                        &prefetch,
+                        4,
+                        NULL,
+                        s_burn_core_cfg.tf_core) == pdPASS) {
+                    prefetch_inflight = true;
+                    prefetch_started = true;
+                } else {
+                    vSemaphoreDelete(prefetch_done);
+                    prefetch_done = NULL;
+                }
+            }
+
+            if (prefetch_inflight && prefetch_done != NULL) {
+                xSemaphoreTake(prefetch_done, portMAX_DELAY);
                 prefetch_inflight = false;
-                if (prefetch_done != NULL) {
-                    vSemaphoreDelete(prefetch_done);
-                    prefetch_done = NULL;
-                }
-
-                prefetch_done = xSemaphoreCreateBinary();
-                if (prefetch_done != NULL) {
-                    prefetch.fp = fp;
-                    prefetch.dst = psram_stage_buf;
-                    prefetch.bytes = stage_bytes;
-                    prefetch.read_len = 0u;
-                    prefetch.err = ESP_FAIL;
-                    prefetch.done = prefetch_done;
-                    if (burner_create_task_with_affinity(
-                            burner_tf_prefetch_task,
-                            "tf_prefetch",
-                            4096,
-                            &prefetch,
-                            4,
-                            NULL,
-                            s_burn_core_cfg.tf_core) == pdPASS) {
-                        prefetch_inflight = true;
-                        prefetch_started = true;
-                    } else {
-                        vSemaphoreDelete(prefetch_done);
-                        prefetch_done = NULL;
-                    }
-                }
-
-                burner_status_mark_erase_begin();
-                erase_timer_started = true;
-                if (processed > 0u && sector_geometry_valid) {
-                    uint32_t mask = s_cart_ctx.sector_size - 1u;
-                    uint64_t ceil_begin_u64 = (uint64_t)stage_addr + (uint64_t)mask;
-                    if (ceil_begin_u64 > UINT32_MAX) {
-                        stage_erase_begin = UINT32_MAX;
-                    } else {
-                        stage_erase_begin = (uint32_t)ceil_begin_u64 & ~mask;
-                    }
-                    if (stage_erase_begin > stage_erase_end) {
-                        stage_erase_begin = stage_erase_end;
-                    }
-                }
-                err = burner_run_gba_range_erase(
-                    stage_erase_begin,
-                    stage_erase_end,
-                    s_cart_ctx.sector_size,
-                    burner_is_gba_multi_card(job),
-                    false);
-                burner_status_mark_erase_end();
-                erase_timer_started = false;
-
-                if (prefetch_inflight && prefetch_done != NULL) {
-                    xSemaphoreTake(prefetch_done, portMAX_DELAY);
-                    prefetch_inflight = false;
-                }
-                if (prefetch_done != NULL) {
-                    vSemaphoreDelete(prefetch_done);
-                    prefetch_done = NULL;
-                }
-
-                if (err != ESP_OK) {
+            }
+            if (prefetch_done != NULL) {
+                vSemaphoreDelete(prefetch_done);
+                prefetch_done = NULL;
+            }
+            if (prefetch_started) {
+                if (prefetch.err == ESP_OK && prefetch.read_len == stage_bytes) {
+                    stage_prefetched = true;
+                } else {
                     burner_status_update(
                         BURNER_STATE_ERROR,
                         0,
                         processed,
                         job->total_bytes,
-                        "erase gba flash failed",
+                        "prefetch tf->psram failed",
                         job->rom_name,
                         job->rom_path);
+                    err = (prefetch.err != ESP_OK) ? prefetch.err : ESP_FAIL;
                     goto write_gba_done;
-                }
-
-                if (prefetch_started) {
-                    if (prefetch.err == ESP_OK && prefetch.read_len == stage_bytes) {
-                        stage_prefetched = true;
-                    } else {
-                        burner_status_update(
-                            BURNER_STATE_ERROR,
-                            0,
-                            processed,
-                            job->total_bytes,
-                            "prefetch tf->psram failed",
-                            job->rom_name,
-                            job->rom_path);
-                        err = (prefetch.err != ESP_OK) ? prefetch.err : ESP_FAIL;
-                        goto write_gba_done;
-                    }
                 }
             }
 
@@ -13578,6 +14462,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     }
 
 write_gba_done:
+    burner_gba_sector_erase_ctx_reset();
     if (erase_timer_started) {
         burner_status_mark_erase_end();
     }

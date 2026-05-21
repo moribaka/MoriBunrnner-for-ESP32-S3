@@ -38,6 +38,7 @@
 #include "freertos/task.h"
 
 #include "file_system.h"
+#include "burner_nor_db.h"
 #include "ip5306.h"
 #include "lcd_display.h"
 #include "mcu_debug.h"
@@ -198,6 +199,7 @@ typedef struct {
     uint32_t sector_size;
     uint32_t device_size;
     uint8_t mbc5_id[4];
+    burner_nor_cmdset_t gba_cmdset;
     burner_gba_cmd_addr_mode_t gba_cmd_addr_mode;
     burner_gba_cmd_data_lane_t gba_cmd_data_lane;
     bool d0d1_known;   /* D0/D1 detection completed */
@@ -232,6 +234,12 @@ typedef enum {
     BURNER_GBA_SAVE_TYPE_FLASH,
     BURNER_GBA_SAVE_TYPE_BATTERYLESS,
 } burner_gba_save_type_t;
+
+typedef enum {
+    BURNER_GBA_SRAM_PATCH_NONE = 0,
+    BURNER_GBA_SRAM_PATCH_GBATA,
+    BURNER_GBA_SRAM_PATCH_FLASH1M_REPRO,
+} burner_gba_sram_patch_kind_t;
 
 typedef enum {
     BURNER_CART_MODE_MBC5 = 0,
@@ -343,6 +351,9 @@ typedef struct {
     burner_gba_save_type_t probe_gba_save_type;
     uint32_t probe_gba_save_size;
     bool probe_gba_save_detected;
+    burner_gba_sram_patch_kind_t probe_gba_sram_patch_kind;
+    bool probe_gba_sram_patch_scanned;
+    bool probe_gba_sram_patch_detected;
     uint32_t probe_device_size;
     uint32_t probe_sector_size;
     uint16_t probe_buffer_write_bytes;
@@ -551,7 +562,6 @@ esp_err_t burner_tf_writer_start(burner_tf_writer_ctx_t *ctx, int fd);
 esp_err_t burner_tf_writer_submit(burner_tf_writer_ctx_t *ctx, const uint8_t *src, size_t bytes);
 esp_err_t burner_tf_writer_wait(burner_tf_writer_ctx_t *ctx);
 void burner_tf_writer_stop(burner_tf_writer_ctx_t *ctx);
-const char *burner_mbc5_chip_name(const uint8_t id[4]);
 const char *burner_rom_dump_ext_for_mode(burner_cart_mode_t cart_mode);
 bool burner_task_is_running_snapshot(void);
 bool burner_build_full_path(const char *rel_path, char *full_path, size_t full_path_len);
@@ -696,6 +706,10 @@ void burner_status_set_gba_save_probe(
     burner_gba_save_type_t save_type,
     uint32_t save_size,
     bool detected);
+void burner_status_set_gba_sram_patch_probe(
+    burner_gba_sram_patch_kind_t patch_kind,
+    bool scanned,
+    bool detected);
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal);
 void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t sector_size);
 void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t sector_size);
@@ -836,7 +850,6 @@ esp_err_t burner_bacon_mbc5_prepare_power(void);
 const char *burner_gba_cmd_addr_mode_name(burner_gba_cmd_addr_mode_t mode);
 const char *burner_gba_cmd_data_lane_name(burner_gba_cmd_data_lane_t lane);
 void burner_format_hex_bytes(const uint8_t *data, size_t len, char *out, size_t out_len);
-const char *burner_gba_chip_name(const uint8_t id[8]);
 bool burner_gba_id_looks_like_rom_header(const uint8_t id[8]);
 esp_err_t burner_bacon_gba_probe_locked(
     uint8_t id_out[8],
@@ -845,15 +858,32 @@ esp_err_t burner_bacon_gba_probe_locked(
     uint16_t *buffer_write_bytes,
     bool *cfi_ok_out);
 void burner_bacon_gba_d0d1_status(bool *known_out, bool *swapped_out);
+esp_err_t burner_probe_gba_rom_analysis_locked(
+    uint32_t device_size,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *save_detected_out,
+    burner_gba_sram_patch_kind_t *patch_kind_out,
+    bool *patch_detected_out);
+esp_err_t burner_probe_gba_rom_analysis(
+    uint32_t device_size,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *save_detected_out,
+    burner_gba_sram_patch_kind_t *patch_kind_out,
+    bool *patch_detected_out);
 esp_err_t burner_probe_gba_save_type(
     burner_gba_save_type_t *save_type_out,
     uint32_t *save_size_out,
     bool *detected_out);
-bool burner_mbc5_geometry_from_id(
-    const uint8_t id[4],
-    uint32_t *device_size,
-    uint32_t *sector_size,
-    uint16_t *buffer_write_bytes);
+esp_err_t burner_probe_gba_save_type_head_locked(
+    uint32_t device_size,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out,
+    bool *detected_out);
+esp_err_t burner_probe_gba_sram_patch(
+    burner_gba_sram_patch_kind_t *patch_kind_out,
+    bool *detected_out);
 esp_err_t burner_bacon_mbc5_get_id(uint8_t id_out[4]);
 esp_err_t burner_bacon_mbc5_get_cfi(
     uint32_t *device_size,
