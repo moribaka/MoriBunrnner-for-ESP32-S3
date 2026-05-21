@@ -116,3 +116,31 @@ Implement real GBA SRAM save import/export in the new path with explicit size se
 - ChisLink itself uses backup-type analysis plus game DB fallback.
 - In this repo, the first usable slice can start with ROM signature scanning and explicit unknown results.
 - Do not silently convert unknown into SRAM/FLASH/EEPROM.
+
+## Deferred: GBATA SRAM ROM patch writing
+
+Do not implement ROM patch writing yet. Keep this as a follow-up task.
+
+Planned follow-up:
+
+1. Reproduce `GBA Tool Advance` SRAM patch write path for supported save signatures.
+2. Fully parse its embedded `BINFILE -> SRAM` resource into structured templates.
+3. Map each save signature group to its patch template:
+   - `EEPROM_V111/V120/V121/V122/V124/V125/V126`
+   - `FLASH_V120/V121/V123/V124/V125/V126`
+   - `FLASH512_V130/V131`
+   - `FLASH1M_V102/V103`
+4. Reproduce ROM code injection positions and branch rewrites.
+5. Add "already patched" detection before any patch write.
+6. Fail clearly for unsupported or unrecognized ROMs instead of forcing a patch.
+
+## Deferred: Flash1M_Repro SRAM ROM patch writing
+
+Do not implement ROM patch writing yet. Keep this as a follow-up task.
+
+Planned follow-up:
+
+1. Reconstruct the `Flash1M_Repro_SRAM_Patcher` patchset table into structured per-signature templates.
+2. Split `1MSRAM` and plain `SRAM` patch families instead of sharing a loose detector.
+3. Reproduce its branch rewrites and injected helper routines exactly, with no fuzzy fallback patching.
+4. Run "already patched" detection before patch write so repeated patching fails clearly.
