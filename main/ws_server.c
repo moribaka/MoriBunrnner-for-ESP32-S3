@@ -8240,7 +8240,9 @@ static bool burner_gba_detect_qry_words(uint16_t q, uint16_t r, uint16_t y, bool
  * burner_bacon_gba_get_cfi(): GBA flash is probed in word-address mode, so the
  * canonical signature words are 0x010/0x011/0x012 after entering CFI at 0x055.
  */
-static esp_err_t burner_gba_detect_d0d1_swap(bool *is_swapped_out)
+static esp_err_t burner_gba_detect_d0d1_swap(
+    bool *is_swapped_out,
+    burner_gba_cmd_data_lane_t *lane_out)
 {
     esp_err_t err;
     uint16_t q = 0;
@@ -8274,6 +8276,9 @@ static esp_err_t burner_gba_detect_d0d1_swap(bool *is_swapped_out)
     }
 
     if (burner_gba_detect_qry_words(q, r, y, is_swapped_out, &high_byte_lane)) {
+        if (lane_out != NULL) {
+            *lane_out = high_byte_lane ? BURNER_GBA_CMD_DATA_HIGH : BURNER_GBA_CMD_DATA_LOW;
+        }
         ESP_LOGI(
             BURNER_TAG,
             "D0/D1 swap detection: CFI 'QRY' detected (%s, %s-byte lane) [010]=%04X [011]=%04X [012]=%04X",
@@ -8566,6 +8571,7 @@ static esp_err_t burner_bacon_gba_get_cfi(
     cfi2a = high_byte_lane ? (uint8_t)((w2a >> 8) & 0xFFu) : (uint8_t)(w2a & 0xFFu);
     cfi2f = high_byte_lane ? (uint8_t)((w2f >> 8) & 0xFFu) : (uint8_t)(w2f & 0xFFu);
     cfi30 = high_byte_lane ? (uint8_t)((w30 >> 8) & 0xFFu) : (uint8_t)(w30 & 0xFFu);
+    s_cart_ctx.gba_cmd_data_lane = high_byte_lane ? BURNER_GBA_CMD_DATA_HIGH : BURNER_GBA_CMD_DATA_LOW;
 
     if (cfi27 >= 31u) {
         err = ESP_FAIL;
@@ -8660,6 +8666,8 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     const burner_nor_entry_t *nor_entry = NULL;
     bool id_looks_like_header = false;
     bool id_matches_plain_rom = false;
+    const char *chip_name = "unknown";
+    const char *profile_name = "unknown";
     burner_nor_cmdset_t attempted_cmdset = BURNER_NOR_CMDSET_AMD;
     uint32_t probe_hz = (s_mcu_spi_actual_hz > 0u) ? s_mcu_spi_actual_hz : s_mcu_spi_clock_hz;
     uint32_t attempt = 0u;
@@ -8684,15 +8692,19 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
 
     /* Detect D0/D1 swap before reading ID */
     ESP_LOGI(BURNER_TAG, "GBA D0/D1 swap detection starting...");
-    err = burner_gba_detect_d0d1_swap(&s_cart_ctx.d0d1_swapped);
+    err = burner_gba_detect_d0d1_swap(&s_cart_ctx.d0d1_swapped, &s_cart_ctx.gba_cmd_data_lane);
     if (err == ESP_OK) {
         s_cart_ctx.d0d1_known = true;
-        ESP_LOGI(BURNER_TAG, "GBA D0/D1 swap detection: %s",
-                 s_cart_ctx.d0d1_swapped ? "SWAPPED (D0<->D1)" : "NORMAL (no swap)");
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA D0/D1 swap detection: %s, lane=%s",
+            s_cart_ctx.d0d1_swapped ? "SWAPPED (D0<->D1)" : "NORMAL (no swap)",
+            burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane));
     } else {
         ESP_LOGW(BURNER_TAG, "GBA D0/D1 swap detection failed, assuming normal (no swap)");
         s_cart_ctx.d0d1_known = false;
         s_cart_ctx.d0d1_swapped = false;
+        s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
     }
 
     for (attempt = 0u; attempt < BURNER_GBA_CFI_RETRY_COUNT; ++attempt) {
@@ -8756,7 +8768,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             (id_matches_plain_rom ? "looks-like-plain-rom-data" : "candidate-id"));
 
         nor_entry = burner_nor_db_lookup_gba(id_out);
-        if (nor_entry == NULL || nor_entry->cmdset == BURNER_NOR_CMDSET_INTEL) {
+        if (nor_entry == NULL || burner_nor_entry_cmdset(nor_entry) == BURNER_NOR_CMDSET_INTEL) {
             uint8_t intel_id[8] = {0};
             esp_err_t intel_err;
 
@@ -8768,7 +8780,9 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
                 "GBA Intel ReadID trace");
             if (intel_err == ESP_OK) {
                 const burner_nor_entry_t *intel_entry = burner_nor_db_lookup_gba(intel_id);
-                bool prefer_intel = (intel_entry != NULL && intel_entry->cmdset == BURNER_NOR_CMDSET_INTEL);
+                bool prefer_intel =
+                    (intel_entry != NULL &&
+                     burner_nor_entry_cmdset(intel_entry) == BURNER_NOR_CMDSET_INTEL);
 
                 if (prefer_intel) {
                     memcpy(id_out, intel_id, sizeof(intel_id));
@@ -8819,10 +8833,21 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             continue;
         }
 
-        *device_size = nor_entry->device_size;
-        *sector_size = nor_entry->sector_size;
-        *buffer_write_bytes = nor_entry->buffer_write_bytes;
-        s_cart_ctx.gba_cmdset = nor_entry->cmdset;
+        chip_name = burner_nor_entry_name(nor_entry);
+        profile_name = burner_gba_profile_name(id_out);
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA profile match @%" PRIu32 "Hz try=%" PRIu32 ": chip=%s profile=%s cmdset=%s",
+            probe_hz,
+            attempt + 1u,
+            chip_name,
+            profile_name,
+            burner_nor_cmdset_name(burner_nor_entry_cmdset(nor_entry)));
+
+        *device_size = burner_nor_entry_device_size(nor_entry);
+        *sector_size = burner_nor_entry_sector_size(nor_entry);
+        *buffer_write_bytes = burner_nor_entry_buffer_write_bytes(nor_entry);
+        s_cart_ctx.gba_cmdset = burner_nor_entry_cmdset(nor_entry);
 
         err = burner_bacon_gba_get_cfi(device_size, sector_size, buffer_write_bytes);
         if (err == ESP_OK) {
@@ -8830,13 +8855,16 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             ESP_LOGI(
                 BURNER_TAG,
                 "GBA CFI ok in word-address mode @%" PRIu32 "Hz try=%" PRIu32
-                ": flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cmdset=%s",
+                ": chip=%s profile=%s flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cmdset=%s lane=%s",
                 probe_hz,
                 attempt + 1u,
+                chip_name,
+                profile_name,
                 *device_size,
                 *sector_size,
                 (unsigned)*buffer_write_bytes,
-                burner_nor_cmdset_name(s_cart_ctx.gba_cmdset));
+                burner_nor_cmdset_name(s_cart_ctx.gba_cmdset),
+                burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane));
             return ESP_OK;
         }
 
@@ -8875,7 +8903,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             *device_size,
             *sector_size,
             (unsigned)*buffer_write_bytes,
-            burner_nor_cmdset_name(nor_entry->cmdset));
+            burner_nor_cmdset_name(burner_nor_entry_cmdset(nor_entry)));
         s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     }
 
@@ -8966,7 +8994,9 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
 
     ESP_LOGI(
         BURNER_TAG,
-        "GBA prepared: flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cfi=%s nor=%s cmd=%s-address %s-lane id=%02X %02X %02X %02X %02X %02X %02X %02X",
+        "GBA prepared: chip=%s profile=%s flash=%" PRIu32 " sector=%" PRIu32 " buf=%u cfi=%s nor=%s cmd=%s-address %s-lane id=%02X %02X %02X %02X %02X %02X %02X %02X",
+        burner_gba_chip_name(id),
+        burner_gba_profile_name(id),
         device_size,
         sector_size,
         (unsigned)buffer_write_bytes,

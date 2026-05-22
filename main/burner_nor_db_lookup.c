@@ -1,0 +1,295 @@
+#include "burner_nor_db.h"
+
+#include <stddef.h>
+
+#include "burner_nor_db_data.h"
+
+/* Lookup and metadata helpers layered on top of the standalone NOR database. */
+
+static bool burner_nor_id_match(const uint8_t *id, const burner_nor_entry_t *entry)
+{
+    size_t i;
+
+    if (id == NULL || entry == NULL) {
+        return false;
+    }
+    for (i = 0u; i < entry->id_len; ++i) {
+        if ((id[i] & entry->id_mask[i]) != (entry->id[i] & entry->id_mask[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static const burner_nor_entry_t *burner_nor_db_lookup(
+    burner_nor_idbus_t bus,
+    const uint8_t *id,
+    size_t id_len)
+{
+    const burner_nor_entry_t *table = NULL;
+    size_t table_count = 0u;
+    size_t i;
+
+    if (id == NULL) {
+        return NULL;
+    }
+
+    switch (bus) {
+        case BURNER_NOR_IDBUS_GBA:
+            table = g_burner_nor_db_gba;
+            table_count = g_burner_nor_db_gba_count;
+            break;
+        case BURNER_NOR_IDBUS_MBC5:
+            table = g_burner_nor_db_mbc5;
+            table_count = g_burner_nor_db_mbc5_count;
+            break;
+        default:
+            return NULL;
+    }
+
+    for (i = 0u; i < table_count; ++i) {
+        if (table[i].id_len != id_len) {
+            continue;
+        }
+        if (burner_nor_id_match(id, &table[i])) {
+            return &table[i];
+        }
+    }
+    return NULL;
+}
+
+static uint16_t burner_nor_family_buffer_write_bytes(const burner_nor_entry_t *entry)
+{
+    if (entry == NULL || entry->family == NULL) {
+        return 0u;
+    }
+
+    switch (entry->bus) {
+        case BURNER_NOR_IDBUS_GBA:
+            return entry->family->buffer_write_bytes_gba;
+        case BURNER_NOR_IDBUS_MBC5:
+            return entry->family->buffer_write_bytes_mbc5;
+        default:
+            return 0u;
+    }
+}
+
+const burner_nor_entry_t *burner_nor_db_lookup_gba(const uint8_t id[8])
+{
+    return burner_nor_db_lookup(BURNER_NOR_IDBUS_GBA, id, 8u);
+}
+
+const burner_nor_entry_t *burner_nor_db_lookup_mbc5(const uint8_t id[4])
+{
+    return burner_nor_db_lookup(BURNER_NOR_IDBUS_MBC5, id, 4u);
+}
+
+const burner_nor_family_t *burner_gba_family_from_id(const uint8_t id[8])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_gba(id);
+    return (entry != NULL) ? entry->family : NULL;
+}
+
+const burner_nor_family_t *burner_mbc5_family_from_id(const uint8_t id[4])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_mbc5(id);
+    return (entry != NULL) ? entry->family : NULL;
+}
+
+const char *burner_nor_entry_name(const burner_nor_entry_t *entry)
+{
+    if (entry == NULL) {
+        return "unknown";
+    }
+    if (entry->name != NULL) {
+        return entry->name;
+    }
+    if (entry->family != NULL && entry->family->name != NULL) {
+        return entry->family->name;
+    }
+    return "unknown";
+}
+
+burner_nor_cmdset_t burner_nor_entry_cmdset(const burner_nor_entry_t *entry)
+{
+    if (entry == NULL) {
+        return BURNER_NOR_CMDSET_UNKNOWN;
+    }
+    if (entry->cmdset != BURNER_NOR_CMDSET_UNKNOWN) {
+        return entry->cmdset;
+    }
+    if (entry->family != NULL) {
+        return entry->family->cmdset;
+    }
+    return BURNER_NOR_CMDSET_UNKNOWN;
+}
+
+uint32_t burner_nor_entry_flags(const burner_nor_entry_t *entry)
+{
+    uint32_t flags = BURNER_NOR_FLAG_NONE;
+
+    if (entry == NULL) {
+        return BURNER_NOR_FLAG_NONE;
+    }
+    if (entry->family != NULL) {
+        flags |= entry->family->flags;
+    }
+    flags |= entry->flags;
+    return flags;
+}
+
+uint32_t burner_nor_entry_device_size(const burner_nor_entry_t *entry)
+{
+    if (entry == NULL) {
+        return 0u;
+    }
+    if (entry->device_size != 0u) {
+        return entry->device_size;
+    }
+    if (entry->family != NULL) {
+        return entry->family->device_size;
+    }
+    return 0u;
+}
+
+uint32_t burner_nor_entry_sector_size(const burner_nor_entry_t *entry)
+{
+    if (entry == NULL) {
+        return 0u;
+    }
+    if (entry->sector_size != 0u) {
+        return entry->sector_size;
+    }
+    if (entry->family != NULL) {
+        return entry->family->sector_size;
+    }
+    return 0u;
+}
+
+uint16_t burner_nor_entry_buffer_write_bytes(const burner_nor_entry_t *entry)
+{
+    if (entry == NULL) {
+        return 0u;
+    }
+    if (entry->buffer_write_bytes != 0u) {
+        return entry->buffer_write_bytes;
+    }
+    return burner_nor_family_buffer_write_bytes(entry);
+}
+
+const char *burner_nor_cmdset_name(burner_nor_cmdset_t cmdset)
+{
+    switch (cmdset) {
+        case BURNER_NOR_CMDSET_AMD:
+            return "amd";
+        case BURNER_NOR_CMDSET_INTEL:
+            return "intel";
+        case BURNER_NOR_CMDSET_UNKNOWN:
+        default:
+            return "unknown";
+    }
+}
+
+const char *burner_gba_chip_name(const uint8_t id[8])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_gba(id);
+    return burner_nor_entry_name(entry);
+}
+
+const char *burner_gba_profile_name(const uint8_t id[8])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_gba(id);
+
+    if (entry != NULL && entry->profile != NULL) {
+        return entry->profile;
+    }
+    if (entry != NULL && entry->family != NULL && entry->family->gba_profile != NULL) {
+        return entry->family->gba_profile;
+    }
+    if (entry != NULL) {
+        switch (burner_nor_entry_cmdset(entry)) {
+            case BURNER_NOR_CMDSET_AMD:
+                return "AGB:AMD";
+            case BURNER_NOR_CMDSET_INTEL:
+                return "AGB:INTEL";
+            case BURNER_NOR_CMDSET_UNKNOWN:
+            default:
+                break;
+        }
+    }
+    return "unknown";
+}
+
+bool burner_gba_geometry_from_id(
+    const uint8_t id[8],
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes)
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_gba(id);
+
+    if (entry == NULL || device_size == NULL || sector_size == NULL || buffer_write_bytes == NULL) {
+        return false;
+    }
+    *device_size = burner_nor_entry_device_size(entry);
+    *sector_size = burner_nor_entry_sector_size(entry);
+    *buffer_write_bytes = burner_nor_entry_buffer_write_bytes(entry);
+    return true;
+}
+
+burner_nor_cmdset_t burner_gba_cmdset_from_id(const uint8_t id[8])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_gba(id);
+    return burner_nor_entry_cmdset(entry);
+}
+
+uint32_t burner_gba_nor_flags_from_id(const uint8_t id[8])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_gba(id);
+    return burner_nor_entry_flags(entry);
+}
+
+bool burner_gba_nor_has_flag(const uint8_t id[8], uint32_t flag)
+{
+    return (burner_gba_nor_flags_from_id(id) & flag) != 0u;
+}
+
+const char *burner_mbc5_chip_name(const uint8_t id[4])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_mbc5(id);
+    return burner_nor_entry_name(entry);
+}
+
+bool burner_mbc5_geometry_from_id(
+    const uint8_t id[4],
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes)
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_mbc5(id);
+
+    if (entry == NULL || device_size == NULL || sector_size == NULL || buffer_write_bytes == NULL) {
+        return false;
+    }
+    *device_size = burner_nor_entry_device_size(entry);
+    *sector_size = burner_nor_entry_sector_size(entry);
+    *buffer_write_bytes = burner_nor_entry_buffer_write_bytes(entry);
+    return true;
+}
+
+burner_nor_cmdset_t burner_mbc5_cmdset_from_id(const uint8_t id[4])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_mbc5(id);
+    return burner_nor_entry_cmdset(entry);
+}
+
+uint32_t burner_mbc5_nor_flags_from_id(const uint8_t id[4])
+{
+    const burner_nor_entry_t *entry = burner_nor_db_lookup_mbc5(id);
+    return burner_nor_entry_flags(entry);
+}
+
+bool burner_mbc5_nor_has_flag(const uint8_t id[4], uint32_t flag)
+{
+    return (burner_mbc5_nor_flags_from_id(id) & flag) != 0u;
+}
