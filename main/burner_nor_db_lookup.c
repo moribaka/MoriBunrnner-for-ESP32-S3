@@ -1,6 +1,9 @@
 #include "burner_nor_db.h"
 
+#include <inttypes.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "burner_nor_db_data.h"
 
@@ -187,6 +190,72 @@ const char *burner_nor_cmdset_name(burner_nor_cmdset_t cmdset)
         case BURNER_NOR_CMDSET_UNKNOWN:
         default:
             return "unknown";
+    }
+}
+
+burner_nor_cmdset_t burner_nor_cmdset_from_cfi_primary_id(uint16_t primary_id)
+{
+    switch (primary_id) {
+        case 0x0001u: /* Intel/Sharp extended */
+        case 0x0003u: /* Intel standard */
+            return BURNER_NOR_CMDSET_INTEL;
+        case 0x0002u: /* AMD/Fujitsu standard */
+        case 0x0004u: /* AMD/Fujitsu extended */
+            return BURNER_NOR_CMDSET_AMD;
+        default:
+            return BURNER_NOR_CMDSET_UNKNOWN;
+    }
+}
+
+void burner_nor_format_chip_name(
+    char *buf,
+    size_t buf_len,
+    const char *known_name,
+    burner_nor_cmdset_t cmdset,
+    uint32_t device_size)
+{
+    const char *cmdset_label = "NOR";
+
+    if (buf == NULL || buf_len == 0u) {
+        return;
+    }
+
+    if (known_name != NULL && known_name[0] != '\0' && strcmp(known_name, "unknown") != 0) {
+        (void)snprintf(buf, buf_len, "%s", known_name);
+        return;
+    }
+
+    switch (cmdset) {
+        case BURNER_NOR_CMDSET_AMD:
+            cmdset_label = "AMD";
+            break;
+        case BURNER_NOR_CMDSET_INTEL:
+            cmdset_label = "INTEL";
+            break;
+        case BURNER_NOR_CMDSET_UNKNOWN:
+        default:
+            cmdset_label = "NOR";
+            break;
+    }
+
+    if (device_size >= (1024u * 1024u) && (device_size % (1024u * 1024u)) == 0u) {
+        (void)snprintf(
+            buf,
+            buf_len,
+            "CFI %s %" PRIu32 "MB",
+            cmdset_label,
+            (uint32_t)(device_size / (1024u * 1024u)));
+    } else if (device_size >= 1024u && (device_size % 1024u) == 0u) {
+        (void)snprintf(
+            buf,
+            buf_len,
+            "CFI %s %" PRIu32 "KB",
+            cmdset_label,
+            (uint32_t)(device_size / 1024u));
+    } else if (device_size > 0u) {
+        (void)snprintf(buf, buf_len, "CFI %s %" PRIu32 "B", cmdset_label, device_size);
+    } else {
+        (void)snprintf(buf, buf_len, "CFI %s", cmdset_label);
     }
 }
 

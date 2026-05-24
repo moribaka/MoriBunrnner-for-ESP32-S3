@@ -511,22 +511,32 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     sample_hex[0] = '\0';
     burner_spi_lock_take();
     if (cart_mode == BURNER_CART_MODE_MBC5) {
+        burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+
         err = burner_bacon_mbc5_prepare_power();
-        if (err == ESP_OK) {
-            err = burner_bacon_mbc5_get_id(mbc5_id);
-        }
         if (err == ESP_OK) {
             uint32_t cfi_device_size = 0;
             uint32_t cfi_sector_size = 0;
             uint16_t cfi_buffer_write_bytes = 0;
+            burner_nor_geometry_t cfi_geometry = {0};
 
-            if (burner_bacon_mbc5_get_cfi(&cfi_device_size, &cfi_sector_size, &cfi_buffer_write_bytes) == ESP_OK) {
+            if (burner_bacon_mbc5_get_cfi(
+                    &cfi_device_size,
+                    &cfi_sector_size,
+                    &cfi_buffer_write_bytes,
+                    &cfi_geometry,
+                    &mbc5_cmdset) == ESP_OK) {
                 device_size = cfi_device_size;
                 sector_size = cfi_sector_size;
                 buffer_write_bytes = cfi_buffer_write_bytes;
                 cfi_ok = true;
-            } else {
-                (void)burner_mbc5_geometry_from_id(mbc5_id, &device_size, &sector_size, &buffer_write_bytes);
+                if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
+                    err = burner_bacon_mbc5_get_id(mbc5_id);
+                    if (err != ESP_OK) {
+                        memset(mbc5_id, 0, sizeof(mbc5_id));
+                        err = ESP_OK;
+                    }
+                }
             }
         }
     } else {
@@ -702,22 +712,32 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
 
     burner_spi_lock_take();
     if (strcasecmp(mode, "mbc5") == 0) {
+        burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+
         err = burner_bacon_mbc5_prepare_power();
-        if (err == ESP_OK) {
-            err = burner_bacon_mbc5_get_id(mbc5_id);
-        }
         if (err == ESP_OK) {
             uint32_t cfi_device_size = 0;
             uint32_t cfi_sector_size = 0;
             uint16_t cfi_buffer_write_bytes = 0;
+            burner_nor_geometry_t cfi_geometry = {0};
 
-            if (burner_bacon_mbc5_get_cfi(&cfi_device_size, &cfi_sector_size, &cfi_buffer_write_bytes) == ESP_OK) {
+            if (burner_bacon_mbc5_get_cfi(
+                    &cfi_device_size,
+                    &cfi_sector_size,
+                    &cfi_buffer_write_bytes,
+                    &cfi_geometry,
+                    &mbc5_cmdset) == ESP_OK) {
                 device_size = cfi_device_size;
                 sector_size = cfi_sector_size;
                 buffer_write_bytes = cfi_buffer_write_bytes;
                 cfi_ok = true;
-            } else {
-                (void)burner_mbc5_geometry_from_id(mbc5_id, &device_size, &sector_size, &buffer_write_bytes);
+                if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
+                    err = burner_bacon_mbc5_get_id(mbc5_id);
+                    if (err != ESP_OK) {
+                        memset(mbc5_id, 0, sizeof(mbc5_id));
+                        err = ESP_OK;
+                    }
+                }
             }
         }
     } else {
@@ -848,6 +868,7 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         ",\"mbc5_buffer_write_ok_count\":%" PRIu32 ",\"mbc5_buffer_fallback_count\":%" PRIu32
         ",\"erase_sector_count\":%" PRIu32 ",\"erase_sector_size\":%" PRIu32
         ",\"erase_active\":%s,\"erase_phase_done_sectors\":%" PRIu32 ",\"erase_phase_total_sectors\":%" PRIu32
+        ",\"erase_phase_done_bytes\":%" PRIu32 ",\"erase_phase_total_bytes\":%" PRIu32
         ",\"task_time_ms\":%" PRIu32 ",\"erase_time_ms\":%" PRIu32 ",\"write_time_ms\":%" PRIu32
         ",\"dump_read_time_ms\":%" PRIu32 ",\"dump_write_time_ms\":%" PRIu32
         ",\"dump_wait_time_ms\":%" PRIu32 ",\"dump_finalize_time_ms\":%" PRIu32
@@ -883,6 +904,8 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         snap.erase_phase_active ? "true" : "false",
         snap.erase_phase_done_sectors,
         snap.erase_phase_total_sectors,
+        snap.erase_phase_done_bytes,
+        snap.erase_phase_total_bytes,
         task_ms,
         erase_ms,
         write_ms,

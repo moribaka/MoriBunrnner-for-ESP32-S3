@@ -19,6 +19,7 @@
 #include "esp_log.h"
 #include "esp_sntp.h"
 #include "esp_system.h"
+#include "power_manager.h"
 #include "file_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -2506,9 +2507,6 @@ static void init_i2c_peripherals(void)
 {
     esp_err_t err;
     i2c_master_bus_handle_t i2c_bus = NULL;
-    uint8_t ctl0 = 0;
-    uint8_t ctl1 = 0;
-    uint8_t ctl2 = 0;
     uint16_t tca_input = 0;
     uint16_t tca_cfg = 0;
     uint8_t tca_addr = TCA9555_I2C_ADDR_DEFAULT;
@@ -2526,20 +2524,23 @@ static void init_i2c_peripherals(void)
         return;
     }
 
-    err = ip5306_probe(i2c_bus, IP5306_I2C_ADDR_DEFAULT);
+    err = power_manager_init(i2c_bus);
     if (err == ESP_OK) {
-        err = ip5306_init(i2c_bus, IP5306_I2C_ADDR_DEFAULT);
-        if (err == ESP_OK) {
+        if (power_manager_chip_type() == POWER_CHIP_IP5306) {
+            uint8_t ctl0 = 0;
+            uint8_t ctl1 = 0;
+            uint8_t ctl2 = 0;
+
             apply_ip5306_ini_if_present();
             apply_ip5306_fixed_charge_current();
             if (ip5306_get_sys_ctrl(&ctl0, &ctl1, &ctl2) == ESP_OK) {
                 ESP_LOGI("main", "IP5306 ctl regs: 0x%02X 0x%02X 0x%02X", ctl0, ctl1, ctl2);
             }
-        } else {
-            ESP_LOGW("main", "IP5306 init failed: %s", esp_err_to_name(err));
+        } else if (power_manager_chip_type() == POWER_CHIP_AXP209) {
+            ESP_LOGI("main", "AXP209 power manager ready at 0x%02X", axp209_address());
         }
     } else {
-        ESP_LOGW("main", "IP5306 not found at 0x%02X", IP5306_I2C_ADDR_DEFAULT);
+        ESP_LOGW("main", "no supported power chip found");
     }
 
     /* Keep sample behavior priority: fixed address first, then fallback scan. */
