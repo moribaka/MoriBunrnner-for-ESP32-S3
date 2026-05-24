@@ -53,11 +53,12 @@
 #define ROM_OUTPUT_DIR_PATH mount_point "/ROM_OUTPUT"
 #define DUMP_DIR_PATH mount_point "/dumps"
 #define UPLOAD_CHUNK_SIZE 2048
+#define BURN_MBC5_ROM_BANK_BYTES (16U * 1024U)
 #define BURN_GBC_READ_SPI_OVERHEAD_BYTES 4U
 #define BURN_GBC_READ_SPI_BYTES_PER_DATA_BYTE 3U
 #define BURN_CART_WRITE_MAX_BYTES (BURNER_SPI_MAX_XFER / 6U)
 #define BURN_CART_READ_MAX_BYTES ((BURNER_SPI_MAX_XFER - BURN_GBC_READ_SPI_OVERHEAD_BYTES) / BURN_GBC_READ_SPI_BYTES_PER_DATA_BYTE)
-#define BURN_MBC5_PROGRAM_CHUNK_BYTES (16U * 1024U)
+#define BURN_MBC5_PROGRAM_CHUNK_BYTES BURN_MBC5_ROM_BANK_BYTES
 #define BURN_MBC5_PROGRAM_CHUNK_MIN_BYTES (4U * 1024U)
 #define BURN_MBC5_PROGRAM_CHUNK_MAX_BYTES (128U * 1024U)
 #define BURN_MBC5_DUMP_CHUNK_BYTES (64U * 1024U)
@@ -283,6 +284,12 @@ typedef enum {
     BURNER_CART_MODE_MBC5 = 0,
     BURNER_CART_MODE_GBA,
 } burner_cart_mode_t;
+
+typedef enum {
+    BURNER_GB_MAPPER_UNKNOWN = 0,
+    BURNER_GB_MAPPER_MBC3,
+    BURNER_GB_MAPPER_MBC5,
+} burner_gb_mapper_t;
 
 typedef struct {
     burner_cart_mode_t cart_mode;
@@ -597,7 +604,7 @@ burner_core_config_t s_burn_core_cfg = {
 };
 uint8_t s_burn_erase_always = BURN_ERASE_ALWAYS_DEFAULT;
 uint8_t s_gba_fixed_erase_window_enabled = BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT;
-uint8_t s_mbc5_power_5v_enabled = 0;
+uint8_t s_mbc5_power_5v_enabled = 1;
 TickType_t s_bacon_last_active_tick = 0;
 bool s_bacon_idle_powered_down = false;
 burner_cart_ctx_t s_cart_ctx = {
@@ -658,6 +665,8 @@ esp_err_t burner_bacon_mbc5_read_block(uint8_t *out, size_t len, uint32_t offset
 static esp_err_t burner_bacon_mbc5_read_block_program_window(uint8_t *out, size_t len, uint32_t offset);
 uint32_t burner_psram_auto_window_mb(void);
 static bool burner_is_gba_multi_card(const burner_task_param_t *job);
+static const char *burner_gb_mapper_name(burner_gb_mapper_t mapper);
+static esp_err_t burner_buffer_all_ff(const uint8_t *buf, size_t len, bool *all_ff_out);
 burner_status_t s_status = {
     .state = BURNER_STATE_IDLE,
     .progress = 0,
@@ -669,6 +678,7 @@ burner_status_t s_status = {
     .cancel_requested = false,
 };
 static uint64_t s_burn_task_last_yield_us = 0;
+static burner_gb_mapper_t s_gb_mapper_kind = BURNER_GB_MAPPER_UNKNOWN;
 const char *const s_system_migrate_rel_dirs[] = {
     WEB_LANG_DIR_REL,
     WEB_ROOT_DIR_REL,
@@ -2446,6 +2456,50 @@ static uint32_t burner_nor_geometry_largest_sector_size(const burner_nor_geometr
     return burner_nor_geometry_is_valid(geometry) ? geometry->largest_sector_size : 0u;
 }
 
+static uint32_t burner_nor_geometry_report_sector_size(const burner_nor_geometry_t *geometry)
+{
+    uint32_t sector_size = burner_nor_geometry_display_sector_size(geometry);
+
+    if (sector_size == 0u) {
+        sector_size = burner_nor_geometry_largest_sector_size(geometry);
+    }
+    return sector_size;
+}
+
+static const char *burner_gb_mapper_name(burner_gb_mapper_t mapper)
+{
+    switch (mapper) {
+        case BURNER_GB_MAPPER_MBC3:
+            return "mbc3";
+        case BURNER_GB_MAPPER_MBC5:
+            return "mbc5";
+        default:
+            return "unknown";
+    }
+}
+
+static bool burner_nor_geometry_equal(
+    const burner_nor_geometry_t *left,
+    const burner_nor_geometry_t *right)
+{
+    if (!burner_nor_geometry_is_valid(left) || !burner_nor_geometry_is_valid(right) ||
+        left->region_count != right->region_count ||
+        left->uniform_sector_size != right->uniform_sector_size ||
+        left->smallest_sector_size != right->smallest_sector_size ||
+        left->largest_sector_size != right->largest_sector_size) {
+        return false;
+    }
+
+    for (uint32_t i = 0u; i < left->region_count; ++i) {
+        if (left->regions[i].addr_begin != right->regions[i].addr_begin ||
+            left->regions[i].addr_end != right->regions[i].addr_end ||
+            left->regions[i].sector_size != right->regions[i].sector_size) {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 static esp_err_t burner_nor_geometry_set_uniform(
     burner_nor_geometry_t *geometry,
@@ -2820,6 +2874,93 @@ static esp_err_t burner_nor_geometry_stage_bytes_for_addr(
         return err;
     }
     return burner_nor_geometry_stage_bytes_in_cursor(&cursor, addr, remaining_bytes, stage_bytes_out);
+}
+
+static esp_err_t burner_nor_geometry_limit_prefix(
+    burner_nor_geometry_t *geometry,
+    uint32_t device_size_limit)
+{
+    burner_nor_geometry_t src;
+    uint32_t sector_counts[BURNER_NOR_GEOMETRY_REGION_MAX] = {0};
+    uint32_t sector_sizes[BURNER_NOR_GEOMETRY_REGION_MAX] = {0};
+    uint32_t remaining_bytes;
+    uint32_t region_count = 0u;
+
+    if (geometry == NULL || !burner_nor_geometry_is_valid(geometry) || device_size_limit == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (device_size_limit >= geometry->regions[geometry->region_count - 1u].addr_end) {
+        return ESP_OK;
+    }
+
+    src = *geometry;
+    remaining_bytes = device_size_limit;
+    for (uint32_t i = 0u; i < src.region_count && remaining_bytes > 0u; ++i) {
+        const burner_nor_region_t *region = &src.regions[i];
+        uint32_t region_bytes = region->addr_end - region->addr_begin;
+        uint32_t take_bytes = (region_bytes < remaining_bytes) ? region_bytes : remaining_bytes;
+
+        if (take_bytes == 0u || (take_bytes % region->sector_size) != 0u ||
+            region_count >= BURNER_NOR_GEOMETRY_REGION_MAX) {
+            return ESP_ERR_INVALID_SIZE;
+        }
+
+        sector_counts[region_count] = take_bytes / region->sector_size;
+        sector_sizes[region_count] = region->sector_size;
+        remaining_bytes -= take_bytes;
+        ++region_count;
+    }
+
+    if (remaining_bytes != 0u || region_count == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    return burner_nor_geometry_build(
+        geometry,
+        device_size_limit,
+        sector_counts,
+        sector_sizes,
+        region_count,
+        false);
+}
+
+static uint32_t burner_gb_mapper_device_size_limit(burner_gb_mapper_t mapper)
+{
+    return (mapper == BURNER_GB_MAPPER_MBC3) ? (2u * 1024u * 1024u) : 0u;
+}
+
+static uint8_t burner_gb_mapper_normalize_rom_bank(burner_gb_mapper_t mapper, uint16_t bank)
+{
+    if (mapper == BURNER_GB_MAPPER_MBC3 && bank == 0u) {
+        return 1u;
+    }
+    return (uint8_t)(bank & 0xFFu);
+}
+
+static void burner_mbc5_addr_to_program_window(
+    uint32_t flash_addr,
+    uint16_t *bank_out,
+    uint16_t *cart_addr_out,
+    uint32_t *bank_off_out)
+{
+    uint32_t bank = flash_addr / BURN_MBC5_ROM_BANK_BYTES;
+    uint32_t bank_off = flash_addr % BURN_MBC5_ROM_BANK_BYTES;
+    uint16_t cart_addr = (uint16_t)(0x4000u + bank_off);
+
+    if (s_gb_mapper_kind == BURNER_GB_MAPPER_MBC3 && bank == 0u) {
+        cart_addr = (uint16_t)bank_off;
+    }
+
+    if (bank_out != NULL) {
+        *bank_out = (uint16_t)bank;
+    }
+    if (cart_addr_out != NULL) {
+        *cart_addr_out = cart_addr;
+    }
+    if (bank_off_out != NULL) {
+        *bank_off_out = bank_off;
+    }
 }
 
 static esp_err_t burner_nor_geometry_largest_sector_size_in_range(
@@ -6453,6 +6594,7 @@ esp_err_t burner_spi_init(void)
     s_cart_ctx.device_size = 0;
     burner_nor_geometry_clear(&s_cart_ctx.geometry);
     memset(s_cart_ctx.mbc5_id, 0, sizeof(s_cart_ctx.mbc5_id));
+    s_gb_mapper_kind = BURNER_GB_MAPPER_UNKNOWN;
     s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
@@ -6770,6 +6912,7 @@ void burner_bacon_idle_task_entry(void *param)
                 s_cart_ctx.device_size = 0;
                 burner_nor_geometry_clear(&s_cart_ctx.geometry);
                 memset(s_cart_ctx.mbc5_id, 0, sizeof(s_cart_ctx.mbc5_id));
+                s_gb_mapper_kind = BURNER_GB_MAPPER_UNKNOWN;
                 s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
                 s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
                 s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
@@ -9664,7 +9807,7 @@ static esp_err_t burner_bacon_gba_get_cfi(
     if (err != ESP_OK) {
         goto cfi_reset;
     }
-    *sector_size = burner_nor_geometry_display_sector_size(geometry);
+    *sector_size = burner_nor_geometry_report_sector_size(geometry);
     err = ESP_OK;
 
 cfi_reset:
@@ -9734,6 +9877,109 @@ static bool burner_gba_probe_load_entry_geometry(
         return false;
     }
     return true;
+}
+
+static bool burner_mbc5_id_is_mx29lv640eb(const uint8_t id[4])
+{
+    return id != NULL && id[0] == 0xC2u && id[1] == 0xCBu;
+}
+
+static bool burner_mbc5_id_is_mx29lv640et(const uint8_t id[4])
+{
+    return id != NULL && id[0] == 0xC2u && id[1] == 0xC9u;
+}
+
+static bool burner_mbc5_probe_load_entry_geometry(
+    const uint8_t id[4],
+    const burner_nor_entry_t *entry,
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    burner_nor_geometry_t *geometry)
+{
+    uint32_t entry_device_size = 0u;
+    uint32_t entry_sector_size = 0u;
+    uint16_t entry_buffer_write_bytes = 0u;
+    bool entry_ok;
+
+    entry_ok = burner_gba_probe_load_entry_geometry(
+        entry,
+        &entry_device_size,
+        &entry_sector_size,
+        &entry_buffer_write_bytes,
+        geometry);
+    if (!entry_ok || device_size == NULL || sector_size == NULL ||
+        buffer_write_bytes == NULL || geometry == NULL) {
+        return false;
+    }
+
+    if ((burner_mbc5_id_is_mx29lv640eb(id) || burner_mbc5_id_is_mx29lv640et(id)) &&
+        entry_device_size == (8u * 1024u * 1024u) &&
+        entry_sector_size == (64u * 1024u)) {
+        uint32_t sector_counts[BURNER_NOR_GEOMETRY_REGION_MAX] = {0};
+        uint32_t sector_sizes[BURNER_NOR_GEOMETRY_REGION_MAX] = {0};
+
+        if (burner_mbc5_id_is_mx29lv640eb(id)) {
+            sector_counts[0] = 8u;
+            sector_sizes[0] = 8u * 1024u;
+            sector_counts[1] = 127u;
+            sector_sizes[1] = 64u * 1024u;
+        } else {
+            sector_counts[0] = 127u;
+            sector_sizes[0] = 64u * 1024u;
+            sector_counts[1] = 8u;
+            sector_sizes[1] = 8u * 1024u;
+        }
+        if (burner_nor_geometry_build(
+                geometry,
+                entry_device_size,
+                sector_counts,
+                sector_sizes,
+                2u,
+                false) != ESP_OK) {
+            return false;
+        }
+    }
+
+    *device_size = entry_device_size;
+    *sector_size = burner_nor_geometry_report_sector_size(geometry);
+    *buffer_write_bytes = entry_buffer_write_bytes;
+    return true;
+}
+
+static bool burner_mbc5_geometry_should_prefer_id(
+    const burner_nor_geometry_t *cfi_geometry,
+    uint32_t cfi_device_size,
+    uint32_t cfi_sector_size,
+    const burner_nor_geometry_t *id_geometry,
+    uint32_t id_device_size,
+    uint32_t id_sector_size)
+{
+    uint32_t cfi_largest;
+    uint32_t id_largest;
+
+    if (!burner_nor_geometry_is_valid(id_geometry) ||
+        id_device_size == 0u || id_sector_size == 0u) {
+        return false;
+    }
+    if (!burner_nor_geometry_is_valid(cfi_geometry) ||
+        cfi_device_size == 0u || cfi_sector_size == 0u) {
+        return true;
+    }
+    if (cfi_device_size != id_device_size) {
+        return false;
+    }
+    cfi_largest = burner_nor_geometry_largest_sector_size(cfi_geometry);
+    id_largest = burner_nor_geometry_largest_sector_size(id_geometry);
+    if (cfi_largest > 0u && id_largest > cfi_largest &&
+        cfi_largest <= BURN_MBC5_ROM_BANK_BYTES) {
+        return true;
+    }
+    if (!burner_nor_geometry_is_uniform(id_geometry) &&
+        !burner_nor_geometry_equal(cfi_geometry, id_geometry)) {
+        return true;
+    }
+    return false;
 }
 
 static void burner_gba_build_auto_profile_name(
@@ -10423,6 +10669,11 @@ static esp_err_t burner_bacon_mbc5_switch_bank(uint16_t bank)
     uint8_t b1 = (uint8_t)((bank >> 8) & 0xFFu);
     esp_err_t err;
 
+    if (s_gb_mapper_kind == BURNER_GB_MAPPER_MBC3) {
+        b0 = burner_gb_mapper_normalize_rom_bank(s_gb_mapper_kind, bank);
+        return burner_bacon_gbc_write(0x2000u, &b0, 1u);
+    }
+
     /*
      * Match ChisFlashBurner mission_mbc5.cs:
      * write low 8 bits at 0x2000, then high bit at 0x3000.
@@ -10436,6 +10687,9 @@ static esp_err_t burner_bacon_mbc5_switch_bank(uint16_t bank)
 
 static esp_err_t burner_bacon_mbc5_ram_switch_bank(uint8_t bank)
 {
+    if (s_gb_mapper_kind == BURNER_GB_MAPPER_MBC3) {
+        bank &= 0x07u;
+    }
     return burner_bacon_gbc_write(0x4000u, &bank, 1);
 }
 
@@ -10499,6 +10753,116 @@ static uint32_t burner_erase_remaining_timeout_ms(int64_t deadline_us)
         return 0u;
     }
     return (uint32_t)((remaining_us + 999LL) / 1000LL);
+}
+
+static bool burner_buffer_all_equal(const uint8_t *left, const uint8_t *right, size_t len)
+{
+    return left != NULL && right != NULL && len > 0u && memcmp(left, right, len) == 0;
+}
+
+static esp_err_t burner_bacon_gb_detect_mapper(burner_gb_mapper_t *mapper_out)
+{
+    static const uint16_t sample_addrs[] = {
+        0x4000u,
+        0x4100u,
+        0x4300u,
+        0x47C0u,
+    };
+    uint8_t bank0_sample[sizeof(sample_addrs)] = {0};
+    uint8_t bank1_sample[sizeof(sample_addrs)] = {0};
+    uint8_t bank81_sample[sizeof(sample_addrs)] = {0};
+    bool bank0_blank = false;
+    bool bank1_blank = false;
+    bool bank81_blank = false;
+    bool bank0_eq_bank1;
+    bool bank1_eq_bank81;
+    esp_err_t err = ESP_OK;
+
+    if (mapper_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *mapper_out = BURNER_GB_MAPPER_UNKNOWN;
+
+    err = burner_bacon_mbc5_switch_bank(0u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    s_cart_ctx.current_bank = 0u;
+    for (size_t i = 0u; i < sizeof(sample_addrs) / sizeof(sample_addrs[0]); ++i) {
+        err = burner_bacon_gbc_read_u8(sample_addrs[i], &bank0_sample[i]);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    err = burner_bacon_mbc5_switch_bank(1u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    s_cart_ctx.current_bank = 1u;
+    for (size_t i = 0u; i < sizeof(sample_addrs) / sizeof(sample_addrs[0]); ++i) {
+        err = burner_bacon_gbc_read_u8(sample_addrs[i], &bank1_sample[i]);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    err = burner_bacon_mbc5_switch_bank(0x81u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    s_cart_ctx.current_bank = 0x81u;
+    for (size_t i = 0u; i < sizeof(sample_addrs) / sizeof(sample_addrs[0]); ++i) {
+        err = burner_bacon_gbc_read_u8(sample_addrs[i], &bank81_sample[i]);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    err = burner_buffer_all_ff(bank0_sample, sizeof(bank0_sample), &bank0_blank);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_buffer_all_ff(bank1_sample, sizeof(bank1_sample), &bank1_blank);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_buffer_all_ff(bank81_sample, sizeof(bank81_sample), &bank81_blank);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    bank0_eq_bank1 = burner_buffer_all_equal(bank0_sample, bank1_sample, sizeof(bank0_sample));
+    bank1_eq_bank81 = burner_buffer_all_equal(bank1_sample, bank81_sample, sizeof(bank1_sample));
+    if (!bank0_blank && !bank1_blank && bank0_eq_bank1) {
+        *mapper_out = BURNER_GB_MAPPER_MBC3;
+    } else if (!bank1_blank && !bank81_blank && bank1_eq_bank81) {
+        *mapper_out = BURNER_GB_MAPPER_MBC3;
+    } else {
+        *mapper_out = BURNER_GB_MAPPER_MBC5;
+    }
+
+    ESP_LOGI(
+        BURNER_TAG,
+        "GB mapper detect: bank0=%02X-%02X-%02X-%02X bank1=%02X-%02X-%02X-%02X bank81=%02X-%02X-%02X-%02X blank=%d/%d/%d result=%s",
+        bank0_sample[0],
+        bank0_sample[1],
+        bank0_sample[2],
+        bank0_sample[3],
+        bank1_sample[0],
+        bank1_sample[1],
+        bank1_sample[2],
+        bank1_sample[3],
+        bank81_sample[0],
+        bank81_sample[1],
+        bank81_sample[2],
+        bank81_sample[3],
+        bank0_blank ? 1 : 0,
+        bank1_blank ? 1 : 0,
+        bank81_blank ? 1 : 0,
+        burner_gb_mapper_name(*mapper_out));
+    return ESP_OK;
 }
 
 esp_err_t burner_bacon_mbc5_get_id(uint8_t id_out[4])
@@ -10808,7 +11172,7 @@ cfi_retry:
     if (err != ESP_OK) {
         goto cfi_out;
     }
-    *sector_size = burner_nor_geometry_display_sector_size(geometry);
+    *sector_size = burner_nor_geometry_report_sector_size(geometry);
 
 cfi_out:
     if (entered_cfi) {
@@ -10833,6 +11197,13 @@ static esp_err_t burner_bacon_mbc5_probe_locked(
     uint16_t cfi_buffer_write_bytes = 0u;
     burner_nor_geometry_t cfi_geometry = {0};
     burner_nor_cmdset_t cfi_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    const burner_nor_entry_t *id_entry = NULL;
+    burner_nor_geometry_t id_geometry = {0};
+    uint32_t id_device_size = 0u;
+    uint32_t id_sector_size = 0u;
+    uint16_t id_buffer_write_bytes = 0u;
+    burner_nor_cmdset_t id_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    bool id_geometry_ok = false;
     uint32_t cfi_try;
     esp_err_t err = ESP_FAIL;
 
@@ -10851,8 +11222,45 @@ static esp_err_t burner_bacon_mbc5_probe_locked(
     }
     burner_nor_geometry_clear(&s_cart_ctx.geometry);
 
+    err = burner_bacon_mbc5_get_id(id_out);
+    if (err == ESP_OK) {
+        id_entry = burner_nor_db_lookup_mbc5(id_out);
+        id_cmdset = burner_nor_entry_cmdset(id_entry);
+        id_geometry_ok = burner_mbc5_probe_load_entry_geometry(
+            id_out,
+            id_entry,
+            &id_device_size,
+            &id_sector_size,
+            &id_buffer_write_bytes,
+            &id_geometry);
+        ESP_LOGI(
+            BURNER_TAG,
+            "MBC5 ID probe: id=%02X %02X %02X %02X chip=%s flash=%" PRIu32
+            " sector=%" PRIu32 " geom=%s largest=%" PRIu32 " regions=%u buf=%u cmdset=%s",
+            id_out[0],
+            id_out[1],
+            id_out[2],
+            id_out[3],
+            burner_nor_entry_name(id_entry),
+            id_device_size,
+            id_sector_size,
+            burner_nor_geometry_is_uniform(&id_geometry) ? "uniform" : "mixed",
+            burner_nor_geometry_largest_sector_size(&id_geometry),
+            (unsigned)id_geometry.region_count,
+            (unsigned)id_buffer_write_bytes,
+            burner_nor_cmdset_name(id_cmdset));
+    } else {
+        ESP_LOGW(BURNER_TAG, "MBC5 ID probe failed before CFI: %s", esp_err_to_name(err));
+        memset(id_out, 0, 4u);
+    }
+
     err = ESP_FAIL;
     for (cfi_try = 0u; cfi_try < 3u; ++cfi_try) {
+        burner_nor_geometry_clear(&cfi_geometry);
+        cfi_device_size = 0u;
+        cfi_sector_size = 0u;
+        cfi_buffer_write_bytes = 0u;
+        cfi_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
         err = burner_bacon_mbc5_get_cfi(
             &cfi_device_size,
             &cfi_sector_size,
@@ -10860,25 +11268,139 @@ static esp_err_t burner_bacon_mbc5_probe_locked(
             &cfi_geometry,
             &cfi_cmdset);
         if (err == ESP_OK) {
+            if (!id_geometry_ok) {
+                esp_err_t id_retry_err = burner_bacon_mbc5_get_id(id_out);
+
+                if (id_retry_err == ESP_OK) {
+                    id_entry = burner_nor_db_lookup_mbc5(id_out);
+                    id_cmdset = burner_nor_entry_cmdset(id_entry);
+                    id_geometry_ok = burner_mbc5_probe_load_entry_geometry(
+                        id_out,
+                        id_entry,
+                        &id_device_size,
+                        &id_sector_size,
+                        &id_buffer_write_bytes,
+                        &id_geometry);
+                    ESP_LOGI(
+                        BURNER_TAG,
+                        "MBC5 ID retry after CFI: id=%02X %02X %02X %02X chip=%s flash=%" PRIu32
+                        " sector=%" PRIu32 " geom=%s largest=%" PRIu32 " regions=%u buf=%u cmdset=%s",
+                        id_out[0],
+                        id_out[1],
+                        id_out[2],
+                        id_out[3],
+                        burner_nor_entry_name(id_entry),
+                        id_device_size,
+                        id_sector_size,
+                        burner_nor_geometry_is_uniform(&id_geometry) ? "uniform" : "mixed",
+                        burner_nor_geometry_largest_sector_size(&id_geometry),
+                        (unsigned)id_geometry.region_count,
+                        (unsigned)id_buffer_write_bytes,
+                        burner_nor_cmdset_name(id_cmdset));
+                } else {
+                    ESP_LOGW(BURNER_TAG, "MBC5 ID retry after CFI failed: %s", esp_err_to_name(id_retry_err));
+                    memset(id_out, 0, 4u);
+                }
+            }
+            if (id_geometry_ok &&
+                burner_mbc5_geometry_should_prefer_id(
+                    &cfi_geometry,
+                    cfi_device_size,
+                    cfi_sector_size,
+                    &id_geometry,
+                    id_device_size,
+                    id_sector_size)) {
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "MBC5 CFI geometry conflicts with ID, using ID geometry: cfi_flash=%" PRIu32
+                    " cfi_sector=%" PRIu32 " cfi_geom=%s cfi_largest=%" PRIu32
+                    " id_flash=%" PRIu32 " id_sector=%" PRIu32 " chip=%s",
+                    cfi_device_size,
+                    cfi_sector_size,
+                    burner_nor_geometry_is_uniform(&cfi_geometry) ? "uniform" : "mixed",
+                    burner_nor_geometry_largest_sector_size(&cfi_geometry),
+                    id_device_size,
+                    id_sector_size,
+                    burner_nor_entry_name(id_entry));
+                cfi_device_size = id_device_size;
+                cfi_sector_size = id_sector_size;
+                if (cfi_buffer_write_bytes == 0u || id_buffer_write_bytes < cfi_buffer_write_bytes) {
+                    cfi_buffer_write_bytes = id_buffer_write_bytes;
+                }
+                cfi_geometry = id_geometry;
+            } else if (id_geometry_ok) {
+                if (cfi_device_size == 0u) {
+                    cfi_device_size = id_device_size;
+                }
+                if (cfi_sector_size == 0u) {
+                    cfi_sector_size = id_sector_size;
+                }
+                if (cfi_buffer_write_bytes == 0u) {
+                    cfi_buffer_write_bytes = id_buffer_write_bytes;
+                }
+                if (!burner_nor_geometry_is_valid(&cfi_geometry)) {
+                    cfi_geometry = id_geometry;
+                }
+            }
+            if (!burner_nor_geometry_is_valid(&cfi_geometry) ||
+                cfi_device_size == 0u || cfi_sector_size == 0u) {
+                err = ESP_ERR_INVALID_SIZE;
+                continue;
+            }
+            if (id_cmdset != BURNER_NOR_CMDSET_UNKNOWN &&
+                cfi_cmdset != BURNER_NOR_CMDSET_UNKNOWN &&
+                cfi_cmdset != id_cmdset) {
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "MBC5 CFI cmdset conflicts with ID, using ID cmdset: cfi=%s id=%s chip=%s",
+                    burner_nor_cmdset_name(cfi_cmdset),
+                    burner_nor_cmdset_name(id_cmdset),
+                    burner_nor_entry_name(id_entry));
+            }
+            if (id_buffer_write_bytes > 0u && cfi_buffer_write_bytes > id_buffer_write_bytes) {
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "MBC5 CFI buffer larger than ID limit, clamping: cfi_buf=%u id_buf=%u chip=%s",
+                    (unsigned)cfi_buffer_write_bytes,
+                    (unsigned)id_buffer_write_bytes,
+                    burner_nor_entry_name(id_entry));
+                cfi_buffer_write_bytes = id_buffer_write_bytes;
+            }
             *device_size = cfi_device_size;
             *sector_size = cfi_sector_size;
             *buffer_write_bytes = cfi_buffer_write_bytes;
             *cfi_ok_out = true;
             if (cmdset_out != NULL) {
-                *cmdset_out = cfi_cmdset;
+                *cmdset_out = (id_cmdset != BURNER_NOR_CMDSET_UNKNOWN) ? id_cmdset : cfi_cmdset;
             }
             s_cart_ctx.geometry = cfi_geometry;
-            if (cfi_cmdset == BURNER_NOR_CMDSET_AMD) {
-                err = burner_bacon_mbc5_get_id(id_out);
-                if (err != ESP_OK) {
-                    ESP_LOGW(BURNER_TAG, "MBC5 auxiliary ID read failed after CFI detect: %s", esp_err_to_name(err));
-                    memset(id_out, 0, 4u);
-                    err = ESP_OK;
-                }
-            }
             return ESP_OK;
         }
         vTaskDelay(pdMS_TO_TICKS(2));
+    }
+
+    if (id_geometry_ok) {
+        *device_size = id_device_size;
+        *sector_size = id_sector_size;
+        *buffer_write_bytes = id_buffer_write_bytes;
+        *cfi_ok_out = false;
+        if (cmdset_out != NULL) {
+            *cmdset_out = id_cmdset;
+        }
+        s_cart_ctx.geometry = id_geometry;
+        ESP_LOGW(
+            BURNER_TAG,
+            "MBC5 CFI read failed after retries, fallback by ID geometry: flash=%" PRIu32
+            " sector=%" PRIu32 " buf=%u chip=%s id=%02X %02X %02X %02X",
+            *device_size,
+            *sector_size,
+            (unsigned)*buffer_write_bytes,
+            burner_nor_entry_name(id_entry),
+            id_out[0],
+            id_out[1],
+            id_out[2],
+            id_out[3]);
+        return ESP_OK;
     }
 
     burner_nor_geometry_clear(&s_cart_ctx.geometry);
@@ -10887,8 +11409,8 @@ static esp_err_t burner_bacon_mbc5_probe_locked(
 
 static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr, uint32_t timeout_ms)
 {
-    uint16_t bank = (uint16_t)(flash_addr >> 14);
-    uint16_t cart_addr = (uint16_t)(0x4000u + (flash_addr & 0x3FFFu));
+    uint16_t bank = 0u;
+    uint16_t cart_addr = 0u;
     uint8_t cmd;
     esp_err_t err;
 
@@ -10896,6 +11418,7 @@ static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr, uint32_t ti
         return ESP_ERR_TIMEOUT;
     }
 
+    burner_mbc5_addr_to_program_window(flash_addr, &bank, &cart_addr, NULL);
     err = burner_bacon_mbc5_switch_bank(bank);
     if (err != ESP_OK) {
         return err;
@@ -10939,10 +11462,12 @@ static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr, uint32_t ti
         (void)burner_bacon_gbc_read_u8(cart_addr, &read_back);
         ESP_LOGW(
             BURNER_TAG,
-            "MBC5 erase timeout flash=0x%08" PRIX32 " bank=%u cart_addr=0x%04X read=0x%02X timeout=%ums",
+            "MBC5 erase timeout flash=0x%08" PRIX32 " bank=%u cart_addr=0x%04X sector=%" PRIu32
+            " read=0x%02X timeout=%ums",
             flash_addr,
             (unsigned)bank,
             (unsigned)cart_addr,
+            burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry),
             (unsigned)read_back,
             (unsigned)timeout_ms);
     }
@@ -11150,11 +11675,27 @@ static esp_err_t burner_bacon_mbc5_erase_range(
     }
     timeout_ms = burner_erase_timeout_ms_for_bytes(erase_bytes);
     erase_deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
-    ESP_LOGI(
-        BURNER_TAG,
-        "MBC5 erase timeout budget: bytes=%" PRIu32 " timeout=%" PRIu32 "ms",
-        erase_bytes,
-        timeout_ms);
+    {
+        uint16_t first_bank = 0u;
+        uint16_t first_cart_addr = 0u;
+
+        burner_mbc5_addr_to_program_window(sector_addr, &first_bank, &first_cart_addr, NULL);
+        ESP_LOGI(
+            BURNER_TAG,
+            "MBC5 erase plan: range=0x%08" PRIX32 "-0x%08" PRIX32
+            " first_sector=0x%08" PRIX32 " first_bank=%u first_cart=0x%04X bytes=%" PRIu32
+            " timeout=%" PRIu32 "ms geom=%s largest=%" PRIu32 " regions=%u",
+            addr_begin,
+            addr_end,
+            sector_addr,
+            (unsigned)first_bank,
+            (unsigned)first_cart_addr,
+            erase_bytes,
+            timeout_ms,
+            burner_nor_geometry_is_uniform(geometry) ? "uniform" : "mixed",
+            burner_nor_geometry_largest_sector_size(geometry),
+            (unsigned)geometry->region_count);
+    }
 
     while (sector_addr <= addr_end) {
         uint32_t current_sector_size = cursor.sector_size;
@@ -11162,10 +11703,21 @@ static esp_err_t burner_bacon_mbc5_erase_range(
         uint32_t region_limit_addr = (addr_end < region_end_addr) ? addr_end : region_end_addr;
 
         while (sector_addr <= region_limit_addr) {
+            uint16_t sector_bank = 0u;
+            uint16_t sector_cart_addr = 0u;
+
             err = burner_cancel_poll();
             if (err != ESP_OK) {
                 goto erase_range_out;
             }
+            burner_mbc5_addr_to_program_window(sector_addr, &sector_bank, &sector_cart_addr, NULL);
+            ESP_LOGI(
+                BURNER_TAG,
+                "MBC5 erase sector: flash=0x%08" PRIX32 " size=%" PRIu32 " bank=%u cart=0x%04X",
+                sector_addr,
+                current_sector_size,
+                (unsigned)sector_bank,
+                (unsigned)sector_cart_addr);
             if (sample_blank_sectors && !erase_always) {
                 bool blank = false;
 
@@ -12469,10 +13021,12 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
     uint8_t id[4];
     char chip_name[48] = {0};
     uint32_t device_size = 0;
+    uint32_t probed_device_size = 0;
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
     bool cfi_ok = false;
     burner_nor_cmdset_t cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    burner_gb_mapper_t mapper = BURNER_GB_MAPPER_MBC5;
     esp_err_t err;
 
     if (total_bytes == 0u) {
@@ -12490,10 +13044,6 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         ESP_LOGE(BURNER_TAG, "MBC5 probe failed: %s", esp_err_to_name(err));
         return err;
     }
-    if (!cfi_ok) {
-        ESP_LOGE(BURNER_TAG, "MBC5 CFI read failed; refusing to continue");
-        return ESP_FAIL;
-    }
     if (cmdset != BURNER_NOR_CMDSET_AMD) {
         ESP_LOGE(
             BURNER_TAG,
@@ -12502,6 +13052,9 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         return ESP_ERR_NOT_SUPPORTED;
     }
 
+    if (!cfi_ok) {
+        ESP_LOGW(BURNER_TAG, "MBC5 CFI unavailable; continuing with ID geometry");
+    }
     if (burner_mbc5_nor_has_flag(id, BURNER_NOR_FLAG_LIMIT_BUFFER_TO_ID)) {
         uint32_t id_device_size = 0u;
         uint32_t id_sector_size = 0u;
@@ -12517,6 +13070,24 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
     }
     if (buffer_write_bytes > ((BURNER_SPI_MAX_XFER - 30u) / 6u)) {
         buffer_write_bytes = (uint16_t)((BURNER_SPI_MAX_XFER - 30u) / 6u);
+    }
+
+    probed_device_size = device_size;
+    err = burner_bacon_gb_detect_mapper(&mapper);
+    if (err != ESP_OK) {
+        ESP_LOGW(BURNER_TAG, "GB mapper detect failed, defaulting to mbc5: %s", esp_err_to_name(err));
+        mapper = BURNER_GB_MAPPER_MBC5;
+        err = ESP_OK;
+    }
+    s_gb_mapper_kind = mapper;
+    if (burner_gb_mapper_device_size_limit(mapper) > 0u &&
+        device_size > burner_gb_mapper_device_size_limit(mapper)) {
+        device_size = burner_gb_mapper_device_size_limit(mapper);
+        if (burner_nor_geometry_limit_prefix(&s_cart_ctx.geometry, device_size) != ESP_OK) {
+            ESP_LOGE(BURNER_TAG, "GB mapper geometry clamp failed");
+            return ESP_ERR_INVALID_SIZE;
+        }
+        sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
     }
 
     if (total_bytes > device_size) {
@@ -12539,12 +13110,14 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         sizeof(chip_name),
         burner_mbc5_chip_name(id),
         cmdset,
-        device_size);
+        probed_device_size);
 
     ESP_LOGI(
         BURNER_TAG,
-        "MBC5 prepared: flash=%" PRIu32 " sector=%" PRIu32 " geom=%s largest=%" PRIu32
-        " regions=%u buf=%u nor=%s id=%02X %02X %02X %02X",
+        "GB prepared: mapper=%s flash=%" PRIu32 " usable=%" PRIu32 " sector=%" PRIu32
+        " geom=%s largest=%" PRIu32 " regions=%u buf=%u nor=%s cfi=%s id=%02X %02X %02X %02X",
+        burner_gb_mapper_name(mapper),
+        probed_device_size,
         device_size,
         sector_size,
         burner_nor_geometry_is_uniform(&s_cart_ctx.geometry) ? "uniform" : "mixed",
@@ -12552,6 +13125,7 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         (unsigned)s_cart_ctx.geometry.region_count,
         (unsigned)buffer_write_bytes,
         burner_nor_cmdset_name(cmdset),
+        cfi_ok ? "ok" : "id-fallback",
         id[0],
         id[1],
         id[2],
@@ -12592,12 +13166,16 @@ static esp_err_t burner_bacon_mbc5_program_block(const uint8_t *data, size_t len
             return err;
         }
         uint32_t rom_addr = offset + (uint32_t)programmed;
-        uint16_t bank = (uint16_t)(rom_addr >> 14);
-        uint16_t bank_off = (uint16_t)(rom_addr & 0x3FFFu);
+        uint16_t bank = 0u;
+        uint32_t bank_off = 0u;
+        uint16_t cart_addr = 0u;
         size_t remain = len - programmed;
-        size_t bank_remain = 0x4000u - bank_off;
-        size_t chunk = (remain < bank_remain) ? remain : bank_remain;
-        uint16_t cart_addr = (uint16_t)(0x4000u + bank_off);
+        size_t bank_remain;
+        size_t chunk;
+
+        burner_mbc5_addr_to_program_window(rom_addr, &bank, &cart_addr, &bank_off);
+        bank_remain = BURN_MBC5_ROM_BANK_BYTES - bank_off;
+        chunk = (remain < bank_remain) ? remain : bank_remain;
 
         if (bank != s_cart_ctx.current_bank) {
             err = burner_bacon_mbc5_switch_bank(bank);
@@ -12745,8 +13323,9 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
         if (err == ESP_OK && !cfi_ok) {
             ESP_LOGW(
                 BURNER_TAG,
-                "MBC5 capacity probe: CFI unavailable: flash=%" PRIu32
+                "GB capacity probe: mapper=%s CFI unavailable: flash=%" PRIu32
                 " sector=%" PRIu32 " buf=%u cmdset=%s id=%02X %02X %02X %02X",
+                burner_gb_mapper_name(s_gb_mapper_kind),
                 device_size,
                 sector_size,
                 (unsigned)buffer_write_bytes,
@@ -12944,8 +13523,8 @@ static esp_err_t burner_bacon_mbc5_scan_ppb_locked(
     sector_count = burner_erase_sector_count_from_bytes(device_size, sector_size);
     for (sector_idx = 0u; sector_idx < sector_count; ++sector_idx) {
         uint32_t sector_addr = sector_idx * sector_size;
-        uint16_t bank = (uint16_t)(sector_addr >> 14);
-        uint16_t cart_addr;
+        uint16_t bank = 0u;
+        uint16_t cart_addr = 0u;
         uint8_t ppb = 0u;
         static const uint8_t cmd_aa = 0xAAu;
         static const uint8_t cmd_55 = 0x55u;
@@ -12955,6 +13534,7 @@ static esp_err_t burner_bacon_mbc5_scan_ppb_locked(
         if (err != ESP_OK) {
             return err;
         }
+        burner_mbc5_addr_to_program_window(sector_addr, &bank, &cart_addr, NULL);
         if (bank != current_bank) {
             err = burner_bacon_mbc5_switch_bank(bank);
             if (err != ESP_OK) {
@@ -12962,10 +13542,6 @@ static esp_err_t burner_bacon_mbc5_scan_ppb_locked(
             }
             current_bank = bank;
         }
-
-        cart_addr = (bank == 0u)
-                        ? (uint16_t)(0x0000u + (sector_addr & 0x3FFFu))
-                        : (uint16_t)(0x4000u + (sector_addr & 0x3FFFu));
 
         err = burner_bacon_gbc_write(0x0AAAu, &cmd_aa, 1u);
         if (err != ESP_OK) {
@@ -13249,13 +13825,16 @@ static esp_err_t burner_bacon_mbc5_read_block_program_window(uint8_t *out, size_
 
     while (copied < len) {
         uint32_t rom_addr = offset + (uint32_t)copied;
-        uint16_t bank = (uint16_t)(rom_addr >> 14);
-        uint16_t bank_off = (uint16_t)(rom_addr & 0x3FFFu);
-        uint16_t cart_addr = (uint16_t)(0x4000u + bank_off);
+        uint16_t bank = 0u;
+        uint16_t cart_addr = 0u;
+        uint32_t bank_off = 0u;
         size_t remain = len - copied;
-        size_t bank_remain = 0x4000u - bank_off;
-        size_t chunk = (remain < bank_remain) ? remain : bank_remain;
+        size_t bank_remain;
+        size_t chunk;
 
+        burner_mbc5_addr_to_program_window(rom_addr, &bank, &cart_addr, &bank_off);
+        bank_remain = BURN_MBC5_ROM_BANK_BYTES - bank_off;
+        chunk = (remain < bank_remain) ? remain : bank_remain;
         if (chunk > BURN_CART_READ_MAX_BYTES) {
             chunk = BURN_CART_READ_MAX_BYTES;
         }
@@ -14694,7 +15273,7 @@ static esp_err_t burner_run_mbc5_range_erase(
 {
     uint32_t planned_sectors = burner_nor_geometry_sector_count_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
     uint32_t planned_bytes = burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
-    uint32_t tracked_sector_size = burner_nor_geometry_display_sector_size(&s_cart_ctx.geometry);
+    uint32_t tracked_sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
     burner_erase_task_ctx_t ctx = {
         .op = BURNER_ERASE_OP_MBC5_RANGE,
         .addr_begin = addr_begin,
@@ -14725,7 +15304,7 @@ static esp_err_t burner_run_gba_range_erase(
 {
     uint32_t planned_sectors = burner_nor_geometry_sector_count_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
     uint32_t planned_bytes = burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
-    uint32_t tracked_sector_size = burner_nor_geometry_display_sector_size(&s_cart_ctx.geometry);
+    uint32_t tracked_sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
     burner_erase_task_ctx_t ctx = {
         .op = BURNER_ERASE_OP_GBA_RANGE,
         .addr_begin = addr_begin,
@@ -14756,7 +15335,7 @@ static esp_err_t burner_run_mbc5_chip_erase(void)
         (burner_nor_geometry_is_valid(&s_cart_ctx.geometry) && s_cart_ctx.device_size > 0u)
             ? burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, 0u, s_cart_ctx.device_size - 1u)
             : s_cart_ctx.device_size;
-    uint32_t tracked_sector_size = burner_nor_geometry_display_sector_size(&s_cart_ctx.geometry);
+    uint32_t tracked_sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
     burner_erase_task_ctx_t ctx = {
         .op = BURNER_ERASE_OP_MBC5_CHIP,
         .err = ESP_FAIL,
@@ -14781,7 +15360,7 @@ static esp_err_t burner_run_gba_chip_erase(void)
         (burner_nor_geometry_is_valid(&s_cart_ctx.geometry) && s_cart_ctx.device_size > 0u)
             ? burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, 0u, s_cart_ctx.device_size - 1u)
             : s_cart_ctx.device_size;
-    uint32_t tracked_sector_size = burner_nor_geometry_display_sector_size(&s_cart_ctx.geometry);
+    uint32_t tracked_sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
     burner_erase_task_ctx_t ctx = {
         .op = BURNER_ERASE_OP_GBA_CHIP,
         .err = ESP_FAIL,
@@ -15339,7 +15918,7 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
         burner_status_plan_erase_phase(
             planned_erase_sectors,
             planned_erase_bytes,
-            burner_nor_geometry_display_sector_size(&s_cart_ctx.geometry));
+            burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry));
     }
     if (use_pipeline_stage) {
         err = burner_nor_geometry_region_cursor_begin(&s_cart_ctx.geometry, addr_begin, &pipeline_cursor);
@@ -16012,7 +16591,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         burner_status_plan_erase_phase(
             planned_erase_sectors,
             planned_erase_bytes,
-            burner_nor_geometry_display_sector_size(&s_cart_ctx.geometry));
+            burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry));
     }
     if (use_pipeline_stage) {
         err = burner_nor_geometry_region_cursor_begin(&s_cart_ctx.geometry, addr_begin, &pipeline_cursor);
