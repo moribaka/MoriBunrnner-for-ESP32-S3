@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include "esp_app_desc.h"
+#include "burner_nor_db.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -26,6 +27,7 @@
 #include "ip5306.h"
 #include "lcd_display.h"
 #include "lvgl.h"
+#include "power_manager.h"
 #include "usb_msc_tf.h"
 #include "wifi_manager.h"
 #include "ws_server_internal.h"
@@ -105,8 +107,8 @@
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
-#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 2
-#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 3
+#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 3
+#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 4
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 7
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
@@ -120,6 +122,7 @@
 #define UI_BURN_SAVE_ITEM_COUNT 8
 #define UI_SETTINGS_ITEM_COUNT 10
 #define UI_TASK_STATUS_ITEM_COUNT 12
+#define UI_TASK_CANCEL_CONFIRM_ITEM_COUNT 2U
 #define UI_TASK_ERASE_PROGRESS_ROW 6U
 #define UI_TASK_BURN_PROGRESS_ROW 7U
 #define UI_ROW_COUNT UI_LIST_VISIBLE_COUNT
@@ -133,7 +136,8 @@
 #define UI_WIFI_TASK_PRIORITY 3
 #define UI_STORAGE_TASK_STACK_SIZE 4096U
 #define UI_STORAGE_TASK_PRIORITY 3
-#define UI_BURN_WORK_TASK_STACK_SIZE (12U * 1024U)
+#define UI_BURN_WORK_TASK_STACK_SIZE (16U * 1024U)
+#define UI_BURN_PROBE_TASK_STACK_SIZE (24U * 1024U)
 #define UI_SYSTEM_TASK_CORE_ID 0
 #define UI_BURN_TASK_CORE_ID 1
 #define UI_BUTTON_QUEUE_LEN 16
@@ -270,6 +274,7 @@ typedef struct {
     burner_cart_mode_t cart_mode;
     uint32_t slot;
     burner_write_path_t write_path;
+    bool erase_always;
     uint32_t psram_mb;
     uint32_t mbc5_chunk_kb;
     bool gba_force_no_cfi;
@@ -409,8 +414,13 @@ static uint8_t s_ui_language = UI_LANGUAGE_DEFAULT;
 static bool s_file_start_active = false;
 static bool s_wifi_work_active = false;
 static bool s_storage_work_active = false;
+static bool s_burn_probe_active = false;
+static bool s_task_cancel_confirm = false;
+static bool s_task_cancel_exit_pending = false;
+static bool s_task_cancel_request_pending = false;
 static bool s_cart_analyzed = false;
 static burner_cart_mode_t s_analyzed_cart_mode = BURNER_CART_MODE_GBA;
+static ui_page_t s_task_cancel_return_page = UI_PAGE_BURNER;
 static char s_analyzed_cart_info[UI_STATUS_TEXT_MAX_LEN] = "";
 static bool s_burn_rom_write_menu = false;
 static uint32_t s_last_clock_refresh_ms = 0;
@@ -422,6 +432,13 @@ static uint32_t s_last_button_queue_full_log_ms = 0;
 
 static lv_obj_t *s_canvas = NULL;
 static uint16_t *s_canvas_buf = NULL;
+
+static void ui_task_cancel_confirm_reset_locked(void);
+static void ui_task_cancel_confirm_open_locked(ui_model_t *model);
+static void ui_task_cancel_confirm_close_locked(ui_model_t *model, const char *status_key);
+static void ui_issue_pending_task_cancel(void);
+static bool ui_task_status_operation_active(void);
+static ui_page_t ui_task_return_parent_page(ui_page_t page);
 
 static ui_model_t s_model = {
     .page = UI_PAGE_ROOT,
@@ -558,7 +575,7 @@ static ui_nav_entry_t s_nav_stack[8];
 static uint8_t s_nav_depth = 0;
 static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
-static burner_write_path_t s_write_path = BURNER_WRITE_PATH_DIRECT;
+static burner_write_path_t s_write_path = BURNER_WRITE_PATH_PIPELINE;
 static bool s_ram_fram = false;
 static burner_gba_save_type_t s_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
 static uint32_t s_cart_slot = 0;
@@ -568,8 +585,8 @@ static uint32_t s_psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
 static uint32_t s_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
 static uint32_t s_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
 static uint8_t s_ram_latency = 10;
-static ui_file_entry_t s_last_rom_file = {0};
-static ui_file_kind_t s_last_rom_kind = UI_FILE_KIND_UNSUPPORTED;
+static ui_file_entry_t s_last_rom_file_by_cart[2] = {0};
+static ui_file_kind_t s_last_rom_kind_by_cart[2] = {UI_FILE_KIND_UNSUPPORTED, UI_FILE_KIND_UNSUPPORTED};
 static ui_file_entry_t s_last_save_file = {0};
 static ui_burn_rom_submenu_t s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
 static char s_burn_rom_custom_size_text[UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX] = "";
@@ -581,6 +598,10 @@ static void ui_set_status_locked(ui_model_t *model, const char *text);
 static void ui_drop_nav_target_locked(ui_page_t page);
 static void ui_mark_content_dirty(ui_model_t *model);
 static void ui_mark_chrome_dirty(ui_model_t *model);
+static void ui_burn_probe_task(void *param);
+static bool ui_burner_operation_active(void);
+static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row);
+static const char *ui_probe_chip_name(const burner_status_t *status);
 
 static bool ui_take_model_lock(void)
 {
@@ -607,6 +628,14 @@ static void ui_set_status_locked(ui_model_t *model, const char *text)
     snprintf(model->status_text, sizeof(model->status_text), "%s", (text != NULL) ? text : "");
     ui_mark_chrome_dirty(model);
     ui_mark_content_dirty(model);
+}
+
+static bool ui_burner_operation_active(void)
+{
+    burner_status_t status = {0};
+
+    burner_status_snapshot(&status);
+    return burner_status_is_operation_active_state(status.state);
 }
 
 static void ui_mark_motion_dirty(ui_model_t *model)
@@ -1262,16 +1291,68 @@ static void ui_px_text_clipped_offset(int32_t x, int32_t y, int32_t max_w, const
     }
 }
 
-static void ui_px_draw_fps_overlay(const ui_model_t *model)
+static void ui_px_draw_charge_bolt(int32_t x, int32_t y)
 {
-    const char *fps = (model != NULL && model->fps_text[0] != '\0') ? model->fps_text : "FPS --";
-    int32_t w = ui_px_text_width(fps);
-    int32_t x = UI_CANVAS_W - w - 4;
+    ui_px_set(x + 1, y + 0, true);
+    ui_px_set(x + 2, y + 0, true);
+    ui_px_set(x + 1, y + 1, true);
+    ui_px_set(x + 0, y + 2, true);
+    ui_px_set(x + 1, y + 2, true);
+    ui_px_set(x + 2, y + 3, true);
+    ui_px_set(x + 1, y + 4, true);
+    ui_px_set(x + 2, y + 4, true);
+}
 
-    if (x < 0) {
-        x = 0;
+static void ui_px_draw_battery_overlay(const ui_model_t *model, int32_t y)
+{
+    const int32_t body_w = 12;
+    const int32_t body_h = 7;
+    const int32_t tip_w = 2;
+    const int32_t tip_h = 3;
+    const int32_t inner_w = body_w - 2;
+    const int32_t text_gap = 4;
+    const int32_t charge_gap = 6;
+    char percent_text[8] = "--%";
+    bool valid = model != NULL && model->battery_valid;
+    bool charging = model != NULL && model->battery_charging;
+    uint8_t percent = valid ? model->battery_percent : 0U;
+    int32_t icon_x = UI_CANVAS_W - (body_w + tip_w) - 4;
+    int32_t icon_y = y + 1;
+    int32_t text_w;
+    int32_t text_x;
+
+    if (valid) {
+        snprintf(percent_text, sizeof(percent_text), "%u%%", (unsigned)percent);
     }
-    ui_px_text(x, UI_LIST_HEADER_TEXT_Y, fps, true);
+
+    text_w = ui_px_text_width(percent_text);
+    text_x = icon_x - text_gap - text_w - (charging ? charge_gap : 0);
+    if (text_x < 0) {
+        text_x = 0;
+    }
+
+    ui_px_text(text_x, y, percent_text, true);
+    if (charging) {
+        ui_px_draw_charge_bolt(icon_x - 5, y + 1);
+    }
+
+    ui_px_frame(icon_x, icon_y, body_w, body_h, true);
+    ui_px_box(icon_x + body_w, icon_y + 2, tip_w, tip_h, true);
+
+    if (!valid) {
+        ui_px_hline(icon_x + 3, icon_y + 3, body_w - 6, true);
+        return;
+    }
+    if (percent > 0U) {
+        int32_t fill_w = (int32_t)(((uint32_t)inner_w * (uint32_t)percent + 99U) / 100U);
+
+        if (fill_w < 1) {
+            fill_w = 1;
+        } else if (fill_w > inner_w) {
+            fill_w = inner_w;
+        }
+        ui_px_box(icon_x + 1, icon_y + 1, fill_w, body_h - 2, true);
+    }
 }
 
 static void ui_format_file_size(uint32_t size, char *out, size_t out_len)
@@ -1326,6 +1407,11 @@ static uint16_t ui_burn_rom_settings_item_count(void)
 static const char *ui_mbc5_voltage_label(void)
 {
     return (s_mbc5_power_5v_enabled != 0u) ? "5V" : "3V3";
+}
+
+static const char *ui_erase_mode_label(void)
+{
+    return (s_burn_erase_always != 0u) ? "Force erase" : "Smart skip";
 }
 
 static const char *ui_gba_save_type_label(burner_gba_save_type_t save_type)
@@ -1614,6 +1700,55 @@ static uint16_t ui_burn_rom_item_count(void)
         return UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT;
     }
     return UI_BURN_ROM_MBC5_WITH_ROM_ITEM_COUNT;
+}
+
+static size_t ui_cart_mode_index(burner_cart_mode_t mode)
+{
+    return (mode == BURNER_CART_MODE_GBA) ? 1U : 0U;
+}
+
+static const ui_file_entry_t *ui_last_rom_file_for_mode(burner_cart_mode_t mode)
+{
+    return &s_last_rom_file_by_cart[ui_cart_mode_index(mode)];
+}
+
+static ui_file_entry_t *ui_last_rom_file_for_mode_mut(burner_cart_mode_t mode)
+{
+    return &s_last_rom_file_by_cart[ui_cart_mode_index(mode)];
+}
+
+static ui_file_kind_t ui_last_rom_kind_for_mode(burner_cart_mode_t mode)
+{
+    return s_last_rom_kind_by_cart[ui_cart_mode_index(mode)];
+}
+
+static ui_file_kind_t *ui_last_rom_kind_for_mode_mut(burner_cart_mode_t mode)
+{
+    return &s_last_rom_kind_by_cart[ui_cart_mode_index(mode)];
+}
+
+static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row)
+{
+    uint16_t count;
+
+    if (model == NULL || model->page != UI_PAGE_BURN_ROM) {
+        return;
+    }
+
+    count = ui_burn_rom_item_count();
+    if (count == 0U) {
+        model->selected = 0;
+        model->scroll = 0;
+        ui_mark_content_dirty(model);
+        return;
+    }
+    if (row >= count) {
+        row = (uint16_t)(count - 1U);
+    }
+
+    model->selected = row;
+    model->scroll = ui_scroll_for_selected_rows(row, 0, count, ui_burn_rom_visible_rows());
+    ui_mark_content_dirty(model);
 }
 
 static bool ui_burn_cart_has_slots(void)
@@ -1993,9 +2128,9 @@ static ui_file_action_t ui_file_action_for_kind(ui_file_kind_t kind, uint8_t ind
     }
     switch (index) {
         case 0:
-            return UI_FILE_ACTION_BURN_PSRAM;
-        case 1:
             return UI_FILE_ACTION_BURN_PIPELINE;
+        case 1:
+            return UI_FILE_ACTION_BURN_PSRAM;
         case 2:
             return UI_FILE_ACTION_BURN_DIRECT;
         case 3:
@@ -2521,20 +2656,22 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
     model->file_filter = UI_FILE_FILTER_NONE;
     if (kind == UI_FILE_KIND_SAVE) {
         s_last_save_file = *entry;
+        s_burn_rom_write_menu = false;
         model->page = UI_PAGE_BURN_ROM;
         model->parent_page = UI_PAGE_BURNER;
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_RAM;
         ui_set_status_locked(model, ui_tr("save selected"));
+        ui_focus_burn_rom_row_locked(model, 1U);
     } else {
-        s_last_rom_file = *entry;
-        s_last_rom_kind = kind;
+        *ui_last_rom_file_for_mode_mut(s_cart_mode) = *entry;
+        *ui_last_rom_kind_for_mode_mut(s_cart_mode) = kind;
+        s_burn_rom_write_menu = false;
         model->page = UI_PAGE_BURN_ROM;
         model->parent_page = UI_PAGE_BURNER;
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
         ui_set_status_locked(model, ui_tr("ROM selected"));
+        ui_focus_burn_rom_row_locked(model, 2U);
     }
-    model->selected = 0;
-    model->scroll = 0;
     ui_clamp_burn_rom_selection_locked(model);
     ui_drop_nav_target_locked(model->page);
     model->dirty = true;
@@ -2592,6 +2729,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
                               ((action == UI_FILE_ACTION_BURN_PIPELINE) ?
                                    BURNER_WRITE_PATH_PIPELINE :
                                    BURNER_WRITE_PATH_DIRECT);
+    request->erase_always = (s_burn_erase_always != 0u);
     request->psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
     request->mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     request->gba_force_no_cfi = false;
@@ -2601,6 +2739,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->ram_latency = 10U;
 
     s_file_start_active = true;
+    ui_task_cancel_confirm_reset_locked();
     model->page = UI_PAGE_TASK_STATUS;
     model->parent_page = UI_PAGE_ROOT;
     model->burn_progress = 0;
@@ -2629,6 +2768,7 @@ static void ui_finish_file_start_task(
     }
 
     s_file_start_active = false;
+    ui_task_cancel_confirm_reset_locked();
     s_model.page = UI_PAGE_TASK_STATUS;
     s_model.parent_page = UI_PAGE_ROOT;
     if (err == ESP_OK) {
@@ -2703,6 +2843,7 @@ static void ui_start_file_action_task(void *param)
                 request->cart_mode,
                 request->slot,
                 request->write_path,
+                request->erase_always,
                 request->psram_mb,
                 request->mbc5_chunk_kb,
                 request->gba_force_no_cfi,
@@ -2827,6 +2968,7 @@ static void ui_set_task_page_starting(const char *text, uint32_t total)
     if (!ui_take_model_lock()) {
         return;
     }
+    ui_task_cancel_confirm_reset_locked();
     s_model.page = UI_PAGE_TASK_STATUS;
     s_model.parent_page = UI_PAGE_BURNER;
     s_model.burn_progress = 0;
@@ -2889,6 +3031,7 @@ static esp_err_t ui_start_dump_rom_task(void)
         BURNER_JOB_READ_ROM,
         s_cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        false,
         gba_force_multi,
         false,
         BURN_MBC5_PROGRAM_CHUNK_BYTES,
@@ -3002,6 +3145,7 @@ static esp_err_t ui_start_chip_erase_task(void)
         BURNER_WRITE_PATH_DIRECT,
         false,
         false,
+        false,
         BURN_MBC5_PROGRAM_CHUNK_BYTES,
         BURN_GBA_DUMP_CHUNK_BYTES,
         BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES,
@@ -3019,10 +3163,12 @@ static esp_err_t ui_start_chip_erase_task(void)
     return err;
 }
 
-static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
+static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mode_t cart_mode)
 {
     uint8_t gba_id[8] = {0};
     uint8_t mbc5_id[4] = {0};
+    char chip_name[48] = {0};
+    burner_nor_geometry_t cfi_geometry = {0};
     uint32_t device_size = 0;
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
@@ -3031,6 +3177,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
     bool cfi_ok = false;
+    burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     esp_err_t err;
 
     if (out == NULL || out_len == 0U) {
@@ -3043,16 +3190,24 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
     }
 
     burner_spi_lock_take();
-    if (s_cart_mode == BURNER_CART_MODE_MBC5) {
+    if (cart_mode == BURNER_CART_MODE_MBC5) {
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_mbc5_get_id(mbc5_id);
-        }
-        if (err == ESP_OK) {
-            if (burner_bacon_mbc5_get_cfi(&device_size, &sector_size, &buffer_write_bytes) == ESP_OK) {
+            err = burner_bacon_mbc5_get_cfi(
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_geometry,
+                &mbc5_cmdset);
+            if (err == ESP_OK) {
                 cfi_ok = true;
-            } else {
-                (void)burner_mbc5_geometry_from_id(mbc5_id, &device_size, &sector_size, &buffer_write_bytes);
+                if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
+                    err = burner_bacon_mbc5_get_id(mbc5_id);
+                    if (err != ESP_OK) {
+                        memset(mbc5_id, 0, sizeof(mbc5_id));
+                        err = ESP_OK;
+                    }
+                }
             }
         }
     } else {
@@ -3068,7 +3223,13 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
     if (err != ESP_OK) {
         return err;
     }
-    if (s_cart_mode == BURNER_CART_MODE_MBC5) {
+    if (cart_mode == BURNER_CART_MODE_MBC5) {
+        burner_nor_format_chip_name(
+            chip_name,
+            sizeof(chip_name),
+            burner_mbc5_chip_name(mbc5_id),
+            mbc5_cmdset,
+            device_size);
         burner_status_set_probe_info(
             BURNER_CART_MODE_MBC5,
             mbc5_id,
@@ -3080,18 +3241,25 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
             false,
             false,
             false,
-            false);
+            false,
+            chip_name);
         snprintf(
             out,
             out_len,
             "%s ID %02X %02X %02X %02X %s",
-            ui_cart_mode_label(s_cart_mode),
+            ui_cart_mode_label(cart_mode),
             mbc5_id[0],
             mbc5_id[1],
             mbc5_id[2],
             mbc5_id[3],
             cfi_ok ? "CFI" : "no CFI");
     } else {
+        burner_nor_format_chip_name(
+            chip_name,
+            sizeof(chip_name),
+            burner_gba_chip_name(gba_id),
+            s_cart_ctx.gba_cmdset,
+            device_size);
         burner_status_set_probe_info(
             BURNER_CART_MODE_GBA,
             gba_id,
@@ -3103,7 +3271,8 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
             false,
             false,
             gba_d0d1_known,
-            gba_d0d1_swapped);
+            gba_d0d1_swapped,
+            chip_name);
         {
             bool detected = false;
             burner_spi_lock_take();
@@ -3126,7 +3295,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len)
             out,
             out_len,
             "%s ID %02X %02X %02X %02X %s",
-            ui_cart_mode_label(s_cart_mode),
+            ui_cart_mode_label(cart_mode),
             gba_id[0],
             gba_id[1],
             gba_id[2],
@@ -3172,7 +3341,8 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
             false,
             false,
             false,
-            false);
+            false,
+            burner_mbc5_chip_name(report.mbc5_id));
     } else {
         burner_status_set_probe_info(
             BURNER_CART_MODE_GBA,
@@ -3185,7 +3355,8 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
             false,
             false,
             report.gba_d0d1_known,
-            report.gba_d0d1_swapped);
+            report.gba_d0d1_swapped,
+            burner_gba_chip_name(report.gba_id));
     }
 
     if (report.ppb_needs_unlock_before == 0U && report.ppb_needs_unlock_after == 0U) {
@@ -3216,12 +3387,17 @@ static void ui_finish_work_task(ui_work_type_t type, esp_err_t err, const char *
         s_wifi_work_active = false;
     } else if (type == UI_WORK_STORAGE_USB_ENABLE || type == UI_WORK_STORAGE_USB_DISABLE) {
         s_storage_work_active = false;
+    } else if (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_UNLOCK_PPB) {
+        s_burn_probe_active = false;
     }
     if (type == UI_WORK_BURN_READ_ID) {
         if (err == ESP_OK) {
             s_cart_analyzed = true;
             s_analyzed_cart_mode = cart_mode;
             snprintf(s_analyzed_cart_info, sizeof(s_analyzed_cart_info), "%s", ok_text != NULL ? ok_text : "");
+            s_burn_rom_write_menu = false;
+            s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+            ui_focus_burn_rom_row_locked(&s_model, 1U);
         } else {
             s_cart_analyzed = false;
             s_analyzed_cart_info[0] = '\0';
@@ -3248,7 +3424,6 @@ static void ui_work_task(void *param)
     ui_work_request_t *request = (ui_work_request_t *)param;
     esp_err_t err = ESP_ERR_INVALID_ARG;
     const char *ok_text = ui_tr("done");
-    char id_text[UI_STATUS_TEXT_MAX_LEN] = {0};
 
     if (request == NULL) {
         vTaskDelete(NULL);
@@ -3281,10 +3456,6 @@ static void ui_work_task(void *param)
             ok_text = ui_tr("USB pass-through disabled");
             err = usb_msc_tf_set_enabled(false);
             break;
-        case UI_WORK_BURN_READ_ID:
-            err = ui_read_cart_id_once(id_text, sizeof(id_text));
-            ok_text = (err == ESP_OK) ? id_text : ui_tr("read id failed");
-            break;
         case UI_WORK_BURN_ERASE_CHIP:
             ok_text = ui_tr("chip erase started");
             err = ui_start_chip_erase_task();
@@ -3296,10 +3467,6 @@ static void ui_work_task(void *param)
         case UI_WORK_BURN_DUMP_SAVE:
             ok_text = ui_tr("save dump started");
             err = ui_start_dump_save_task();
-            break;
-        case UI_WORK_BURN_UNLOCK_PPB:
-            err = ui_unlock_ppb_once(id_text, sizeof(id_text), request->cart_mode);
-            ok_text = (err == ESP_OK) ? id_text : ui_tr("PPB unlock failed");
             break;
         case UI_WORK_BRIGHTNESS_UP:
             ok_text = ui_tr("brightness up");
@@ -3324,14 +3491,49 @@ static void ui_work_task(void *param)
     vTaskDelete(NULL);
 }
 
+static void ui_burn_probe_task(void *param)
+{
+    ui_work_request_t *request = (ui_work_request_t *)param;
+    esp_err_t err = ESP_ERR_INVALID_ARG;
+    const char *ok_text = ui_tr("done");
+    char id_text[UI_STATUS_TEXT_MAX_LEN] = {0};
+
+    if (request == NULL) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    switch (request->type) {
+        case UI_WORK_BURN_READ_ID:
+            err = ui_read_cart_id_once(id_text, sizeof(id_text), request->cart_mode);
+            ok_text = (err == ESP_OK) ? id_text : ui_tr("read id failed");
+            break;
+        case UI_WORK_BURN_UNLOCK_PPB:
+            err = ui_unlock_ppb_once(id_text, sizeof(id_text), request->cart_mode);
+            ok_text = (err == ESP_OK) ? id_text : ui_tr("PPB unlock failed");
+            break;
+        default:
+            err = ESP_ERR_INVALID_ARG;
+            break;
+    }
+
+    ui_finish_work_task(request->type, err, ok_text, request->cart_mode);
+    ESP_LOGI(UI_TAG, "UI probe task stack free min=%u bytes", (unsigned)uxTaskGetStackHighWaterMark2(NULL));
+    free(request);
+    vTaskDelete(NULL);
+}
+
 static void ui_start_work_async(ui_work_type_t type)
 {
     ui_work_request_t *request = NULL;
     bool *active = NULL;
     const char *status = ui_tr("working");
+    const char *task_name = "ui_work";
     uint32_t stack_size = UI_STORAGE_TASK_STACK_SIZE;
     UBaseType_t priority = UI_STORAGE_TASK_PRIORITY;
     BaseType_t core_id = UI_SYSTEM_TASK_CORE_ID;
+    TaskFunction_t task_fn = ui_work_task;
+    bool is_burn_probe = (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_UNLOCK_PPB);
 
     if (!ui_take_model_lock()) {
         return;
@@ -3347,21 +3549,28 @@ static void ui_start_work_async(ui_work_type_t type)
         status = ui_tr("storage working");
         stack_size = UI_STORAGE_TASK_STACK_SIZE;
         priority = UI_STORAGE_TASK_PRIORITY;
-    } else if (type == UI_WORK_BURN_UNLOCK_PPB) {
-        active = NULL;
-        status = ui_tr("PPB unlocking");
-        stack_size = UI_BURN_WORK_TASK_STACK_SIZE;
+    } else if (is_burn_probe) {
+        active = &s_burn_probe_active;
+        status = (type == UI_WORK_BURN_UNLOCK_PPB) ? ui_tr("PPB unlocking") : ui_tr("analyzing cart");
+        task_fn = ui_burn_probe_task;
+        task_name = "ui_probe";
+        stack_size = UI_BURN_PROBE_TASK_STACK_SIZE;
         priority = UI_STORAGE_TASK_PRIORITY;
         core_id = UI_BURN_TASK_CORE_ID;
     } else {
         active = NULL;
         status = ui_tr("working");
-        if (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_ERASE_CHIP ||
+        if (type == UI_WORK_BURN_ERASE_CHIP ||
             type == UI_WORK_BURN_DUMP_ROM || type == UI_WORK_BURN_DUMP_SAVE) {
             stack_size = UI_BURN_WORK_TASK_STACK_SIZE;
             priority = UI_STORAGE_TASK_PRIORITY;
             core_id = UI_BURN_TASK_CORE_ID;
         }
+    }
+    if (is_burn_probe && ui_burner_operation_active()) {
+        ui_set_status_locked(&s_model, ui_tr("action already running"));
+        xSemaphoreGive(s_model_lock);
+        return;
     }
     if (active != NULL && *active) {
         ui_set_status_locked(&s_model, ui_tr("action already running"));
@@ -3383,8 +3592,8 @@ static void ui_start_work_async(ui_work_type_t type)
     request->cart_mode = s_cart_mode;
 
     if (xTaskCreatePinnedToCore(
-            ui_work_task,
-            "ui_work",
+            task_fn,
+            task_name,
             stack_size,
             request,
             priority,
@@ -3445,7 +3654,7 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
         case UI_PAGE_SETTINGS:
             return UI_SETTINGS_ITEM_COUNT;
         case UI_PAGE_TASK_STATUS:
-            return UI_TASK_STATUS_ITEM_COUNT;
+            return s_task_cancel_confirm ? UI_TASK_CANCEL_CONFIRM_ITEM_COUNT : UI_TASK_STATUS_ITEM_COUNT;
         default:
             return 0;
     }
@@ -3517,6 +3726,64 @@ static void ui_open_root_locked(ui_model_t *model)
     s_burn_rom_verify_prompt_until_ms = 0;
     s_nav_depth = 0;
     ui_set_status_locked(model, ui_tr("ready"));
+}
+
+static bool ui_task_status_operation_active(void)
+{
+    burner_status_t status = {0};
+
+    burner_status_snapshot(&status);
+    return s_file_start_active || status.state == BURNER_STATE_RECEIVING || status.state == BURNER_STATE_BURNING;
+}
+
+static ui_page_t ui_task_return_parent_page(ui_page_t page)
+{
+    switch (page) {
+        case UI_PAGE_ROOT:
+            return UI_PAGE_ROOT;
+        case UI_PAGE_BURNER:
+            return UI_PAGE_ROOT;
+        case UI_PAGE_BURN_ROM:
+        case UI_PAGE_BURN_SAVE:
+            return UI_PAGE_BURNER;
+        default:
+            return UI_PAGE_ROOT;
+    }
+}
+
+static void ui_task_cancel_confirm_reset_locked(void)
+{
+    s_task_cancel_confirm = false;
+    s_task_cancel_exit_pending = false;
+    s_task_cancel_request_pending = false;
+    s_task_cancel_return_page = UI_PAGE_BURNER;
+}
+
+static void ui_task_cancel_confirm_open_locked(ui_model_t *model)
+{
+    if (model == NULL) {
+        return;
+    }
+    s_task_cancel_confirm = true;
+    s_task_cancel_return_page = model->parent_page;
+    model->selected = 0;
+    model->scroll = 0;
+    ui_mark_content_dirty(model);
+    ui_set_status_locked(model, ui_tr("confirm stop task"));
+}
+
+static void ui_task_cancel_confirm_close_locked(ui_model_t *model, const char *status_key)
+{
+    s_task_cancel_confirm = false;
+    if (model == NULL) {
+        return;
+    }
+    model->selected = 0;
+    model->scroll = 0;
+    ui_mark_content_dirty(model);
+    if (status_key != NULL && status_key[0] != '\0') {
+        ui_set_status_locked(model, ui_tr(status_key));
+    }
 }
 
 static void ui_menu_move_locked(ui_model_t *model, int delta)
@@ -3611,6 +3878,14 @@ static void ui_back_locked(ui_model_t *model)
     char parent[TF_PATH_LEN_MAX] = {0};
 
     if (model == NULL) {
+        return;
+    }
+    if (model->page == UI_PAGE_TASK_STATUS && s_task_cancel_confirm) {
+        ui_task_cancel_confirm_close_locked(model, "task status");
+        return;
+    }
+    if (model->page == UI_PAGE_TASK_STATUS && ui_task_status_operation_active()) {
+        ui_task_cancel_confirm_open_locked(model);
         return;
     }
     if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
@@ -3754,8 +4029,8 @@ static esp_err_t ui_prepare_last_file_action_locked(
             selected_file = s_last_save_file;
             selected_kind = UI_FILE_KIND_SAVE;
         } else {
-            selected_file = s_last_rom_file;
-            selected_kind = s_last_rom_kind;
+            selected_file = *ui_last_rom_file_for_mode(s_cart_mode);
+            selected_kind = ui_last_rom_kind_for_mode(s_cart_mode);
         }
     } else if (model != NULL) {
         selected_file = model->action_file;
@@ -3802,6 +4077,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
                                 ((action == UI_FILE_ACTION_BURN_PIPELINE) ?
                                      BURNER_WRITE_PATH_PIPELINE :
                                      BURNER_WRITE_PATH_DIRECT));
+    request->erase_always = (s_burn_erase_always != 0u);
     request->psram_mb = s_psram_mb;
     request->mbc5_chunk_kb = s_mbc5_chunk_kb;
     request->gba_force_no_cfi = false;
@@ -3811,6 +4087,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->ram_latency = s_ram_latency;
 
     s_file_start_active = true;
+    ui_task_cancel_confirm_reset_locked();
     model->page = UI_PAGE_TASK_STATUS;
     model->parent_page = UI_PAGE_BURNER;
     model->burn_progress = 0;
@@ -3829,9 +4106,9 @@ static ui_file_action_t ui_burn_write_action_for_index(uint16_t index)
 {
     switch (index) {
         case 0:
-            return UI_FILE_ACTION_BURN_PSRAM;
-        case 1:
             return UI_FILE_ACTION_BURN_PIPELINE;
+        case 1:
+            return UI_FILE_ACTION_BURN_PSRAM;
         case 2:
         default:
             return UI_FILE_ACTION_BURN_DIRECT;
@@ -4193,13 +4470,18 @@ static void ui_select_locked(
                 }
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
                 if (model->selected == 0U) {
+                    s_burn_erase_always = (s_burn_erase_always == 0u) ? 1u : 0u;
+                    ui_set_status_locked(model, s_burn_erase_always != 0u ?
+                                                   ui_tr("Erase mode: force erase") :
+                                                   ui_tr("Erase mode: smart skip"));
+                } else if (model->selected == 1U) {
                     s_psram_mb = ui_next_option_u32(
                         s_psram_mb_options,
                         sizeof(s_psram_mb_options) / sizeof(s_psram_mb_options[0]),
                         s_psram_mb,
                         1);
                     ui_set_status_locked(model, ui_tr("PSRAM window changed"));
-                } else if (model->selected == 1U) {
+                } else if (model->selected == 2U) {
                     s_dump_chunk_kb = ui_next_option_u32(
                         s_dump_chunk_kb_options,
                         sizeof(s_dump_chunk_kb_options) / sizeof(s_dump_chunk_kb_options[0]),
@@ -4306,7 +4588,7 @@ static void ui_select_locked(
                         model->parent_page = UI_PAGE_BURN_ROM;
                         break;
                     case UI_BURN_ROM_OP_WRITE_ROM:
-                        if (s_last_rom_file.path[0] == '\0') {
+                        if (ui_last_rom_file_for_mode(s_cart_mode)->path[0] == '\0') {
                             s_burn_rom_write_prompt_until_ms = esp_log_timestamp() + UI_BURN_ROW_PROMPT_MS;
                             ui_mark_content_dirty(model);
                         } else {
@@ -4314,7 +4596,7 @@ static void ui_select_locked(
                         }
                         break;
                     case UI_BURN_ROM_OP_VERIFY_ROM:
-                        if (s_last_rom_file.path[0] == '\0') {
+                        if (ui_last_rom_file_for_mode(s_cart_mode)->path[0] == '\0') {
                             s_burn_rom_verify_prompt_until_ms = esp_log_timestamp() + UI_BURN_ROW_PROMPT_MS;
                             ui_mark_content_dirty(model);
                         } else {
@@ -4434,7 +4716,30 @@ static void ui_select_locked(
             }
             break;
         case UI_PAGE_TASK_STATUS:
-            ui_set_status_locked(model, ui_tr("task status"));
+            if (s_task_cancel_confirm) {
+                if (model->selected == 1U) {
+                    ui_page_t return_page = s_task_cancel_return_page;
+
+                    s_task_cancel_confirm = false;
+                    s_task_cancel_exit_pending = true;
+                    s_task_cancel_request_pending = true;
+                    model->selected = 0;
+                    model->scroll = 0;
+                    ui_mark_content_dirty(model);
+                    ui_set_status_locked(model, ui_tr("cancelling task"));
+                    model->page = return_page;
+                    model->parent_page = ui_task_return_parent_page(return_page);
+                    model->selected = 0;
+                    model->scroll = 0;
+                    ui_mark_chrome_dirty(model);
+                    ui_mark_content_dirty(model);
+                    model->dirty = true;
+                } else {
+                    ui_task_cancel_confirm_close_locked(model, "task status");
+                }
+            } else {
+                ui_set_status_locked(model, ui_tr("task status"));
+            }
             break;
         default:
             ui_set_status_locked(model, ui_tr("read only"));
@@ -4679,18 +4984,17 @@ static void ui_update_battery_if_needed(uint32_t now_ms)
     uint8_t percent = 0;
     bool valid = false;
     bool charging = false;
-    ip5306_status_t status = {0};
+    power_manager_telemetry_t telemetry = {0};
 
     if (s_last_battery_refresh_ms != 0U && (now_ms - s_last_battery_refresh_ms) < UI_BATTERY_REFRESH_MS) {
         return;
     }
     s_last_battery_refresh_ms = now_ms;
 
-    if (ip5306_ready() && ip5306_get_battery_level_percent(&percent) == ESP_OK) {
-        valid = true;
-        if (ip5306_get_status(&status) == ESP_OK) {
-            charging = status.charge_enable && !status.charge_full;
-        }
+    if (power_manager_get_telemetry(&telemetry) == ESP_OK) {
+        percent = telemetry.battery_percent;
+        valid = telemetry.battery_percent_valid;
+        charging = telemetry.charging;
     }
 
     if (!ui_take_model_lock()) {
@@ -4701,6 +5005,7 @@ static void ui_update_battery_if_needed(uint32_t now_ms)
         s_model.battery_valid = valid;
         s_model.battery_percent = percent;
         s_model.battery_charging = charging;
+        ui_mark_chrome_dirty(&s_model);
         ui_mark_content_dirty(&s_model);
     }
     xSemaphoreGive(s_model_lock);
@@ -4711,6 +5016,8 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     burner_status_t status = {0};
     int progress;
     int erase_progress = 0;
+    uint32_t erase_done_bytes = 0;
+    uint32_t erase_total_bytes = 0;
     uint32_t erase_done = 0;
     uint32_t erase_total = 0;
     bool release_start = false;
@@ -4730,13 +5037,23 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     if (status.total_bytes > 0U && status.processed_bytes > status.total_bytes) {
         status.processed_bytes = status.total_bytes;
     }
+    erase_total_bytes = status.erase_phase_total_bytes;
+    erase_done_bytes = status.erase_phase_done_bytes;
     erase_total = status.erase_phase_total_sectors;
     erase_done = status.erase_phase_done_sectors;
-    if (erase_total == 0U) {
+    if (erase_total_bytes > 0U) {
+        if (erase_done_bytes > erase_total_bytes) {
+            erase_done_bytes = erase_total_bytes;
+        }
+        erase_progress = burner_calc_progress_percent_u64(erase_done_bytes, erase_total_bytes);
+        if (erase_progress > 100) {
+            erase_progress = 100;
+        }
+    } else if (erase_total == 0U) {
         erase_total = status.erase_sector_count;
         erase_done = status.erase_sector_count;
     }
-    if (erase_total > 0U) {
+    if (erase_total_bytes == 0U && erase_total > 0U) {
         if (erase_done > erase_total) {
             erase_done = erase_total;
         }
@@ -4769,6 +5086,25 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
         s_model.burn_elapsed_us = status.task_elapsed_us;
         ui_mark_content_dirty(&s_model);
     }
+    if (release_start) {
+        s_task_cancel_confirm = false;
+        s_task_cancel_request_pending = false;
+        if (s_task_cancel_exit_pending &&
+            s_model.page == UI_PAGE_TASK_STATUS &&
+            (status.state == BURNER_STATE_CANCELLED || status.state == BURNER_STATE_ERROR)) {
+            s_model.page = s_task_cancel_return_page;
+            s_model.parent_page = ui_task_return_parent_page(s_task_cancel_return_page);
+            s_model.selected = 0;
+            s_model.scroll = 0;
+            s_task_cancel_exit_pending = false;
+            ui_mark_chrome_dirty(&s_model);
+            ui_mark_content_dirty(&s_model);
+            s_model.dirty = true;
+        } else if (status.state == BURNER_STATE_DONE || status.state == BURNER_STATE_CANCELLED ||
+                   status.state == BURNER_STATE_ERROR) {
+            s_task_cancel_exit_pending = false;
+        }
+    }
     if (s_model.page == UI_PAGE_TASK_STATUS) {
         ui_mark_content_dirty(&s_model);
     }
@@ -4777,6 +5113,29 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     if (release_start) {
         s_file_start_active = false;
     }
+}
+
+static void ui_issue_pending_task_cancel(void)
+{
+    bool pending = false;
+
+    if (!ui_take_model_lock()) {
+        return;
+    }
+    pending = s_task_cancel_request_pending;
+    xSemaphoreGive(s_model_lock);
+
+    if (!pending) {
+        return;
+    }
+
+    (void)burner_cancel_request();
+
+    if (!ui_take_model_lock()) {
+        return;
+    }
+    s_task_cancel_request_pending = false;
+    xSemaphoreGive(s_model_lock);
 }
 
 static void ui_refresh_sources(void)
@@ -4999,8 +5358,8 @@ static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *tit
             snprintf(hint, hint_len, "%s", size_text);
             break;
         case 4:
-            snprintf(title, title_len, "IP5306");
-            snprintf(hint, hint_len, "%s", ip5306_ready() ? ui_tr("ready") : ui_tr("missing"));
+            snprintf(title, title_len, "Power");
+            snprintf(hint, hint_len, "%s", power_manager_ready() ? power_manager_chip_name() : ui_tr("missing"));
             break;
         default:
             snprintf(title, title_len, "TCA9555");
@@ -5066,9 +5425,12 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
     }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
         if (index == 0U) {
+            snprintf(title, title_len, "%s", ui_tr("Erase mode"));
+            snprintf(hint, hint_len, "%s", ui_erase_mode_label());
+        } else if (index == 1U) {
             snprintf(title, title_len, "%s", ui_tr("PSRAM window"));
             snprintf(hint, hint_len, "%s", ui_psram_window_label(s_psram_mb, psram_label, sizeof(psram_label)));
-        } else if (index == 1U) {
+        } else if (index == 2U) {
             snprintf(title, title_len, "%s", ui_tr("Dump chunk"));
             snprintf(hint, hint_len, "%" PRIu32 " KB", s_dump_chunk_kb);
         } else if (s_cart_mode == BURNER_CART_MODE_MBC5) {
@@ -5137,14 +5499,19 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
     }
     switch (ui_burn_rom_op_for_index(index)) {
         case UI_BURN_ROM_OP_CHOOSE_ROM:
-            snprintf(
-                title,
-                title_len,
-                "%s",
-                s_last_rom_file.path[0] != '\0' ?
-                    ui_tr("ROM: Reselect file") :
-                    ui_tr("ROM: Choose file"));
-            snprintf(hint, hint_len, "%s", s_last_rom_file.path[0] != '\0' ? s_last_rom_file.name : ui_tr("not selected"));
+            {
+                const ui_file_entry_t *rom_file = ui_last_rom_file_for_mode(s_cart_mode);
+
+                if (rom_file->path[0] != '\0') {
+                    const char *rom_name = (rom_file->name[0] != '\0') ? rom_file->name : rom_file->path;
+
+                    snprintf(title, title_len, "ROM: %s", rom_name);
+                    snprintf(hint, hint_len, "%s", rom_file->path);
+                } else {
+                    snprintf(title, title_len, "%s", ui_tr("ROM: Choose file"));
+                    snprintf(hint, hint_len, "%s", ui_tr("not selected"));
+                }
+            }
             return;
         case UI_BURN_ROM_OP_WRITE_ROM:
             if (s_burn_rom_write_prompt_until_ms != 0U &&
@@ -5217,8 +5584,8 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                 hint_len,
                 "%s",
                 (s_cart_mode == BURNER_CART_MODE_MBC5) ?
-                    ui_tr("PSRAM/chunk/voltage") :
-                    ui_tr("PSRAM/dump chunk"));
+                    ui_tr("erase/PSRAM/chunk/voltage") :
+                    ui_tr("erase/PSRAM/dump"));
             return;
         case UI_BURN_ROM_OP_ANALYZE:
         case UI_BURN_ROM_OP_INVALID:
@@ -5280,6 +5647,16 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
 
     burner_status_snapshot(&status);
     ui_format_elapsed(status.task_elapsed_us > 0ULL ? status.task_elapsed_us : model->burn_elapsed_us, elapsed, sizeof(elapsed));
+    if (s_task_cancel_confirm) {
+        if (index == 0U) {
+            snprintf(title, title_len, "%s", ui_tr("No"));
+            snprintf(hint, hint_len, "%s", ui_tr("continue current task"));
+        } else {
+            snprintf(title, title_len, "%s", ui_tr("Yes, stop task"));
+            snprintf(hint, hint_len, "%s", ui_tr("return to previous page"));
+        }
+        return;
+    }
     if (index == 1U) {
         snprintf(title, title_len, "%s", ui_tr("ROM/File"));
         snprintf(hint, hint_len, "%s", status.rom_name[0] != '\0' ? status.rom_name : "--");
@@ -5521,7 +5898,7 @@ static void ui_px_apply_tile(const ui_model_t *model)
 
     ui_px_text(8, 10, "MORI", true);
     ui_px_text_clipped(UI_CANVAS_W - 118, 10, 58, model->time_text, true);
-    ui_px_draw_fps_overlay(model);
+    ui_px_draw_battery_overlay(model, 10);
     ui_px_box(0, 0, progress_w, UI_TILE_BAR_H, true);
     for (uint16_t i = 0; i < UI_ROOT_ITEM_COUNT; ++i) {
         int32_t x = center_x + (int32_t)((float)i * (float)UI_TILE_ICON_SPACING - s_anim.tile_camera_x);
@@ -5626,7 +6003,7 @@ static void ui_px_apply_burner_modes(const ui_model_t *model)
 
     ui_px_text(8, 10, ui_tr("Burner"), true);
     ui_px_text_clipped(UI_CANVAS_W - 118, 10, 58, model->time_text, true);
-    ui_px_draw_fps_overlay(model);
+    ui_px_draw_battery_overlay(model, 10);
     ui_px_box(0, 0, progress_w, UI_TILE_BAR_H, true);
     ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("Select cart type"))) / 2, 34, ui_tr("Select cart type"), true);
     ui_px_cart_icon(UI_BURNER_ICON_GBA_X, UI_BURNER_ICON_Y, "GBA", selected == 0U);
@@ -5976,7 +6353,7 @@ static void ui_px_draw_burner_cart_info(const ui_model_t *model)
         }
         ui_format_probe_id(&status, id_text, sizeof(id_text));
         ui_format_gba_d0d1_text(&status, d0d1_text, sizeof(d0d1_text));
-        ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 20, w, s_analyzed_cart_info[0] != '\0' ? s_analyzed_cart_info : ui_cart_mode_label(s_cart_mode), true);
+        ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 20, w, ui_probe_chip_name(&status), true);
         if (status.probe_cart_mode == BURNER_CART_MODE_GBA) {
             ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 36, w, "D1/D0", true);
             ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 36, w - 72, d0d1_text, true);
@@ -6078,7 +6455,10 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
 
     ui_px_info_line(text_x, yy, text_w, ui_tr("Type:"), ui_cart_mode_label(s_cart_mode));
     yy += UI_LIST_LINE_H;
-    if (s_analyzed_cart_info[0] != '\0') {
+    if (status.probe_valid && status.probe_cart_mode == s_cart_mode) {
+        ui_px_text_clipped(text_x, yy, text_w, ui_probe_chip_name(&status), true);
+        yy += UI_LIST_LINE_H;
+    } else if (s_analyzed_cart_info[0] != '\0') {
         ui_px_text_clipped(text_x, yy, text_w, s_analyzed_cart_info, true);
         yy += UI_LIST_LINE_H;
     }
@@ -6123,11 +6503,26 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
         ui_px_text_clipped(text_x, yy, text_w, ui_tr("No probe detail"), true);
         yy += UI_LIST_LINE_H;
     }
-    if (s_last_rom_file.path[0] != '\0' && yy + (UI_LIST_LINE_H * 2) <= y + h - 2) {
-        ui_px_info_line(text_x, yy, text_w, ui_tr("File:"), "");
-        yy += UI_LIST_LINE_H;
-        ui_px_text_clipped(text_x, yy, text_w, s_last_rom_file.name, true);
+    {
+        const ui_file_entry_t *rom_file = ui_last_rom_file_for_mode(s_cart_mode);
+
+        if (rom_file->path[0] != '\0' && yy + (UI_LIST_LINE_H * 2) <= y + h - 2) {
+            ui_px_info_line(text_x, yy, text_w, ui_tr("File:"), "");
+            yy += UI_LIST_LINE_H;
+            ui_px_text_clipped(text_x, yy, text_w, rom_file->name, true);
+        }
     }
+}
+
+static const char *ui_probe_chip_name(const burner_status_t *status)
+{
+    if (status == NULL || !status->probe_valid) {
+        return "--";
+    }
+    if (status->probe_chip_name[0] != '\0') {
+        return status->probe_chip_name;
+    }
+    return "unknown";
 }
 
 static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, int32_t y, int32_t w, int32_t h)
@@ -6232,7 +6627,7 @@ static void ui_px_draw_burn_rom_split_chrome(const ui_model_t *model)
     snprintf(header, sizeof(header), "%s", ui_page_title(model->page));
     ui_px_text(4, UI_LIST_HEADER_TEXT_Y, header, true);
     ui_px_text_clipped(UI_CANVAS_W - 118, UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
-    ui_px_draw_fps_overlay(model);
+    ui_px_draw_battery_overlay(model, UI_LIST_HEADER_TEXT_Y);
     ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - 2, true);
     for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
         ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
@@ -6299,7 +6694,7 @@ static void ui_px_apply_chrome_dynamic(const ui_model_t *model)
     }
     ui_px_text(4, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : UI_LIST_HEADER_TEXT_Y, header, true);
     ui_px_text_clipped(UI_CANVAS_W - 118, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
-    ui_px_draw_fps_overlay(model);
+    ui_px_draw_battery_overlay(model, (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) ? 10 : UI_LIST_HEADER_TEXT_Y);
     ui_px_clear_rect(0, UI_CANVAS_H - UI_HINT_H, UI_CANVAS_W, UI_HINT_H);
     if (model->status_text[0] != '\0') {
         ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
@@ -6330,7 +6725,7 @@ static void ui_px_apply_list(const ui_model_t *model)
 
     ui_px_text(4, UI_LIST_HEADER_TEXT_Y, header, true);
     ui_px_text_clipped(UI_CANVAS_W - 118, UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
-    ui_px_draw_fps_overlay(model);
+    ui_px_draw_battery_overlay(model, UI_LIST_HEADER_TEXT_Y);
     ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - UI_LIST_BAR_W - 2, true);
     for (int32_t x = 0; x < UI_CANVAS_W - UI_LIST_BAR_W; x += 6) {
         ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
@@ -6755,6 +7150,8 @@ void ui_process(void)
         ui_apply_snapshot(&snapshot);
         s_render_frames_this_second++;
     }
+
+    ui_issue_pending_task_cancel();
 }
 
 void ui_post_button(ui_button_t button, bool pressed)

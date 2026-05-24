@@ -1952,8 +1952,16 @@
                 <div style="margin: 14px 0 8px; text-align: left;">
                     <label class="setting-label" for="fileActionWritePathSelect" style="display:block; margin-bottom: 6px;">烧录路径</label>
                     <select class="input" id="fileActionWritePathSelect" onchange="setWritePathMode(this.value)">
-                        <option value="direct">直接: TF -> 卡带</option>
+                        <option value="pipeline">流水: 边擦边写（推荐）</option>
                         <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带</option>
+                        <option value="direct">直接: TF -> 卡带（兼容）</option>
+                    </select>
+                </div>
+                <div style="margin: 0 0 8px; text-align: left;" id="fileActionPipelineEraseSection">
+                    <label class="setting-label" for="fileActionPipelineEraseSelect" style="display:block; margin-bottom: 6px;">擦除策略</label>
+                    <select class="input" id="fileActionPipelineEraseSelect" onchange="setPipelineEraseMode(this.value)">
+                        <option value="smart">智能跳过空白扇区（默认）</option>
+                        <option value="force">强制每扇区先擦除</option>
                     </select>
                 </div>
                 <div style="margin: 0 0 8px; text-align: left;">
@@ -2172,7 +2180,8 @@
             systemRefreshTimer: null,
             powerViewMode: 'basic',
             cartMode: 'gba',
-            writePathMode: 'direct',
+            writePathMode: 'pipeline',
+            pipelineEraseMode: 'smart',
             psramWindowMb: 4,
             mbc5ChunkKb: 16,
             dumpChunkKb: 64,
@@ -2313,14 +2322,14 @@
         function updatePowerStatus(data) {
             state.powerData = data;
             const ip5306 = (data && data.ip5306) ? data.ip5306 : {};
-            
-            const batteryPercent = estimateBatteryPercent(ip5306);
+            const power = (data && data.power) ? data.power : {};
+            const batteryPercent = estimateBatteryPercent(power.ready ? power : ip5306);
             
             const sidebarBattery = document.getElementById('sidebarBattery');
             const sidebarChargeState = document.getElementById('sidebarChargeState');
             if (sidebarBattery) sidebarBattery.textContent = batteryPercent + '%';
             
-            const chargeState = ip5306.charge_state || 'unknown';
+            const chargeState = power.charge_state || ip5306.charge_state || 'unknown';
             const stateMap = {
                 'charging': '⚡ 充电中',
                 'charge_full': '✓ 已充满',
@@ -2353,18 +2362,23 @@
             return fallback;
         }
 
-        function estimateBatteryPercent(ip5306) {
-            if (!ip5306 || typeof ip5306 !== 'object') return 0;
+        function estimateBatteryPercent(powerLike) {
+            if (!powerLike || typeof powerLike !== 'object') return 0;
+
+            const genericReported = parseTelemetryNumber(powerLike.battery_percent, -1);
+            if (powerLike.battery_percent_valid !== false && genericReported >= 0) {
+                return Math.max(0, Math.min(100, Math.round(genericReported)));
+            }
 
             // 优先使用固件返回的 battery_level_percent。
-            const reported = parseTelemetryNumber(ip5306.battery_level_percent, -1);
-            if (ip5306.battery_level_percent_ok !== false && reported >= 0) {
+            const reported = parseTelemetryNumber(powerLike.battery_level_percent, -1);
+            if (powerLike.battery_level_percent_ok !== false && reported >= 0) {
                 return Math.max(0, Math.min(100, Math.round(reported)));
             }
 
             // 兜底：仅在无百分比时给出确定性状态值，避免随机跳动。
-            if (ip5306.charge_full_flag) return 100;
-            if (ip5306.charge_state === 'charging') return 50;
+            if (powerLike.charge_full || powerLike.charge_full_flag) return 100;
+            if ((powerLike.charge_state || '') === 'charging') return 50;
             return 0;
         }
 
@@ -2692,11 +2706,22 @@
                             <div class="setting-item" style="flex: 1; min-width: 280px;">
                                 <label class="setting-label">烧录路径</label>
                                 <select class="input" id="writePathModeSelect" onchange="setWritePathMode(this.value)">
-                                    <option value="direct">直接: TF -> 卡带</option>
+                                    <option value="pipeline">流水: 边擦边写（推荐）</option>
                                     <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带</option>
+                                    <option value="direct">直接: TF -> 卡带（兼容）</option>
                                 </select>
                                 <div id="writePathModeHint" style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
-                                    两种路径都可用于 GBA / MBC5。PSRAM 模式可配 1~8MB 循环：擦除并行预取，擦除后写卡带。
+                                    流水模式默认启用：按扇区边擦边写，可选智能跳过空白扇区或强制每扇区擦除。
+                                </div>
+                            </div>
+                            <div class="setting-item" style="flex: 1; min-width: 220px;" id="pipelineEraseModeSection">
+                                <label class="setting-label">擦除策略</label>
+                                <select class="input" id="pipelineEraseModeSelect" onchange="setPipelineEraseMode(this.value)">
+                                    <option value="smart">智能跳过空白扇区（默认）</option>
+                                    <option value="force">强制每扇区先擦除</option>
+                                </select>
+                                <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    对按扇区写入的烧录流程生效。
                                 </div>
                             </div>
                             <div class="setting-item" style="flex: 1; min-width: 220px;" id="psramWindowMbSection">
@@ -2726,7 +2751,7 @@
                                     <option value="128">128 KB</option>
                                 </select>
                                 <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
-                                    用于 MBC5 写入任务（direct / psram）。块越大通常吞吐越高，但稳定性可能受卡带影响。
+                                    用于 MBC5 写入任务（pipeline / direct / psram）。块越大通常吞吐越高，但稳定性可能受卡带影响。
                                 </div>
                             </div>
                             <div class="setting-item" style="flex: 1; min-width: 220px;">
@@ -2911,7 +2936,8 @@
 
             state.cartMode = 'gba';
             updateCartModeUI();
-            setWritePathMode(state.writePathMode || 'direct');
+            setPipelineEraseMode(state.pipelineEraseMode || 'smart');
+            setWritePathMode(state.writePathMode || 'pipeline');
             setPsramWindowMb(state.psramWindowMb || 4);
             setMbc5ChunkKb(state.mbc5ChunkKb || 16);
             setDumpChunkKb(state.dumpChunkKb || 64);
@@ -2925,20 +2951,29 @@
         }
 
         function getEffectiveWritePath(mode, requestedPath) {
-            const normalized = (requestedPath === 'psram') ? 'psram' : 'direct';
+            const normalized =
+                (requestedPath === 'pipeline' || requestedPath === 'psram' || requestedPath === 'direct')
+                    ? requestedPath
+                    : 'pipeline';
             return normalized;
         }
 
         function updateWritePathControls(modeOverride) {
             const mode = modeOverride || state.cartMode || 'gba';
-            const effective = getEffectiveWritePath(mode, state.writePathMode || 'direct');
+            const effective = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
             const select = document.getElementById('writePathModeSelect');
             const fileActionSelect = document.getElementById('fileActionWritePathSelect');
             const hint = document.getElementById('writePathModeHint');
+            const pipelineSection = document.getElementById('pipelineEraseModeSection');
+            const pipelineSelect = document.getElementById('pipelineEraseModeSelect');
+            const fileActionPipelineSection = document.getElementById('fileActionPipelineEraseSection');
+            const fileActionPipelineSelect = document.getElementById('fileActionPipelineEraseSelect');
             const psramSection = document.getElementById('psramWindowMbSection');
             const psramSelect = document.getElementById('psramWindowMbSelect');
             const fileActionPsramSelect = document.getElementById('fileActionPsramMbSelect');
             const psramMb = getPsramWindowMb();
+            const pipelineEraseMode = getPipelineEraseMode();
+            const pipelineEnabled = effective === 'pipeline';
             const psramEnabled = effective === 'psram';
 
             state.writePathMode = effective;
@@ -2948,6 +2983,18 @@
                 if (el.value !== effective) {
                     el.value = effective;
                 }
+            });
+
+            [pipelineSelect, fileActionPipelineSelect].forEach((el) => {
+                if (!el) return;
+                if (el.value !== pipelineEraseMode) {
+                    el.value = pipelineEraseMode;
+                }
+                el.disabled = !pipelineEnabled;
+            });
+            [pipelineSection, fileActionPipelineSection].forEach((el) => {
+                if (!el) return;
+                el.style.opacity = pipelineEnabled ? '1' : '0.6';
             });
 
             [psramSelect, fileActionPsramSelect].forEach((el) => {
@@ -2962,13 +3009,22 @@
             }
 
             if (hint) {
-                hint.textContent =
-                    `两种路径都可用于 GBA / MBC5。PSRAM 模式当前按 ${psramMb}MB 循环：擦除并行预取，擦除后写卡带（可选 1~8MB）。`;
+                if (effective === 'pipeline') {
+                    hint.textContent =
+                        pipelineEraseMode === 'force'
+                            ? '流水模式会对每个扇区先擦再写，不跳过空白扇区。'
+                            : '流水模式会按扇区边擦边写，并智能跳过看起来已空白的扇区；这是当前默认推荐模式。';
+                } else if (effective === 'psram') {
+                    hint.textContent = `PSRAM 模式当前按 ${psramMb}MB 循环：先搬运到 PSRAM，再写卡带；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}。`;
+                } else {
+                    hint.textContent = `直接模式不做流水 staging，按 TF -> 卡带直接写入；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}。`;
+                }
             }
         }
 
         function setWritePathMode(mode) {
-            const normalized = (mode === 'psram') ? 'psram' : 'direct';
+            const normalized =
+                (mode === 'pipeline' || mode === 'psram' || mode === 'direct') ? mode : 'pipeline';
             const cartMode = state.cartMode || 'gba';
             const effective = getEffectiveWritePath(cartMode, normalized);
             const changed = state.writePathMode !== effective;
@@ -2977,13 +3033,36 @@
             updateWritePathControls(cartMode);
 
             if (changed) {
-                addBurnLog(
-                    effective === 'psram'
-                        ? `烧录路径切换为 PSRAM: ${getPsramWindowMb()}MB擦写流水`
-                        : '烧录路径切换为 Direct: TF->卡带',
-                    'info'
-                );
+                let message = '烧录路径已切换';
+                if (effective === 'pipeline') {
+                    message = '烧录路径切换为 Pipeline: 边擦边写（默认推荐）';
+                } else if (effective === 'psram') {
+                    message = `烧录路径切换为 PSRAM: ${getPsramWindowMb()}MB staging`;
+                } else {
+                    message = '烧录路径切换为 Direct: TF->卡带';
+                }
+                addBurnLog(message, 'info');
             }
+        }
+
+        function setPipelineEraseMode(mode) {
+            const normalized = (mode === 'force') ? 'force' : 'smart';
+            const changed = state.pipelineEraseMode !== normalized;
+
+            state.pipelineEraseMode = normalized;
+            updateWritePathControls(state.cartMode || 'gba');
+
+            if (changed) {
+                addBurnLog(
+                    normalized === 'force'
+                        ? '擦除策略切换为 Force: 每扇区都先擦除'
+                        : '擦除策略切换为 Smart: 智能跳过空白扇区',
+                    'info');
+            }
+        }
+
+        function getPipelineEraseMode() {
+            return state.pipelineEraseMode === 'force' ? 'force' : 'smart';
         }
 
         function setPsramWindowMb(value) {
@@ -3585,7 +3664,8 @@
         async function cartWriteRom() {
             const mode = state.cartMode || 'gba';
             const slot = getSelectedCartSlot();
-            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'direct');
+            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+            const pipelineErase = getPipelineEraseMode();
             const psramMb = getPsramWindowMb();
             const mbc5ChunkKb = getMbc5ChunkKb();
             const tfRomInput = document.getElementById('tfRomName');
@@ -3614,6 +3694,9 @@
                     `/api/write?name=${encodeURIComponent(tfRomName)}` +
                     `&mode=${encodeURIComponent(mode)}&slot=${encodeURIComponent(slot)}` +
                     `&write_path=${encodeURIComponent(writePath)}`;
+                if (writePath === 'pipeline') {
+                    writeUrl += `&pipeline_erase=${encodeURIComponent(pipelineErase)}`;
+                }
                 if (writePath === 'psram') {
                     writeUrl += `&psram_mb=${encodeURIComponent(String(psramMb))}`;
                 }
@@ -4041,8 +4124,14 @@
         }
 
         function getErasePhaseProgressPercent(data) {
+            const doneBytes = Number(data && data.erase_phase_done_bytes);
+            const totalBytes = Number(data && data.erase_phase_total_bytes);
             const done = Number(data && data.erase_phase_done_sectors);
             const total = Number(data && data.erase_phase_total_sectors);
+
+            if (Number.isFinite(doneBytes) && Number.isFinite(totalBytes) && totalBytes > 0) {
+                return Math.max(0, Math.min(100, Math.round((doneBytes * 100) / totalBytes)));
+            }
 
             if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
                 return Math.max(0, Math.min(100, Math.round((done * 100) / total)));
@@ -4052,9 +4141,18 @@
         }
 
         function getErasePhaseProgressMessage(data) {
+            const doneBytes = Number(data && data.erase_phase_done_bytes || 0);
+            const totalBytes = Number(data && data.erase_phase_total_bytes || 0);
             const done = Number(data && data.erase_phase_done_sectors || 0);
             const total = Number(data && data.erase_phase_total_sectors || 0);
 
+            if (totalBytes > 0) {
+                const clampedDoneBytes = Math.min(doneBytes, totalBytes);
+                if (total > 0) {
+                    return `擦除进度: ${formatSize(clampedDoneBytes)} / ${formatSize(totalBytes)} (${done}/${total} 扇区)`;
+                }
+                return `擦除进度: ${formatSize(clampedDoneBytes)} / ${formatSize(totalBytes)}`;
+            }
             if (total > 0) {
                 return `擦除进度: ${done}/${total} 扇区`;
             }
@@ -4758,7 +4856,9 @@
 
                 if (powerReq.status === 'fulfilled' && powerReq.value.ok) {
                     const powerData = await powerReq.value.json();
-                    const batteryPercent = estimateBatteryPercent(powerData.ip5306);
+                    const batteryPercent = estimateBatteryPercent((powerData && powerData.power && powerData.power.ready)
+                        ? powerData.power
+                        : powerData.ip5306);
                     const batteryEl = document.getElementById('sysBattery');
                     const batteryBarEl = document.getElementById('sysBatteryBar');
                     const uptimeEl = document.getElementById('sysUptime');
@@ -5522,11 +5622,12 @@
 
         function updatePowerDetailTables(data) {
             if (!data) return;
+            const power = data.power || {};
             const ip5306 = data.ip5306 || {};
             const tca9555 = data.tca9555 || {};
             
             // 更新主显示
-            const batteryPercent = estimateBatteryPercent(ip5306);
+            const batteryPercent = estimateBatteryPercent(power.ready ? power : ip5306);
             document.getElementById('powerBattery').textContent = batteryPercent + '%';
             document.getElementById('powerBatteryBar').style.width = batteryPercent + '%';
             
@@ -5538,9 +5639,9 @@
                 'no_battery_external_power': '🔌 仅外部供电(无电池)',
                 'unknown': '❓ 未知'
             };
-            const chargeState = ip5306.charge_state || 'unknown';
+            const chargeState = power.charge_state || ip5306.charge_state || 'unknown';
             document.getElementById('powerChargeState').textContent = stateMap[chargeState] || chargeState;
-            document.getElementById('powerCurrent').textContent = ip5306.charge_current_cfg_ma || '--';
+            document.getElementById('powerCurrent').textContent = power.charge_current_limit_ma || ip5306.charge_current_cfg_ma || '--';
             document.getElementById('powerUptime').textContent = formatDuration(Math.floor(data.uptime_ms / 1000));
             document.getElementById('powerHeap').textContent = formatSize(data.free_heap);
             document.getElementById('powerHeapBar').style.width = Math.min(100, (data.free_heap / 500000) * 100) + '%';
@@ -5697,11 +5798,12 @@
         }
 
         function updatePowerBasicView() {
-            if (!state.powerData || !state.powerData.ip5306) return;
+            if (!state.powerData) return;
 
-            const ip5306 = state.powerData.ip5306;
-            const chargeCurrentCfg = parseInt(ip5306.charge_current_cfg_ma, 10);
-            const chargeState = ip5306.charge_state || 'unknown';
+            const power = state.powerData.power || {};
+            const ip5306 = state.powerData.ip5306 || {};
+            const chargeCurrentCfg = parseInt(power.charge_current_limit_ma ?? ip5306.charge_current_cfg_ma, 10);
+            const chargeState = power.charge_state || ip5306.charge_state || 'unknown';
             const boostEnabled = !!(ip5306.boost_enable_cfg ?? ip5306.boost_enable);
             const lowPowerShutdown = !!(ip5306.low_power_shutdown_cfg ?? ip5306.low_power_shutdown);
             const keyEnabled = !!(ip5306.key_shutdown_enable_cfg ?? ip5306.key_enable);
@@ -5980,20 +6082,25 @@
 
         function showFileActionModal(filename, size, path) {
             state.selectedFile = { filename, size, path };
+            const mode = filename.toLowerCase().endsWith('.gba') ? 'gba' : 'mbc5';
 
             document.getElementById('fileActionName').textContent = filename;
             document.getElementById('fileActionInfo').textContent =
-                `${formatSize(size)} • 默认 7MB PSRAM 流水烧录，可直接校验`;
+                `${formatSize(size)} • 选择烧录路径后可直接烧录或校验`;
             document.getElementById('fileActionIcon').textContent = getFileIcon(filename);
             const writePathSelect = document.getElementById('fileActionWritePathSelect');
             if (writePathSelect) {
-                writePathSelect.value = 'psram';
+                writePathSelect.value = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+            }
+            const pipelineEraseSelect = document.getElementById('fileActionPipelineEraseSelect');
+            if (pipelineEraseSelect) {
+                pipelineEraseSelect.value = getPipelineEraseMode();
             }
             const psramMbSelect = document.getElementById('fileActionPsramMbSelect');
             if (psramMbSelect) {
-                psramMbSelect.value = '7';
-                psramMbSelect.disabled = false;
+                psramMbSelect.value = String(getPsramWindowMb());
             }
+            updateWritePathControls(mode);
             document.getElementById('fileActionModal').classList.add('active');
         }
 
@@ -6036,11 +6143,14 @@
 
             const fileToBurn = { ...state.selectedFile };
             const writePathSelect = document.getElementById('fileActionWritePathSelect');
+            const pipelineEraseSelect = document.getElementById('fileActionPipelineEraseSelect');
             const psramMbSelect = document.getElementById('fileActionPsramMbSelect');
-            const requestedWritePath = (writePathSelect && writePathSelect.value === 'psram') ? 'psram' : 'direct';
+            const requestedWritePath = writePathSelect ? writePathSelect.value : (state.writePathMode || 'pipeline');
+            const requestedPipelineErase = pipelineEraseSelect ? pipelineEraseSelect.value : getPipelineEraseMode();
             if (psramMbSelect) {
                 setPsramWindowMb(psramMbSelect.value);
             }
+            setPipelineEraseMode(requestedPipelineErase);
             closeFileActionModal();
             const { mode, selectedTfPath } = prepareSelectedTfRomForBurner(fileToBurn);
             const selectedWritePath = getEffectiveWritePath(mode, requestedWritePath);
@@ -6083,7 +6193,8 @@
             if (!file) return;
             const mode = options.mode || state.cartMode || 'gba';
             const slot = options.slot || getSelectedCartSlot();
-            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'direct');
+            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+            const pipelineErase = getPipelineEraseMode();
             const psramMb = getPsramWindowMb();
             const mbc5ChunkKb = getMbc5ChunkKb();
             const autoStart = options.autoStart !== false;
@@ -6168,6 +6279,9 @@
                     `/api/write?name=${encodeURIComponent(tfName)}` +
                     `&mode=${encodeURIComponent(mode)}&slot=${encodeURIComponent(slot)}` +
                     `&write_path=${encodeURIComponent(writePath)}`;
+                if (writePath === 'pipeline') {
+                    writeUrl += `&pipeline_erase=${encodeURIComponent(pipelineErase)}`;
+                }
                 if (writePath === 'psram') {
                     writeUrl += `&psram_mb=${encodeURIComponent(String(psramMb))}`;
                 }
@@ -6591,12 +6705,15 @@
             const progressPercent = getBurnProgressPercent(data);
             const progressMessage = getBurnProgressMessage(data, currentMessage);
             const eraseActive = Boolean(data.erase_active);
+            const erasePhaseDoneBytes = Number(data.erase_phase_done_bytes || 0);
+            const erasePhaseTotalBytes = Number(data.erase_phase_total_bytes || 0);
             const erasePhaseDoneSectors = Number(data.erase_phase_done_sectors || 0);
             const erasePhaseTotalSectors = Number(data.erase_phase_total_sectors || 0);
             const erasePhasePercent = getErasePhaseProgressPercent(data);
             const displayErasePhaseOnMainBar =
-                erasePhaseTotalSectors > 0 &&
-                erasePhaseDoneSectors < erasePhaseTotalSectors;
+                erasePhaseTotalBytes > 0
+                    ? erasePhaseDoneBytes < erasePhaseTotalBytes
+                    : (erasePhaseTotalSectors > 0 && erasePhaseDoneSectors < erasePhaseTotalSectors);
             const primarySpeedLabel = getBurnPrimarySpeedLabel(activeOperation);
             const speedCurrent = Number(data.speed_current_bps || 0);
             const speedAvg = Number(data.speed_avg_bps || 0);

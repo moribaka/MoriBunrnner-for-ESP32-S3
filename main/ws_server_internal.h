@@ -65,8 +65,8 @@
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
 #define BURN_ERASE_ALWAYS_DEFAULT 0U
-#define BURN_MBC5_ERASE_PROBE_BYTES 512U
-#define BURN_ERASE_BLANK_SAMPLE_BYTES 512U
+#define BURN_BLANK_SAMPLE_BYTES 2U
+#define BURN_BLANK_SAMPLE_POINTS 4U
 #define BURN_MBC5_RAM_CHUNK_BYTES 4096U
 #define BURN_GBA_PROGRAM_CHUNK_BYTES 65536U
 #define BURN_GBA_DUMP_CHUNK_BYTES 65536U
@@ -192,12 +192,30 @@ typedef enum {
     BURNER_GBA_CMD_DATA_HIGH,    /* command byte on D15..D8 */
 } burner_gba_cmd_data_lane_t;
 
+#define BURNER_NOR_GEOMETRY_REGION_MAX 4U
+
+typedef struct {
+    uint32_t addr_begin;
+    uint32_t addr_end;
+    uint32_t sector_size;
+} burner_nor_region_t;
+
+typedef struct {
+    uint8_t region_count;
+    uint8_t reserved[3];
+    uint32_t uniform_sector_size;
+    uint32_t smallest_sector_size;
+    uint32_t largest_sector_size;
+    burner_nor_region_t regions[BURNER_NOR_GEOMETRY_REGION_MAX];
+} burner_nor_geometry_t;
+
 typedef struct {
     bool prepared;
     uint16_t current_bank;
     uint16_t buffer_write_bytes;
     uint32_t sector_size;
     uint32_t device_size;
+    burner_nor_geometry_t geometry;
     uint8_t mbc5_id[4];
     burner_nor_cmdset_t gba_cmdset;
     burner_gba_cmd_addr_mode_t gba_cmd_addr_mode;
@@ -290,6 +308,8 @@ typedef struct {
     burner_core_affinity_t psram_core;
 } burner_core_config_t;
 
+#define BURNER_PROBE_CHIP_NAME_LEN 48
+
 typedef struct {
     burner_state_t state;
     int progress;
@@ -310,6 +330,8 @@ typedef struct {
     uint32_t erase_sector_size;
     uint32_t erase_phase_total_sectors;
     uint32_t erase_phase_done_sectors;
+    uint32_t erase_phase_total_bytes;
+    uint32_t erase_phase_done_bytes;
     uint64_t erase_start_us;
     uint64_t erase_elapsed_us;
     uint64_t write_start_us;
@@ -358,6 +380,7 @@ typedef struct {
     uint32_t probe_sector_size;
     uint16_t probe_buffer_write_bytes;
     uint8_t probe_id[8];
+    char probe_chip_name[BURNER_PROBE_CHIP_NAME_LEN];
     char rom_name[BURNER_FILE_NAME_LEN];
     char rom_path[BURNER_FILE_PATH_LEN];
     char message[96];
@@ -379,6 +402,7 @@ typedef struct {
     burner_job_mode_t mode;
     burner_cart_mode_t cart_mode;
     burner_write_path_t write_path;
+    bool erase_always;
     uint32_t mbc5_program_chunk_bytes;
     uint32_t read_chunk_bytes;
     uint32_t psram_window_bytes;
@@ -629,6 +653,7 @@ esp_err_t burner_start_write_from_tf(
     burner_cart_mode_t cart_mode,
     uint32_t slot,
     burner_write_path_t write_path,
+    bool erase_always,
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
@@ -701,7 +726,8 @@ void burner_status_set_probe_info(
     bool gba_multi,
     bool gba_force_multi,
     bool gba_d0d1_known,
-    bool gba_d0d1_swapped);
+    bool gba_d0d1_swapped,
+    const char *chip_name);
 void burner_status_set_gba_save_probe(
     burner_gba_save_type_t save_type,
     uint32_t save_size,
@@ -711,9 +737,9 @@ void burner_status_set_gba_sram_patch_probe(
     bool scanned,
     bool detected);
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal);
-void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t sector_size);
-void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t sector_size);
-void burner_status_advance_erase_phase(uint32_t sectors_done);
+void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size);
+void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size);
+void burner_status_advance_erase_phase(uint32_t sectors_done, uint32_t bytes_done);
 void burner_status_mark_erase_begin(void);
 void burner_status_mark_erase_end(void);
 void burner_status_mark_write_begin(void);
@@ -888,7 +914,9 @@ esp_err_t burner_bacon_mbc5_get_id(uint8_t id_out[4]);
 esp_err_t burner_bacon_mbc5_get_cfi(
     uint32_t *device_size,
     uint32_t *sector_size,
-    uint16_t *buffer_write_bytes);
+    uint16_t *buffer_write_bytes,
+    burner_nor_geometry_t *geometry,
+    burner_nor_cmdset_t *cmdset_out);
 esp_err_t burner_bacon_gba_verify_read_block_hoststyle(
     uint8_t *out,
     size_t len,
@@ -906,6 +934,7 @@ esp_err_t burner_start_task_ex(
     burner_job_mode_t mode,
     burner_cart_mode_t cart_mode,
     burner_write_path_t write_path,
+    bool erase_always,
     bool gba_force_multi,
     bool gba_force_no_cfi,
     uint32_t mbc5_program_chunk_bytes,

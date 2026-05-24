@@ -8,6 +8,23 @@ static esp_err_t burner_resolve_input_file(
     size_t full_path_len,
     uint32_t *file_size);
 static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const char *error_msg);
+static bool burner_parse_pipeline_erase_text(const char *text, bool *erase_always_out);
+
+static bool burner_parse_pipeline_erase_text(const char *text, bool *erase_always_out)
+{
+    if (text == NULL || erase_always_out == NULL) {
+        return false;
+    }
+    if (strcasecmp(text, "smart") == 0 || strcasecmp(text, "skip") == 0) {
+        *erase_always_out = false;
+        return true;
+    }
+    if (strcasecmp(text, "force") == 0 || strcasecmp(text, "always") == 0) {
+        *erase_always_out = true;
+        return true;
+    }
+    return false;
+}
 
 static bool burner_rom_dump_name_is_placeholder(const char *name)
 {
@@ -263,6 +280,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     char slot_arg[16] = {0};
     char mode_arg[16] = {0};
     char write_path_arg[16] = {0};
+    char pipeline_erase_arg[16] = {0};
     char psram_mb_arg[16] = {0};
     char mbc5_chunk_kb_arg[16] = {0};
     char force_no_cfi_arg[16] = {0};
@@ -272,6 +290,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     uint32_t mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     uint32_t psram_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     bool gba_force_no_cfi = false;
+    bool erase_always = (s_burn_erase_always != 0u);
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
     burner_write_path_t write_path = BURNER_WRITE_PATH_DIRECT;
     burner_task_start_result_t result = {0};
@@ -300,6 +319,9 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "write_path", write_path_arg, sizeof(write_path_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid write_path query");
     }
+    if (!burner_get_query_arg(req, "pipeline_erase", pipeline_erase_arg, sizeof(pipeline_erase_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid pipeline_erase query");
+    }
     if (!burner_get_query_arg(req, "psram_mb", psram_mb_arg, sizeof(psram_mb_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid psram_mb query");
     }
@@ -314,6 +336,10 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     }
     if (!burner_parse_write_path_text(write_path_arg, &write_path)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "write_path must be direct, psram, or pipeline");
+    }
+    if (pipeline_erase_arg[0] != '\0' &&
+        !burner_parse_pipeline_erase_text(pipeline_erase_arg, &erase_always)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "pipeline_erase must be smart or force");
     }
     if (psram_mb_arg[0] != '\0') {
         if (!burner_parse_u32_text(psram_mb_arg, &psram_mb) ||
@@ -342,6 +368,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         cart_mode,
         slot,
         write_path,
+        erase_always,
         psram_mb,
         mbc5_chunk_kb,
         gba_force_no_cfi,
@@ -498,6 +525,7 @@ esp_err_t burner_read_handler(httpd_req_t *req)
         BURNER_JOB_READ_ROM,
         cart_mode,
         read_path,
+        false,
         gba_force_multi,
         false,
         BURN_MBC5_PROGRAM_CHUNK_BYTES,
@@ -677,6 +705,7 @@ esp_err_t burner_start_write_from_tf(
     burner_cart_mode_t cart_mode,
     uint32_t slot,
     burner_write_path_t write_path,
+    bool erase_always,
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
@@ -693,7 +722,6 @@ esp_err_t burner_start_write_from_tf(
     uint32_t available_size = 0;
     uint32_t psram_window_bytes = BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES;
     uint32_t mbc5_program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
-    uint64_t requested_top64 = 0u;
     char probe_err[96] = {0};
     bool gba_force_multi = false;
     esp_err_t err;
@@ -764,35 +792,26 @@ esp_err_t burner_start_write_from_tf(
         return burner_start_error(err, "invalid slot query", error_msg, error_msg_len);
     }
 
-    requested_top64 = (uint64_t)addr_begin + (uint64_t)effective_size;
-    if (requested_top64 > UINT32_MAX) {
+    if (((uint64_t)addr_begin + (uint64_t)effective_size) > UINT32_MAX) {
         return burner_start_error(ESP_ERR_INVALID_SIZE, "requested write range too large", error_msg, error_msg_len);
     }
 
     err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
     if (err != ESP_OK) {
-        if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED && gba_force_no_cfi) {
-            device_size = (uint32_t)requested_top64;
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBA force_no_cfi: bypass capacity probe and continue write (range top=0x%08" PRIX32 ")",
-                device_size);
-        } else {
-            if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
-                return burner_start_error(
-                    err,
-                    "gba cfi probe failed: command mode unavailable; cartridge may be read-only or unsupported",
-                    error_msg,
-                    error_msg_len);
-            }
-            (void)snprintf(
-                probe_err,
-                sizeof(probe_err),
-                "read %s nor size failed: %s",
-                (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
-                esp_err_to_name(err));
-            return burner_start_error(err, probe_err, error_msg, error_msg_len);
+        if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
+            return burner_start_error(
+                err,
+                "gba cfi probe failed: command mode unavailable; cartridge may be read-only or unsupported",
+                error_msg,
+                error_msg_len);
         }
+        (void)snprintf(
+            probe_err,
+            sizeof(probe_err),
+            "read %s nor size failed: %s",
+            (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
+            esp_err_to_name(err));
+        return burner_start_error(err, probe_err, error_msg, error_msg_len);
     }
     available_size = (addr_begin < device_size) ? (device_size - addr_begin) : 0u;
     if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
@@ -812,6 +831,7 @@ esp_err_t burner_start_write_from_tf(
         BURNER_JOB_WRITE_ROM,
         cart_mode,
         write_path,
+        erase_always,
         gba_force_multi,
         gba_force_no_cfi,
         mbc5_program_chunk_bytes,
@@ -912,6 +932,7 @@ esp_err_t burner_start_verify_from_tf(
         BURNER_JOB_VERIFY_ROM,
         cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        false,
         gba_force_multi,
         false,
         BURN_MBC5_PROGRAM_CHUNK_BYTES,
@@ -1412,6 +1433,7 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
         BURNER_JOB_ERASE_ROM,
         cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        false,
         false,
         false,
         BURN_MBC5_PROGRAM_CHUNK_BYTES,

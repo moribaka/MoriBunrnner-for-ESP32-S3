@@ -1,9 +1,19 @@
 #include "ws_server_http_device.h"
 #include "ws_server_http_content.h"
 #include "ws_server_http_maintenance.h"
+#include "power_manager.h"
 
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req)
 {
+    power_chip_type_t chip_type = power_manager_chip_type();
+
+    if (chip_type == POWER_CHIP_AXP209) {
+        httpd_resp_set_status(req, "403 Forbidden");
+        return burner_send_json(
+            req,
+            "{\"ok\":false,\"message\":\"charge current is fixed at 500mA by firmware\"}");
+    }
+
     httpd_resp_set_status(req, "403 Forbidden");
     return burner_send_json(
         req,
@@ -15,6 +25,9 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
     uint64_t uptime_ms = (uint64_t)(esp_timer_get_time() / 1000LL);
     uint32_t free_heap = esp_get_free_heap_size();
     uint32_t min_heap = esp_get_minimum_free_heap_size();
+    power_manager_telemetry_t power = {0};
+    bool power_ok = (power_manager_get_telemetry(&power) == ESP_OK);
+    const char *chip_type = "none";
     bool ip_ready = ip5306_ready();
     bool tca_ready = tca9555_ready();
     uint8_t ip_sys0 = 0;
@@ -60,8 +73,14 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
     bool tca_input_ok = false;
     bool tca_output_ok = false;
     bool tca_config_ok = false;
-    char resp[3400];
+    char resp[5200];
     int n;
+
+    if (power.chip_type == POWER_CHIP_AXP209) {
+        chip_type = "axp209";
+    } else if (power.chip_type == POWER_CHIP_IP5306) {
+        chip_type = "ip5306";
+    }
 
     if (ip_ready) {
         ip_sys0_ok = (ip5306_read_reg(IP5306_REG_SYS_CTL0, &ip_sys0) == ESP_OK);
@@ -144,6 +163,21 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         "{\"ok\":true,"
         "\"note\":\"No dedicated current sensor. Values are telemetry/estimation only.\","
         "\"uptime_ms\":%" PRIu64 ",\"free_heap\":%" PRIu32 ",\"min_free_heap\":%" PRIu32 ","
+        "\"power\":{\"ready\":%s,\"chip_type\":\"%s\",\"chip_name\":\"%s\","
+        "\"battery_percent_valid\":%s,\"battery_percent\":%u,"
+        "\"charging\":%s,\"charge_full\":%s,\"vbus_present\":%s,\"battery_present\":%s,"
+        "\"charge_current_limit_ma\":%u,\"battery_voltage_mv\":%" PRIu32 ",\"vbus_voltage_mv\":%" PRIu32
+        ",\"ipsout_voltage_mv\":%" PRIu32 ",\"internal_temp_deci_c\":%" PRIi32 ",\"charge_state\":\"%s\"},"
+        "\"axp209\":{\"ready\":%s,\"addr\":\"0x%02X\","
+        "\"snapshot_ok\":%s,\"charge_control_ok\":%s,"
+        "\"power_status\":\"0x%02X\",\"charge_status\":\"0x%02X\","
+        "\"battery_voltage_mv\":%" PRIu32 ",\"acin_voltage_mv\":%" PRIu32 ",\"vbus_voltage_mv\":%" PRIu32
+        ",\"battery_charge_current_ma_x10\":%" PRIu32 ",\"battery_discharge_current_ma_x10\":%" PRIu32
+        ",\"ipsout_voltage_mv\":%" PRIu32 ",\"internal_temp_deci_c\":%" PRIi32 ","
+        "\"acin_present\":%s,\"acin_usable\":%s,\"vbus_present\":%s,\"vbus_usable\":%s,"
+        "\"battery_present\":%s,\"battery_activated\":%s,\"charging\":%s,"
+        "\"charge_current_limited\":%s,\"charge_enabled_cfg\":%s,\"charge_current_cfg_ma\":%u,"
+        "\"target_voltage_cfg_mv\":%u,\"end_current_percent_cfg\":%u},"
         "\"ip5306\":{\"ready\":%s,\"addr\":\"0x%02X\","
         "\"sys_ctl0_ok\":%s,\"sys_ctl0\":\"0x%02X\","
         "\"sys_ctl1_ok\":%s,\"sys_ctl1\":\"0x%02X\","
@@ -176,6 +210,46 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         uptime_ms,
         free_heap,
         min_heap,
+        burner_json_bool(power_ok),
+        chip_type,
+        power.chip_name != NULL ? power.chip_name : "NONE",
+        burner_json_bool(power.battery_percent_valid),
+        power.battery_percent,
+        burner_json_bool(power.charging),
+        burner_json_bool(power.charge_full),
+        burner_json_bool(power.vbus_present),
+        burner_json_bool(power.battery_present),
+        power.charge_current_limit_ma,
+        power.battery_voltage_mv,
+        power.vbus_voltage_mv,
+        power.ipsout_voltage_mv,
+        power.internal_temp_deci_c,
+        power.charge_state != NULL ? power.charge_state : "unknown",
+        burner_json_bool(axp209_ready()),
+        axp209_address(),
+        burner_json_bool(power.axp209_snapshot_ok),
+        burner_json_bool(power.axp209_charge_control_ok),
+        power.axp209_snapshot.power_status,
+        power.axp209_snapshot.charge_status,
+        power.axp209_snapshot.battery_voltage_mv,
+        power.axp209_snapshot.acin_voltage_mv,
+        power.axp209_snapshot.vbus_voltage_mv,
+        power.axp209_snapshot.battery_charge_current_ma_x10,
+        power.axp209_snapshot.battery_discharge_current_ma_x10,
+        power.axp209_snapshot.ipsout_voltage_mv,
+        power.axp209_snapshot.internal_temp_deci_c,
+        burner_json_bool(power.axp209_flags.acin_present),
+        burner_json_bool(power.axp209_flags.acin_usable),
+        burner_json_bool(power.axp209_flags.vbus_present),
+        burner_json_bool(power.axp209_flags.vbus_usable),
+        burner_json_bool(power.axp209_flags.battery_present),
+        burner_json_bool(power.axp209_flags.battery_activated),
+        burner_json_bool(power.axp209_flags.charging),
+        burner_json_bool(power.axp209_flags.charge_current_limited),
+        burner_json_bool(power.axp209_charge_control.enabled),
+        power.axp209_charge_control.charge_current_ma,
+        power.axp209_charge_control.target_voltage_mv,
+        (unsigned)power.axp209_charge_control.end_current_percent,
         burner_json_bool(ip_ready),
         ip5306_address(),
         burner_json_bool(ip_sys0_ok),

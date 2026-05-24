@@ -1,6 +1,7 @@
 #ifndef BURNER_NOR_DB_H
 #define BURNER_NOR_DB_H
 
+#include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -51,6 +52,13 @@ typedef struct {
 const burner_nor_entry_t *burner_nor_db_lookup_gba(const uint8_t id[8]);
 const burner_nor_entry_t *burner_nor_db_lookup_mbc5(const uint8_t id[4]);
 const char *burner_nor_cmdset_name(burner_nor_cmdset_t cmdset);
+burner_nor_cmdset_t burner_nor_cmdset_from_cfi_primary_id(uint16_t primary_id);
+void burner_nor_format_chip_name(
+    char *buf,
+    size_t buf_len,
+    const char *known_name,
+    burner_nor_cmdset_t cmdset,
+    uint32_t device_size);
 const burner_nor_family_t *burner_gba_family_from_id(const uint8_t id[8]);
 const burner_nor_family_t *burner_mbc5_family_from_id(const uint8_t id[4]);
 const char *burner_nor_entry_name(const burner_nor_entry_t *entry);
