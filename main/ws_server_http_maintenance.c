@@ -462,6 +462,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
     const char *sample_error = "";
+    const char *gb_mapper = "unknown";
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
     bool is_busy = false;
@@ -515,29 +516,15 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
 
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
-            uint32_t cfi_device_size = 0;
-            uint32_t cfi_sector_size = 0;
-            uint16_t cfi_buffer_write_bytes = 0;
-            burner_nor_geometry_t cfi_geometry = {0};
-
-            if (burner_bacon_mbc5_get_cfi(
-                    &cfi_device_size,
-                    &cfi_sector_size,
-                    &cfi_buffer_write_bytes,
-                    &cfi_geometry,
-                    &mbc5_cmdset) == ESP_OK) {
-                device_size = cfi_device_size;
-                sector_size = cfi_sector_size;
-                buffer_write_bytes = cfi_buffer_write_bytes;
-                cfi_ok = true;
-                if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
-                    err = burner_bacon_mbc5_get_id(mbc5_id);
-                    if (err != ESP_OK) {
-                        memset(mbc5_id, 0, sizeof(mbc5_id));
-                        err = ESP_OK;
-                    }
-                }
-            }
+            err = burner_bacon_mbc5_prepare_probe_info_locked(
+                mbc5_id,
+                1u,
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_ok,
+                &mbc5_cmdset,
+                &gb_mapper);
         }
     } else {
         err = burner_bacon_gba_prepare_power();
@@ -603,11 +590,14 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
         n = snprintf(
             resp,
             sizeof(resp),
-            "{\"ok\":true,\"mode\":\"mbc5\",\"power\":{\"v5\":true,\"v3\":false},"
+            "{\"ok\":true,\"mode\":\"mbc5\",\"mapper\":\"%s\",\"power\":{\"v5\":%s,\"v3\":%s},"
             "\"id\":\"%s\",\"chip\":\"%s\","
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
             "\"sample_ok\":%s,\"sample_addr\":%" PRIu32 ",\"sample_len\":%" PRIu32 ","
             "\"sample_hex\":\"%s\",\"sample_error\":\"%s\"}",
+            gb_mapper,
+            (s_mbc5_power_5v_enabled != 0u) ? "true" : "false",
+            (s_mbc5_power_5v_enabled != 0u) ? "false" : "true",
             id_hex,
             burner_mbc5_chip_name(mbc5_id),
             cfi_ok ? "true" : "false",
@@ -670,7 +660,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
 esp_err_t burner_cart_id_handler(httpd_req_t *req)
 {
     char mode_arg[16] = {0};
-    const char *mode = NULL;
+    burner_cart_mode_t cart_mode = BURNER_CART_MODE_GBA;
     uint8_t gba_id[8] = {0};
     uint8_t mbc5_id[4] = {0};
     uint32_t device_size = 0;
@@ -680,6 +670,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     char resp[480];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
+    const char *gb_mapper = "unknown";
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
     bool is_busy = false;
@@ -689,8 +680,13 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
     }
-    mode = (mode_arg[0] == '\0') ? "gba" : mode_arg;
-    if (strcasecmp(mode, "gba") != 0 && strcasecmp(mode, "mbc5") != 0) {
+    if (mode_arg[0] == '\0') {
+        mode_arg[0] = 'g';
+        mode_arg[1] = 'b';
+        mode_arg[2] = 'a';
+        mode_arg[3] = '\0';
+    }
+    if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
     }
 
@@ -711,34 +707,20 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     }
 
     burner_spi_lock_take();
-    if (strcasecmp(mode, "mbc5") == 0) {
+    if (cart_mode == BURNER_CART_MODE_MBC5) {
         burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
 
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
-            uint32_t cfi_device_size = 0;
-            uint32_t cfi_sector_size = 0;
-            uint16_t cfi_buffer_write_bytes = 0;
-            burner_nor_geometry_t cfi_geometry = {0};
-
-            if (burner_bacon_mbc5_get_cfi(
-                    &cfi_device_size,
-                    &cfi_sector_size,
-                    &cfi_buffer_write_bytes,
-                    &cfi_geometry,
-                    &mbc5_cmdset) == ESP_OK) {
-                device_size = cfi_device_size;
-                sector_size = cfi_sector_size;
-                buffer_write_bytes = cfi_buffer_write_bytes;
-                cfi_ok = true;
-                if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
-                    err = burner_bacon_mbc5_get_id(mbc5_id);
-                    if (err != ESP_OK) {
-                        memset(mbc5_id, 0, sizeof(mbc5_id));
-                        err = ESP_OK;
-                    }
-                }
-            }
+            err = burner_bacon_mbc5_prepare_probe_info_locked(
+                mbc5_id,
+                1u,
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_ok,
+                &mbc5_cmdset,
+                &gb_mapper);
         }
     } else {
         err = burner_bacon_gba_prepare_power();
@@ -764,7 +746,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cart id read failed");
     }
 
-    if (strcasecmp(mode, "mbc5") == 0) {
+    if (cart_mode == BURNER_CART_MODE_MBC5) {
         n = snprintf(
             id_hex,
             sizeof(id_hex),
@@ -780,9 +762,12 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
         n = snprintf(
             resp,
             sizeof(resp),
-            "{\"ok\":true,\"mode\":\"mbc5\",\"power\":{\"v5\":true,\"v3\":false},"
+            "{\"ok\":true,\"mode\":\"mbc5\",\"mapper\":\"%s\",\"power\":{\"v5\":%s,\"v3\":%s},"
             "\"id\":\"%s\",\"chip\":\"%s\","
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u}",
+            gb_mapper,
+            (s_mbc5_power_5v_enabled != 0u) ? "true" : "false",
+            (s_mbc5_power_5v_enabled != 0u) ? "false" : "true",
             id_hex,
             burner_mbc5_chip_name(mbc5_id),
             cfi_ok ? "true" : "false",

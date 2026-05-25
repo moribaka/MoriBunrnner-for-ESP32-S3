@@ -1952,8 +1952,8 @@
                 <div style="margin: 14px 0 8px; text-align: left;">
                     <label class="setting-label" for="fileActionWritePathSelect" style="display:block; margin-bottom: 6px;">烧录路径</label>
                     <select class="input" id="fileActionWritePathSelect" onchange="setWritePathMode(this.value)">
-                        <option value="pipeline">流水: 边擦边写（推荐）</option>
-                        <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带</option>
+                        <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带（默认推荐）</option>
+                        <option value="pipeline">流水: 边擦边写</option>
                         <option value="direct">直接: TF -> 卡带（兼容）</option>
                     </select>
                 </div>
@@ -2180,7 +2180,7 @@
             systemRefreshTimer: null,
             powerViewMode: 'basic',
             cartMode: 'gba',
-            writePathMode: 'pipeline',
+            writePathMode: 'psram',
             pipelineEraseMode: 'smart',
             psramWindowMb: 4,
             mbc5ChunkKb: 16,
@@ -2706,12 +2706,12 @@
                             <div class="setting-item" style="flex: 1; min-width: 280px;">
                                 <label class="setting-label">烧录路径</label>
                                 <select class="input" id="writePathModeSelect" onchange="setWritePathMode(this.value)">
-                                    <option value="pipeline">流水: 边擦边写（推荐）</option>
-                                    <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带</option>
+                                    <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带（默认推荐）</option>
+                                    <option value="pipeline">流水: 边擦边写</option>
                                     <option value="direct">直接: TF -> 卡带（兼容）</option>
                                 </select>
                                 <div id="writePathModeHint" style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
-                                    流水模式默认启用：按扇区边擦边写，可选智能跳过空白扇区或强制每扇区擦除。
+                                    PSRAM 模式默认启用：先搬运到 PSRAM，再写卡带；可配合智能跳过或强制擦除。
                                 </div>
                             </div>
                             <div class="setting-item" style="flex: 1; min-width: 220px;" id="pipelineEraseModeSection">
@@ -2937,7 +2937,7 @@
             state.cartMode = 'gba';
             updateCartModeUI();
             setPipelineEraseMode(state.pipelineEraseMode || 'smart');
-            setWritePathMode(state.writePathMode || 'pipeline');
+            setWritePathMode(state.writePathMode || 'psram');
             setPsramWindowMb(state.psramWindowMb || 4);
             setMbc5ChunkKb(state.mbc5ChunkKb || 16);
             setDumpChunkKb(state.dumpChunkKb || 64);
@@ -2954,13 +2954,13 @@
             const normalized =
                 (requestedPath === 'pipeline' || requestedPath === 'psram' || requestedPath === 'direct')
                     ? requestedPath
-                    : 'pipeline';
+                    : 'psram';
             return normalized;
         }
 
         function updateWritePathControls(modeOverride) {
             const mode = modeOverride || state.cartMode || 'gba';
-            const effective = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+            const effective = getEffectiveWritePath(mode, state.writePathMode || 'psram');
             const select = document.getElementById('writePathModeSelect');
             const fileActionSelect = document.getElementById('fileActionWritePathSelect');
             const hint = document.getElementById('writePathModeHint');
@@ -3013,9 +3013,9 @@
                     hint.textContent =
                         pipelineEraseMode === 'force'
                             ? '流水模式会对每个扇区先擦再写，不跳过空白扇区。'
-                            : '流水模式会按扇区边擦边写，并智能跳过看起来已空白的扇区；这是当前默认推荐模式。';
+                            : '流水模式会按扇区边擦边写，并智能跳过看起来已空白的扇区。';
                 } else if (effective === 'psram') {
-                    hint.textContent = `PSRAM 模式当前按 ${psramMb}MB 循环：先搬运到 PSRAM，再写卡带；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}。`;
+                    hint.textContent = `PSRAM 模式当前按 ${psramMb}MB 循环：先搬运到 PSRAM，再写卡带；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}；这是当前默认推荐模式。`;
                 } else {
                     hint.textContent = `直接模式不做流水 staging，按 TF -> 卡带直接写入；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}。`;
                 }
@@ -3024,7 +3024,7 @@
 
         function setWritePathMode(mode) {
             const normalized =
-                (mode === 'pipeline' || mode === 'psram' || mode === 'direct') ? mode : 'pipeline';
+                (mode === 'pipeline' || mode === 'psram' || mode === 'direct') ? mode : 'psram';
             const cartMode = state.cartMode || 'gba';
             const effective = getEffectiveWritePath(cartMode, normalized);
             const changed = state.writePathMode !== effective;
@@ -3035,9 +3035,9 @@
             if (changed) {
                 let message = '烧录路径已切换';
                 if (effective === 'pipeline') {
-                    message = '烧录路径切换为 Pipeline: 边擦边写（默认推荐）';
+                    message = '烧录路径切换为 Pipeline: 边擦边写';
                 } else if (effective === 'psram') {
-                    message = `烧录路径切换为 PSRAM: ${getPsramWindowMb()}MB staging`;
+                    message = `烧录路径切换为 PSRAM: ${getPsramWindowMb()}MB staging（默认推荐）`;
                 } else {
                     message = '烧录路径切换为 Direct: TF->卡带';
                 }
@@ -3421,6 +3421,9 @@
 
         function logCartIdResponse(data, mode) {
             addBurnLog('后端模式: ' + (data.mode || mode), 'info');
+            if (data.mapper) {
+                addBurnLog('Mapper: ' + String(data.mapper).toUpperCase(), 'info');
+            }
             if (data.cmd_mode) {
                 addBurnLog(
                     '命令地址模式: ' + data.cmd_mode,
@@ -3664,7 +3667,7 @@
         async function cartWriteRom() {
             const mode = state.cartMode || 'gba';
             const slot = getSelectedCartSlot();
-            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'psram');
             const pipelineErase = getPipelineEraseMode();
             const psramMb = getPsramWindowMb();
             const mbc5ChunkKb = getMbc5ChunkKb();
@@ -5140,6 +5143,17 @@
                                 </select>
                                 <span class="setting-desc">烧录主任务/PSRAM 访问核心</span>
                             </div>
+                            <div class="setting-item">
+                                <label class="setting-label" for="burnPowerSettleMs">切压延时</label>
+                                <select id="burnPowerSettleMs" class="input">
+                                    <option value="100">100 ms</option>
+                                    <option value="200">200 ms</option>
+                                    <option value="400">400 ms</option>
+                                    <option value="800">800 ms</option>
+                                    <option value="1000">1000 ms</option>
+                                </select>
+                                <span class="setting-desc">关电后与上目标电压后的等待时间</span>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="applyBurnCoreConfig()">✓ 应用</button>
@@ -6090,7 +6104,7 @@
             document.getElementById('fileActionIcon').textContent = getFileIcon(filename);
             const writePathSelect = document.getElementById('fileActionWritePathSelect');
             if (writePathSelect) {
-                writePathSelect.value = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+                writePathSelect.value = getEffectiveWritePath(mode, state.writePathMode || 'psram');
             }
             const pipelineEraseSelect = document.getElementById('fileActionPipelineEraseSelect');
             if (pipelineEraseSelect) {
@@ -6145,7 +6159,7 @@
             const writePathSelect = document.getElementById('fileActionWritePathSelect');
             const pipelineEraseSelect = document.getElementById('fileActionPipelineEraseSelect');
             const psramMbSelect = document.getElementById('fileActionPsramMbSelect');
-            const requestedWritePath = writePathSelect ? writePathSelect.value : (state.writePathMode || 'pipeline');
+            const requestedWritePath = writePathSelect ? writePathSelect.value : (state.writePathMode || 'psram');
             const requestedPipelineErase = pipelineEraseSelect ? pipelineEraseSelect.value : getPipelineEraseMode();
             if (psramMbSelect) {
                 setPsramWindowMb(psramMbSelect.value);
@@ -6193,7 +6207,7 @@
             if (!file) return;
             const mode = options.mode || state.cartMode || 'gba';
             const slot = options.slot || getSelectedCartSlot();
-            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'pipeline');
+            const writePath = getEffectiveWritePath(mode, state.writePathMode || 'psram');
             const pipelineErase = getPipelineEraseMode();
             const psramMb = getPsramWindowMb();
             const mbc5ChunkKb = getMbc5ChunkKb();
@@ -7303,10 +7317,12 @@
             const erase = (data && data.erase) ? data.erase : 'auto';
             const tf = (data && data.tf) ? data.tf : 'auto';
             const psram = (data && data.psram) ? data.psram : 'auto';
+            const powerSettleMs = Number(data && data.power_settle_ms ? data.power_settle_ms : 100);
             return [
                 `擦除核心: ${erase}`,
                 `读 TF 核心: ${tf}`,
-                `读写 PSRAM 核心: ${psram}`
+                `读写 PSRAM 核心: ${psram}`,
+                `切压延时: ${powerSettleMs} ms`
             ].join('\n');
         }
 
@@ -7315,7 +7331,8 @@
             const eraseEl = document.getElementById('burnCoreErase');
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl) return;
+            const settleEl = document.getElementById('burnPowerSettleMs');
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -7329,6 +7346,7 @@
                 eraseEl.value = (data.erase || 'auto').toLowerCase();
                 tfEl.value = (data.tf || 'auto').toLowerCase();
                 psramEl.value = (data.psram || 'auto').toLowerCase();
+                settleEl.value = String(data.power_settle_ms || 100);
                 statusEl.textContent = formatBurnCoreStatusLines(data);
             } catch (error) {
                 statusEl.textContent = '读取失败: ' + error.message;
@@ -7340,11 +7358,13 @@
             const eraseEl = document.getElementById('burnCoreErase');
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl) return;
+            const settleEl = document.getElementById('burnPowerSettleMs');
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl) return;
 
             const erase = String(eraseEl.value || 'auto').toLowerCase();
             const tf = String(tfEl.value || 'auto').toLowerCase();
             const psram = String(psramEl.value || 'auto').toLowerCase();
+            const powerSettleMs = String(settleEl.value || '100');
             statusEl.textContent = '应用中...';
 
             try {
@@ -7352,6 +7372,7 @@
                 query.set('erase', erase);
                 query.set('tf', tf);
                 query.set('psram', psram);
+                query.set('power_settle_ms', powerSettleMs);
                 const response = await apiCall(`/api/burn/core_config?${query.toString()}`, { method: 'POST' });
                 const data = await readApiPayload(response);
                 if (!response.ok || !data.ok) {
@@ -7364,6 +7385,7 @@
                 eraseEl.value = (data.erase || 'auto').toLowerCase();
                 tfEl.value = (data.tf || 'auto').toLowerCase();
                 psramEl.value = (data.psram || 'auto').toLowerCase();
+                settleEl.value = String(data.power_settle_ms || 100);
                 statusEl.textContent = formatBurnCoreStatusLines(data);
                 showToast('烧录核心分配已更新', 'success');
             } catch (error) {

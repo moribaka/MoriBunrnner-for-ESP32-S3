@@ -561,6 +561,7 @@ extern burner_core_config_t s_burn_core_cfg;
 extern uint8_t s_burn_erase_always;
 extern uint8_t s_gba_fixed_erase_window_enabled;
 extern uint8_t s_mbc5_power_5v_enabled;
+extern uint32_t s_bacon_power_settle_ms;
 extern TickType_t s_bacon_last_active_tick;
 extern bool s_bacon_idle_powered_down;
 extern burner_cart_ctx_t s_cart_ctx;
@@ -873,6 +874,7 @@ esp_err_t burner_send_lang_string_chunk(
     bool trailing_comma);
 esp_err_t burner_bacon_gba_prepare_power(void);
 esp_err_t burner_bacon_mbc5_prepare_power(void);
+void burner_bacon_restore_3v3_power(void);
 const char *burner_gba_cmd_addr_mode_name(burner_gba_cmd_addr_mode_t mode);
 const char *burner_gba_cmd_data_lane_name(burner_gba_cmd_data_lane_t lane);
 void burner_format_hex_bytes(const uint8_t *data, size_t len, char *out, size_t out_len);
@@ -917,6 +919,15 @@ esp_err_t burner_bacon_mbc5_get_cfi(
     uint16_t *buffer_write_bytes,
     burner_nor_geometry_t *geometry,
     burner_nor_cmdset_t *cmdset_out);
+esp_err_t burner_bacon_mbc5_prepare_probe_info_locked(
+    uint8_t id_out[4],
+    uint32_t total_bytes,
+    uint32_t *device_size_out,
+    uint32_t *sector_size_out,
+    uint16_t *buffer_write_bytes_out,
+    bool *cfi_ok_out,
+    burner_nor_cmdset_t *cmdset_out,
+    const char **mapper_name_out);
 esp_err_t burner_bacon_gba_verify_read_block_hoststyle(
     uint8_t *out,
     size_t len,

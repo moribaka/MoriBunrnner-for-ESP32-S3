@@ -145,6 +145,8 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"Verify save", "Verify save"},
     {"Version", "Version"},
     {"Voltage", "Voltage"},
+    {"Voltage settle", "Voltage settle"},
+    {"Voltage settle changed", "Voltage settle changed"},
     {"Web deploy", "Web deploy"},
     {"GBATA SRAM patched", "GBATA SRAM patched"},
     {"Wi-Fi connected", "Wi-Fi connected"},
