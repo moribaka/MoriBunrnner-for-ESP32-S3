@@ -103,12 +103,12 @@
 #define UI_POWER_ITEM_COUNT 6
 #define UI_SYSTEM_ITEM_COUNT 7
 #define UI_BURNER_MODE_COUNT 2
-#define UI_BURN_ROM_LOCKED_ITEM_COUNT 2
+#define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
-#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 3
-#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 4
+#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 4
+#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 5
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 7
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
@@ -560,6 +560,7 @@ static const uint32_t s_psram_mb_options[] = {
     8U,
 };
 static const uint32_t s_dump_chunk_kb_options[] = {32U, 64U, 128U, 256U};
+static const uint32_t s_power_settle_ms_options[] = {100U, 200U, 400U, 800U, 1000U};
 
 static ui_anim_state_t s_anim = {
     .tile_fore_y = (float)UI_CANVAS_H,
@@ -575,7 +576,7 @@ static ui_nav_entry_t s_nav_stack[8];
 static uint8_t s_nav_depth = 0;
 static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
-static burner_write_path_t s_write_path = BURNER_WRITE_PATH_PIPELINE;
+static burner_write_path_t s_write_path = BURNER_WRITE_PATH_PSRAM;
 static bool s_ram_fram = false;
 static burner_gba_save_type_t s_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
 static uint32_t s_cart_slot = 0;
@@ -1409,6 +1410,15 @@ static const char *ui_mbc5_voltage_label(void)
     return (s_mbc5_power_5v_enabled != 0u) ? "5V" : "3V3";
 }
 
+static const char *ui_power_settle_label(uint32_t ms, char *out, size_t out_len)
+{
+    if (out == NULL || out_len == 0U) {
+        return "";
+    }
+    snprintf(out, out_len, "%" PRIu32 " ms", ms);
+    return out;
+}
+
 static const char *ui_erase_mode_label(void)
 {
     return (s_burn_erase_always != 0u) ? "Force erase" : "Smart skip";
@@ -2128,9 +2138,9 @@ static ui_file_action_t ui_file_action_for_kind(ui_file_kind_t kind, uint8_t ind
     }
     switch (index) {
         case 0:
-            return UI_FILE_ACTION_BURN_PIPELINE;
-        case 1:
             return UI_FILE_ACTION_BURN_PSRAM;
+        case 1:
+            return UI_FILE_ACTION_BURN_PIPELINE;
         case 2:
             return UI_FILE_ACTION_BURN_DIRECT;
         case 3:
@@ -4106,9 +4116,9 @@ static ui_file_action_t ui_burn_write_action_for_index(uint16_t index)
 {
     switch (index) {
         case 0:
-            return UI_FILE_ACTION_BURN_PIPELINE;
-        case 1:
             return UI_FILE_ACTION_BURN_PSRAM;
+        case 1:
+            return UI_FILE_ACTION_BURN_PIPELINE;
         case 2:
         default:
             return UI_FILE_ACTION_BURN_DIRECT;
@@ -4193,6 +4203,9 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index)
         return UI_BURN_ROM_OP_ANALYZE;
     }
     if (!ui_cart_is_unlocked()) {
+        if (index == cursor++) {
+            return UI_BURN_ROM_OP_SETTINGS;
+        }
         return UI_BURN_ROM_OP_INVALID;
     }
     if (index == cursor++) {
@@ -4253,7 +4266,8 @@ static void ui_burn_rom_open_write_menu_locked(ui_model_t *model)
     }
     s_burn_rom_write_menu = true;
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_WRITE;
-    model->selected = 0;
+    model->selected = (s_write_path == BURNER_WRITE_PATH_PSRAM) ? 0U :
+                      ((s_write_path == BURNER_WRITE_PATH_PIPELINE) ? 1U : 2U);
     model->scroll = 0;
     ui_mark_content_dirty(model);
     ui_set_status_locked(model, ui_tr("select write method"));
@@ -4475,13 +4489,20 @@ static void ui_select_locked(
                                                    ui_tr("Erase mode: force erase") :
                                                    ui_tr("Erase mode: smart skip"));
                 } else if (model->selected == 1U) {
+                    s_bacon_power_settle_ms = ui_next_option_u32(
+                        s_power_settle_ms_options,
+                        sizeof(s_power_settle_ms_options) / sizeof(s_power_settle_ms_options[0]),
+                        s_bacon_power_settle_ms,
+                        1);
+                    ui_set_status_locked(model, ui_tr("Voltage settle changed"));
+                } else if (model->selected == 2U) {
                     s_psram_mb = ui_next_option_u32(
                         s_psram_mb_options,
                         sizeof(s_psram_mb_options) / sizeof(s_psram_mb_options[0]),
                         s_psram_mb,
                         1);
                     ui_set_status_locked(model, ui_tr("PSRAM window changed"));
-                } else if (model->selected == 2U) {
+                } else if (model->selected == 3U) {
                     s_dump_chunk_kb = ui_next_option_u32(
                         s_dump_chunk_kb_options,
                         sizeof(s_dump_chunk_kb_options) / sizeof(s_dump_chunk_kb_options[0]),
@@ -5383,6 +5404,7 @@ static void ui_fill_burner_row(const ui_model_t *model, uint16_t index, char *ti
 static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
     char psram_label[16] = {0};
+    char settle_label[16] = {0};
     (void)model;
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
         ui_file_action_t action = ui_burn_write_action_for_index(index);
@@ -5428,9 +5450,12 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             snprintf(title, title_len, "%s", ui_tr("Erase mode"));
             snprintf(hint, hint_len, "%s", ui_erase_mode_label());
         } else if (index == 1U) {
+            snprintf(title, title_len, "%s", ui_tr("Voltage settle"));
+            snprintf(hint, hint_len, "%s", ui_power_settle_label(s_bacon_power_settle_ms, settle_label, sizeof(settle_label)));
+        } else if (index == 2U) {
             snprintf(title, title_len, "%s", ui_tr("PSRAM window"));
             snprintf(hint, hint_len, "%s", ui_psram_window_label(s_psram_mb, psram_label, sizeof(psram_label)));
-        } else if (index == 2U) {
+        } else if (index == 3U) {
             snprintf(title, title_len, "%s", ui_tr("Dump chunk"));
             snprintf(hint, hint_len, "%" PRIu32 " KB", s_dump_chunk_kb);
         } else if (s_cart_mode == BURNER_CART_MODE_MBC5) {
@@ -5493,9 +5518,23 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         return;
     }
     if (!ui_cart_is_unlocked()) {
-        snprintf(title, title_len, "%s", ui_tr("Locked"));
-        snprintf(hint, hint_len, "%s", ui_tr("analyze first"));
-        return;
+        switch (ui_burn_rom_op_for_index(index)) {
+            case UI_BURN_ROM_OP_SETTINGS:
+                snprintf(title, title_len, "%s", ui_tr("Settings"));
+                snprintf(
+                    hint,
+                    hint_len,
+                    "%s",
+                    (s_cart_mode == BURNER_CART_MODE_MBC5) ?
+                        ui_tr("erase/PSRAM/chunk/voltage") :
+                        ui_tr("erase/PSRAM/dump"));
+                return;
+            case UI_BURN_ROM_OP_INVALID:
+            default:
+                snprintf(title, title_len, "%s", ui_tr("Locked"));
+                snprintf(hint, hint_len, "%s", ui_tr("analyze first"));
+                return;
+        }
     }
     switch (ui_burn_rom_op_for_index(index)) {
         case UI_BURN_ROM_OP_CHOOSE_ROM:
