@@ -33,7 +33,7 @@
 #include "ui.h"
 #include "usb_msc_tf.h"
 #include "wifi_manager.h"
-#include "ws_server.h"
+#include "burner/core/ws_server_internal.h"
 #include "tca9555.h"
 
 #define SD_INIT_MAX_RETRY 5
@@ -58,6 +58,7 @@
 #define MORI_LANG_EN_INI_PATH MORI_SETTING_DIR_PATH "/lang_en_us.ini"
 #define MORI_IP5306_INI_PATH MORI_SETTING_DIR_PATH "/ip5306.ini"
 #define MORI_TCA9555_INI_PATH MORI_SETTING_DIR_PATH "/tca9555.ini"
+#define MORI_BURN_CONFIG_INI_PATH MORI_SETTING_DIR_PATH "/burn_config.ini"
 #define MORI_WIFI_IMPORT_TXT_PATH MORI_SETTING_DIR_PATH "/wifi.txt"
 #define MORI_WIFI_SSID_BUF_LEN 33
 #define MORI_WIFI_PASS_BUF_LEN 65
@@ -293,6 +294,20 @@ static const char s_default_tca9555_ini[] =
     "# output=0x0000    ; OUTPUT_PORT1:PORT0\n"
     "# polarity=0x0000  ; POLARITY_PORT1:PORT0\n"
     "# config=0xFFFF    ; CONFIG_PORT1:PORT0 (1=input,0=output)\n";
+
+static const char s_default_burn_config_ini[] =
+    "# MORI burn config\n"
+    "erase_mode=smart\n"
+    "gbc_voltage=3v3\n"
+    "power_settle_ms=100\n"
+    "write_path=psram\n"
+    "psram_window_mb=auto\n"
+    "mbc5_chunk_kb=16\n"
+    "dump_chunk_kb=64\n"
+    "gba_fixed_erase_window=1\n"
+    "erase_core=cpu1\n"
+    "tf_core=cpu1\n"
+    "psram_core=cpu1\n";
 
 typedef struct {
     const char *key;
@@ -2260,6 +2275,11 @@ static void ensure_setting_files(void)
         ESP_LOGW("main", "init tca9555.ini failed: %s", esp_err_to_name(err));
     }
 
+    err = write_text_file_if_missing(MORI_BURN_CONFIG_INI_PATH, s_default_burn_config_ini);
+    if (err != ESP_OK) {
+        ESP_LOGW("main", "init burn_config.ini failed: %s", esp_err_to_name(err));
+    }
+
     mori_upgrade_lang_ini_file(
         MORI_LANG_ZH_INI_PATH,
         s_lang_zh_upgrade_items,
@@ -2708,6 +2728,12 @@ static void mount_sdcard_if_possible(void)
     }
 
     ensure_setting_files();
+    {
+        esp_err_t burn_cfg_err = burner_load_burn_config();
+        if (burn_cfg_err != ESP_OK) {
+            ESP_LOGW("main", "load burn_config.ini failed: %s", esp_err_to_name(burn_cfg_err));
+        }
+    }
     mori_apply_ui_language_from_system_ini();
 }
 

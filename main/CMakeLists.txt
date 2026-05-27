@@ -1,6 +1,6 @@
-idf_component_register(SRCS  "wifi_manager.c" "file_system.c" "burner_nor_db_data.c" "burner_nor_db_lookup.c" "ws_server.c" "ws_server_http_content.c" "ws_server_http_device.c" "ws_server_http_maintenance.c" "ws_server_http_burn.c" "ws_server_httpd.c" "mcu_debug.c" "lcd_display.c" "lvgl_port.c" "ui.c" "ui_text.c" "ui_text_en.c" "ui_text_zh.c" "usb_msc_tf.c" "mori_i2c.c" "ip5306.c" "axp209.c" "power_manager.c" "tca9555.c" "main.c"
+idf_component_register(SRCS  "wifi_manager.c" "file_system.c" "burner/db/burner_nor_db_data.c" "burner/db/burner_nor_db_lookup.c" "burner/core/ws_server.c" "burner/core/burner_status.c" "burner/core/burner_task.c" "burner/core/burner_backend.c" "burner/core/burner_spi_backend.c" "burner/http/ws_server_http_content.c" "burner/http/ws_server_http_device.c" "burner/http/ws_server_http_maintenance.c" "burner/http/ws_server_http_burn.c" "burner/http/ws_server_httpd.c" "mcu_debug.c" "lcd_display.c" "lvgl_port.c" "ui.c" "ui_text.c" "ui_text_en.c" "ui_text_zh.c" "usb_msc_tf.c" "mori_i2c.c" "ip5306.c" "axp209.c" "power_manager.c" "tca9555.c" "main.c"
                        PRIV_REQUIRES driver esp_driver_i2c fatfs sdmmc spi_flash esp_wifi esp_http_server nvs_flash esp_lcd esp_timer esp_tinyusb app_update esp_psram spiffs "lvgl-9.4.0"
-                       INCLUDE_DIRS "")
+                       INCLUDE_DIRS "." "burner" "burner/core" "burner/http" "burner/db")
 
 spiffs_create_partition_image(assets ../assets FLASH_IN_PROJECT)
 

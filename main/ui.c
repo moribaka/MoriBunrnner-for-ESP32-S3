@@ -13,7 +13,7 @@
 #include <time.h>
 
 #include "esp_app_desc.h"
-#include "burner_nor_db.h"
+#include "burner/db/burner_nor_db.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -30,7 +30,7 @@
 #include "power_manager.h"
 #include "usb_msc_tf.h"
 #include "wifi_manager.h"
-#include "ws_server_internal.h"
+#include "burner/core/ws_server_internal.h"
 #include "ui_text.h"
 
 #define UI_TAG "ui"
@@ -1424,6 +1424,30 @@ static const char *ui_erase_mode_label(void)
     return (s_burn_erase_always != 0u) ? "Force erase" : "Smart skip";
 }
 
+static void ui_sync_burn_settings_from_runtime(void)
+{
+    s_write_path = s_burn_write_path_default;
+    s_psram_mb = s_burn_psram_window_mb;
+    s_mbc5_chunk_kb = s_burn_mbc5_chunk_kb;
+    s_dump_chunk_kb = s_burn_dump_chunk_kb;
+}
+
+static void ui_sync_runtime_burn_settings_from_local(void)
+{
+    s_burn_write_path_default = s_write_path;
+    s_burn_psram_window_mb = s_psram_mb;
+    s_burn_mbc5_chunk_kb = s_mbc5_chunk_kb;
+    s_burn_dump_chunk_kb = s_dump_chunk_kb;
+}
+
+static void ui_persist_burn_settings_locked(ui_model_t *model)
+{
+    ui_sync_runtime_burn_settings_from_local();
+    if (burner_save_burn_config() != ESP_OK) {
+        ui_set_status_locked(model, ui_tr("save failed"));
+    }
+}
+
 static const char *ui_gba_save_type_label(burner_gba_save_type_t save_type)
 {
     switch (save_type) {
@@ -2740,8 +2764,8 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
                                    BURNER_WRITE_PATH_PIPELINE :
                                    BURNER_WRITE_PATH_DIRECT);
     request->erase_always = (s_burn_erase_always != 0u);
-    request->psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
-    request->mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
+    request->psram_mb = s_psram_mb;
+    request->mbc5_chunk_kb = s_mbc5_chunk_kb;
     request->gba_force_no_cfi = false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = model->action_file.size;
@@ -4441,6 +4465,7 @@ static void ui_select_locked(
                                    ((action == UI_FILE_ACTION_BURN_PIPELINE) ?
                                         BURNER_WRITE_PATH_PIPELINE :
                                         BURNER_WRITE_PATH_DIRECT);
+                ui_persist_burn_settings_locked(model);
                 if (ui_prepare_last_file_action_locked(model, action, start_request) == ESP_OK) {
                     s_burn_rom_write_menu = false;
                     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
@@ -4485,6 +4510,7 @@ static void ui_select_locked(
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
                 if (model->selected == 0U) {
                     s_burn_erase_always = (s_burn_erase_always == 0u) ? 1u : 0u;
+                    ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, s_burn_erase_always != 0u ?
                                                    ui_tr("Erase mode: force erase") :
                                                    ui_tr("Erase mode: smart skip"));
@@ -4494,6 +4520,7 @@ static void ui_select_locked(
                         sizeof(s_power_settle_ms_options) / sizeof(s_power_settle_ms_options[0]),
                         s_bacon_power_settle_ms,
                         1);
+                    ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("Voltage settle changed"));
                 } else if (model->selected == 2U) {
                     s_psram_mb = ui_next_option_u32(
@@ -4501,6 +4528,7 @@ static void ui_select_locked(
                         sizeof(s_psram_mb_options) / sizeof(s_psram_mb_options[0]),
                         s_psram_mb,
                         1);
+                    ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("PSRAM window changed"));
                 } else if (model->selected == 3U) {
                     s_dump_chunk_kb = ui_next_option_u32(
@@ -4508,9 +4536,11 @@ static void ui_select_locked(
                         sizeof(s_dump_chunk_kb_options) / sizeof(s_dump_chunk_kb_options[0]),
                         s_dump_chunk_kb,
                         1);
+                    ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("dump chunk changed"));
                 } else if (s_cart_mode == BURNER_CART_MODE_MBC5) {
                     s_mbc5_power_5v_enabled = (s_mbc5_power_5v_enabled == 0u) ? 1u : 0u;
+                    ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, s_mbc5_power_5v_enabled != 0u ?
                                                    ui_tr("GBC voltage: 5V") :
                                                    ui_tr("GBC voltage: 3V3"));
@@ -5163,6 +5193,7 @@ static void ui_refresh_sources(void)
 {
     uint32_t now_ms = esp_log_timestamp();
 
+    ui_sync_burn_settings_from_runtime();
     ui_update_clock_if_needed(now_ms);
     ui_update_fps_if_needed(now_ms);
     ui_update_battery_if_needed(now_ms);
@@ -7136,6 +7167,7 @@ esp_err_t ui_init(void)
         return ESP_ERR_NO_MEM;
     }
     xSemaphoreGive(s_model_lock);
+    ui_sync_burn_settings_from_runtime();
     if (!ui_ensure_button_queue()) {
         return ESP_ERR_NO_MEM;
     }
