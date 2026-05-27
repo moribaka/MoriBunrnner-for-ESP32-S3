@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#include "burner_nor_db.h"
+#include "../db/burner_nor_db.h"
 
 extern const burner_nor_entry_t g_burner_nor_db_gba[];
 extern const size_t g_burner_nor_db_gba_count;

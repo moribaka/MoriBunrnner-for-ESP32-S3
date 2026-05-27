@@ -38,7 +38,7 @@
 #include "freertos/task.h"
 
 #include "file_system.h"
-#include "burner_nor_db.h"
+#include "../db/burner_nor_db.h"
 #include "ip5306.h"
 #include "lcd_display.h"
 #include "mcu_debug.h"
@@ -85,6 +85,7 @@
 #define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
 #define BURN_VERIFY_PSRAM_WINDOW_MB 7U
 #define BURN_VERIFY_PSRAM_WINDOW_BYTES (BURN_VERIFY_PSRAM_WINDOW_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
+#define BURN_TASK_STACK_BYTES (16U * 1024U)
 #define VERIFY_LOG_DIR_REL ".log"
 #define ROM_OUTPUT_TEMP_ROOT_REL ".temp/ROM_OUTPUT"
 #define TF_PATH_LEN_MAX 240
@@ -111,6 +112,8 @@
 #define POWER_JSON_BODY_MAX 160
 #define WIFI_SCAN_AP_MAX 24
 #define WEB_LANG_DIR_REL ".setting"
+#define BURN_CONFIG_DIR_REL ".setting"
+#define BURN_CONFIG_INI_REL BURN_CONFIG_DIR_REL "/burn_config.ini"
 #define WEB_LANG_SYSTEM_INI_REL WEB_LANG_DIR_REL "/mori_system.ini"
 #define WEB_LANG_DEFAULT_INI "lang_zh_cn.ini"
 #define WEB_LANG_FALLBACK_EN_INI "lang_en_us.ini"
@@ -173,6 +176,7 @@ typedef struct {
 #define BURNER_GBA_SPI_CS_SETUP_US 5U
 #define BURNER_GBA_SPI_CS_HOLD_US 5U
 #define BURNER_GBA_ROM_PHASE_GAP_US 1U
+#define BURNER_CPU_YIELD_INTERVAL_US 20000ULL
 #define BURNER_SPEED_WARMUP_US (1000ULL * 1000ULL)
 #define BURNER_POWER_SETTLE_MS 100
 #define BURNER_IDLE_POWER_TIMEOUT_MS 5000
@@ -398,7 +402,7 @@ typedef struct {
     bool gba_force_no_cfi;
 } burner_task_start_result_t;
 
-typedef struct {
+typedef struct burner_task_param {
     burner_job_mode_t mode;
     burner_cart_mode_t cart_mode;
     burner_write_path_t write_path;
@@ -562,23 +566,62 @@ extern uint8_t s_burn_erase_always;
 extern uint8_t s_gba_fixed_erase_window_enabled;
 extern uint8_t s_mbc5_power_5v_enabled;
 extern uint32_t s_bacon_power_settle_ms;
+extern burner_write_path_t s_burn_write_path_default;
+extern uint32_t s_burn_psram_window_mb;
+extern uint32_t s_burn_mbc5_chunk_kb;
+extern uint32_t s_burn_dump_chunk_kb;
 extern TickType_t s_bacon_last_active_tick;
 extern bool s_bacon_idle_powered_down;
 extern burner_cart_ctx_t s_cart_ctx;
 extern burner_status_t s_status;
 extern const char *const s_system_migrate_rel_dirs[BURNER_SYSTEM_MIGRATE_REL_DIR_COUNT];
 extern const char s_base_settings_html[];
+extern uint64_t s_burn_task_last_yield_us;
 
 esp_err_t burner_reject_if_tf_busy(httpd_req_t *req);
 void burner_schedule_restart(void);
+void burner_reset_cart_probe_state(void);
 void burner_bacon_mark_activity_locked(void);
 void burner_bacon_idle_task_entry(void *param);
 esp_err_t burner_bacon_gba_power_cmd(bool power_5v, bool power_3v3);
 esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len);
 void burner_spi_release_cs(void);
+uint8_t burner_bacon_option_byte0(
+    uint8_t batch_size,
+    bool dir_a,
+    bool dir_ad,
+    bool cs2,
+    bool cs1,
+    bool rd,
+    bool wr);
+uint8_t burner_bacon_option_byte2(
+    uint8_t batch_size,
+    bool dir_a,
+    bool dir_ad,
+    bool ad_incr,
+    bool cs1,
+    bool rd,
+    bool wr);
+void burner_spi_apply_cs_mode(burner_spi_cs_mode_t mode);
+uint32_t burner_spi_cs_setup_delay_us(burner_spi_cs_mode_t mode);
+esp_err_t burner_spi_begin_cs(burner_spi_cs_mode_t mode);
+void burner_spi_end_cs(burner_spi_cs_mode_t mode);
+esp_err_t burner_spi_transfer_cs(
+    burner_spi_cs_mode_t mode,
+    const uint8_t *tx,
+    uint8_t *rx,
+    size_t len);
+esp_err_t burner_spi_transfer(const uint8_t *tx, uint8_t *rx, size_t len);
+esp_err_t burner_spi_transfer_cs_legacy(
+    burner_spi_cs_mode_t mode,
+    const uint8_t *tx,
+    uint8_t *rx,
+    size_t len);
 esp_err_t burner_spi_config_get_handler(httpd_req_t *req);
 esp_err_t burner_core_config_get_handler(httpd_req_t *req);
 esp_err_t burner_core_config_post_handler(httpd_req_t *req);
+esp_err_t burner_load_burn_config(void);
+esp_err_t burner_save_burn_config(void);
 uint8_t *burner_spi_alloc_rw_buffer(size_t len, bool *needs_free);
 uint8_t *burner_spi_alloc_tx_buffer(size_t len, bool *needs_free);
 esp_err_t burner_tf_write_exact(int fd, const uint8_t *src, size_t bytes);
@@ -602,8 +645,11 @@ void burner_status_update(
     const char *rom_name,
     const char *rom_path);
 esp_err_t burner_spi_init(void);
+void burner_task_yield_if_due(void);
 void burner_spi_lock_take(void);
 void burner_spi_lock_give(void);
+esp_err_t burner_bacon_gba_power_cycle_3v3_locked(void);
+esp_err_t burner_bacon_gba_release_bus_idle(void);
 void burner_bacon_restore_3v3_power(void);
 esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card);
 esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job);
@@ -941,6 +987,16 @@ esp_err_t burner_cart_unlock_ppb_locked(
     burner_ppb_unlock_report_t *report);
 esp_err_t burner_ensure_dump_dir(void);
 esp_err_t burner_ensure_rom_output_dir(void);
+esp_err_t burner_run_write_job(const burner_task_param_t *job);
+esp_err_t burner_run_read_job(const burner_task_param_t *job);
+esp_err_t burner_run_verify_rom_job(const burner_task_param_t *job);
+esp_err_t burner_run_erase_rom_job(const burner_task_param_t *job);
+esp_err_t burner_run_write_ram_job(const burner_task_param_t *job);
+esp_err_t burner_run_read_ram_job(const burner_task_param_t *job);
+esp_err_t burner_run_verify_ram_job(const burner_task_param_t *job);
+esp_err_t burner_run_write_gba_save_job_new(const burner_task_param_t *job);
+esp_err_t burner_run_read_gba_save_job_new(const burner_task_param_t *job);
+esp_err_t burner_run_verify_gba_save_job_new(const burner_task_param_t *job);
 esp_err_t burner_start_task_ex(
     burner_job_mode_t mode,
     burner_cart_mode_t cart_mode,

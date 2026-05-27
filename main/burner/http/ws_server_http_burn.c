@@ -26,6 +26,27 @@ static bool burner_parse_pipeline_erase_text(const char *text, bool *erase_alway
     return false;
 }
 
+static bool burner_parse_psram_mb_or_auto_text(const char *text, uint32_t *psram_mb_out)
+{
+    uint32_t value = 0;
+
+    if (text == NULL || psram_mb_out == NULL) {
+        return false;
+    }
+    if (text[0] == '\0' || strcasecmp(text, "auto") == 0 || strcmp(text, "0") == 0) {
+        *psram_mb_out = BURN_PSRAM_WINDOW_AUTO_MB;
+        return true;
+    }
+    if (!burner_parse_u32_text(text, &value)) {
+        return false;
+    }
+    if (value < BURN_PSRAM_WINDOW_MIN_MB || value > BURN_PSRAM_WINDOW_MAX_MB) {
+        return false;
+    }
+    *psram_mb_out = value;
+    return true;
+}
+
 static bool burner_rom_dump_name_is_placeholder(const char *name)
 {
     char stem[96] = {0};
@@ -287,12 +308,12 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     char resp[BURNER_JSON_RESP_LEN] = {0};
     char error_msg[160] = {0};
     uint32_t slot = 0;
-    uint32_t mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
-    uint32_t psram_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
+    uint32_t mbc5_chunk_kb = s_burn_mbc5_chunk_kb;
+    uint32_t psram_mb = s_burn_psram_window_mb;
     bool gba_force_no_cfi = false;
     bool erase_always = (s_burn_erase_always != 0u);
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
-    burner_write_path_t write_path = BURNER_WRITE_PATH_DIRECT;
+    burner_write_path_t write_path = s_burn_write_path_default;
     burner_task_start_result_t result = {0};
     esp_err_t err;
     int n;
@@ -334,7 +355,8 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
     }
-    if (!burner_parse_write_path_text(write_path_arg, &write_path)) {
+    if (write_path_arg[0] != '\0' &&
+        !burner_parse_write_path_text(write_path_arg, &write_path)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "write_path must be direct, psram, or pipeline");
     }
     if (pipeline_erase_arg[0] != '\0' &&
@@ -342,10 +364,8 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "pipeline_erase must be smart or force");
     }
     if (psram_mb_arg[0] != '\0') {
-        if (!burner_parse_u32_text(psram_mb_arg, &psram_mb) ||
-            (psram_mb != BURN_PSRAM_WINDOW_AUTO_MB &&
-             (psram_mb < BURN_PSRAM_WINDOW_MIN_MB || psram_mb > BURN_PSRAM_WINDOW_MAX_MB))) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "psram_mb must be integer 0..8");
+        if (!burner_parse_psram_mb_or_auto_text(psram_mb_arg, &psram_mb)) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "psram_mb must be auto or integer 1..8");
         }
     }
     if (mbc5_chunk_kb_arg[0] != '\0') {
@@ -413,8 +433,8 @@ esp_err_t burner_read_handler(httpd_req_t *req)
     uint32_t slot = 0;
     uint32_t addr_begin = 0;
     uint32_t effective_size = 0;
-    uint32_t dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
-    uint32_t dump_chunk_bytes = BURN_GBA_DUMP_CHUNK_BYTES;
+    uint32_t dump_chunk_kb = s_burn_dump_chunk_kb;
+    uint32_t dump_chunk_bytes = burner_dump_chunk_kb_to_bytes(s_burn_dump_chunk_kb);
     bool gba_force_multi = false;
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
     burner_write_path_t read_path = BURNER_WRITE_PATH_DIRECT;
