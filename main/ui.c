@@ -3228,7 +3228,18 @@ static esp_err_t ui_start_dump_save_task(void)
 
 static esp_err_t ui_start_chip_erase_task(void)
 {
-    esp_err_t err = burner_start_task_ex(
+    esp_err_t err = ESP_OK;
+
+    if (s_cart_mode == BURNER_CART_MODE_GBA) {
+        uint32_t device_size = 0u;
+
+        err = burner_probe_cart_capacity_bytes(BURNER_CART_MODE_GBA, &device_size);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    err = burner_start_task_ex(
         BURNER_JOB_ERASE_ROM,
         s_cart_mode,
         BURNER_WRITE_PATH_DIRECT,
@@ -3344,12 +3355,19 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             mbc5_id[3],
             cfi_ok ? "CFI" : "no CFI");
     } else {
-        burner_nor_format_chip_name(
-            chip_name,
-            sizeof(chip_name),
-            burner_gba_chip_name(gba_id),
-            s_cart_ctx.gba_cmdset,
-            device_size);
+        if (s_cart_ctx.gba_likely_read_only) {
+            snprintf(chip_name, sizeof(chip_name), "%s", ui_tr("Read-only retail ROM"));
+            device_size = 0u;
+            sector_size = 0u;
+            buffer_write_bytes = 0u;
+        } else {
+            burner_nor_format_chip_name(
+                chip_name,
+                sizeof(chip_name),
+                burner_gba_chip_name(gba_id),
+                s_cart_ctx.gba_cmdset,
+                device_size);
+        }
         burner_status_set_probe_info(
             BURNER_CART_MODE_GBA,
             gba_id,
@@ -3391,7 +3409,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_id[1],
             gba_id[2],
             gba_id[3],
-            cfi_ok ? "CFI" : "no CFI");
+            s_cart_ctx.gba_likely_read_only ? ui_tr("Read-only retail ROM") : (cfi_ok ? "CFI" : "no CFI"));
     }
     return ESP_OK;
 }
@@ -5947,13 +5965,17 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
         case 10:
             snprintf(title, title_len, "%s", ui_tr("Mapping"));
             if (status.probe_valid && status.probe_cart_mode == BURNER_CART_MODE_GBA) {
-                snprintf(
-                    hint,
-                    hint_len,
-                    "%s CFI %s%s",
-                    status.probe_gba_multi ? "4MB window" : "linear",
-                    status.probe_cfi_ok ? "ok" : "fallback",
-                    status.probe_gba_force_multi ? " forced" : "");
+                if (s_cart_ctx.gba_likely_read_only && !status.probe_cfi_ok) {
+                    snprintf(hint, hint_len, "%s", ui_tr("Read-only retail ROM"));
+                } else {
+                    snprintf(
+                        hint,
+                        hint_len,
+                        "%s CFI %s%s",
+                        status.probe_gba_multi ? "4MB window" : "linear",
+                        status.probe_cfi_ok ? "ok" : "fallback",
+                        status.probe_gba_force_multi ? " forced" : "");
+                }
             } else if (status.probe_valid) {
                 snprintf(hint, hint_len, "MBC5 CFI %s", status.probe_cfi_ok ? "ok" : "fallback");
             } else {
@@ -6714,6 +6736,11 @@ static const char *ui_probe_chip_name(const burner_status_t *status)
 {
     if (status == NULL || !status->probe_valid) {
         return "--";
+    }
+    if (status->probe_cart_mode == BURNER_CART_MODE_GBA &&
+        s_cart_ctx.gba_likely_read_only &&
+        !status->probe_cfi_ok) {
+        return ui_tr("Read-only retail ROM");
     }
     if (status->probe_chip_name[0] != '\0') {
         return status->probe_chip_name;

@@ -243,6 +243,7 @@ typedef struct {
     burner_gba_cmd_data_lane_t gba_cmd_data_lane;
     bool d0d1_known;   /* D0/D1 detection completed */
     bool d0d1_swapped; /* D0/D1 data lines swapped */
+    bool gba_likely_read_only; /* Probe looks like plain ROM, not writable NOR */
 } burner_cart_ctx_t;
 
 typedef enum {
@@ -622,6 +623,7 @@ burner_cart_ctx_t s_cart_ctx = {
     .gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN,
     .gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD,
     .gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW,
+    .gba_likely_read_only = false,
 };
 static burner_gba_sector_erase_ctx_t s_gba_sector_erase_ctx = {0};
 esp_err_t burner_reject_if_tf_busy(httpd_req_t *req);

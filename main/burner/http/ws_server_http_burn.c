@@ -823,7 +823,7 @@ esp_err_t burner_start_write_from_tf(
         if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
             return burner_start_error(
                 err,
-                "gba cfi probe failed: command mode unavailable; cartridge may be read-only or unsupported",
+                "gba card looks like read-only retail rom; writing is blocked",
                 error_msg,
                 error_msg_len);
         }
@@ -1453,6 +1453,18 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
     }
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        uint32_t device_size = 0u;
+
+        err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
+        if (err == ESP_ERR_NOT_SUPPORTED) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "gba card looks like read-only retail rom; chip erase is blocked");
+        }
+        if (err != ESP_OK) {
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "gba probe failed before chip erase");
+        }
     }
 
     err = burner_start_task_ex(

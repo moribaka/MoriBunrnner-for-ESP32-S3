@@ -2411,6 +2411,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_cart_ctx.d0d1_known = false;
     s_cart_ctx.d0d1_swapped = false; /* Default: no swap */
+    s_cart_ctx.gba_likely_read_only = false;
     burner_nor_geometry_clear(&s_cart_ctx.geometry);
 
     memset(id_out, 0, 8u);
@@ -2585,6 +2586,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
                     resolved_cmdset);
                 *cfi_ok_out = false;
                 s_cart_ctx.gba_cmdset = resolved_cmdset;
+                s_cart_ctx.gba_likely_read_only = false;
                 burner_nor_format_chip_name(
                     chip_name,
                     sizeof(chip_name),
@@ -2736,6 +2738,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
         *cfi_ok_out = true;
         s_cart_ctx.geometry = cfi_geometry;
         s_cart_ctx.gba_cmdset = resolved_cmdset;
+        s_cart_ctx.gba_likely_read_only = false;
         id_looks_like_header = burner_gba_id_looks_like_rom_header(id_out);
         id_matches_plain_rom = burner_gba_id_matches_plain_rom_data(id_out);
 
@@ -2792,12 +2795,38 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
         last_intel_id,
         last_intel_id_valid,
         BURNER_NOR_CMDSET_AMD);
+    id_looks_like_header = burner_gba_id_looks_like_rom_header(id_out);
+    id_matches_plain_rom = burner_gba_id_matches_plain_rom_data(id_out);
+    if (id_looks_like_header || id_matches_plain_rom) {
+        *device_size = BURNER_GBA_FALLBACK_DEVICE_SIZE;
+        *sector_size = BURNER_GBA_FALLBACK_SECTOR_SIZE;
+        *buffer_write_bytes = BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES;
+        *cfi_ok_out = false;
+        (void)burner_nor_geometry_set_uniform(&s_cart_ctx.geometry, *device_size, *sector_size);
+        s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+        s_cart_ctx.gba_likely_read_only = true;
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA probe classified as likely read-only retail ROM after retries:"
+            " id=%02X %02X %02X %02X %02X %02X %02X %02X source=%s",
+            id_out[0],
+            id_out[1],
+            id_out[2],
+            id_out[3],
+            id_out[4],
+            id_out[5],
+            id_out[6],
+            id_out[7],
+            id_looks_like_header ? "rom-header" : "plain-rom-data");
+        return ESP_OK;
+    }
     *device_size = BURNER_GBA_FALLBACK_DEVICE_SIZE;
     *sector_size = BURNER_GBA_FALLBACK_SECTOR_SIZE;
     *buffer_write_bytes = BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES;
     *cfi_ok_out = false;
     (void)burner_nor_geometry_set_uniform(&s_cart_ctx.geometry, *device_size, *sector_size);
     s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_AMD;
+    s_cart_ctx.gba_likely_read_only = false;
     burner_nor_format_chip_name(
         chip_name,
         sizeof(chip_name),
@@ -2892,6 +2921,11 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             sector_size,
             (unsigned)buffer_write_bytes,
             burner_nor_cmdset_name(s_cart_ctx.gba_cmdset));
+    }
+    if (s_cart_ctx.gba_likely_read_only &&
+        (job->mode == BURNER_JOB_WRITE_ROM || job->mode == BURNER_JOB_ERASE_ROM)) {
+        ESP_LOGE(BURNER_TAG, "GBA prepare blocked: likely read-only retail ROM");
+        return ESP_ERR_NOT_SUPPORTED;
     }
     if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_UNKNOWN) {
         s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_AMD;

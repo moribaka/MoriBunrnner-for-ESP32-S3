@@ -516,10 +516,12 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     char resp[1024];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
+    const char *gba_chip_label = NULL;
     const char *sample_error = "";
     const char *gb_mapper = "unknown";
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
+    bool gba_likely_read_only = false;
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
     bool gba_save_detected = false;
@@ -601,6 +603,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
                 gba_cmd_mode = burner_gba_cmd_addr_mode_name(s_cart_ctx.gba_cmd_addr_mode);
                 gba_cmd_data_lane = burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane);
                 gba_id_looks_like_rom_header = burner_gba_id_looks_like_rom_header(gba_id);
+                gba_likely_read_only = s_cart_ctx.gba_likely_read_only;
                 burner_bacon_gba_d0d1_status(&gba_d0d1_known, &gba_d0d1_swapped);
             }
         }
@@ -719,6 +722,18 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             burner_gba_chip_name(gba_id),
             s_cart_ctx.gba_cmdset,
             device_size);
+        if (gba_likely_read_only) {
+            snprintf(chip_name, sizeof(chip_name), "%s", "Retail ROM / read-only");
+            device_size = 0u;
+            sector_size = 0u;
+            buffer_write_bytes = 0u;
+            gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+            gba_save_size = 0u;
+            gba_save_detected = false;
+            gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+            gba_patch_detected = false;
+        }
+        gba_chip_label = chip_name;
         burner_status_set_probe_info(
             BURNER_CART_MODE_GBA,
             gba_id,
@@ -760,6 +775,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             "{\"ok\":true,\"mode\":\"gba\",\"power\":{\"v5\":false,\"v3\":true},"
             "\"id\":\"%s\",\"chip\":\"%s\",\"cmd_mode\":\"%s\",\"cmd_data_lane\":\"%s\","
             "\"id_looks_like_rom_header\":%s,"
+            "\"likely_read_only_retail\":%s,"
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
             "\"d0d1_known\":%s,\"d0d1_swapped\":%s,"
             "\"gba_save_type\":\"%s\",\"gba_save_size\":%" PRIu32 ",\"gba_save_detected\":%s,"
@@ -767,10 +783,11 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             "\"sample_ok\":%s,\"sample_addr\":%" PRIu32 ",\"sample_len\":%" PRIu32 ","
             "\"sample_hex\":\"%s\",\"sample_error\":\"%s\"}",
             id_hex,
-            burner_gba_chip_name(gba_id),
+            gba_chip_label,
             gba_cmd_mode,
             gba_cmd_data_lane,
             gba_id_looks_like_rom_header ? "true" : "false",
+            gba_likely_read_only ? "true" : "false",
             cfi_ok ? "true" : "false",
             device_size,
             sector_size,
@@ -809,9 +826,11 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     char resp[480];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
+    const char *gba_chip_label = NULL;
     const char *gb_mapper = "unknown";
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
+    bool gba_likely_read_only = false;
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
     bool gba_save_detected = false;
@@ -881,6 +900,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                 gba_cmd_mode = burner_gba_cmd_addr_mode_name(s_cart_ctx.gba_cmd_addr_mode);
                 gba_cmd_data_lane = burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane);
                 gba_id_looks_like_rom_header = burner_gba_id_looks_like_rom_header(gba_id);
+                gba_likely_read_only = s_cart_ctx.gba_likely_read_only;
                 burner_bacon_gba_d0d1_status(&gba_d0d1_known, &gba_d0d1_swapped);
             }
         }
@@ -968,6 +988,18 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             burner_gba_chip_name(gba_id),
             s_cart_ctx.gba_cmdset,
             device_size);
+        if (gba_likely_read_only) {
+            snprintf(chip_name, sizeof(chip_name), "%s", "Retail ROM / read-only");
+            device_size = 0u;
+            sector_size = 0u;
+            buffer_write_bytes = 0u;
+            gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+            gba_save_size = 0u;
+            gba_save_detected = false;
+            gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+            gba_patch_detected = false;
+        }
+        gba_chip_label = chip_name;
         burner_status_set_probe_info(
             BURNER_CART_MODE_GBA,
             gba_id,
@@ -1009,15 +1041,17 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             "{\"ok\":true,\"mode\":\"gba\",\"power\":{\"v5\":false,\"v3\":true},"
             "\"id\":\"%s\",\"chip\":\"%s\",\"cmd_mode\":\"%s\",\"cmd_data_lane\":\"%s\","
             "\"id_looks_like_rom_header\":%s,"
+            "\"likely_read_only_retail\":%s,"
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
             "\"d0d1_known\":%s,\"d0d1_swapped\":%s,"
             "\"gba_save_type\":\"%s\",\"gba_save_size\":%" PRIu32 ",\"gba_save_detected\":%s,"
             "\"gba_sram_patch_kind\":\"%s\",\"gba_sram_patch_scanned\":true,\"gba_sram_patch_detected\":%s}",
             id_hex,
-            burner_gba_chip_name(gba_id),
+            gba_chip_label,
             gba_cmd_mode,
             gba_cmd_data_lane,
             gba_id_looks_like_rom_header ? "true" : "false",
+            gba_likely_read_only ? "true" : "false",
             cfi_ok ? "true" : "false",
             device_size,
             sector_size,
