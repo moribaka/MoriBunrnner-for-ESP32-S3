@@ -12,6 +12,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     bool use_psram_stage = false;
     bool use_pipeline_stage = false;
     bool force_erase_sectors = true;
+    bool erase_every_sector = false;
     size_t stage_capacity = 0;
     burner_tf_prefetch_ctx_t prefetch = {0};
     burner_tf_reader_ctx_t tf_reader = {0};
@@ -205,11 +206,17 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     }
 
     force_erase_sectors = job->erase_always;
+    erase_every_sector = force_erase_sectors || burner_gba_nor_is_intel_active();
     if (force_erase_sectors) {
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
             "GBA burn erase policy: force erase for all write paths");
+    } else if (burner_gba_nor_is_intel_active()) {
+        should_erase = true;
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA burn erase policy: per-sector erase for Intel (blank-skip disabled)");
     } else {
         should_erase = true;
         ESP_LOGI(
@@ -276,7 +283,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             addr_begin + job->total_bytes - 1u,
             s_cart_ctx.sector_size,
             burner_is_gba_multi_card(job),
-            force_erase_sectors);
+            erase_every_sector);
     }
     if (should_erase && !use_psram_stage) {
         burner_status_mark_erase_begin();
@@ -295,8 +302,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             addr_begin + job->total_bytes - 1u,
             s_cart_ctx.sector_size,
             burner_is_gba_multi_card(job),
-            true,
-            force_erase_sectors);
+            !erase_every_sector,
+            erase_every_sector);
         burner_status_mark_erase_end();
         erase_timer_started = false;
 
@@ -431,8 +438,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                         stage_erase_end,
                         s_cart_ctx.sector_size,
                         burner_is_gba_multi_card(job),
-                        true,
-                        force_erase_sectors);
+                        !erase_every_sector,
+                        erase_every_sector);
                 }
                 burner_status_mark_erase_end();
                 erase_timer_started = false;
