@@ -3270,6 +3270,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     char chip_name[48] = {0};
     burner_nor_geometry_t cfi_geometry = {0};
     uint32_t device_size = 0;
+    uint32_t save_probe_device_size = 0;
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
     burner_gba_save_type_t gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
@@ -3355,6 +3356,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             mbc5_id[3],
             cfi_ok ? "CFI" : "no CFI");
     } else {
+        save_probe_device_size = device_size;
         if (s_cart_ctx.gba_likely_read_only) {
             snprintf(chip_name, sizeof(chip_name), "%s", ui_tr("Read-only retail ROM"));
             device_size = 0u;
@@ -3386,7 +3388,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             bool detected = false;
             burner_spi_lock_take();
             err = burner_probe_gba_save_type_head_locked(
-                device_size,
+                save_probe_device_size,
                 &gba_save_type,
                 &gba_save_size,
                 &detected);

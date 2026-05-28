@@ -1,3 +1,24 @@
+/* GBA header game code lives at 0xAC..0xAF. */
+#define BURNER_GBA_GAME_CODE_OFFSET 0xACu
+#define BURNER_GBA_GAME_CODE_LEN 4u
+#define BURNER_GBA_GAME_CODE_HEADER_BYTES (BURNER_GBA_GAME_CODE_OFFSET + BURNER_GBA_GAME_CODE_LEN)
+
+typedef struct {
+    const char *game_code;
+    burner_gba_save_type_t save_type;
+    uint32_t save_size;
+} burner_gba_save_header_hint_t;
+
+/*
+ * Retail carts often don't expose writable NOR IDs/CFI and some titles don't
+ * leave the usual SRAM/EEPROM/FLASH strings in easy-to-scan ROM regions.
+ * Keep this table tiny and focused for known exceptions we want to handle.
+ */
+static const burner_gba_save_header_hint_t s_gba_save_header_hints[] = {
+    {"RZWE", BURNER_GBA_SAVE_TYPE_SRAM, 32u * 1024u}, /* WarioWare: Twisted! */
+    {"RZWJ", BURNER_GBA_SAVE_TYPE_SRAM, 32u * 1024u}, /* Mawaru Made in Wario */
+};
+
 bool burner_extract_ascii_cart_title(
     const uint8_t *raw,
     size_t raw_len,
@@ -105,6 +126,104 @@ bool burner_try_probe_cart_title(
     }
 
     return burner_extract_ascii_cart_title(header, header_len, title, title_len);
+}
+
+static bool burner_extract_gba_game_code(
+    const uint8_t *raw,
+    size_t raw_len,
+    char *game_code,
+    size_t game_code_len)
+{
+    size_t i;
+
+    if (raw == NULL || game_code == NULL || game_code_len < (BURNER_GBA_GAME_CODE_LEN + 1u) ||
+        raw_len < BURNER_GBA_GAME_CODE_HEADER_BYTES) {
+        return false;
+    }
+
+    for (i = 0u; i < BURNER_GBA_GAME_CODE_LEN; ++i) {
+        uint8_t ch = raw[BURNER_GBA_GAME_CODE_OFFSET + i];
+
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z'))) {
+            return false;
+        }
+        game_code[i] = (char)ch;
+    }
+    game_code[BURNER_GBA_GAME_CODE_LEN] = '\0';
+    return true;
+}
+
+static bool burner_lookup_gba_save_type_by_game_code(
+    const char *game_code,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out)
+{
+    size_t i;
+
+    if (game_code == NULL || save_type_out == NULL || save_size_out == NULL) {
+        return false;
+    }
+
+    for (i = 0u; i < sizeof(s_gba_save_header_hints) / sizeof(s_gba_save_header_hints[0]); ++i) {
+        if (strcmp(game_code, s_gba_save_header_hints[i].game_code) == 0) {
+            *save_type_out = s_gba_save_header_hints[i].save_type;
+            *save_size_out = s_gba_save_header_hints[i].save_size;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool burner_detect_gba_save_type_from_header_game_code(
+    const uint8_t *raw,
+    size_t raw_len,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out)
+{
+    char game_code[BURNER_GBA_GAME_CODE_LEN + 1u];
+
+    if (!burner_extract_gba_game_code(raw, raw_len, game_code, sizeof(game_code))) {
+        return false;
+    }
+    if (!burner_lookup_gba_save_type_by_game_code(game_code, save_type_out, save_size_out)) {
+        return false;
+    }
+
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA save type matched by game code %s: type=%u size=%" PRIu32,
+        game_code,
+        (unsigned)*save_type_out,
+        *save_size_out);
+    return true;
+}
+
+static bool burner_probe_gba_save_type_from_header_locked(
+    const burner_task_param_t *job,
+    burner_gba_save_type_t *save_type_out,
+    uint32_t *save_size_out)
+{
+    uint8_t header[BURNER_GBA_GAME_CODE_HEADER_BYTES] = {0};
+
+    if (job == NULL || save_type_out == NULL || save_size_out == NULL ||
+        job->total_bytes < BURNER_GBA_GAME_CODE_HEADER_BYTES) {
+        return false;
+    }
+
+    if (burner_bacon_gba_read_block(
+            header,
+            sizeof(header),
+            job->addr_begin,
+            burner_is_gba_multi_card(job)) != ESP_OK) {
+        return false;
+    }
+
+    return burner_detect_gba_save_type_from_header_game_code(
+        header,
+        sizeof(header),
+        save_type_out,
+        save_size_out);
 }
 
 static bool burner_memmem_ascii(
@@ -698,6 +817,13 @@ esp_err_t burner_probe_gba_rom_analysis_locked(
             if (err == ESP_OK) {
                 save_detected = burner_detect_gba_save_type_in_span(head_cache, head_scan_bytes, &save_type, &save_size);
                 patch_detected = burner_detect_gba_sram_patch_in_span(head_cache, head_scan_bytes, &patch_kind);
+                if (!save_detected) {
+                    save_detected = burner_detect_gba_save_type_from_header_game_code(
+                        head_cache,
+                        head_scan_bytes,
+                        &save_type,
+                        &save_size);
+                }
             }
         } else {
             burner_task_param_t head_job = {
@@ -708,6 +834,9 @@ esp_err_t burner_probe_gba_rom_analysis_locked(
 
             head_job.total_bytes = head_scan_bytes;
             save_detected = burner_detect_gba_save_type_from_rom_locked(&head_job, NULL, 0u, &save_type, &save_size);
+            if (!save_detected) {
+                save_detected = burner_probe_gba_save_type_from_header_locked(&head_job, &save_type, &save_size);
+            }
             patch_detected = burner_detect_gbata_sram_patch_from_rom_locked(&head_job);
             if (patch_detected) {
                 patch_kind = BURNER_GBA_SRAM_PATCH_GBATA;
@@ -818,6 +947,13 @@ esp_err_t burner_probe_gba_save_type_head_locked(
             head_scan_bytes);
         if (err == ESP_OK) {
             detected = burner_detect_gba_save_type_in_span(head_cache, head_scan_bytes, &save_type, &save_size);
+            if (!detected) {
+                detected = burner_detect_gba_save_type_from_header_game_code(
+                    head_cache,
+                    head_scan_bytes,
+                    &save_type,
+                    &save_size);
+            }
         }
         free(head_cache);
     } else {
@@ -828,6 +964,9 @@ esp_err_t burner_probe_gba_save_type_head_locked(
         };
 
         detected = burner_detect_gba_save_type_from_rom_locked(&head_job, NULL, 0u, &save_type, &save_size);
+        if (!detected) {
+            detected = burner_probe_gba_save_type_from_header_locked(&head_job, &save_type, &save_size);
+        }
     }
 
     if (err != ESP_OK) {
