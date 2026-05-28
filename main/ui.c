@@ -107,13 +107,14 @@
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
+#define UI_BURN_ROM_MAPPER_ITEM_COUNT 2
 #define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 4
 #define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 5
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 7
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
 #define UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT 8
-#define UI_BURN_ROM_MBC5_WITH_ROM_ITEM_COUNT 9
+#define UI_BURN_ROM_MBC5_WITH_ROM_ITEM_COUNT 10
 #define UI_BURN_ROM_ACTION_ROWS UI_LIST_VISIBLE_COUNT
 #define UI_BURN_SPLIT_GAP 8
 #define UI_BURN_SIDE_MARGIN 4
@@ -229,6 +230,7 @@ typedef enum {
 typedef enum {
     UI_BURN_ROM_OP_ANALYZE = 0,
     UI_BURN_ROM_OP_CHOOSE_ROM,
+    UI_BURN_ROM_OP_ROM_MAPPER,
     UI_BURN_ROM_OP_WRITE_ROM,
     UI_BURN_ROM_OP_VERIFY_ROM,
     UI_BURN_ROM_OP_DUMP_ROM,
@@ -252,6 +254,7 @@ typedef enum {
     UI_BURN_ROM_SUBMENU_WRITE,
     UI_BURN_ROM_SUBMENU_DUMP_SIZE,
     UI_BURN_ROM_SUBMENU_DUMP_CUSTOM,
+    UI_BURN_ROM_SUBMENU_MAPPER,
     UI_BURN_ROM_SUBMENU_SETTINGS,
     UI_BURN_ROM_SUBMENU_ERASE_CONFIRM,
     UI_BURN_ROM_SUBMENU_RAM,
@@ -283,6 +286,7 @@ typedef struct {
     bool ram_fram;
     uint8_t ram_latency;
     bool task_with_caps;
+    ui_page_t return_page;
 } ui_file_start_request_t;
 
 typedef struct {
@@ -471,6 +475,8 @@ static uint16_t ui_burn_rom_visible_rows(void);
 static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index);
 static bool ui_burn_cart_has_slots(void);
 static const char *ui_mbc5_voltage_label(void);
+static void ui_focus_burn_rom_op_locked(ui_model_t *model, ui_burn_rom_op_t op);
+static const char *ui_selected_gb_mapper_label(void);
 
 static bool ui_lang_is_zh(void)
 {
@@ -603,6 +609,7 @@ static void ui_burn_probe_task(void *param);
 static bool ui_burner_operation_active(void);
 static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row);
 static const char *ui_probe_chip_name(const burner_status_t *status);
+static const char *ui_probe_type_label(const burner_status_t *status, burner_cart_mode_t mode);
 
 static bool ui_take_model_lock(void)
 {
@@ -1498,6 +1505,31 @@ static const char *ui_cart_mode_label(burner_cart_mode_t mode)
     return (mode == BURNER_CART_MODE_GBA) ? "GBA" : "GBC";
 }
 
+static const char *ui_probe_type_label(const burner_status_t *status, burner_cart_mode_t mode)
+{
+    if (mode == BURNER_CART_MODE_MBC5 &&
+        status != NULL &&
+        status->probe_valid &&
+        status->probe_cart_mode == BURNER_CART_MODE_MBC5 &&
+        status->probe_mapper_name[0] != '\0') {
+        return status->probe_mapper_name;
+    }
+    return ui_cart_mode_label(mode);
+}
+
+static const char *ui_selected_gb_mapper_label(void)
+{
+    switch (s_gb_mapper_override_kind) {
+        case BURNER_GB_MAPPER_MBC3:
+            return "MBC3";
+        case BURNER_GB_MAPPER_MBC5:
+            return "MBC5";
+        case BURNER_GB_MAPPER_UNKNOWN:
+        default:
+            return ui_tr("Type");
+    }
+}
+
 static bool ui_cart_is_unlocked(void)
 {
     return s_cart_analyzed && s_analyzed_cart_mode == s_cart_mode;
@@ -1718,6 +1750,9 @@ static uint16_t ui_burn_rom_item_count(void)
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_CUSTOM) {
         return UI_BURN_ROM_DUMP_KEY_COUNT;
     }
+    if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
+        return UI_BURN_ROM_MAPPER_ITEM_COUNT;
+    }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
         return ui_burn_rom_settings_item_count();
     }
@@ -1783,6 +1818,23 @@ static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row)
     model->selected = row;
     model->scroll = ui_scroll_for_selected_rows(row, 0, count, ui_burn_rom_visible_rows());
     ui_mark_content_dirty(model);
+}
+
+static void ui_focus_burn_rom_op_locked(ui_model_t *model, ui_burn_rom_op_t op)
+{
+    uint16_t count;
+
+    if (model == NULL || model->page != UI_PAGE_BURN_ROM) {
+        return;
+    }
+
+    count = ui_burn_rom_item_count();
+    for (uint16_t i = 0U; i < count; ++i) {
+        if (ui_burn_rom_op_for_index(i) == op) {
+            ui_focus_burn_rom_row_locked(model, i);
+            return;
+        }
+    }
 }
 
 static bool ui_burn_cart_has_slots(void)
@@ -2704,7 +2756,9 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
         model->parent_page = UI_PAGE_BURNER;
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
         ui_set_status_locked(model, ui_tr("ROM selected"));
-        ui_focus_burn_rom_row_locked(model, 2U);
+        ui_focus_burn_rom_op_locked(
+            model,
+            (s_cart_mode == BURNER_CART_MODE_MBC5) ? UI_BURN_ROM_OP_ROM_MAPPER : UI_BURN_ROM_OP_WRITE_ROM);
     }
     ui_clamp_burn_rom_selection_locked(model);
     ui_drop_nav_target_locked(model->page);
@@ -2771,11 +2825,12 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->gba_save_size = model->action_file.size;
     request->ram_fram = false;
     request->ram_latency = 10U;
+    request->return_page = UI_PAGE_ROOT;
 
     s_file_start_active = true;
     ui_task_cancel_confirm_reset_locked();
     model->page = UI_PAGE_TASK_STATUS;
-    model->parent_page = UI_PAGE_ROOT;
+    model->parent_page = request->return_page;
     model->burn_progress = 0;
     model->burn_processed = 0;
     model->burn_total = request->size;
@@ -2804,7 +2859,7 @@ static void ui_finish_file_start_task(
     s_file_start_active = false;
     ui_task_cancel_confirm_reset_locked();
     s_model.page = UI_PAGE_TASK_STATUS;
-    s_model.parent_page = UI_PAGE_ROOT;
+    s_model.parent_page = (request != NULL) ? request->return_page : UI_PAGE_ROOT;
     if (err == ESP_OK) {
         s_model.burn_progress = 0;
         s_model.burn_processed = 0;
@@ -2997,14 +3052,14 @@ static void ui_start_file_action_async(ui_file_start_request_t *request)
     }
 }
 
-static void ui_set_task_page_starting(const char *text, uint32_t total)
+static void ui_set_task_page_starting(const char *text, uint32_t total, ui_page_t return_page)
 {
     if (!ui_take_model_lock()) {
         return;
     }
     ui_task_cancel_confirm_reset_locked();
     s_model.page = UI_PAGE_TASK_STATUS;
-    s_model.parent_page = UI_PAGE_BURNER;
+    s_model.parent_page = return_page;
     s_model.burn_progress = 0;
     s_model.burn_processed = 0;
     s_model.burn_total = total;
@@ -3079,7 +3134,7 @@ static esp_err_t ui_start_dump_rom_task(void)
         false,
         0U);
     if (err == ESP_OK) {
-        ui_set_task_page_starting(ui_tr("ROM dump started"), effective_size);
+        ui_set_task_page_starting(ui_tr("ROM dump started"), effective_size, UI_PAGE_BURN_ROM);
     }
     return err;
 }
@@ -3123,7 +3178,7 @@ static esp_err_t ui_start_dump_save_task(void)
             s_gba_save_type,
             s_save_size_kib * 1024U);
         if (err == ESP_OK) {
-            ui_set_task_page_starting("GBA save dump started", s_save_size_kib * 1024U);
+            ui_set_task_page_starting("GBA save dump started", s_save_size_kib * 1024U, UI_PAGE_BURN_ROM);
         }
         return err;
     }
@@ -3166,7 +3221,7 @@ static esp_err_t ui_start_dump_save_task(void)
         s_ram_fram,
         s_ram_latency);
     if (err == ESP_OK) {
-        ui_set_task_page_starting(ui_tr("save dump started"), effective_size);
+        ui_set_task_page_starting(ui_tr("save dump started"), effective_size, UI_PAGE_BURN_ROM);
     }
     return err;
 }
@@ -3192,7 +3247,7 @@ static esp_err_t ui_start_chip_erase_task(void)
         0U);
 
     if (err == ESP_OK) {
-        ui_set_task_page_starting(ui_tr("chip erase started"), 1U);
+        ui_set_task_page_starting(ui_tr("chip erase started"), 1U, UI_PAGE_BURN_ROM);
     }
     return err;
 }
@@ -3276,7 +3331,8 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             false,
             false,
             false,
-            chip_name);
+            chip_name,
+            "MBC5");
         snprintf(
             out,
             out_len,
@@ -3306,7 +3362,8 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             false,
             gba_d0d1_known,
             gba_d0d1_swapped,
-            chip_name);
+            chip_name,
+            "");
         {
             bool detected = false;
             burner_spi_lock_take();
@@ -3376,7 +3433,8 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
             false,
             false,
             false,
-            burner_mbc5_chip_name(report.mbc5_id));
+            burner_mbc5_chip_name(report.mbc5_id),
+            "MBC5");
     } else {
         burner_status_set_probe_info(
             BURNER_CART_MODE_GBA,
@@ -3390,7 +3448,8 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
             false,
             report.gba_d0d1_known,
             report.gba_d0d1_swapped,
-            burner_gba_chip_name(report.gba_id));
+            burner_gba_chip_name(report.gba_id),
+            "");
     }
 
     if (report.ppb_needs_unlock_before == 0U && report.ppb_needs_unlock_after == 0U) {
@@ -3922,6 +3981,19 @@ static void ui_back_locked(ui_model_t *model)
         ui_task_cancel_confirm_open_locked(model);
         return;
     }
+    if (model->page == UI_PAGE_TASK_STATUS) {
+        ui_page_t return_page = model->parent_page;
+
+        model->page = return_page;
+        model->parent_page = ui_task_return_parent_page(return_page);
+        model->selected = 0;
+        model->scroll = 0;
+        ui_drop_nav_target_locked(model->page);
+        ui_mark_chrome_dirty(model);
+        ui_mark_content_dirty(model);
+        model->dirty = true;
+        return;
+    }
     if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
         if (ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
             ui_open_files_locked(model, parent, true);
@@ -3968,6 +4040,11 @@ static void ui_back_locked(ui_model_t *model)
         }
         model->scroll = ui_scroll_for_selected_rows(model->selected, 0, ui_burn_rom_item_count(), ui_burn_rom_visible_rows());
         ui_mark_content_dirty(model);
+        return;
+    }
+    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
+        s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+        ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_ROM_MAPPER);
         return;
     }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
@@ -4119,11 +4196,15 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->gba_save_size = selected_file.size;
     request->ram_fram = s_ram_fram;
     request->ram_latency = s_ram_latency;
+    request->return_page =
+        (model != NULL && (model->page == UI_PAGE_BURN_ROM || model->page == UI_PAGE_BURN_SAVE)) ?
+            model->page :
+            UI_PAGE_ROOT;
 
     s_file_start_active = true;
     ui_task_cancel_confirm_reset_locked();
     model->page = UI_PAGE_TASK_STATUS;
-    model->parent_page = UI_PAGE_BURNER;
+    model->parent_page = request->return_page;
     model->burn_progress = 0;
     model->burn_processed = 0;
     model->burn_total = request->size;
@@ -4235,6 +4316,9 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index)
     if (index == cursor++) {
         return UI_BURN_ROM_OP_CHOOSE_ROM;
     }
+    if (s_cart_mode == BURNER_CART_MODE_MBC5 && index == cursor++) {
+        return UI_BURN_ROM_OP_ROM_MAPPER;
+    }
     if (index == cursor++) {
         return UI_BURN_ROM_OP_WRITE_ROM;
     }
@@ -4321,6 +4405,18 @@ static void ui_burn_rom_open_dump_custom_locked(ui_model_t *model)
     model->scroll = 0;
     ui_mark_content_dirty(model);
     ui_set_status_locked(model, ui_tr("input MiB size"));
+}
+
+static void ui_burn_rom_open_mapper_menu_locked(ui_model_t *model)
+{
+    if (model == NULL) {
+        return;
+    }
+    s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_MAPPER;
+    model->selected = (s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC3) ? 1U : 0U;
+    model->scroll = 0;
+    ui_mark_content_dirty(model);
+    ui_set_status_locked(model, ui_tr("select type"));
 }
 
 static void ui_burn_rom_open_erase_confirm_locked(ui_model_t *model)
@@ -4507,6 +4603,12 @@ static void ui_select_locked(
                         ui_mark_content_dirty(model);
                     }
                 }
+            } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
+                s_gb_mapper_override_kind =
+                    (model->selected == 1U) ? BURNER_GB_MAPPER_MBC3 : BURNER_GB_MAPPER_MBC5;
+                s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+                ui_set_status_locked(model, ui_selected_gb_mapper_label());
+                ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_WRITE_ROM);
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
                 if (model->selected == 0U) {
                     s_burn_erase_always = (s_burn_erase_always == 0u) ? 1u : 0u;
@@ -4610,6 +4712,7 @@ static void ui_select_locked(
                         break;
                     case UI_BURN_ROM_OP_ANALYZE:
                     case UI_BURN_ROM_OP_CHOOSE_ROM:
+                    case UI_BURN_ROM_OP_ROM_MAPPER:
                     case UI_BURN_ROM_OP_WRITE_ROM:
                     case UI_BURN_ROM_OP_VERIFY_ROM:
                     case UI_BURN_ROM_OP_DUMP_ROM:
@@ -4637,6 +4740,9 @@ static void ui_select_locked(
                                 UI_FILE_FILTER_SAVE :
                                 ui_burner_rom_file_filter());
                         model->parent_page = UI_PAGE_BURN_ROM;
+                        break;
+                    case UI_BURN_ROM_OP_ROM_MAPPER:
+                        ui_burn_rom_open_mapper_menu_locked(model);
                         break;
                     case UI_BURN_ROM_OP_WRITE_ROM:
                         if (ui_last_rom_file_for_mode(s_cart_mode)->path[0] == '\0') {
@@ -5476,6 +5582,16 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         snprintf(hint, hint_len, "%s", s_burn_rom_custom_size_text[0] != '\0' ? s_burn_rom_custom_size_text : ui_tr("MiB"));
         return;
     }
+    if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
+        snprintf(title, title_len, "%s", (index == 1U) ? "MBC3" : "MBC5");
+        if ((index == 0U && s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC5) ||
+            (index == 1U && s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC3)) {
+            snprintf(hint, hint_len, "%s", ui_tr("done"));
+        } else if (hint_len > 0U) {
+            hint[0] = '\0';
+        }
+        return;
+    }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
         if (index == 0U) {
             snprintf(title, title_len, "%s", ui_tr("Erase mode"));
@@ -5581,6 +5697,16 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                     snprintf(title, title_len, "%s", ui_tr("ROM: Choose file"));
                     snprintf(hint, hint_len, "%s", ui_tr("not selected"));
                 }
+            }
+            return;
+        case UI_BURN_ROM_OP_ROM_MAPPER:
+            snprintf(title, title_len, "ROM: %s", ui_selected_gb_mapper_label());
+            if (s_gb_mapper_override_kind == BURNER_GB_MAPPER_UNKNOWN) {
+                if (hint_len > 0U) {
+                    hint[0] = '\0';
+                }
+            } else {
+                snprintf(hint, hint_len, "%s", ui_tr("done"));
             }
             return;
         case UI_BURN_ROM_OP_WRITE_ROM:
@@ -6523,7 +6649,7 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
         return;
     }
 
-    ui_px_info_line(text_x, yy, text_w, ui_tr("Type:"), ui_cart_mode_label(s_cart_mode));
+    ui_px_info_line(text_x, yy, text_w, ui_tr("Type:"), ui_probe_type_label(&status, s_cart_mode));
     yy += UI_LIST_LINE_H;
     if (status.probe_valid && status.probe_cart_mode == s_cart_mode) {
         ui_px_text_clipped(text_x, yy, text_w, ui_probe_chip_name(&status), true);
@@ -7315,6 +7441,30 @@ void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total)
         s_model.erase_done_sectors = 0;
         s_model.erase_total_sectors = 0;
     }
+    ui_mark_content_dirty(&s_model);
+    xSemaphoreGive(s_model_lock);
+}
+
+void ui_show_burn_task_status(uint32_t total_hint)
+{
+    if (!ui_take_model_lock()) {
+        return;
+    }
+
+    ui_task_cancel_confirm_reset_locked();
+    s_model.page = UI_PAGE_TASK_STATUS;
+    s_model.parent_page = UI_PAGE_BURNER;
+    s_model.selected = 0;
+    s_model.scroll = 0;
+    s_model.burn_progress = 0;
+    s_model.burn_processed = 0;
+    s_model.burn_total = total_hint;
+    s_model.erase_progress = 0;
+    s_model.erase_done_sectors = 0;
+    s_model.erase_total_sectors = 0;
+    s_model.burn_elapsed_us = 0;
+    ui_set_status_locked(&s_model, ui_tr("task status"));
+    ui_mark_chrome_dirty(&s_model);
     ui_mark_content_dirty(&s_model);
     xSemaphoreGive(s_model_lock);
 }

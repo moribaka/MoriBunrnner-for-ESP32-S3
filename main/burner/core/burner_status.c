@@ -178,6 +178,7 @@ void burner_status_probe_reset_locked(void)
     s_status.probe_buffer_write_bytes = 0u;
     memset(s_status.probe_id, 0, sizeof(s_status.probe_id));
     s_status.probe_chip_name[0] = '\0';
+    s_status.probe_mapper_name[0] = '\0';
 }
 
 void burner_status_set_probe_info(
@@ -192,7 +193,8 @@ void burner_status_set_probe_info(
     bool gba_force_multi,
     bool gba_d0d1_known,
     bool gba_d0d1_swapped,
-    const char *chip_name)
+    const char *chip_name,
+    const char *mapper_name)
 {
     size_t copy_len;
 
@@ -229,6 +231,11 @@ void burner_status_set_probe_info(
         sizeof(s_status.probe_chip_name),
         "%s",
         (chip_name != NULL && chip_name[0] != '\0') ? chip_name : "unknown");
+    snprintf(
+        s_status.probe_mapper_name,
+        sizeof(s_status.probe_mapper_name),
+        "%s",
+        (mapper_name != NULL && mapper_name[0] != '\0') ? mapper_name : "");
     xSemaphoreGive(s_status_lock);
 }
 

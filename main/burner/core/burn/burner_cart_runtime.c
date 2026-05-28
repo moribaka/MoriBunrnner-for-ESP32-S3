@@ -211,6 +211,13 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
                 mbc5_id[2],
                 mbc5_id[3]);
         }
+        if (err == ESP_OK && s_gb_mapper_override_kind != BURNER_GB_MAPPER_UNKNOWN) {
+            s_gb_mapper_kind = s_gb_mapper_override_kind;
+            if (s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC3 &&
+                device_size > (2u * 1024u * 1024u)) {
+                device_size = (2u * 1024u * 1024u);
+            }
+        }
     }
     burner_bacon_restore_3v3_power();
     burner_spi_lock_give();

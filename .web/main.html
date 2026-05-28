@@ -1967,6 +1967,7 @@
                 <div style="margin: 0 0 8px; text-align: left;">
                     <label class="setting-label" for="fileActionPsramMbSelect" style="display:block; margin-bottom: 6px;">PSRAM 流水窗口 (MB)</label>
                     <select class="input" id="fileActionPsramMbSelect" onchange="setPsramWindowMb(this.value)">
+                        <option value="0">Auto</option>
                         <option value="1">1 MB</option>
                         <option value="2">2 MB</option>
                         <option value="3">3 MB</option>
@@ -2182,9 +2183,11 @@
             cartMode: 'gba',
             writePathMode: 'psram',
             pipelineEraseMode: 'smart',
-            psramWindowMb: 4,
+            psramWindowMb: 0,
             mbc5ChunkKb: 16,
             dumpChunkKb: 64,
+            gbcVoltage: '3v3',
+            gbaFixedEraseWindow: true,
             baconSpiConfiguredHz: 0,
             baconSpiActualHz: 0,
             romFile: null,
@@ -2196,7 +2199,8 @@
             pendingDumpName: '',
             pendingDumpAutoDownloaded: false,
             lastBurnMessage: '',
-            burnCancelPending: false
+            burnCancelPending: false,
+            cartProbeData: null
         };
 
         // 页面渲染函数
@@ -2301,6 +2305,9 @@
                 if (storageReq.status === 'fulfilled' && storageReq.value.ok) {
                     const storageData = await storageReq.value.json();
                     state.usbPassThrough = storageData.usb_passthrough_enabled;
+                }
+                if (state.currentPage === 'burner' && !state.burnStatusInterval) {
+                    await refreshBurnStatusSnapshot();
                 }
             } catch (error) {
                 console.error('Status refresh failed:', error);
@@ -2727,6 +2734,7 @@
                             <div class="setting-item" style="flex: 1; min-width: 220px;" id="psramWindowMbSection">
                                 <label class="setting-label">PSRAM 流水窗口 (MB)</label>
                                 <select class="input" id="psramWindowMbSelect" onchange="setPsramWindowMb(this.value)">
+                                    <option value="0">Auto</option>
                                     <option value="1">1 MB</option>
                                     <option value="2">2 MB</option>
                                     <option value="3">3 MB</option>
@@ -2869,6 +2877,17 @@
                     </div>
                 </div>
 
+                <div class="card animate-in">
+                    <div class="card-header">
+                        <h3 class="card-title">🧪 卡带探测</h3>
+                    </div>
+                    <div style="padding: 16px;">
+                        <div id="cartProbeInfo" style="padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.7;">
+                            尚未探测。点击“读取 ID”后，这里会显示当前卡带分析结果。
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card animate-in" id="burnStatusCard" style="display: none;">
                     <div class="card-header">
                         <h3 class="card-title">📊 烧录状态</h3>
@@ -2934,19 +2953,22 @@
                 </div>
             `;
 
-            state.cartMode = 'gba';
+            state.cartMode = state.cartMode === 'mbc5' ? 'mbc5' : 'gba';
             updateCartModeUI();
             setPipelineEraseMode(state.pipelineEraseMode || 'smart');
             setWritePathMode(state.writePathMode || 'psram');
-            setPsramWindowMb(state.psramWindowMb || 4);
+            setPsramWindowMb(state.psramWindowMb ?? 0);
             setMbc5ChunkKb(state.mbc5ChunkKb || 16);
             setDumpChunkKb(state.dumpChunkKb || 64);
             setupBurnerDragDrop();
+            updateCartProbeInfo(state.cartProbeData || state.burnStatus, state.cartMode);
+            refreshBurnStatusSnapshot();
         }
 
         function setCartMode(mode) {
             state.cartMode = mode;
             updateCartModeUI();
+            updateCartProbeInfo(state.cartProbeData || state.burnStatus, state.cartMode);
             addBurnLog('切换至 ' + (mode === 'gba' ? 'GBA' : 'MBC5') + ' 模式', 'info');
         }
 
@@ -2972,6 +2994,7 @@
             const psramSelect = document.getElementById('psramWindowMbSelect');
             const fileActionPsramSelect = document.getElementById('fileActionPsramMbSelect');
             const psramMb = getPsramWindowMb();
+            const psramLabel = psramMb === 0 ? 'Auto' : `${psramMb}MB`;
             const pipelineEraseMode = getPipelineEraseMode();
             const pipelineEnabled = effective === 'pipeline';
             const psramEnabled = effective === 'psram';
@@ -3015,7 +3038,7 @@
                             ? '流水模式会对每个扇区先擦再写，不跳过空白扇区。'
                             : '流水模式会按扇区边擦边写，并智能跳过看起来已空白的扇区。';
                 } else if (effective === 'psram') {
-                    hint.textContent = `PSRAM 模式当前按 ${psramMb}MB 循环：先搬运到 PSRAM，再写卡带；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}；这是当前默认推荐模式。`;
+                    hint.textContent = `PSRAM 模式当前按 ${psramLabel} 循环：先搬运到 PSRAM，再写卡带；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}；这是当前默认推荐模式。`;
                 } else {
                     hint.textContent = `直接模式不做流水 staging，按 TF -> 卡带直接写入；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}。`;
                 }
@@ -3066,25 +3089,25 @@
         }
 
         function setPsramWindowMb(value) {
-            const allowed = [1, 2, 3, 4, 5, 6, 7, 8];
+            const allowed = [0, 1, 2, 3, 4, 5, 6, 7, 8];
             let mb = parseInt(value, 10);
-            const prev = state.psramWindowMb || 4;
+            const prev = Number.isFinite(parseInt(state.psramWindowMb, 10)) ? parseInt(state.psramWindowMb, 10) : 0;
 
             if (!Number.isFinite(mb) || !allowed.includes(mb)) {
-                mb = 4;
+                mb = 0;
             }
             state.psramWindowMb = mb;
             updateWritePathControls(state.cartMode || 'gba');
 
             if (prev !== mb) {
-                addBurnLog(`PSRAM 流水窗口已设为 ${mb}MB`, 'info');
+                addBurnLog(`PSRAM 流水窗口已设为 ${mb === 0 ? 'Auto' : `${mb}MB`}`, 'info');
             }
         }
 
         function getPsramWindowMb() {
             const mb = parseInt(state.psramWindowMb, 10);
-            if (!Number.isFinite(mb) || mb < 1 || mb > 8) {
-                return 4;
+            if (!Number.isFinite(mb) || mb < 0 || mb > 8) {
+                return 0;
             }
             return mb;
         }
@@ -3142,6 +3165,278 @@
                 return 64;
             }
             return kb;
+        }
+
+        function parseApiBoolean(value, fallback = false) {
+            if (typeof value === 'boolean') {
+                return value;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value !== 0;
+            }
+            if (typeof value === 'string') {
+                const normalized = value.trim().toLowerCase();
+                if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+                    return true;
+                }
+                if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+                    return false;
+                }
+            }
+            return fallback;
+        }
+
+        function formatCartModeLabel(mode) {
+            return String(mode || '').toLowerCase() === 'mbc5' ? 'GB/GBC (MBC5)' : 'GBA';
+        }
+
+        function formatCartProbeBufferLabel(bytes) {
+            const value = Number(bytes || 0);
+            if (!Number.isFinite(value) || value <= 0) {
+                return '不支持';
+            }
+            return `${value} B`;
+        }
+
+        function formatGbaSaveTypeLabel(saveType, detected) {
+            if (!detected) {
+                return 'unknown';
+            }
+
+            switch (String(saveType || '').toLowerCase()) {
+                case 'sram':
+                    return 'SRAM';
+                case 'eeprom':
+                    return 'EEPROM';
+                case 'flash':
+                    return 'FLASH';
+                case 'batteryless':
+                    return 'BATTERYLESS';
+                default:
+                    return 'UNKNOWN';
+            }
+        }
+
+        function formatGbaSramPatchLabel(kind, scanned, detected) {
+            if (!scanned) {
+                return 'Not scanned';
+            }
+            if (!detected) {
+                return 'Not patched';
+            }
+
+            switch (String(kind || '').toLowerCase()) {
+                case 'gbata':
+                    return 'GBATA SRAM patched';
+                case 'flash1m_repro':
+                    return 'Flash1M Repro SRAM patched';
+                case 'none':
+                    return 'Patched';
+                default:
+                    return 'Patched';
+            }
+        }
+
+        function formatGbaD0D1Label(known, swapped) {
+            if (!known) {
+                return 'unknown';
+            }
+            return swapped ? 'swapped' : 'normal';
+        }
+
+        function normalizeCartProbeData(data, modeOverride) {
+            if (!data || typeof data !== 'object') {
+                return null;
+            }
+
+            if (data._normalizedProbe === true) {
+                return data;
+            }
+
+            if (
+                Object.prototype.hasOwnProperty.call(data, 'probe_valid') ||
+                Object.prototype.hasOwnProperty.call(data, 'probe_mode') ||
+                Object.prototype.hasOwnProperty.call(data, 'probe_id') ||
+                Object.prototype.hasOwnProperty.call(data, 'probe_chip_name')
+            ) {
+                const probeValid = parseApiBoolean(data.probe_valid, false);
+                if (!probeValid) {
+                    return null;
+                }
+
+                return {
+                    _normalizedProbe: true,
+                    valid: true,
+                    mode: String(data.probe_mode || modeOverride || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba',
+                    id: String(data.probe_id || '').trim(),
+                    chip: String(data.probe_chip_name || '').trim(),
+                    mapper: '',
+                    cmdMode: '',
+                    cmdDataLane: '',
+                    cfiOk: parseApiBoolean(data.probe_cfi_ok, false),
+                    deviceSize: Number(data.probe_device_size || 0),
+                    sectorSize: Number(data.probe_sector_size || 0),
+                    bufferWrite: Number(data.probe_buffer_write_bytes || 0),
+                    idLooksLikeRomHeader: false,
+                    gbaMulti: parseApiBoolean(data.probe_gba_multi, false),
+                    gbaForceMulti: parseApiBoolean(data.probe_gba_force_multi, false),
+                    gbaD0D1Known: parseApiBoolean(data.probe_gba_d0d1_known, false),
+                    gbaD0D1Swapped: parseApiBoolean(data.probe_gba_d0d1_swapped, false),
+                    gbaSaveType: String(data.probe_gba_save_type || 'unknown').toLowerCase(),
+                    gbaSaveSize: Number(data.probe_gba_save_size || 0),
+                    gbaSaveDetected: parseApiBoolean(data.probe_gba_save_detected, false),
+                    gbaSramPatchKind: String(data.probe_gba_sram_patch_kind || 'none').toLowerCase(),
+                    gbaSramPatchScanned: parseApiBoolean(data.probe_gba_sram_patch_scanned, false),
+                    gbaSramPatchDetected: parseApiBoolean(data.probe_gba_sram_patch_detected, false)
+                };
+            }
+
+            const actualMode = String(data.mode || modeOverride || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const hasDirectProbe =
+                Object.prototype.hasOwnProperty.call(data, 'id') ||
+                Object.prototype.hasOwnProperty.call(data, 'chip') ||
+                Object.prototype.hasOwnProperty.call(data, 'mapper');
+
+            if (!hasDirectProbe) {
+                return null;
+            }
+
+            return {
+                _normalizedProbe: true,
+                valid: true,
+                mode: actualMode,
+                id: String(data.id || '').trim(),
+                chip: String(data.chip || '').trim(),
+                mapper: String(data.mapper || '').trim(),
+                cmdMode: String(data.cmd_mode || '').trim(),
+                cmdDataLane: String(data.cmd_data_lane || '').trim(),
+                cfiOk: parseApiBoolean(data.cfi_ok, false),
+                deviceSize: Number(data.device_size || 0),
+                sectorSize: Number(data.sector_size || 0),
+                bufferWrite: Number(data.buffer_write || 0),
+                idLooksLikeRomHeader: parseApiBoolean(data.id_looks_like_rom_header, false),
+                gbaMulti: null,
+                gbaForceMulti: null,
+                gbaD0D1Known: parseApiBoolean(data.d0d1_known, false),
+                gbaD0D1Swapped: parseApiBoolean(data.d0d1_swapped, false),
+                gbaSaveType: String(data.gba_save_type || 'unknown').toLowerCase(),
+                gbaSaveSize: Number(data.gba_save_size || 0),
+                gbaSaveDetected: parseApiBoolean(data.gba_save_detected, false),
+                gbaSramPatchKind: String(data.gba_sram_patch_kind || 'none').toLowerCase(),
+                gbaSramPatchScanned: parseApiBoolean(data.gba_sram_patch_scanned, actualMode === 'gba'),
+                gbaSramPatchDetected: parseApiBoolean(data.gba_sram_patch_detected, false)
+            };
+        }
+
+        function mergeCartProbeData(previous, next) {
+            if (!next || next._normalizedProbe !== true) {
+                return previous && previous._normalizedProbe === true ? previous : null;
+            }
+            if (!previous || previous._normalizedProbe !== true) {
+                return next;
+            }
+            if (previous.mode !== next.mode) {
+                return next;
+            }
+            if (previous.id && next.id && previous.id !== next.id) {
+                return next;
+            }
+
+            const merged = { ...previous };
+            Object.keys(next).forEach((key) => {
+                const value = next[key];
+                if (value === undefined || value === null) {
+                    return;
+                }
+                if (typeof value === 'string' && value === '') {
+                    return;
+                }
+                merged[key] = value;
+            });
+            merged._normalizedProbe = true;
+            return merged;
+        }
+
+        function formatCartProbeData(data, modeOverride) {
+            const probe = normalizeCartProbeData(data, modeOverride);
+            const selectedMode = String(modeOverride || (probe && probe.mode) || state.cartMode || 'gba').toLowerCase() === 'mbc5'
+                ? 'mbc5'
+                : 'gba';
+            const lines = [];
+
+            if (!probe || !probe.valid) {
+                return `尚未探测当前 ${formatCartModeLabel(selectedMode)} 卡带。点击“读取 ID”后，这里会显示当前卡带分析结果。`;
+            }
+
+            if (probe.mode !== selectedMode) {
+                lines.push(`当前页面: ${formatCartModeLabel(selectedMode)}`);
+                lines.push(`最近一次探测: ${formatCartModeLabel(probe.mode)}（显示缓存结果）`);
+            } else {
+                lines.push(`卡带模式: ${formatCartModeLabel(probe.mode)}`);
+            }
+
+            if (probe.mapper) {
+                lines.push(`Mapper: ${String(probe.mapper).toUpperCase()}`);
+            }
+            lines.push(`芯片: ${probe.chip || '未知'}`);
+            lines.push(`ID: ${probe.id || '--'}`);
+            lines.push(`CFI: ${probe.cfiOk ? 'ok' : 'fallback'}`);
+
+            if (probe.deviceSize > 0) {
+                lines.push(`容量: ${formatSize(probe.deviceSize)}`);
+            }
+            if (probe.sectorSize > 0 || probe.bufferWrite >= 0) {
+                lines.push(`扇区/缓冲: ${probe.sectorSize > 0 ? formatSize(probe.sectorSize) : '--'} / ${formatCartProbeBufferLabel(probe.bufferWrite)}`);
+            }
+
+            if (probe.mode === 'gba') {
+                if (probe.cmdMode) {
+                    lines.push(`命令地址模式: ${probe.cmdMode}`);
+                }
+                if (probe.cmdDataLane) {
+                    lines.push(`命令数据线: ${probe.cmdDataLane}`);
+                }
+                if (typeof probe.gbaMulti === 'boolean' || typeof probe.gbaForceMulti === 'boolean') {
+                    let mappingText = '线性单卡';
+                    if (probe.gbaForceMulti) {
+                        mappingText = '强制合卡映射';
+                    } else if (probe.gbaMulti) {
+                        mappingText = '合卡/分银行映射';
+                    }
+                    lines.push(`映射: ${mappingText}`);
+                }
+                lines.push(`D0/D1: ${formatGbaD0D1Label(probe.gbaD0D1Known, probe.gbaD0D1Swapped)}`);
+                lines.push(
+                    `存档类型: ${formatGbaSaveTypeLabel(probe.gbaSaveType, probe.gbaSaveDetected)}` +
+                    (probe.gbaSaveDetected && probe.gbaSaveSize > 0 ? ` (${formatSize(probe.gbaSaveSize)})` : '')
+                );
+                lines.push(
+                    `SRAM Patch: ${formatGbaSramPatchLabel(
+                        probe.gbaSramPatchKind,
+                        probe.gbaSramPatchScanned,
+                        probe.gbaSramPatchDetected
+                    )}`
+                );
+                if (probe.idLooksLikeRomHeader) {
+                    lines.push('警告: 当前返回值像普通 ROM 数据，可能未进入 ID/CFI 命令模式');
+                }
+            }
+
+            return lines.map((line) => escapeHtml(line)).join('<br>');
+        }
+
+        function updateCartProbeInfo(data, modeOverride) {
+            const infoEl = document.getElementById('cartProbeInfo');
+            if (!infoEl) {
+                return;
+            }
+
+            const normalized = normalizeCartProbeData(data, modeOverride);
+            if (normalized) {
+                state.cartProbeData = mergeCartProbeData(state.cartProbeData, normalized);
+            }
+
+            infoEl.innerHTML = formatCartProbeData(state.cartProbeData, modeOverride);
         }
 
         function updateCartModeUI() {
@@ -3420,6 +3715,12 @@
         }
 
         function logCartIdResponse(data, mode) {
+            const probeData = normalizeCartProbeData(data, mode);
+            if (probeData) {
+                state.cartProbeData = mergeCartProbeData(state.cartProbeData, probeData);
+                updateCartProbeInfo(state.cartProbeData, state.cartMode);
+            }
+
             addBurnLog('后端模式: ' + (data.mode || mode), 'info');
             if (data.mapper) {
                 addBurnLog('Mapper: ' + String(data.mapper).toUpperCase(), 'info');
@@ -3449,6 +3750,29 @@
                     'info');
             } else {
                 addBurnLog('CFI 读取失败，容量信息不可用', 'warning');
+            }
+
+            if (probeData && probeData.mode === 'gba') {
+                addBurnLog('D0/D1: ' + formatGbaD0D1Label(probeData.gbaD0D1Known, probeData.gbaD0D1Swapped), probeData.gbaD0D1Swapped ? 'warning' : 'info');
+
+                if (probeData.gbaSaveDetected) {
+                    const saveLabel = formatGbaSaveTypeLabel(probeData.gbaSaveType, true);
+                    const saveSizeText = probeData.gbaSaveSize > 0 ? ` (${formatSize(probeData.gbaSaveSize)})` : '';
+                    addBurnLog('GBA 存档类型: ' + saveLabel + saveSizeText, 'success');
+                } else {
+                    addBurnLog('GBA 存档类型: unknown', 'warning');
+                }
+
+                if (probeData.gbaSramPatchScanned) {
+                    addBurnLog(
+                        'SRAM Patch: ' + formatGbaSramPatchLabel(
+                            probeData.gbaSramPatchKind,
+                            probeData.gbaSramPatchScanned,
+                            probeData.gbaSramPatchDetected
+                        ),
+                        probeData.gbaSramPatchDetected ? 'warning' : 'info'
+                    );
+                }
             }
         }
 
@@ -5154,6 +5478,22 @@
                                 </select>
                                 <span class="setting-desc">关电后与上目标电压后的等待时间</span>
                             </div>
+                            <div class="setting-item">
+                                <label class="setting-label" for="burnGbcVoltage">GBC 电压</label>
+                                <select id="burnGbcVoltage" class="input">
+                                    <option value="3v3">3.3V</option>
+                                    <option value="5v">5V</option>
+                                </select>
+                                <span class="setting-desc">MBC5/GB/GBC 卡带默认供电电压</span>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label" for="burnGbaFixedEraseWindow">GBA 固定擦除窗口</label>
+                                <select id="burnGbaFixedEraseWindow" class="input">
+                                    <option value="true">开启</option>
+                                    <option value="false">关闭</option>
+                                </select>
+                                <span class="setting-desc">控制 GBA 擦除阶段是否固定使用 4MB 擦除窗口</span>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="applyBurnCoreConfig()">✓ 应用</button>
@@ -6711,9 +7051,30 @@
             }, 500);
         }
 
+        async function refreshBurnStatusSnapshot() {
+            if (state.currentPage !== 'burner') {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) {
+                    return;
+                }
+                const data = await response.json();
+                updateBurnStatus(data);
+            } catch (error) {
+                console.error('Burn status snapshot error:', error);
+            }
+        }
+
         function updateBurnStatus(data) {
             const prevState = state.burnStatus ? state.burnStatus.state : null;
             state.burnStatus = data;
+            const incomingProbe = normalizeCartProbeData(data, state.cartMode);
+            if (incomingProbe) {
+                state.cartProbeData = mergeCartProbeData(state.cartProbeData, incomingProbe);
+            }
             const activeOperation = state.activeBurnOperation;
             const currentMessage = translateBurnMessage(data.message || '');
             const progressPercent = getBurnProgressPercent(data);
@@ -6793,6 +7154,11 @@
             const dumpWaitTimeText = dumpWaitTimeMs > 0 ? formatTaskTimeMs(dumpWaitTimeMs) : '--';
             const dumpFinalizeTimeText = dumpFinalizeTimeMs > 0 ? formatTaskTimeMs(dumpFinalizeTimeMs) : '--';
             const cancelRequested = Boolean(data.cancel_requested);
+            const hasTaskData =
+                String(data.state || 'idle') !== 'idle' ||
+                Number(data.total || 0) > 0 ||
+                Number(data.processed || 0) > 0 ||
+                !!state.activeBurnOperation;
             let displayProgressPercent = progressPercent;
             let displayProgressMessage = progressMessage;
 
@@ -6825,8 +7191,21 @@
 
             setBurnCancelUi(cancelRequested && (data.state === 'receiving' || data.state === 'burning'));
 
+            const burnStatusCard = document.getElementById('burnStatusCard');
+            if (burnStatusCard) {
+                burnStatusCard.style.display = hasTaskData ? 'block' : 'none';
+            }
+
             const statusGrid = document.getElementById('burnStatusGrid');
             if (statusGrid) {
+                const probeSummary = state.cartProbeData && state.cartProbeData._normalizedProbe === true
+                    ? [
+                        `模式: ${formatCartModeLabel(state.cartProbeData.mode)}`,
+                        `芯片: ${state.cartProbeData.chip || '未知'}`,
+                        `ID: ${state.cartProbeData.id || '--'}`
+                    ].join('<br>')
+                    : '尚未探测';
+
                 statusGrid.innerHTML = `
                     <div class="status-card">
                         <div class="status-label">任务概览</div>
@@ -6896,8 +7275,16 @@
                         </div>
                     </div>
                     ` : ''}
+                    <div class="status-card">
+                        <div class="status-label">最近探测</div>
+                        <div class="status-value-large" style="font-size: 14px; line-height: 1.6; word-break: break-all;">
+                            ${probeSummary}
+                        </div>
+                    </div>
                 `;
             }
+
+            updateCartProbeInfo(state.cartProbeData || data, state.cartMode);
 
             updateBurnProgress(
                 displayProgressPercent,
@@ -7318,11 +7705,26 @@
             const tf = (data && data.tf) ? data.tf : 'auto';
             const psram = (data && data.psram) ? data.psram : 'auto';
             const powerSettleMs = Number(data && data.power_settle_ms ? data.power_settle_ms : 100);
+            const writePath = (data && data.write_path) ? data.write_path : 'psram';
+            const pipelineErase = (data && (data.pipeline_erase || data.erase_mode)) ? (data.pipeline_erase || data.erase_mode) : 'smart';
+            const psramMb = (data && data.psram_mb !== undefined) ? String(data.psram_mb) : '0';
+            const psramLabel = (psramMb === '0' || psramMb.toLowerCase() === 'auto') ? 'Auto' : `${psramMb} MB`;
+            const mbc5ChunkKb = Number(data && data.mbc5_chunk_kb ? data.mbc5_chunk_kb : 16);
+            const dumpChunkKb = Number(data && data.dump_chunk_kb ? data.dump_chunk_kb : 64);
+            const gbcVoltage = (data && data.gbc_voltage) ? String(data.gbc_voltage).toUpperCase() : '3V3';
+            const gbaFixedEraseWindow = parseApiBoolean(data && data.gba_fixed_erase_window, true);
             return [
                 `擦除核心: ${erase}`,
                 `读 TF 核心: ${tf}`,
                 `读写 PSRAM 核心: ${psram}`,
-                `切压延时: ${powerSettleMs} ms`
+                `切压延时: ${powerSettleMs} ms`,
+                `默认烧录路径: ${writePath}`,
+                `擦除策略: ${pipelineErase}`,
+                `PSRAM 窗口: ${psramLabel}`,
+                `MBC5 写入块: ${mbc5ChunkKb} KB`,
+                `ROM 导出块: ${dumpChunkKb} KB`,
+                `GBC 电压: ${gbcVoltage}`,
+                `GBA 固定擦除窗口: ${gbaFixedEraseWindow ? '开启' : '关闭'}`
             ].join('\n');
         }
 
@@ -7332,7 +7734,9 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl) return;
+            const gbcVoltageEl = document.getElementById('burnGbcVoltage');
+            const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbcVoltageEl || !gbaFixedEraseWindowEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -7347,6 +7751,15 @@
                 tfEl.value = (data.tf || 'auto').toLowerCase();
                 psramEl.value = (data.psram || 'auto').toLowerCase();
                 settleEl.value = String(data.power_settle_ms || 100);
+                setWritePathMode(data.write_path || 'psram');
+                setPipelineEraseMode(data.pipeline_erase || data.erase_mode || 'smart');
+                setPsramWindowMb(data.psram_mb !== undefined ? data.psram_mb : 0);
+                setMbc5ChunkKb(data.mbc5_chunk_kb || 16);
+                setDumpChunkKb(data.dump_chunk_kb || 64);
+                state.gbcVoltage = String(data.gbc_voltage || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
+                state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, true);
+                gbcVoltageEl.value = state.gbcVoltage;
+                gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 statusEl.textContent = formatBurnCoreStatusLines(data);
             } catch (error) {
                 statusEl.textContent = '读取失败: ' + error.message;
@@ -7359,12 +7772,21 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl) return;
+            const gbcVoltageEl = document.getElementById('burnGbcVoltage');
+            const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbcVoltageEl || !gbaFixedEraseWindowEl) return;
 
             const erase = String(eraseEl.value || 'auto').toLowerCase();
             const tf = String(tfEl.value || 'auto').toLowerCase();
             const psram = String(psramEl.value || 'auto').toLowerCase();
             const powerSettleMs = String(settleEl.value || '100');
+            const writePath = String(state.writePathMode || 'psram').toLowerCase();
+            const pipelineErase = String(getPipelineEraseMode() || 'smart').toLowerCase();
+            const psramMb = String(getPsramWindowMb());
+            const mbc5ChunkKb = String(getMbc5ChunkKb());
+            const dumpChunkKb = String(getDumpChunkKb());
+            const gbcVoltage = String(gbcVoltageEl.value || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
+            const gbaFixedEraseWindow = parseApiBoolean(gbaFixedEraseWindowEl.value, true) ? 'true' : 'false';
             statusEl.textContent = '应用中...';
 
             try {
@@ -7373,6 +7795,13 @@
                 query.set('tf', tf);
                 query.set('psram', psram);
                 query.set('power_settle_ms', powerSettleMs);
+                query.set('write_path', writePath);
+                query.set('pipeline_erase', pipelineErase);
+                query.set('psram_mb', psramMb);
+                query.set('mbc5_chunk_kb', mbc5ChunkKb);
+                query.set('dump_chunk_kb', dumpChunkKb);
+                query.set('gbc_voltage', gbcVoltage);
+                query.set('gba_fixed_erase_window', gbaFixedEraseWindow);
                 const response = await apiCall(`/api/burn/core_config?${query.toString()}`, { method: 'POST' });
                 const data = await readApiPayload(response);
                 if (!response.ok || !data.ok) {
@@ -7386,8 +7815,17 @@
                 tfEl.value = (data.tf || 'auto').toLowerCase();
                 psramEl.value = (data.psram || 'auto').toLowerCase();
                 settleEl.value = String(data.power_settle_ms || 100);
+                setWritePathMode(data.write_path || 'psram');
+                setPipelineEraseMode(data.pipeline_erase || data.erase_mode || 'smart');
+                setPsramWindowMb(data.psram_mb !== undefined ? data.psram_mb : 0);
+                setMbc5ChunkKb(data.mbc5_chunk_kb || 16);
+                setDumpChunkKb(data.dump_chunk_kb || 64);
+                state.gbcVoltage = String(data.gbc_voltage || gbcVoltage).toLowerCase() === '5v' ? '5v' : '3v3';
+                state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, parseApiBoolean(gbaFixedEraseWindow, true));
+                gbcVoltageEl.value = state.gbcVoltage;
+                gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 statusEl.textContent = formatBurnCoreStatusLines(data);
-                showToast('烧录核心分配已更新', 'success');
+                showToast('烧录配置已更新', 'success');
             } catch (error) {
                 statusEl.textContent = '设置失败: ' + error.message;
                 showToast('核心分配设置失败: ' + error.message, 'error');

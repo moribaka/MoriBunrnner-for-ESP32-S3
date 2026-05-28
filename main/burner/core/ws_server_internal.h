@@ -65,6 +65,7 @@
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
 #define BURN_ERASE_ALWAYS_DEFAULT 0U
+#define BURN_ERASE_PROBE_BYTES 512U
 #define BURN_BLANK_SAMPLE_BYTES 2U
 #define BURN_BLANK_SAMPLE_POINTS 4U
 #define BURN_MBC5_RAM_CHUNK_BYTES 4096U
@@ -101,7 +102,7 @@
 #define BURNER_MBC5_TITLE_LEN 16u
 #define TF_IO_CHUNK_SIZE 2048
 #define BURN_TF_STDIO_BUFFER_BYTES (128U * 1024U)
-#define WEB_HTTPD_STACK_SIZE 8192
+#define WEB_HTTPD_STACK_SIZE 12288
 #define WEB_ROOT_DIR_REL ".web"
 #define WEB_MAIN_FILE_REL ".web/main.html"
 #define WEB_FILE_PATH_LEN_MAX 320
@@ -268,6 +269,12 @@ typedef enum {
     BURNER_CART_MODE_GBA,
 } burner_cart_mode_t;
 
+typedef enum {
+    BURNER_GB_MAPPER_UNKNOWN = 0,
+    BURNER_GB_MAPPER_MBC3,
+    BURNER_GB_MAPPER_MBC5,
+} burner_gb_mapper_t;
+
 typedef struct {
     burner_cart_mode_t cart_mode;
     bool cfi_ok;
@@ -313,6 +320,7 @@ typedef struct {
 } burner_core_config_t;
 
 #define BURNER_PROBE_CHIP_NAME_LEN 48
+#define BURNER_PROBE_MAPPER_NAME_LEN 24
 
 typedef struct {
     burner_state_t state;
@@ -385,6 +393,7 @@ typedef struct {
     uint16_t probe_buffer_write_bytes;
     uint8_t probe_id[8];
     char probe_chip_name[BURNER_PROBE_CHIP_NAME_LEN];
+    char probe_mapper_name[BURNER_PROBE_MAPPER_NAME_LEN];
     char rom_name[BURNER_FILE_NAME_LEN];
     char rom_path[BURNER_FILE_PATH_LEN];
     char message[96];
@@ -570,6 +579,7 @@ extern burner_write_path_t s_burn_write_path_default;
 extern uint32_t s_burn_psram_window_mb;
 extern uint32_t s_burn_mbc5_chunk_kb;
 extern uint32_t s_burn_dump_chunk_kb;
+extern burner_gb_mapper_t s_gb_mapper_override_kind;
 extern TickType_t s_bacon_last_active_tick;
 extern bool s_bacon_idle_powered_down;
 extern burner_cart_ctx_t s_cart_ctx;
@@ -774,7 +784,8 @@ void burner_status_set_probe_info(
     bool gba_force_multi,
     bool gba_d0d1_known,
     bool gba_d0d1_swapped,
-    const char *chip_name);
+    const char *chip_name,
+    const char *mapper_name);
 void burner_status_set_gba_save_probe(
     burner_gba_save_type_t save_type,
     uint32_t save_size,

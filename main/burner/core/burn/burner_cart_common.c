@@ -222,11 +222,11 @@ const char *burner_gb_mapper_name(burner_gb_mapper_t mapper)
 {
     switch (mapper) {
         case BURNER_GB_MAPPER_MBC3:
-            return "mbc3";
+            return "MBC3";
         case BURNER_GB_MAPPER_MBC5:
-            return "mbc5";
+            return "MBC5";
         default:
-            return "unknown";
+            return "UNKNOWN";
     }
 }
 
@@ -700,7 +700,11 @@ static void burner_mbc5_addr_to_program_window(
     uint32_t bank_off = flash_addr % BURN_MBC5_ROM_BANK_BYTES;
     uint16_t cart_addr = (uint16_t)(0x4000u + bank_off);
 
-    if (s_gb_mapper_kind == BURNER_GB_MAPPER_MBC3 && bank == 0u) {
+    /*
+     * GB bank 0 always lives in the fixed 0x0000-0x3FFF window.
+     * The switchable 0x4000-0x7FFF window starts at bank 1.
+     */
+    if (bank == 0u) {
         cart_addr = (uint16_t)bank_off;
     }
 

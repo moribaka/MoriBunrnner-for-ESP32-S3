@@ -8,9 +8,12 @@ static void burner_readid_trace_log_u8(
     int64_t *last_us);
 static void burner_readid_trace_end(const char *name, int64_t start_us, esp_err_t err);
 static esp_err_t burner_bacon_gbc_write(uint16_t addr, const uint8_t *buf, size_t len);
+static esp_err_t burner_bacon_gbc_read(uint16_t addr, uint8_t *buf, size_t len);
 static esp_err_t burner_bacon_gbc_read_u8(uint16_t addr, uint8_t *value);
 static bool burner_buffer_all_equal(const uint8_t *left, const uint8_t *right, size_t len);
 static esp_err_t burner_bacon_mbc5_switch_bank(uint16_t bank);
+static esp_err_t burner_bacon_gb_probe_write_low(uint8_t bank);
+static esp_err_t burner_bacon_gb_probe_read_switch_sample(uint8_t *sample, size_t len);
 static bool burner_mbc5_probe_load_entry_geometry(
     const uint8_t id[4],
     const burner_nor_entry_t *entry,
@@ -25,6 +28,12 @@ static bool burner_mbc5_geometry_should_prefer_id(
     const burner_nor_geometry_t *id_geometry,
     uint32_t id_device_size,
     uint32_t id_sector_size);
+
+enum {
+    GB_FIXED_SAMPLE_ADDR = 0x0000u,
+    GB_SWITCH_SAMPLE_ADDR = 0x4000u,
+    GB_MAPPER_SAMPLE_LEN = 64u,
+};
 
 void burner_build_output_timestamp(char *buf, size_t buf_len)
 {
@@ -120,107 +129,80 @@ FILE *burner_open_mbc5_verify_log(
 
 static esp_err_t burner_bacon_gb_detect_mapper(burner_gb_mapper_t *mapper_out)
 {
-    static const uint16_t sample_addrs[] = {
-        0x4000u,
-        0x4100u,
-        0x4300u,
-        0x47C0u,
-    };
-    uint8_t bank0_sample[sizeof(sample_addrs)] = {0};
-    uint8_t bank1_sample[sizeof(sample_addrs)] = {0};
-    uint8_t bank81_sample[sizeof(sample_addrs)] = {0};
-    bool bank0_blank = false;
-    bool bank1_blank = false;
-    bool bank81_blank = false;
-    bool bank0_eq_bank1;
-    bool bank1_eq_bank81;
+    uint8_t fixed_sample[GB_MAPPER_SAMPLE_LEN] = {0};
+    uint8_t switch_sample[GB_MAPPER_SAMPLE_LEN] = {0};
+    bool fixed_blank = false;
+    bool switch_blank = false;
+    bool eq = false;
     esp_err_t err = ESP_OK;
 
     if (mapper_out == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    *mapper_out = BURNER_GB_MAPPER_UNKNOWN;
+    *mapper_out = BURNER_GB_MAPPER_MBC5;
 
-    err = burner_bacon_mbc5_switch_bank(0u);
+    err = burner_bacon_gb_probe_write_low(0u);
     if (err != ESP_OK) {
         return err;
     }
-    s_cart_ctx.current_bank = 0u;
-    for (size_t i = 0u; i < sizeof(sample_addrs) / sizeof(sample_addrs[0]); ++i) {
-        err = burner_bacon_gbc_read_u8(sample_addrs[i], &bank0_sample[i]);
-        if (err != ESP_OK) {
-            return err;
-        }
-    }
-
-    err = burner_bacon_mbc5_switch_bank(1u);
+    err = burner_bacon_gbc_read(GB_FIXED_SAMPLE_ADDR, fixed_sample, sizeof(fixed_sample));
     if (err != ESP_OK) {
         return err;
     }
-    s_cart_ctx.current_bank = 1u;
-    for (size_t i = 0u; i < sizeof(sample_addrs) / sizeof(sample_addrs[0]); ++i) {
-        err = burner_bacon_gbc_read_u8(sample_addrs[i], &bank1_sample[i]);
-        if (err != ESP_OK) {
-            return err;
-        }
-    }
-
-    err = burner_bacon_mbc5_switch_bank(0x81u);
-    if (err != ESP_OK) {
-        return err;
-    }
-    s_cart_ctx.current_bank = 0x81u;
-    for (size_t i = 0u; i < sizeof(sample_addrs) / sizeof(sample_addrs[0]); ++i) {
-        err = burner_bacon_gbc_read_u8(sample_addrs[i], &bank81_sample[i]);
-        if (err != ESP_OK) {
-            return err;
-        }
-    }
-
-    err = burner_buffer_all_ff(bank0_sample, sizeof(bank0_sample), &bank0_blank);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_buffer_all_ff(bank1_sample, sizeof(bank1_sample), &bank1_blank);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_buffer_all_ff(bank81_sample, sizeof(bank81_sample), &bank81_blank);
+    err = burner_bacon_gb_probe_read_switch_sample(switch_sample, sizeof(switch_sample));
     if (err != ESP_OK) {
         return err;
     }
 
-    bank0_eq_bank1 = burner_buffer_all_equal(bank0_sample, bank1_sample, sizeof(bank0_sample));
-    bank1_eq_bank81 = burner_buffer_all_equal(bank1_sample, bank81_sample, sizeof(bank1_sample));
-    if (!bank0_blank && !bank1_blank && bank0_eq_bank1) {
-        *mapper_out = BURNER_GB_MAPPER_MBC3;
-    } else if (!bank1_blank && !bank81_blank && bank1_eq_bank81) {
-        *mapper_out = BURNER_GB_MAPPER_MBC3;
-    } else {
+    err = burner_buffer_all_ff(fixed_sample, sizeof(fixed_sample), &fixed_blank);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_buffer_all_ff(switch_sample, sizeof(switch_sample), &switch_blank);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    eq = burner_buffer_all_equal(fixed_sample, switch_sample, sizeof(fixed_sample));
+    if (eq) {
         *mapper_out = BURNER_GB_MAPPER_MBC5;
+    } else {
+        *mapper_out = BURNER_GB_MAPPER_MBC3;
     }
 
     ESP_LOGI(
         BURNER_TAG,
-        "GB mapper detect: bank0=%02X-%02X-%02X-%02X bank1=%02X-%02X-%02X-%02X bank81=%02X-%02X-%02X-%02X blank=%d/%d/%d result=%s",
-        bank0_sample[0],
-        bank0_sample[1],
-        bank0_sample[2],
-        bank0_sample[3],
-        bank1_sample[0],
-        bank1_sample[1],
-        bank1_sample[2],
-        bank1_sample[3],
-        bank81_sample[0],
-        bank81_sample[1],
-        bank81_sample[2],
-        bank81_sample[3],
-        bank0_blank ? 1 : 0,
-        bank1_blank ? 1 : 0,
-        bank81_blank ? 1 : 0,
+        "GB mapper detect: bank0 fixed=%04X switch=%04X len=%u fixed=%02X-%02X-%02X-%02X switch=%02X-%02X-%02X-%02X eq=%d blank=%d/%d result=%s",
+        GB_FIXED_SAMPLE_ADDR,
+        GB_SWITCH_SAMPLE_ADDR,
+        (unsigned)GB_MAPPER_SAMPLE_LEN,
+        fixed_sample[0],
+        fixed_sample[1],
+        fixed_sample[2],
+        fixed_sample[3],
+        switch_sample[0],
+        switch_sample[1],
+        switch_sample[2],
+        switch_sample[3],
+        eq ? 1 : 0,
+        fixed_blank ? 1 : 0,
+        switch_blank ? 1 : 0,
         burner_gb_mapper_name(*mapper_out));
     return ESP_OK;
+}
+
+static esp_err_t burner_bacon_gb_probe_write_low(uint8_t bank)
+{
+    return burner_bacon_gbc_write(0x2000u, &bank, 1u);
+}
+
+static esp_err_t burner_bacon_gb_probe_read_switch_sample(uint8_t *sample, size_t len)
+{
+    if (sample == NULL || len == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return burner_bacon_gbc_read(GB_SWITCH_SAMPLE_ADDR, sample, len);
 }
 
 esp_err_t burner_bacon_mbc5_get_id(uint8_t id_out[4])
@@ -835,11 +817,16 @@ esp_err_t burner_bacon_mbc5_prepare_probe_info_locked(
     }
 
     probed_device_size = device_size;
-    err = burner_bacon_gb_detect_mapper(&mapper);
-    if (err != ESP_OK) {
-        ESP_LOGW(BURNER_TAG, "GB mapper detect failed, defaulting to mbc5: %s", esp_err_to_name(err));
-        mapper = BURNER_GB_MAPPER_MBC5;
-        err = ESP_OK;
+    if (s_gb_mapper_override_kind != BURNER_GB_MAPPER_UNKNOWN) {
+        mapper = s_gb_mapper_override_kind;
+        ESP_LOGI(BURNER_TAG, "GB mapper override: using %s", burner_gb_mapper_name(mapper));
+    } else {
+        err = burner_bacon_gb_detect_mapper(&mapper);
+        if (err != ESP_OK) {
+            ESP_LOGW(BURNER_TAG, "GB mapper detect failed, defaulting to MBC5: %s", esp_err_to_name(err));
+            mapper = BURNER_GB_MAPPER_MBC5;
+            err = ESP_OK;
+        }
     }
     s_gb_mapper_kind = mapper;
     if (burner_gb_mapper_device_size_limit(mapper) > 0u &&
@@ -905,7 +892,8 @@ esp_err_t burner_bacon_mbc5_prepare_probe_info_locked(
         false,
         false,
         false,
-        chip_name);
+        chip_name,
+        burner_gb_mapper_name(mapper));
 
     memcpy(id_out, local_id, sizeof(local_id));
     *device_size_out = device_size;

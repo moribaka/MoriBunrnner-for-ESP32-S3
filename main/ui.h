@@ -37,6 +37,7 @@ void ui_set_language(uint8_t language);
 void ui_set_wifi_state(ui_wifi_state_t state);
 void ui_set_ip_text(const char *ip);
 void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total);
+void ui_show_burn_task_status(uint32_t total_hint);
 void ui_set_status_text(const char *text);
 
 #endif /* UI_H */

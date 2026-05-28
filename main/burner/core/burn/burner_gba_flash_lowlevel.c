@@ -603,11 +603,94 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
     return ESP_OK;
 }
 
+static esp_err_t burner_bacon_gba_reset_aso_diag(void)
+{
+    esp_err_t err;
+
+    err = burner_bacon_gba_command_write_u16(0x000u, 0x0090u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(0x000u, 0x0000u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return burner_bacon_gba_reset_to_read_mode();
+}
+
+static esp_err_t burner_bacon_gba_diag_read_ppb_lock_status(uint16_t *lock_status_out)
+{
+    esp_err_t err;
+
+    if (lock_status_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_bacon_gba_reset_aso_diag();
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0050u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_rom_read_u16(0x000u, lock_status_out);
+    if (err == ESP_OK) {
+        *lock_status_out = burner_apply_d0d1_swap_on_read(*lock_status_out, s_cart_ctx.d0d1_swapped);
+    }
+    (void)burner_bacon_gba_reset_aso_diag();
+    return err;
+}
+
+static esp_err_t burner_bacon_gba_diag_read_sector_ppb(uint32_t sector_addr, uint16_t *ppb_out)
+{
+    esp_err_t err;
+
+    if (ppb_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_bacon_gba_reset_aso_diag();
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00C0u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_rom_read_u16(sector_addr >> 1, ppb_out);
+    if (err == ESP_OK) {
+        *ppb_out = burner_apply_d0d1_swap_on_read(*ppb_out, s_cart_ctx.d0d1_swapped);
+    }
+    (void)burner_bacon_gba_reset_aso_diag();
+    return err;
+}
+
 static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms)
 {
     uint32_t bank = 0u;
     uint32_t sa_word = flash_addr >> 1;
     uint16_t read_back = 0;
+    uint16_t ppb_lock_status = 0u;
+    uint16_t sector_ppb = 0u;
+    esp_err_t ppb_lock_err = ESP_FAIL;
+    esp_err_t sector_ppb_err = ESP_FAIL;
     int64_t deadline_us;
     esp_err_t err;
     bool intel_cmdset;
@@ -668,6 +751,11 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         return err;
     }
 
+    err = burner_bacon_gba_reset_to_read_mode();
+    if (err != ESP_OK) {
+        return err;
+    }
+
     err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
     if (err != ESP_OK) {
         return err;
@@ -709,15 +797,29 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 
+    ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
+    sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(flash_addr, &sector_ppb);
     ESP_LOGW(
         BURNER_TAG,
-        "GBA erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32 " read=0x%04X multi=%u timeout=%ums",
+        "GBA erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32
+        " read=0x%04X multi=%u timeout=%ums ppb_lock=%s(0x%04X) sector_ppb=%s(0x%04X)",
         flash_addr,
         bank,
         sa_word,
         read_back,
         is_multi_card ? 1u : 0u,
-        (unsigned)timeout_ms);
+        (unsigned)timeout_ms,
+        (ppb_lock_err == ESP_OK) ? "ok" : esp_err_to_name(ppb_lock_err),
+        ppb_lock_status,
+        (sector_ppb_err == ESP_OK) ? "ok" : esp_err_to_name(sector_ppb_err),
+        sector_ppb);
+    if (ppb_lock_err == ESP_OK && sector_ppb_err == ESP_OK &&
+        ppb_lock_status == 0x0001u && sector_ppb != 0x0001u) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA erase timeout hint: sector appears PPB-protected, unlock PPB before burn");
+    }
+    (void)burner_bacon_gba_reset_to_read_mode();
     return ESP_ERR_TIMEOUT;
 }
 
@@ -791,6 +893,7 @@ static esp_err_t burner_bacon_gba_erase_range(
     const burner_nor_geometry_t *geometry = &s_cart_ctx.geometry;
     burner_nor_region_cursor_t cursor = {0};
     uint32_t sector_addr = 0u;
+    uint32_t stop_sector_addr = 0u;
     uint32_t skipped_blank = 0u;
     uint32_t erased = 0u;
     uint32_t erase_bytes;
@@ -805,7 +908,18 @@ static esp_err_t burner_bacon_gba_erase_range(
     if (burner_nor_geometry_region_cursor_begin(geometry, addr_begin, &cursor) != ESP_OK) {
         return ESP_ERR_INVALID_ARG;
     }
-    sector_addr = cursor.addr_begin + (((addr_begin - cursor.addr_begin) / cursor.sector_size) * cursor.sector_size);
+    err = burner_nor_geometry_sector_bounds_in_cursor(&cursor, addr_begin, &stop_sector_addr, NULL, NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_nor_geometry_region_cursor_begin(geometry, addr_end, &cursor);
+    if (err != ESP_OK) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    err = burner_nor_geometry_sector_bounds_in_cursor(&cursor, addr_end, &sector_addr, NULL, NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
 
     erase_bytes = burner_nor_geometry_erase_bytes_from_range(geometry, addr_begin, addr_end);
     if (erase_bytes == 0u) {
@@ -819,34 +933,53 @@ static esp_err_t burner_bacon_gba_erase_range(
         erase_bytes,
         timeout_ms);
 
-    while (sector_addr <= addr_end) {
-        uint32_t current_sector_size = cursor.sector_size;
-        uint32_t region_end_addr = cursor.addr_end - 1u;
-        uint32_t region_limit_addr = (addr_end < region_end_addr) ? addr_end : region_end_addr;
+    while (true) {
+        uint32_t current_sector_size = 0u;
 
-        while (sector_addr <= region_limit_addr) {
-            err = burner_cancel_poll();
+        err = burner_cancel_poll();
+        if (err != ESP_OK) {
+            goto erase_range_out;
+        }
+        err = burner_nor_geometry_region_cursor_seek_forward(geometry, sector_addr, &cursor);
+        if (err != ESP_OK) {
+            goto erase_range_out;
+        }
+        err = burner_nor_geometry_sector_bounds_in_cursor(
+            &cursor,
+            sector_addr,
+            &sector_addr,
+            NULL,
+            &current_sector_size);
+        if (err != ESP_OK || current_sector_size == 0u) {
+            err = (err == ESP_OK) ? ESP_ERR_INVALID_SIZE : err;
+            goto erase_range_out;
+        }
+        if (sample_blank_sectors && !erase_always) {
+            bool blank = false;
+
+            err = burner_gba_sector_is_blank(
+                sector_addr,
+                current_sector_size,
+                is_multi_card,
+                &blank);
             if (err != ESP_OK) {
                 goto erase_range_out;
             }
-            if (sample_blank_sectors && !erase_always) {
-                bool blank = false;
-
-                err = burner_gba_sector_is_blank(
+            if (blank) {
+                skipped_blank++;
+                burner_status_advance_erase_phase(1u, current_sector_size);
+            } else {
+                err = burner_bacon_gba_erase_sector(
                     sector_addr,
-                    current_sector_size,
                     is_multi_card,
-                    &blank);
+                    burner_erase_remaining_timeout_ms(erase_deadline_us));
                 if (err != ESP_OK) {
                     goto erase_range_out;
                 }
-                if (blank) {
-                    skipped_blank++;
-                    burner_status_advance_erase_phase(1u, current_sector_size);
-                    sector_addr += current_sector_size;
-                    continue;
-                }
+                erased++;
+                burner_status_advance_erase_phase(1u, current_sector_size);
             }
+        } else {
             err = burner_bacon_gba_erase_sector(
                 sector_addr,
                 is_multi_card,
@@ -856,16 +989,22 @@ static esp_err_t burner_bacon_gba_erase_range(
             }
             erased++;
             burner_status_advance_erase_phase(1u, current_sector_size);
-            sector_addr += current_sector_size;
         }
-        if (region_limit_addr >= addr_end) {
+        if (sector_addr == stop_sector_addr) {
             break;
         }
-        err = burner_nor_geometry_region_cursor_advance(geometry, &cursor);
+        if (sector_addr == 0u) {
+            err = ESP_ERR_INVALID_SIZE;
+            goto erase_range_out;
+        }
+        err = burner_nor_geometry_region_cursor_begin(geometry, sector_addr - 1u, &cursor);
         if (err != ESP_OK) {
-            break;
+            goto erase_range_out;
         }
-        sector_addr = cursor.addr_begin;
+        err = burner_nor_geometry_sector_bounds_in_cursor(&cursor, sector_addr - 1u, &sector_addr, NULL, NULL);
+        if (err != ESP_OK) {
+            goto erase_range_out;
+        }
     }
 
 erase_range_out:

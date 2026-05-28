@@ -65,7 +65,7 @@
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
 #define BURN_ERASE_ALWAYS_DEFAULT 0U
-#define BURN_BLANK_HEAD_CHECK_BYTES 512U
+#define BURN_ERASE_PROBE_BYTES 512U
 #define BURN_BLANK_SAMPLE_BYTES 2U
 #define BURN_BLANK_SAMPLE_POINTS 4U
 #define BURN_MBC5_RAM_CHUNK_BYTES 4096U
@@ -705,7 +705,8 @@ void burner_status_set_probe_info(
     bool gba_force_multi,
     bool gba_d0d1_known,
     bool gba_d0d1_swapped,
-    const char *chip_name);
+    const char *chip_name,
+    const char *mapper_name);
 void burner_status_set_gba_save_probe(
     burner_gba_save_type_t save_type,
     uint32_t save_size,
@@ -800,6 +801,7 @@ burner_status_t s_status = {
 };
 uint64_t s_burn_task_last_yield_us = 0;
 static burner_gb_mapper_t s_gb_mapper_kind = BURNER_GB_MAPPER_UNKNOWN;
+burner_gb_mapper_t s_gb_mapper_override_kind = BURNER_GB_MAPPER_UNKNOWN;
 const char *const s_system_migrate_rel_dirs[] = {
     WEB_LANG_DIR_REL,
     WEB_ROOT_DIR_REL,

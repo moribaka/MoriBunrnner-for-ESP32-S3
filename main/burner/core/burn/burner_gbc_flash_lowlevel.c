@@ -11,10 +11,7 @@ static esp_err_t burner_bacon_mbc5_switch_bank(uint16_t bank)
         return burner_bacon_gbc_write(0x2000u, &b0, 1u);
     }
 
-    /*
-     * Match ChisFlashBurner mission_mbc5.cs:
-     * write low 8 bits at 0x2000, then high bit at 0x3000.
-     */
+    /* MBC5 uses low 8 bits at 0x2000 and the high bit at 0x3000. */
     err = burner_bacon_gbc_write(0x2000u, &b0, 1u);
     if (err != ESP_OK) {
         return err;
@@ -180,61 +177,6 @@ static esp_err_t burner_buffer_all_ff(const uint8_t *buf, size_t len, bool *all_
     return ESP_OK;
 }
 
-static size_t burner_blank_head_check_len(uint32_t region_size)
-{
-    return (region_size < BURN_BLANK_HEAD_CHECK_BYTES) ? (size_t)region_size : (size_t)BURN_BLANK_HEAD_CHECK_BYTES;
-}
-
-static esp_err_t burner_mbc5_region_is_blank_head(
-    uint32_t region_addr,
-    uint32_t region_size,
-    bool *blank_out)
-{
-    uint8_t sample_buf[BURN_BLANK_HEAD_CHECK_BYTES];
-    size_t sample_len;
-    esp_err_t err;
-
-    if (blank_out == NULL || region_size == 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    sample_len = burner_blank_head_check_len(region_size);
-    err = burner_bacon_mbc5_read_block_program_window(sample_buf, sample_len, region_addr);
-    if (err != ESP_OK) {
-        return err;
-    }
-    return burner_buffer_all_ff(sample_buf, sample_len, blank_out);
-}
-
-static esp_err_t burner_gba_region_is_blank_head(
-    uint32_t region_addr,
-    uint32_t region_size,
-    bool is_multi_card,
-    bool *blank_out)
-{
-    uint8_t sample_buf[BURN_BLANK_HEAD_CHECK_BYTES];
-    size_t sample_len;
-    esp_err_t err;
-
-    if (blank_out == NULL || region_size == 0u || (region_size & 0x1u) != 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    sample_len = burner_blank_head_check_len(region_size);
-    if ((sample_len & 0x1u) != 0u) {
-        sample_len -= 1u;
-    }
-    if (sample_len == 0u) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    err = burner_bacon_gba_read_block(sample_buf, sample_len, region_addr, is_multi_card);
-    if (err != ESP_OK) {
-        return err;
-    }
-    return burner_buffer_all_ff(sample_buf, sample_len, blank_out);
-}
-
 static bool burner_blank_sample_offset_seen(const uint32_t *offsets, size_t count, uint32_t offset)
 {
     for (size_t i = 0u; i < count; ++i) {
@@ -343,6 +285,7 @@ static esp_err_t burner_bacon_mbc5_erase_range(
     const burner_nor_geometry_t *geometry = &s_cart_ctx.geometry;
     burner_nor_region_cursor_t cursor = {0};
     uint32_t sector_addr = 0u;
+    uint32_t stop_sector_addr = 0u;
     uint32_t skipped_blank = 0u;
     uint32_t erased = 0u;
     uint32_t erase_bytes;
@@ -357,7 +300,18 @@ static esp_err_t burner_bacon_mbc5_erase_range(
     if (burner_nor_geometry_region_cursor_begin(geometry, addr_begin, &cursor) != ESP_OK) {
         return ESP_ERR_INVALID_ARG;
     }
-    sector_addr = cursor.addr_begin + (((addr_begin - cursor.addr_begin) / cursor.sector_size) * cursor.sector_size);
+    err = burner_nor_geometry_sector_bounds_in_cursor(&cursor, addr_begin, &stop_sector_addr, NULL, NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_nor_geometry_region_cursor_begin(geometry, addr_end, &cursor);
+    if (err != ESP_OK) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    err = burner_nor_geometry_sector_bounds_in_cursor(&cursor, addr_end, &sector_addr, NULL, NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
 
     erase_bytes = burner_nor_geometry_erase_bytes_from_range(geometry, addr_begin, addr_end);
     if (erase_bytes == 0u) {
@@ -387,44 +341,62 @@ static esp_err_t burner_bacon_mbc5_erase_range(
             (unsigned)geometry->region_count);
     }
 
-    while (sector_addr <= addr_end) {
-        uint32_t current_sector_size = cursor.sector_size;
-        uint32_t region_end_addr = cursor.addr_end - 1u;
-        uint32_t region_limit_addr = (addr_end < region_end_addr) ? addr_end : region_end_addr;
+    while (true) {
+        uint32_t current_sector_size = 0u;
+        uint16_t sector_bank = 0u;
+        uint16_t sector_cart_addr = 0u;
 
-        while (sector_addr <= region_limit_addr) {
-            uint16_t sector_bank = 0u;
-            uint16_t sector_cart_addr = 0u;
+        err = burner_cancel_poll();
+        if (err != ESP_OK) {
+            goto erase_range_out;
+        }
+        err = burner_nor_geometry_region_cursor_seek_forward(geometry, sector_addr, &cursor);
+        if (err != ESP_OK) {
+            goto erase_range_out;
+        }
+        err = burner_nor_geometry_sector_bounds_in_cursor(
+            &cursor,
+            sector_addr,
+            &sector_addr,
+            NULL,
+            &current_sector_size);
+        if (err != ESP_OK || current_sector_size == 0u) {
+            err = (err == ESP_OK) ? ESP_ERR_INVALID_SIZE : err;
+            goto erase_range_out;
+        }
 
-            err = burner_cancel_poll();
+        burner_mbc5_addr_to_program_window(sector_addr, &sector_bank, &sector_cart_addr, NULL);
+        ESP_LOGI(
+            BURNER_TAG,
+            "MBC5 erase sector: flash=0x%08" PRIX32 " size=%" PRIu32 " bank=%u cart=0x%04X",
+            sector_addr,
+            current_sector_size,
+            (unsigned)sector_bank,
+            (unsigned)sector_cart_addr);
+        if (sample_blank_sectors && !erase_always) {
+            bool blank = false;
+
+            err = burner_mbc5_sector_is_blank(
+                sector_addr,
+                current_sector_size,
+                &blank);
             if (err != ESP_OK) {
                 goto erase_range_out;
             }
-            burner_mbc5_addr_to_program_window(sector_addr, &sector_bank, &sector_cart_addr, NULL);
-            ESP_LOGI(
-                BURNER_TAG,
-                "MBC5 erase sector: flash=0x%08" PRIX32 " size=%" PRIu32 " bank=%u cart=0x%04X",
-                sector_addr,
-                current_sector_size,
-                (unsigned)sector_bank,
-                (unsigned)sector_cart_addr);
-            if (sample_blank_sectors && !erase_always) {
-                bool blank = false;
-
-                err = burner_mbc5_sector_is_blank(
+            if (blank) {
+                skipped_blank++;
+                burner_status_advance_erase_phase(1u, current_sector_size);
+            } else {
+                err = burner_bacon_mbc5_erase_sector(
                     sector_addr,
-                    current_sector_size,
-                    &blank);
+                    burner_erase_remaining_timeout_ms(erase_deadline_us));
                 if (err != ESP_OK) {
                     goto erase_range_out;
                 }
-                if (blank) {
-                    skipped_blank++;
-                    burner_status_advance_erase_phase(1u, current_sector_size);
-                    sector_addr += current_sector_size;
-                    continue;
-                }
+                erased++;
+                burner_status_advance_erase_phase(1u, current_sector_size);
             }
+        } else {
             err = burner_bacon_mbc5_erase_sector(
                 sector_addr,
                 burner_erase_remaining_timeout_ms(erase_deadline_us));
@@ -433,16 +405,22 @@ static esp_err_t burner_bacon_mbc5_erase_range(
             }
             erased++;
             burner_status_advance_erase_phase(1u, current_sector_size);
-            sector_addr += current_sector_size;
         }
-        if (region_limit_addr >= addr_end) {
+        if (sector_addr == stop_sector_addr) {
             break;
         }
-        err = burner_nor_geometry_region_cursor_advance(geometry, &cursor);
+        if (sector_addr == 0u) {
+            err = ESP_ERR_INVALID_SIZE;
+            goto erase_range_out;
+        }
+        err = burner_nor_geometry_region_cursor_begin(geometry, sector_addr - 1u, &cursor);
         if (err != ESP_OK) {
-            break;
+            goto erase_range_out;
         }
-        sector_addr = cursor.addr_begin;
+        err = burner_nor_geometry_sector_bounds_in_cursor(&cursor, sector_addr - 1u, &sector_addr, NULL, NULL);
+        if (err != ESP_OK) {
+            goto erase_range_out;
+        }
     }
 
 erase_range_out:
