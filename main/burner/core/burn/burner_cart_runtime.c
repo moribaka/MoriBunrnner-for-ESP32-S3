@@ -164,6 +164,21 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
                 &buffer_write_bytes,
                 &cfi_ok);
         }
+        if (err == ESP_OK && s_cart_ctx.gba_likely_read_only) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA capacity probe blocked: likely read-only retail ROM"
+                " id=%02X %02X %02X %02X %02X %02X %02X %02X",
+                gba_id[0],
+                gba_id[1],
+                gba_id[2],
+                gba_id[3],
+                gba_id[4],
+                gba_id[5],
+                gba_id[6],
+                gba_id[7]);
+            err = ESP_ERR_NOT_SUPPORTED;
+        }
         if (err == ESP_OK && !cfi_ok) {
             ESP_LOGW(
                 BURNER_TAG,

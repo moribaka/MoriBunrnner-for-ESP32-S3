@@ -227,6 +227,7 @@ typedef struct {
     burner_gba_cmd_data_lane_t gba_cmd_data_lane;
     bool d0d1_known;   /* D0/D1 detection completed */
     bool d0d1_swapped; /* D0/D1 data lines swapped */
+    bool gba_likely_read_only; /* Probe looks like plain ROM, not writable NOR */
 } burner_cart_ctx_t;
 
 typedef enum {

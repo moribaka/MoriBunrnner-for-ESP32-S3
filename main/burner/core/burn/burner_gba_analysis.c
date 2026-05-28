@@ -751,6 +751,7 @@ esp_err_t burner_probe_gba_rom_analysis(
     }
 
     probe_job.cart_mode = BURNER_CART_MODE_GBA;
+    probe_job.mode = BURNER_JOB_READ_ROM;
     probe_job.addr_begin = 0u;
     probe_job.total_bytes = device_size;
 
