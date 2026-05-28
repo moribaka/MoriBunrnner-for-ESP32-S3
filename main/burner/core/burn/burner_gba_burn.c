@@ -1,19 +1,5 @@
 /* GBA ROM burn job implementations. */
 
-static bool burner_gba_probe_buffer_all_ff(const uint8_t *buf, size_t len)
-{
-    if (buf == NULL) {
-        return false;
-    }
-
-    for (size_t i = 0u; i < len; ++i) {
-        if (buf[i] != 0xFFu) {
-            return false;
-        }
-    }
-    return true;
-}
-
 static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 {
     FILE *fp = NULL;
@@ -27,7 +13,6 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     bool use_pipeline_stage = false;
     bool force_erase_sectors = true;
     size_t stage_capacity = 0;
-    size_t probe_len = 0u;
     burner_tf_prefetch_ctx_t prefetch = {0};
     burner_tf_reader_ctx_t tf_reader = {0};
     burner_nor_region_cursor_t pipeline_cursor = {0};
@@ -40,7 +25,6 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     bool sector_geometry_valid = false;
     uint32_t psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     uint32_t psram_window_bytes = BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES;
-    uint8_t probe_buf[BURN_ERASE_PROBE_BYTES];
     char psram_alloc_fail_msg[96] = {0};
     char psram_erase_prefetch_msg[96] = {0};
     char psram_copy_msg[64] = {0};
@@ -227,37 +211,10 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             BURNER_TAG,
             "GBA burn erase policy: force erase for all write paths");
     } else {
-        probe_len = (job->total_bytes < BURN_ERASE_PROBE_BYTES) ? (size_t)job->total_bytes : BURN_ERASE_PROBE_BYTES;
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            0,
-            0,
-            job->total_bytes,
-            "checking gba flash blank state",
-            job->rom_name,
-            job->rom_path);
-
-        burner_spi_lock_take();
-        err = burner_bacon_gba_read_block(probe_buf, probe_len, addr_begin, burner_is_gba_multi_card(job));
-        burner_spi_lock_give();
-        if (err != ESP_OK) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                0,
-                0,
-                job->total_bytes,
-                "read gba flash probe failed",
-                job->rom_name,
-                job->rom_path);
-            goto write_gba_done;
-        }
-
-        should_erase = !burner_gba_probe_buffer_all_ff(probe_buf, probe_len);
+        should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
-            "GBA burn erase policy: smart head-%uB erase=%s",
-            (unsigned)probe_len,
-            should_erase ? "yes" : "skip");
+            "GBA burn erase policy: smart sector-sampled erase");
     }
     sector_geometry_valid = burner_nor_geometry_is_valid(&s_cart_ctx.geometry);
     if (should_erase && !sector_geometry_valid) {
