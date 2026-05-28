@@ -727,11 +727,6 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             device_size = 0u;
             sector_size = 0u;
             buffer_write_bytes = 0u;
-            gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
-            gba_save_size = 0u;
-            gba_save_detected = false;
-            gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
-            gba_patch_detected = false;
         }
         gba_chip_label = chip_name;
         burner_status_set_probe_info(
@@ -993,11 +988,6 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             device_size = 0u;
             sector_size = 0u;
             buffer_write_bytes = 0u;
-            gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
-            gba_save_size = 0u;
-            gba_save_detected = false;
-            gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
-            gba_patch_detected = false;
         }
         gba_chip_label = chip_name;
         burner_status_set_probe_info(
