@@ -398,6 +398,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (err != ESP_OK) {
         return burner_send_start_error(req, err, error_msg);
     }
+    ui_show_burn_task_status(result.effective_size);
 
     n = snprintf(
         resp,
@@ -569,6 +570,7 @@ esp_err_t burner_read_handler(httpd_req_t *req)
             full_path);
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "dump task is already running");
     }
+    ui_show_burn_task_status(effective_size);
 
     n = snprintf(
         resp,
@@ -1153,6 +1155,7 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
     if (err != ESP_OK) {
         return burner_send_start_error(req, err, error_msg);
     }
+    ui_show_burn_task_status(result.effective_size);
 
     n = snprintf(
         resp,
@@ -1226,6 +1229,7 @@ esp_err_t burner_ram_write_handler(httpd_req_t *req)
     if (err != ESP_OK) {
         return burner_send_start_error(req, err, error_msg);
     }
+    ui_show_burn_task_status(result.effective_size);
 
     n = snprintf(
         resp,
@@ -1348,6 +1352,7 @@ esp_err_t burner_ram_read_handler(httpd_req_t *req)
             full_path);
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ram dump task is already running");
     }
+    ui_show_burn_task_status(effective_size);
 
     n = snprintf(
         resp,
@@ -1421,6 +1426,7 @@ esp_err_t burner_ram_verify_handler(httpd_req_t *req)
     if (err != ESP_OK) {
         return burner_send_start_error(req, err, error_msg);
     }
+    ui_show_burn_task_status(result.effective_size);
 
     n = snprintf(
         resp,
@@ -1477,6 +1483,7 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
             "/cart");
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "chip erase task is already running");
     }
+    ui_show_burn_task_status(1u);
 
     n = snprintf(
         resp,

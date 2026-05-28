@@ -2978,7 +2978,8 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         job->gba_force_multi,
         s_cart_ctx.d0d1_known,
         s_cart_ctx.d0d1_swapped,
-        chip_name);
+        chip_name,
+        "");
 
     return ESP_OK;
 }

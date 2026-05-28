@@ -1,5 +1,19 @@
 /* GBA ROM burn job implementations. */
 
+static bool burner_gba_probe_buffer_all_ff(const uint8_t *buf, size_t len)
+{
+    if (buf == NULL) {
+        return false;
+    }
+
+    for (size_t i = 0u; i < len; ++i) {
+        if (buf[i] != 0xFFu) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 {
     FILE *fp = NULL;
@@ -11,9 +25,9 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     bool should_erase = false;
     bool use_psram_stage = false;
     bool use_pipeline_stage = false;
-    bool range_blank = false;
-    bool force_erase_sectors = false;
+    bool force_erase_sectors = true;
     size_t stage_capacity = 0;
+    size_t probe_len = 0u;
     burner_tf_prefetch_ctx_t prefetch = {0};
     burner_tf_reader_ctx_t tf_reader = {0};
     burner_nor_region_cursor_t pipeline_cursor = {0};
@@ -26,6 +40,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     bool sector_geometry_valid = false;
     uint32_t psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     uint32_t psram_window_bytes = BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES;
+    uint8_t probe_buf[BURN_ERASE_PROBE_BYTES];
     char psram_alloc_fail_msg[96] = {0};
     char psram_erase_prefetch_msg[96] = {0};
     char psram_copy_msg[64] = {0};
@@ -36,7 +51,6 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     use_psram_stage = (job->write_path == BURNER_WRITE_PATH_PSRAM ||
                        job->write_path == BURNER_WRITE_PATH_PIPELINE);
     use_pipeline_stage = (job->write_path == BURNER_WRITE_PATH_PIPELINE);
-    force_erase_sectors = use_pipeline_stage ? true : job->erase_always;
     if (use_pipeline_stage) {
         psram_window_mb = BURN_PSRAM_WINDOW_AUTO_MB;
         psram_window_bytes = 0u;
@@ -206,13 +220,14 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         }
     }
 
-    if (use_pipeline_stage) {
+    force_erase_sectors = job->erase_always;
+    if (force_erase_sectors) {
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
-            "GBA burn erase policy: pipeline sector erase mode=%s",
-            force_erase_sectors ? "force" : "smart-skip");
+            "GBA burn erase policy: force erase for all write paths");
     } else {
+        probe_len = (job->total_bytes < BURN_ERASE_PROBE_BYTES) ? (size_t)job->total_bytes : BURN_ERASE_PROBE_BYTES;
         burner_status_update(
             BURNER_STATE_BURNING,
             0,
@@ -223,11 +238,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             job->rom_path);
 
         burner_spi_lock_take();
-        err = burner_gba_region_is_blank_head(
-            addr_begin,
-            job->total_bytes,
-            burner_is_gba_multi_card(job),
-            &range_blank);
+        err = burner_bacon_gba_read_block(probe_buf, probe_len, addr_begin, burner_is_gba_multi_card(job));
         burner_spi_lock_give();
         if (err != ESP_OK) {
             burner_status_update(
@@ -235,17 +246,18 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                 0,
                 0,
                 job->total_bytes,
-                "read gba flash blank failed",
+                "read gba flash probe failed",
                 job->rom_name,
                 job->rom_path);
             goto write_gba_done;
         }
 
-        should_erase = !range_blank;
+        should_erase = !burner_gba_probe_buffer_all_ff(probe_buf, probe_len);
         ESP_LOGI(
             BURNER_TAG,
-            "GBA burn erase policy: head-512B erase=%s",
-            should_erase ? "yes" : "no");
+            "GBA burn erase policy: smart head-%uB erase=%s",
+            (unsigned)probe_len,
+            should_erase ? "yes" : "skip");
     }
     sector_geometry_valid = burner_nor_geometry_is_valid(&s_cart_ctx.geometry);
     if (should_erase && !sector_geometry_valid) {
@@ -395,6 +407,9 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             }
 
             if (should_erase) {
+                uint32_t stage_erase_begin = stage_addr;
+                uint32_t stage_erase_end = stage_addr + (uint32_t)stage_bytes - 1u;
+
                 burner_status_update(
                     BURNER_STATE_BURNING,
                     burner_calc_progress_percent_u64(processed, job->total_bytes),
@@ -403,43 +418,78 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                     psram_erase_prefetch_msg,
                     job->rom_name,
                     job->rom_path);
-            }
 
-            prefetch_started = false;
-            prefetch_inflight = false;
-            if (prefetch_done != NULL) {
-                vSemaphoreDelete(prefetch_done);
-                prefetch_done = NULL;
-            }
-
-            prefetch_done = xSemaphoreCreateBinary();
-            if (prefetch_done != NULL) {
-                prefetch.fp = fp;
-                prefetch.dst = psram_stage_buf;
-                prefetch.bytes = stage_bytes;
-                prefetch.read_len = 0u;
-                prefetch.err = ESP_FAIL;
-                prefetch.done = prefetch_done;
-                if (burner_create_task_with_affinity(
-                        burner_tf_prefetch_task,
-                        "tf_prefetch",
-                        4096,
-                        &prefetch,
-                        4,
-                        NULL,
-                        s_burn_core_cfg.tf_core) == pdPASS) {
-                    prefetch_inflight = true;
-                    prefetch_started = true;
-                } else {
+                prefetch_started = false;
+                prefetch_inflight = false;
+                if (prefetch_done != NULL) {
                     vSemaphoreDelete(prefetch_done);
                     prefetch_done = NULL;
                 }
-            }
 
-            if (should_erase) {
-                burner_spi_lock_take();
-                err = burner_gba_sector_erase_prepare_current(stage_addr);
-                burner_spi_lock_give();
+                prefetch_done = xSemaphoreCreateBinary();
+                if (prefetch_done != NULL) {
+                    prefetch.fp = fp;
+                    prefetch.dst = psram_stage_buf;
+                    prefetch.bytes = stage_bytes;
+                    prefetch.read_len = 0u;
+                    prefetch.err = ESP_FAIL;
+                    prefetch.done = prefetch_done;
+                    if (burner_create_task_with_affinity(
+                            burner_tf_prefetch_task,
+                            "tf_prefetch",
+                            4096,
+                            &prefetch,
+                            4,
+                            NULL,
+                            s_burn_core_cfg.tf_core) == pdPASS) {
+                        prefetch_inflight = true;
+                        prefetch_started = true;
+                    } else {
+                        vSemaphoreDelete(prefetch_done);
+                        prefetch_done = NULL;
+                    }
+                }
+
+                burner_status_mark_erase_begin();
+                erase_timer_started = true;
+                if (use_pipeline_stage) {
+                    burner_spi_lock_take();
+                    err = burner_gba_sector_erase_prepare_current(stage_addr);
+                    burner_spi_lock_give();
+                } else {
+                    if (processed > 0u) {
+                        err = burner_nor_geometry_sector_begin_ceil(
+                            &s_cart_ctx.geometry,
+                            stage_addr,
+                            &stage_erase_begin);
+                        if (err != ESP_OK || stage_erase_begin > stage_erase_end) {
+                            err = ESP_OK;
+                            burner_status_mark_erase_end();
+                            erase_timer_started = false;
+                            goto gba_stage_erase_done;
+                        }
+                    }
+                    err = burner_run_gba_range_erase(
+                        stage_erase_begin,
+                        stage_erase_end,
+                        s_cart_ctx.sector_size,
+                        burner_is_gba_multi_card(job),
+                        true,
+                        force_erase_sectors);
+                }
+                burner_status_mark_erase_end();
+                erase_timer_started = false;
+
+gba_stage_erase_done:
+                if (prefetch_inflight && prefetch_done != NULL) {
+                    xSemaphoreTake(prefetch_done, portMAX_DELAY);
+                    prefetch_inflight = false;
+                }
+                if (prefetch_done != NULL) {
+                    vSemaphoreDelete(prefetch_done);
+                    prefetch_done = NULL;
+                }
+
                 if (err != ESP_OK) {
                     burner_status_update(
                         BURNER_STATE_ERROR,
@@ -451,30 +501,77 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                         job->rom_path);
                     goto write_gba_done;
                 }
-            }
-
-            if (prefetch_inflight && prefetch_done != NULL) {
-                xSemaphoreTake(prefetch_done, portMAX_DELAY);
+                if (prefetch_started) {
+                    if (prefetch.err == ESP_OK && prefetch.read_len == stage_bytes) {
+                        stage_prefetched = true;
+                    } else {
+                        burner_status_update(
+                            BURNER_STATE_ERROR,
+                            0,
+                            processed,
+                            job->total_bytes,
+                            "prefetch tf->psram failed",
+                            job->rom_name,
+                            job->rom_path);
+                        err = (prefetch.err != ESP_OK) ? prefetch.err : ESP_FAIL;
+                        goto write_gba_done;
+                    }
+                }
+            } else {
+                prefetch_started = false;
                 prefetch_inflight = false;
-            }
-            if (prefetch_done != NULL) {
-                vSemaphoreDelete(prefetch_done);
-                prefetch_done = NULL;
-            }
-            if (prefetch_started) {
-                if (prefetch.err == ESP_OK && prefetch.read_len == stage_bytes) {
-                    stage_prefetched = true;
-                } else {
-                    burner_status_update(
-                        BURNER_STATE_ERROR,
-                        0,
-                        processed,
-                        job->total_bytes,
-                        "prefetch tf->psram failed",
-                        job->rom_name,
-                        job->rom_path);
-                    err = (prefetch.err != ESP_OK) ? prefetch.err : ESP_FAIL;
-                    goto write_gba_done;
+                if (prefetch_done != NULL) {
+                    vSemaphoreDelete(prefetch_done);
+                    prefetch_done = NULL;
+                }
+
+                prefetch_done = xSemaphoreCreateBinary();
+                if (prefetch_done != NULL) {
+                    prefetch.fp = fp;
+                    prefetch.dst = psram_stage_buf;
+                    prefetch.bytes = stage_bytes;
+                    prefetch.read_len = 0u;
+                    prefetch.err = ESP_FAIL;
+                    prefetch.done = prefetch_done;
+                    if (burner_create_task_with_affinity(
+                            burner_tf_prefetch_task,
+                            "tf_prefetch",
+                            4096,
+                            &prefetch,
+                            4,
+                            NULL,
+                            s_burn_core_cfg.tf_core) == pdPASS) {
+                        prefetch_inflight = true;
+                        prefetch_started = true;
+                    } else {
+                        vSemaphoreDelete(prefetch_done);
+                        prefetch_done = NULL;
+                    }
+                }
+
+                if (prefetch_inflight && prefetch_done != NULL) {
+                    xSemaphoreTake(prefetch_done, portMAX_DELAY);
+                    prefetch_inflight = false;
+                }
+                if (prefetch_done != NULL) {
+                    vSemaphoreDelete(prefetch_done);
+                    prefetch_done = NULL;
+                }
+                if (prefetch_started) {
+                    if (prefetch.err == ESP_OK && prefetch.read_len == stage_bytes) {
+                        stage_prefetched = true;
+                    } else {
+                        burner_status_update(
+                            BURNER_STATE_ERROR,
+                            0,
+                            processed,
+                            job->total_bytes,
+                            "prefetch tf->psram failed",
+                            job->rom_name,
+                            job->rom_path);
+                        err = (prefetch.err != ESP_OK) ? prefetch.err : ESP_FAIL;
+                        goto write_gba_done;
+                    }
                 }
             }
 

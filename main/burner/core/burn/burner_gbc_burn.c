@@ -11,8 +11,7 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
     bool should_erase = false;
     bool use_psram_stage = false;
     bool use_pipeline_stage = false;
-    bool range_blank = false;
-    bool force_erase_sectors = false;
+    bool force_erase_sectors = true;
     size_t stage_capacity = 0;
     size_t program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
     burner_nor_region_cursor_t pipeline_cursor = {0};
@@ -39,7 +38,6 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
     use_psram_stage = (job->write_path == BURNER_WRITE_PATH_PSRAM ||
                        job->write_path == BURNER_WRITE_PATH_PIPELINE);
     use_pipeline_stage = (job->write_path == BURNER_WRITE_PATH_PIPELINE);
-    force_erase_sectors = use_pipeline_stage ? true : job->erase_always;
     program_chunk_bytes = (size_t)burner_clamp_mbc5_program_chunk_bytes(job->mbc5_program_chunk_bytes);
     if (use_pipeline_stage) {
         psram_window_mb = BURN_PSRAM_WINDOW_AUTO_MB;
@@ -205,42 +203,17 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
         }
     }
 
-    if (use_pipeline_stage) {
+    force_erase_sectors = job->erase_always;
+    if (force_erase_sectors) {
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
-            "MBC5 burn erase policy: pipeline sector erase mode=%s",
-            force_erase_sectors ? "force" : "smart-skip");
+            "MBC5 burn erase policy: force erase for all write paths");
     } else {
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            0,
-            0,
-            job->total_bytes,
-            "checking flash blank state",
-            job->rom_name,
-            job->rom_path);
-
-        burner_spi_lock_take();
-        err = burner_mbc5_region_is_blank_head(addr_begin, job->total_bytes, &range_blank);
-        burner_spi_lock_give();
-        if (err != ESP_OK) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                0,
-                0,
-                job->total_bytes,
-                "read flash blank failed",
-                job->rom_name,
-                job->rom_path);
-            goto write_done;
-        }
-
-        should_erase = !range_blank;
+        should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
-            "MBC5 burn erase policy: head-512B erase=%s",
-            should_erase ? "yes" : "no");
+            "MBC5 burn erase policy: smart sector-sampled erase");
     }
     if (should_erase && !burner_nor_geometry_is_valid(&s_cart_ctx.geometry)) {
         burner_status_update(
