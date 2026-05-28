@@ -555,8 +555,8 @@ static bool burner_gba_intel_program_buffer_needs_runtime_fallback(
     uint16_t reported_bytes,
     uint16_t active_bytes)
 {
+    (void)reported_bytes;
     return cmdset == BURNER_NOR_CMDSET_INTEL &&
-           reported_bytes == 0u &&
            active_bytes >= BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES;
 }
 
@@ -2940,14 +2940,22 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         return ESP_ERR_INVALID_SIZE;
     }
 
+    program_buffer_write_bytes = burner_gba_program_buffer_write_bytes(buffer_write_bytes, s_cart_ctx.gba_cmdset);
+    if (burner_gba_nor_has_flag(id, BURNER_NOR_FLAG_INTEL_88B0) && program_buffer_write_bytes > 256u) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA Intel 88B0 conservative program buffer cap: probe_buf=%u actual_buf=%u",
+            (unsigned)program_buffer_write_bytes,
+            256u);
+        program_buffer_write_bytes = 256u;
+    }
+
     s_cart_ctx.prepared = true;
     s_cart_ctx.current_bank = UINT16_MAX;
     s_cart_ctx.buffer_write_bytes = buffer_write_bytes;
-    s_cart_ctx.program_buffer_write_bytes =
-        burner_gba_program_buffer_write_bytes(buffer_write_bytes, s_cart_ctx.gba_cmdset);
+    s_cart_ctx.program_buffer_write_bytes = program_buffer_write_bytes;
     s_cart_ctx.sector_size = sector_size;
     s_cart_ctx.device_size = device_size;
-    program_buffer_write_bytes = s_cart_ctx.program_buffer_write_bytes;
     burner_nor_format_chip_name(
         chip_name,
         sizeof(chip_name),
