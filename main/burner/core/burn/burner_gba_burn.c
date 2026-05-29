@@ -737,6 +737,29 @@ gba_stage_erase_done:
             job->rom_path);
         err = ESP_FAIL;
     }
+    if (err == ESP_OK) {
+        burner_status_update(
+            BURNER_STATE_BURNING,
+            100,
+            processed,
+            job->total_bytes,
+            "finalizing gba flash state",
+            job->rom_name,
+            job->rom_path);
+        burner_spi_lock_take();
+        err = burner_bacon_gba_finalize_write(burner_is_gba_multi_card(job));
+        burner_spi_lock_give();
+        if (err != ESP_OK) {
+            burner_status_update(
+                BURNER_STATE_ERROR,
+                0,
+                processed,
+                job->total_bytes,
+                "final gba flash reset failed",
+                job->rom_name,
+                job->rom_path);
+        }
+    }
 
 write_gba_done:
     burner_gba_sector_erase_ctx_reset();
@@ -1008,6 +1031,37 @@ static esp_err_t burner_run_verify_rom_job_gba(const burner_task_param_t *job)
             size_t i;
             char msg[96];
 
+            if (s_cart_ctx.d0d1_swapped) {
+                burner_spi_lock_take();
+                err = burner_bacon_gba_read_block(
+                    cart_buf,
+                    read_len,
+                    addr_begin + processed,
+                    burner_is_gba_multi_card(job));
+                burner_spi_lock_give();
+                if (err != ESP_OK) {
+                    burner_status_update(
+                        BURNER_STATE_ERROR,
+                        0,
+                        processed,
+                        work_total,
+                        "read gba cart failed",
+                        job->rom_name,
+                        job->rom_path);
+                    break;
+                }
+                if (memcmp(rom_buf, cart_buf, read_len) == 0) {
+                    ESP_LOGW(
+                        BURNER_TAG,
+                        "GBA verify hoststyle mismatch recovered by standard read @0x%08" PRIX32
+                        " len=%u swapped=%u",
+                        addr_begin + processed,
+                        (unsigned)read_len,
+                        s_cart_ctx.d0d1_swapped ? 1u : 0u);
+                    goto verify_gba_chunk_ok;
+                }
+            }
+
             for (i = 0; i < read_len; ++i) {
                 if (rom_buf[i] != cart_buf[i]) {
                     uint32_t mismatch_addr = addr_begin + processed + (uint32_t)i;
@@ -1040,6 +1094,7 @@ static esp_err_t burner_run_verify_rom_job_gba(const burner_task_param_t *job)
             }
         }
 
+verify_gba_chunk_ok:
         if (read_len > 0u) {
             size_t sample_index = read_len - 1u;
             burner_status_set_verify_sample(

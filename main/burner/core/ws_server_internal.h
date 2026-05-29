@@ -943,6 +943,7 @@ esp_err_t burner_bacon_gba_probe_locked(
     uint32_t *sector_size,
     uint16_t *buffer_write_bytes,
     bool *cfi_ok_out);
+esp_err_t burner_bacon_gba_finalize_write(bool is_multi_card);
 void burner_bacon_gba_d0d1_status(bool *known_out, bool *swapped_out);
 esp_err_t burner_probe_gba_rom_analysis_locked(
     uint32_t device_size,
