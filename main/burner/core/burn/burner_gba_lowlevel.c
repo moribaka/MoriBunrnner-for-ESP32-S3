@@ -22,8 +22,10 @@ static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_val
 static esp_err_t burner_bacon_gba_command_write_u16(uint32_t word_addr, uint16_t value);
 static esp_err_t burner_bacon_gba_reset_to_read_mode(void);
 static bool burner_gba_nor_is_intel_active(void);
+static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank);
 static uint32_t burner_erase_timeout_ms_for_bytes(uint32_t bytes);
 static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms);
+static uint32_t s_gba_active_nor_flags = 0u;
 
 static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, size_t len)
 {
@@ -527,6 +529,59 @@ static esp_err_t burner_bacon_gba_reset_to_read_mode_for_cmdset(burner_nor_cmdse
 static esp_err_t burner_bacon_gba_reset_to_read_mode(void)
 {
     return burner_bacon_gba_reset_to_read_mode_for_cmdset(s_cart_ctx.gba_cmdset);
+}
+
+esp_err_t burner_bacon_gba_finalize_write(bool is_multi_card)
+{
+    static const uint32_t reset_stride_bytes = 0x00100000u;
+    uint32_t addr;
+    esp_err_t err;
+
+    if (!burner_gba_nor_is_intel_active() ||
+        (s_gba_active_nor_flags & BURNER_NOR_FLAG_RESET_EVERY_1MB) == 0u) {
+        return burner_bacon_gba_reset_to_read_mode();
+    }
+    if (s_cart_ctx.device_size == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA Intel final reset sweep: stride=0x%06" PRIX32 " flash=%" PRIu32 "MB multi=%u",
+        reset_stride_bytes,
+        s_cart_ctx.device_size / (1024u * 1024u),
+        is_multi_card ? 1u : 0u);
+
+    for (addr = 0u; addr < s_cart_ctx.device_size; addr += reset_stride_bytes) {
+        uint32_t bank = 0u;
+        uint32_t bank_word_addr = addr >> 1;
+
+        if (is_multi_card) {
+            bank = addr / BURN_GBA_BANK_BYTES;
+            bank_word_addr = (addr % BURN_GBA_BANK_BYTES) >> 1;
+            err = burner_gba_switch_bank_if_needed(bank);
+            if (err != ESP_OK) {
+                return err;
+            }
+        }
+
+        err = burner_bacon_gba_command_write_u16(bank_word_addr, 0x0050u);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gba_command_write_u16(bank_word_addr, 0x00FFu);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    if (is_multi_card) {
+        err = burner_gba_switch_bank_if_needed(0u);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+    return burner_bacon_gba_reset_to_read_mode();
 }
 
 static esp_err_t burner_bacon_gba_intel_wait_ready(uint32_t flash_addr, uint16_t command, uint32_t timeout_ms, uint16_t *status_out)
@@ -2409,6 +2464,7 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
     s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    s_gba_active_nor_flags = 0u;
     s_cart_ctx.d0d1_known = false;
     s_cart_ctx.d0d1_swapped = false; /* Default: no swap */
     s_cart_ctx.gba_likely_read_only = false;
@@ -2886,6 +2942,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
     uint16_t program_buffer_write_bytes = 0;
+    uint32_t nor_flags = 0u;
     uint64_t requested_top64 = 0;
     bool cfi_ok = false;
     esp_err_t err;
@@ -2941,13 +2998,15 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     }
 
     program_buffer_write_bytes = burner_gba_program_buffer_write_bytes(buffer_write_bytes, s_cart_ctx.gba_cmdset);
-    if (burner_gba_nor_has_flag(id, BURNER_NOR_FLAG_INTEL_88B0) && program_buffer_write_bytes > 256u) {
+    nor_flags = burner_gba_nor_flags_from_id(id);
+    if ((nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u &&
+        program_buffer_write_bytes > BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES) {
         ESP_LOGI(
             BURNER_TAG,
-            "GBA Intel 88B0 conservative program buffer cap: probe_buf=%u actual_buf=%u",
+            "GBA Intel 88B0 fixed program buffer cap: probe_buf=%u actual_buf=%u",
             (unsigned)program_buffer_write_bytes,
-            256u);
-        program_buffer_write_bytes = 256u;
+            (unsigned)BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES);
+        program_buffer_write_bytes = BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES;
     }
 
     s_cart_ctx.prepared = true;
@@ -2956,6 +3015,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     s_cart_ctx.program_buffer_write_bytes = program_buffer_write_bytes;
     s_cart_ctx.sector_size = sector_size;
     s_cart_ctx.device_size = device_size;
+    s_gba_active_nor_flags = nor_flags;
     burner_nor_format_chip_name(
         chip_name,
         sizeof(chip_name),

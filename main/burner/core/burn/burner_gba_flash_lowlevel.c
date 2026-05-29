@@ -82,6 +82,7 @@ static esp_err_t burner_bacon_gba_rom_program(
 
                 while (true) {
                     size_t write_len = 0u;
+                    size_t single_write_len;
                     uint16_t next_buffer_write_bytes;
 
                     err = burner_bacon_gba_intel_buffered_program_once(
@@ -105,7 +106,36 @@ static esp_err_t burner_bacon_gba_rom_program(
                     next_buffer_write_bytes =
                         burner_gba_intel_next_program_buffer_write_bytes(active_buffer_write_bytes);
                     if (next_buffer_write_bytes == 0u || next_buffer_write_bytes >= active_buffer_write_bytes) {
-                        return err;
+                        single_write_len = len - i;
+                        if (single_write_len > active_buffer_write_bytes) {
+                            single_write_len = active_buffer_write_bytes;
+                        }
+                        single_write_len = burner_gba_program_safe_chunk_bytes(
+                            starting_address,
+                            single_write_len,
+                            (size_t)active_buffer_write_bytes);
+                        if (single_write_len < 2u) {
+                            single_write_len = 2u;
+                        }
+                        ESP_LOGW(
+                            BURNER_TAG,
+                            "GBA intel buffered fallback -> single-word at 0x%08" PRIX32
+                            " len=%u active=%u err=%s",
+                            starting_address,
+                            (unsigned)single_write_len,
+                            (unsigned)active_buffer_write_bytes,
+                            esp_err_to_name(err));
+                        err = burner_bacon_gba_intel_reset();
+                        if (err != ESP_OK) {
+                            return err;
+                        }
+                        err = burner_bacon_gba_intel_program_words(starting_address, buf + i, single_write_len);
+                        if (err != ESP_OK) {
+                            return err;
+                        }
+                        i += single_write_len;
+                        burner_task_yield_if_due();
+                        break;
                     }
                     ESP_LOGW(
                         BURNER_TAG,
