@@ -12,6 +12,8 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"Brightness -", "Brightness -"},
     {"Browse TF", "Browse TF"},
     {"Burn", "Burn"},
+    {"Burn method", "Burn method"},
+    {"Burn method changed", "Burn method changed"},
     {"Burn direct", "Burn direct"},
     {"Burn pipeline", "Burn pipeline"},
     {"Burn via PSRAM", "Burn via PSRAM"},

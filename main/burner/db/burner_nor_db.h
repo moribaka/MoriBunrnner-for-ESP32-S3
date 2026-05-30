@@ -22,6 +22,7 @@ typedef enum {
     BURNER_NOR_FLAG_LIMIT_BUFFER_TO_ID = 1u << 1,
     BURNER_NOR_FLAG_INTEL_88B0 = 1u << 2,
     BURNER_NOR_FLAG_RESET_EVERY_1MB = 1u << 3,
+    BURNER_NOR_FLAG_DISABLE_BUFFER_PROGRAM = 1u << 4,
 } burner_nor_flags_t;
 
 typedef struct {

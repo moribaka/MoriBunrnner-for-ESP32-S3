@@ -82,6 +82,9 @@ static bool burner_is_gba_multi_card(const burner_task_param_t *job)
     if (job == NULL || job->cart_mode != BURNER_CART_MODE_GBA) {
         return false;
     }
+    if ((s_gba_active_nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) {
+        return false;
+    }
     if (job->gba_force_multi) {
         return true;
     }

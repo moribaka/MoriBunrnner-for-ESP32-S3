@@ -27,7 +27,7 @@ static esp_err_t burner_bacon_gba_intel_program_words(uint32_t byte_addr, const 
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gba_intel_wait_ready(0x000u, 0x0070u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+        err = burner_bacon_gba_intel_wait_ready(starting_address, 0x0000u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
         if (err != ESP_OK) {
             ESP_LOGW(
                 BURNER_TAG,
@@ -36,7 +36,12 @@ static esp_err_t burner_bacon_gba_intel_program_words(uint32_t byte_addr, const 
                 status);
             return err;
         }
-        err = burner_bacon_gba_intel_read_array();
+        if (burner_gba_intel_status_has_error(status)) {
+            burner_gba_intel_log_status_error("single-word-program", starting_address, status);
+            (void)burner_bacon_gba_intel_reset();
+            return ESP_ERR_INVALID_RESPONSE;
+        }
+        err = burner_bacon_gba_intel_reset();
         if (err != ESP_OK) {
             return err;
         }
@@ -63,6 +68,9 @@ static esp_err_t burner_bacon_gba_rom_program(
     }
 
     intel_cmdset = burner_gba_nor_is_intel_active();
+    if (intel_cmdset && !s_cart_ctx.probe_cfi_ok) {
+        return ESP_ERR_INVALID_STATE;
+    }
 
     while (i < len) {
         err = burner_cancel_poll();
@@ -139,8 +147,9 @@ static esp_err_t burner_bacon_gba_rom_program(
                     }
                     ESP_LOGW(
                         BURNER_TAG,
-                        "GBA intel runtime buffer fallback: probe_buf=0 active=%u next=%u addr=0x%08" PRIX32
+                        "GBA intel runtime buffer fallback: probe_buf=%u active=%u next=%u addr=0x%08" PRIX32
                         " err=%s",
+                        (unsigned)s_cart_ctx.buffer_write_bytes,
                         (unsigned)active_buffer_write_bytes,
                         (unsigned)next_buffer_write_bytes,
                         starting_address,
@@ -402,6 +411,9 @@ static esp_err_t burner_bacon_gba_program_block(
     }
     if (!s_cart_ctx.prepared) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (burner_gba_gbx_is_active()) {
+        return burner_gba_gbx_program_block(data, len, offset, is_multi_card, prepare_sectors);
     }
 
     while (programmed < len) {
@@ -728,6 +740,9 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     if (timeout_ms == 0u) {
         return ESP_ERR_TIMEOUT;
     }
+    if (burner_gba_gbx_is_active()) {
+        return burner_gba_gbx_erase_sector(flash_addr, is_multi_card, timeout_ms);
+    }
 
     intel_cmdset = burner_gba_nor_is_intel_active();
     burner_gba_resolve_write_addr(flash_addr, is_multi_card, &bank, NULL);
@@ -760,8 +775,27 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gba_intel_wait_ready(flash_addr, 0x0070u, timeout_ms, &read_back);
+        err = burner_bacon_gba_intel_wait_ready(flash_addr, 0x0000u, timeout_ms, &read_back);
         if (err == ESP_OK) {
+            if (burner_gba_intel_status_has_error(read_back)) {
+                ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
+                sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(flash_addr, &sector_ppb);
+                burner_gba_intel_log_status_error("erase", flash_addr, read_back);
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "GBA intel erase diag flash=0x%08" PRIX32 " ppb_lock=%s(0x%04X) sector_ppb=%s(0x%04X)",
+                    flash_addr,
+                    (ppb_lock_err == ESP_OK) ? "ok" : esp_err_to_name(ppb_lock_err),
+                    ppb_lock_status,
+                    (sector_ppb_err == ESP_OK) ? "ok" : esp_err_to_name(sector_ppb_err),
+                    sector_ppb);
+                if (ppb_lock_err == ESP_OK && sector_ppb_err == ESP_OK &&
+                    ppb_lock_status == 0x0001u && sector_ppb != 0x0001u) {
+                    ESP_LOGW(BURNER_TAG, "GBA intel erase hint: sector appears PPB-protected, unlock PPB before burn");
+                }
+                (void)burner_bacon_gba_intel_reset();
+                return ESP_ERR_INVALID_RESPONSE;
+            }
             err = burner_bacon_gba_intel_reset();
             if (err != ESP_OK) {
                 return err;
@@ -1056,6 +1090,10 @@ static esp_err_t burner_bacon_gba_chip_erase_once(void)
     esp_err_t err;
     bool intel_cmdset;
 
+    if (burner_gba_gbx_is_active()) {
+        return burner_gba_gbx_chip_erase_once();
+    }
+
     intel_cmdset = burner_gba_nor_is_intel_active();
 
     if (intel_cmdset) {
@@ -1079,7 +1117,12 @@ static esp_err_t burner_bacon_gba_chip_erase_once(void)
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gba_intel_wait_ready(0x000u, 0x0070u, BURNER_ROM_CHIP_ERASE_TIMEOUT_MS, &read_back);
+        err = burner_bacon_gba_intel_wait_ready(0x000u, 0x0000u, BURNER_ROM_CHIP_ERASE_TIMEOUT_MS, &read_back);
+        if (err == ESP_OK && burner_gba_intel_status_has_error(read_back)) {
+            burner_gba_intel_log_status_error("chip-erase", 0x00000000u, read_back);
+            (void)burner_bacon_gba_intel_reset();
+            return ESP_ERR_INVALID_RESPONSE;
+        }
         (void)burner_bacon_gba_intel_reset();
         return err;
     }
@@ -1132,6 +1175,10 @@ static esp_err_t burner_bacon_gba_chip_erase(void)
 {
     uint8_t id[8] = {0};
     esp_err_t err;
+
+    if (burner_gba_gbx_is_active()) {
+        return burner_gba_gbx_chip_erase_once();
+    }
 
     err = burner_bacon_gba_read_id(id, s_cart_ctx.d0d1_swapped);
     if (err != ESP_OK) {

@@ -177,6 +177,7 @@ static void burner_burn_config_apply_defaults(void)
     s_mbc5_power_5v_enabled = 0u;
     s_bacon_power_settle_ms = BURNER_POWER_SETTLE_MS;
     s_burn_write_path_default = BURNER_WRITE_PATH_PSRAM;
+    s_burn_recipe_mode_default = BURNER_RECIPE_MODE_CHIS;
     s_burn_psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     s_burn_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     s_burn_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
@@ -192,6 +193,7 @@ esp_err_t burner_load_burn_config(void)
     bool use_5v = false;
     uint32_t power_settle_ms = BURNER_POWER_SETTLE_MS;
     burner_write_path_t write_path = BURNER_WRITE_PATH_PSRAM;
+    burner_recipe_mode_t recipe_mode = BURNER_RECIPE_MODE_CHIS;
     uint32_t psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     uint32_t mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     uint32_t dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
@@ -229,6 +231,8 @@ esp_err_t burner_load_burn_config(void)
                 (void)burner_parse_power_settle_ms_text(value, &power_settle_ms);
             } else if (strcmp(key, "write_path") == 0) {
                 (void)burner_parse_write_path_text(value, &write_path);
+            } else if (strcmp(key, "recipe_mode") == 0) {
+                (void)burner_parse_recipe_mode_text(value, &recipe_mode);
             } else if (strcmp(key, "psram_window_mb") == 0) {
                 (void)burner_parse_psram_window_mb_text(value, &psram_window_mb);
             } else if (strcmp(key, "mbc5_chunk_kb") == 0) {
@@ -267,6 +271,7 @@ esp_err_t burner_load_burn_config(void)
     s_mbc5_power_5v_enabled = use_5v ? 1u : 0u;
     s_bacon_power_settle_ms = power_settle_ms;
     s_burn_write_path_default = write_path;
+    s_burn_recipe_mode_default = recipe_mode;
     s_burn_psram_window_mb = psram_window_mb;
     s_burn_mbc5_chunk_kb = mbc5_chunk_kb;
     s_burn_dump_chunk_kb = dump_chunk_kb;
@@ -279,10 +284,11 @@ esp_err_t burner_load_burn_config(void)
 
         ESP_LOGI(
             BURNER_TAG,
-            "burn config loaded: erase=%s write_path=%s psram_mb=%s mbc5_chunk=%" PRIu32
+            "burn config loaded: erase=%s write_path=%s recipe=%s psram_mb=%s mbc5_chunk=%" PRIu32
             " dump_chunk=%" PRIu32 " voltage=%s settle=%" PRIu32 "ms cores=%s/%s/%s",
             burner_erase_mode_to_str(s_burn_erase_always != 0u),
             burner_write_path_to_str(s_burn_write_path_default),
+            burner_recipe_mode_to_str(s_burn_recipe_mode_default),
             burner_psram_window_mb_to_text(s_burn_psram_window_mb, psram_text, sizeof(psram_text)),
             s_burn_mbc5_chunk_kb,
             s_burn_dump_chunk_kb,
@@ -327,6 +333,7 @@ esp_err_t burner_save_burn_config(void)
             "gbc_voltage=%s\n"
             "power_settle_ms=%" PRIu32 "\n"
             "write_path=%s\n"
+            "recipe_mode=%s\n"
             "psram_window_mb=%s\n"
             "mbc5_chunk_kb=%" PRIu32 "\n"
             "dump_chunk_kb=%" PRIu32 "\n"
@@ -338,6 +345,7 @@ esp_err_t burner_save_burn_config(void)
             burner_gbc_voltage_to_str(s_mbc5_power_5v_enabled != 0u),
             s_bacon_power_settle_ms,
             burner_write_path_to_str(s_burn_write_path_default),
+            burner_recipe_mode_to_str(s_burn_recipe_mode_default),
             burner_psram_window_mb_to_text(s_burn_psram_window_mb, psram_text, sizeof(psram_text)),
             s_burn_mbc5_chunk_kb,
             s_burn_dump_chunk_kb,
