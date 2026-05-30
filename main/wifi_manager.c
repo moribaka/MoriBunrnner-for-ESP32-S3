@@ -31,6 +31,7 @@ static int sta_connect_cnt = 0;
 static bool is_sta_connected = false;
 static bool wifi_started = false;
 static bool wifi_initialized = false;
+static bool provisioning_waiting_confirm = false;
 
 static char target_ssid[WIFI_SSID_BUF_LEN] = {0};
 
@@ -154,13 +155,16 @@ static void stop_provision_http_server(void);
 
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
+    char ip[32] = {0};
+    bool waiting_confirm = provisioning_waiting_confirm;
     static const char page[] =
         "<!doctype html><html><head>"
         "<meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         "<title>MORI Wi-Fi Setup</title>"
         "<style>body{font-family:Arial,sans-serif;max-width:520px;margin:32px auto;padding:0 16px;}input,button{width:100%;padding:10px;margin:8px 0;}button{cursor:pointer;}</style>"
-        "</head><body>"
+        "</head><body>";
+    static const char setup_tail[] =
         "<h2>MORI GBA Burner Wi-Fi Setup</h2>"
         "<p>Connect ESP32 to your router.</p>"
         "<form method='post' action='/save'>"
@@ -169,9 +173,45 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         "<button type='submit'>Save and Connect</button>"
         "</form>"
         "</body></html>";
+    static const char confirm_head[] =
+        "<h2>Wi-Fi Connected</h2>"
+        "<p>ESP32 is now connected to your router. Keep this setup hotspot connected until you finish switching to the new address.</p>"
+        "<p>Please open this address on your phone/computer:</p>";
+    static const char confirm_tail[] =
+        "<form method='get' action='/'>"
+        "<button type='submit'>Refresh Status</button>"
+        "</form>"
+        "<form method='post' action='/confirm'>"
+        "<button type='submit'>Confirm and Close Setup Hotspot</button>"
+        "</form>"
+        "<form method='post' action='/later'>"
+        "<button type='submit'>Keep Hotspot On For Now</button>"
+        "</form>"
+        "<p>Later, you can close the hotspot from the device UI or revisit this page.</p>"
+        "</body></html>";
+    char resp[1024];
+    int n;
 
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, page, HTTPD_RESP_USE_STRLEN);
+    if (waiting_confirm && wifi_maneger_get_sta_ip(ip, sizeof(ip)) == ESP_OK) {
+        n = snprintf(
+            resp,
+            sizeof(resp),
+            "%s%s<p><a href='http://%s/' target='_blank'>http://%s/</a></p>%s",
+            page,
+            confirm_head,
+            ip,
+            ip,
+            confirm_tail);
+        if (n > 0 && n < (int)sizeof(resp)) {
+            return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+        }
+    }
+    n = snprintf(resp, sizeof(resp), "%s%s", page, setup_tail);
+    if (n <= 0 || n >= (int)sizeof(resp)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "page build failed");
+    }
+    return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t save_post_handler(httpd_req_t *req)
@@ -213,7 +253,29 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 
     wifi_maneger_connect(ssid, password);
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "Saved. ESP32 is connecting to Wi-Fi now.");
+    return httpd_resp_sendstr(req, "Saved. ESP32 is connecting to Wi-Fi now. Keep this hotspot connected until the confirm page shows your new IP.");
+}
+
+static esp_err_t confirm_post_handler(httpd_req_t *req)
+{
+    esp_err_t err = wifi_maneger_provisioning_confirm();
+
+    if (err != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "confirm failed");
+    }
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    return httpd_resp_sendstr(req, "Setup hotspot closed. Please continue from the shown router IP.");
+}
+
+static esp_err_t later_post_handler(httpd_req_t *req)
+{
+    esp_err_t err = wifi_maneger_provisioning_keep_ap();
+
+    if (err != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "keep ap failed");
+    }
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    return httpd_resp_sendstr(req, "Setup hotspot remains active. You can close it later from the device UI or revisit this page.");
 }
 
 static esp_err_t start_provision_http_server(void)
@@ -256,6 +318,32 @@ static esp_err_t start_provision_http_server(void)
             .user_ctx = NULL,
         };
         err = httpd_register_uri_handler(provision_httpd, &save_uri);
+        if (err != ESP_OK) {
+            stop_provision_http_server();
+            return err;
+        }
+    }
+    {
+        httpd_uri_t confirm_uri = {
+            .uri = "/confirm",
+            .method = HTTP_POST,
+            .handler = confirm_post_handler,
+            .user_ctx = NULL,
+        };
+        err = httpd_register_uri_handler(provision_httpd, &confirm_uri);
+        if (err != ESP_OK) {
+            stop_provision_http_server();
+            return err;
+        }
+    }
+    {
+        httpd_uri_t later_uri = {
+            .uri = "/later",
+            .method = HTTP_POST,
+            .handler = later_post_handler,
+            .user_ctx = NULL,
+        };
+        err = httpd_register_uri_handler(provision_httpd, &later_uri);
         if (err != ESP_OK) {
             stop_provision_http_server();
             return err;
@@ -337,16 +425,12 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         }
 
         if (wifi_callback != NULL) {
-            wifi_callback(WIFI_STATE_CONNECTED);
+            wifi_callback(provision_httpd != NULL ? WIFI_STATE_PROVISIONING_CONNECTED : WIFI_STATE_CONNECTED);
         }
 
         if (provision_httpd != NULL) {
-            wifi_mode_t mode = WIFI_MODE_NULL;
-            stop_provision_http_server();
-            if (esp_wifi_get_mode(&mode) == ESP_OK && mode == WIFI_MODE_APSTA) {
-                esp_wifi_set_mode(WIFI_MODE_STA);
-                ESP_LOGI(wifi_manager_tag, "Provisioning finished, switched to STA mode");
-            }
+            provisioning_waiting_confirm = true;
+            ESP_LOGI(wifi_manager_tag, "Provisioning connected, waiting for user confirm before closing AP");
         }
     }
 }
@@ -719,6 +803,7 @@ esp_err_t wifi_maneger_ap(void)
     if (err != ESP_OK) {
         return err;
     }
+    provisioning_waiting_confirm = false;
     ESP_LOGI(
         wifi_manager_tag,
         "Provision AP started. SSID=%s, PASS=%s, URL=http://192.168.4.1/",
@@ -729,6 +814,38 @@ esp_err_t wifi_maneger_ap(void)
         wifi_callback(WIFI_STATE_PROVISIONING);
     }
 
+    return ESP_OK;
+}
+
+bool wifi_maneger_provisioning_waiting_confirm(void)
+{
+    return provisioning_waiting_confirm;
+}
+
+esp_err_t wifi_maneger_provisioning_confirm(void)
+{
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    esp_err_t err;
+
+    provisioning_waiting_confirm = false;
+    stop_provision_http_server();
+    err = esp_wifi_get_mode(&mode);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (mode == WIFI_MODE_APSTA) {
+        err = esp_wifi_set_mode(WIFI_MODE_STA);
+        if (err == ESP_OK) {
+            ESP_LOGI(wifi_manager_tag, "Provisioning confirmed, switched to STA mode");
+        }
+        return err;
+    }
+    return ESP_OK;
+}
+
+esp_err_t wifi_maneger_provisioning_keep_ap(void)
+{
+    provisioning_waiting_confirm = true;
     return ESP_OK;
 }
 

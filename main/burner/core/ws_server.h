@@ -16,5 +16,6 @@ esp_err_t web_ws_start(ws_cfg_t* cfg);
 esp_err_t web_ws_stop(void);
 
 esp_err_t web_ws_send(uint8_t *data, int len);
+void web_ws_mark_activity(void);
 
 #endif

@@ -173,8 +173,6 @@ typedef struct {
 #define BURNER_GBA_FALLBACK_DEVICE_SIZE BURN_GBA_LINEAR_ADDR_BYTES
 #define BURNER_GBA_FALLBACK_SECTOR_SIZE (128U * 1024U)
 #define BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES 0U
-#define BURNER_GBA_INTEL_RUNTIME_BUFFER_DEFAULT_BYTES 512U
-#define BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES 64U
 #define BURNER_GBA_HOST_UNLOCK_ADDR0 0x555u
 #define BURNER_GBA_HOST_UNLOCK_ADDR1 0x2AAu
 #define BURNER_GBA_HOST_CFI_ENTER_ADDR 0x055u
@@ -2385,6 +2383,7 @@ esp_err_t burner_send_json(httpd_req_t *req, const char *json_text)
         return ESP_ERR_INVALID_ARG;
     }
 
+    web_ws_mark_activity();
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, json_text, HTTPD_RESP_USE_STRLEN);
 }

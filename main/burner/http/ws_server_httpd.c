@@ -652,3 +652,8 @@ esp_err_t web_ws_send(uint8_t *data, int len)
         NULL);
     return ESP_OK;
 }
+
+void web_ws_mark_activity(void)
+{
+    ui_mark_activity();
+}

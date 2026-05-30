@@ -18,6 +18,7 @@ typedef enum {
     WIFI_STATE_CONNECTED = 0,
     WIFI_STATE_DISCONNECTED,
     WIFI_STATE_PROVISIONING,
+    WIFI_STATE_PROVISIONING_CONNECTED,
 } WIFI_STATE;
 
 typedef void (*p_wifi_state_cb)(WIFI_STATE);
@@ -35,5 +36,8 @@ esp_err_t wifi_maneger_save_sta_config(const char *ssid, const char *password);
 esp_err_t wifi_maneger_clear_sta_config(void);
 esp_err_t wifi_maneger_connect_saved(uint32_t timeout_ms);
 esp_err_t wifi_maneger_get_sta_ip(char *ip, size_t ip_len);
+bool wifi_maneger_provisioning_waiting_confirm(void);
+esp_err_t wifi_maneger_provisioning_confirm(void);
+esp_err_t wifi_maneger_provisioning_keep_ap(void);
 
 #endif
