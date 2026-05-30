@@ -266,6 +266,7 @@ esp_err_t burner_start_task_ex(
     job->mode = mode;
     job->cart_mode = cart_mode;
     job->write_path = write_path;
+    job->recipe_mode = s_burn_recipe_mode_default;
     job->erase_always = erase_always;
     job->mbc5_program_chunk_bytes = burner_clamp_mbc5_program_chunk_bytes(mbc5_program_chunk_bytes);
     job->read_chunk_bytes = burner_dump_chunk_kb_to_bytes(

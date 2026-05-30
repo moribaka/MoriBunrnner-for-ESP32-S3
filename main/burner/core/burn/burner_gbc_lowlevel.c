@@ -3,6 +3,7 @@
 void burner_reset_cart_probe_state(void)
 {
     s_cart_ctx.prepared = false;
+    s_cart_ctx.probe_cfi_ok = false;
     s_cart_ctx.current_bank = UINT16_MAX;
     s_cart_ctx.buffer_write_bytes = 0;
     s_cart_ctx.program_buffer_write_bytes = 0;
@@ -14,6 +15,10 @@ void burner_reset_cart_probe_state(void)
     s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
+    s_cart_ctx.d0d1_known = false;
+    s_cart_ctx.d0d1_swapped = false;
+    s_cart_ctx.gba_likely_read_only = false;
+    burner_gbx_profile_clear(&s_cart_ctx.gbx);
 }
 
 static esp_err_t burner_bacon_gbc_write(uint16_t addr, const uint8_t *buf, size_t len)

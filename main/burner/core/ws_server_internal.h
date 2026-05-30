@@ -185,6 +185,10 @@ typedef struct {
 #define BURNER_MBC5_SLOT_MAX 17U
 #define BURNER_CART_ID_DEBUG_SAMPLE_DEFAULT 32U
 #define BURNER_CART_ID_DEBUG_SAMPLE_MAX 64U
+#define BURNER_GBX_PROFILE_NAME_LEN 64
+#define BURNER_GBX_PROFILE_CMDSET_LEN 24
+#define BURNER_GBX_CMD_STEP_MAX 16U
+#define BURNER_GBX_UNLOCK_READ_MAX 8U
 
 typedef enum {
     BURNER_GBA_CMD_ADDR_WORD = 0, /* unlock: 0x555/0x2AA, CFI enter: 0x055 */
@@ -214,10 +218,102 @@ typedef struct {
     burner_nor_region_t regions[BURNER_NOR_GEOMETRY_REGION_MAX];
 } burner_nor_geometry_t;
 
+typedef enum {
+    BURNER_GBX_ADDR_NONE = 0,
+    BURNER_GBX_ADDR_ABS,
+    BURNER_GBX_ADDR_SA,
+    BURNER_GBX_ADDR_SA_PLUS_2,
+    BURNER_GBX_ADDR_SA_PLUS_132,
+    BURNER_GBX_ADDR_PA,
+} burner_gbx_addr_kind_t;
+
+typedef enum {
+    BURNER_GBX_DATA_NONE = 0,
+    BURNER_GBX_DATA_VALUE,
+    BURNER_GBX_DATA_PD,
+    BURNER_GBX_DATA_BS,
+} burner_gbx_data_kind_t;
+
+typedef struct {
+    burner_gbx_addr_kind_t addr_kind;
+    uint32_t addr_value;
+    burner_gbx_data_kind_t data_kind;
+    uint16_t data_value;
+} burner_gbx_cmd_step_t;
+
+typedef struct {
+    bool enabled;
+    burner_gbx_addr_kind_t addr_kind;
+    uint32_t addr_value;
+    burner_gbx_data_kind_t expect_kind;
+    uint16_t expect_value;
+    uint16_t mask;
+} burner_gbx_wait_step_t;
+
+typedef struct {
+    uint32_t addr;
+    uint16_t len;
+    uint16_t repeat_count;
+} burner_gbx_unlock_read_step_t;
+
+typedef struct {
+    uint8_t count;
+    burner_gbx_cmd_step_t steps[BURNER_GBX_CMD_STEP_MAX];
+} burner_gbx_cmd_list_t;
+
+typedef struct {
+    uint8_t count;
+    burner_gbx_wait_step_t steps[BURNER_GBX_CMD_STEP_MAX];
+} burner_gbx_wait_list_t;
+
+typedef struct {
+    bool active;
+    bool power_cycle;
+    bool wait_read_status_register;
+    bool d0d1_known;
+    bool d0d1_swapped;
+    bool sector_size_from_cfi;
+    bool has_flash_size;
+    bool has_sector_size;
+    bool has_sector_geometry;
+    bool has_buffer_size;
+    bool has_reset_every;
+    bool has_chip_erase_timeout;
+    bool has_flash_bank_select_type;
+    uint8_t flash_bank_select_type;
+    uint8_t reserved0;
+    uint16_t buffer_size;
+    uint32_t flash_size;
+    uint32_t sector_size;
+    uint32_t reset_every;
+    uint32_t chip_erase_timeout_ms;
+    burner_nor_cmdset_t base_cmdset;
+    burner_nor_geometry_t sector_geometry;
+    char display_name[BURNER_GBX_PROFILE_NAME_LEN];
+    char file_name[BURNER_GBX_PROFILE_NAME_LEN];
+    char command_set_name[BURNER_GBX_PROFILE_CMDSET_LEN];
+    burner_gbx_cmd_list_t unlock;
+    burner_gbx_cmd_list_t reset;
+    burner_gbx_cmd_list_t read_status_register;
+    burner_gbx_cmd_list_t read_identifier;
+    burner_gbx_cmd_list_t read_cfi;
+    burner_gbx_cmd_list_t single_write;
+    burner_gbx_wait_list_t single_write_wait_for;
+    burner_gbx_cmd_list_t buffer_write;
+    burner_gbx_wait_list_t buffer_write_wait_for;
+    burner_gbx_cmd_list_t sector_erase;
+    burner_gbx_wait_list_t sector_erase_wait_for;
+    burner_gbx_cmd_list_t chip_erase;
+    burner_gbx_wait_list_t chip_erase_wait_for;
+    uint8_t unlock_read_count;
+    burner_gbx_unlock_read_step_t unlock_read[BURNER_GBX_UNLOCK_READ_MAX];
+} burner_gbx_profile_t;
+
 typedef struct {
     bool prepared;
     uint16_t current_bank;
     uint16_t buffer_write_bytes;
+    uint16_t program_buffer_write_bytes;
     uint32_t sector_size;
     uint32_t device_size;
     burner_nor_geometry_t geometry;
@@ -228,6 +324,8 @@ typedef struct {
     bool d0d1_known;   /* D0/D1 detection completed */
     bool d0d1_swapped; /* D0/D1 data lines swapped */
     bool gba_likely_read_only; /* Probe looks like plain ROM, not writable NOR */
+    bool probe_cfi_ok;
+    burner_gbx_profile_t gbx;
 } burner_cart_ctx_t;
 
 typedef enum {
@@ -298,6 +396,11 @@ typedef enum {
     BURNER_WRITE_PATH_PSRAM,
     BURNER_WRITE_PATH_PIPELINE,
 } burner_write_path_t;
+
+typedef enum {
+    BURNER_RECIPE_MODE_CHIS = 0,
+    BURNER_RECIPE_MODE_GBX,
+} burner_recipe_mode_t;
 
 typedef enum {
     BURNER_CORE_AFFINITY_AUTO = 0,
@@ -416,6 +519,7 @@ typedef struct burner_task_param {
     burner_job_mode_t mode;
     burner_cart_mode_t cart_mode;
     burner_write_path_t write_path;
+    burner_recipe_mode_t recipe_mode;
     bool erase_always;
     uint32_t mbc5_program_chunk_bytes;
     uint32_t read_chunk_bytes;
@@ -577,6 +681,7 @@ extern uint8_t s_gba_fixed_erase_window_enabled;
 extern uint8_t s_mbc5_power_5v_enabled;
 extern uint32_t s_bacon_power_settle_ms;
 extern burner_write_path_t s_burn_write_path_default;
+extern burner_recipe_mode_t s_burn_recipe_mode_default;
 extern uint32_t s_burn_psram_window_mb;
 extern uint32_t s_burn_mbc5_chunk_kb;
 extern uint32_t s_burn_dump_chunk_kb;
@@ -673,6 +778,8 @@ bool burner_parse_u32_text(const char *value, uint32_t *out_value);
 bool burner_parse_cart_mode_text(const char *text, burner_cart_mode_t *mode_out);
 const char *burner_write_path_to_str(burner_write_path_t path);
 bool burner_parse_write_path_text(const char *text, burner_write_path_t *path_out);
+const char *burner_recipe_mode_to_str(burner_recipe_mode_t mode);
+bool burner_parse_recipe_mode_text(const char *text, burner_recipe_mode_t *mode_out);
 uint32_t burner_clamp_mbc5_program_chunk_bytes(uint32_t bytes);
 uint32_t burner_mbc5_program_chunk_kb_to_bytes(uint32_t kb);
 bool burner_is_supported_dump_chunk_bytes(uint32_t bytes);
@@ -937,6 +1044,27 @@ const char *burner_gba_cmd_addr_mode_name(burner_gba_cmd_addr_mode_t mode);
 const char *burner_gba_cmd_data_lane_name(burner_gba_cmd_data_lane_t lane);
 void burner_format_hex_bytes(const uint8_t *data, size_t len, char *out, size_t out_len);
 bool burner_gba_id_looks_like_rom_header(const uint8_t id[8]);
+void burner_gbx_profile_clear(burner_gbx_profile_t *profile);
+esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out);
+bool burner_gba_gbx_is_active(void);
+esp_err_t burner_gba_gbx_prepare_profile(
+    const burner_task_param_t *job,
+    const uint8_t id[8],
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    uint16_t *program_buffer_write_bytes,
+    bool cfi_ok);
+esp_err_t burner_gba_gbx_reset_to_read_mode(bool full_reset, bool is_multi_card, uint32_t max_address);
+esp_err_t burner_gba_gbx_finalize_write(bool is_multi_card);
+esp_err_t burner_gba_gbx_program_block(
+    const uint8_t *data,
+    size_t len,
+    uint32_t offset,
+    bool is_multi_card,
+    bool prepare_sectors);
+esp_err_t burner_gba_gbx_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms);
+esp_err_t burner_gba_gbx_chip_erase_once(void);
 esp_err_t burner_bacon_gba_probe_locked(
     uint8_t id_out[8],
     uint32_t *device_size,

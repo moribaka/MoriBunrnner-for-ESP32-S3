@@ -1,5 +1,320 @@
 /* GBA ROM burn job implementations. */
 
+static void burner_gba_post_write_diag_log_first_mismatch(
+    const char *label,
+    uint32_t base_addr,
+    const uint8_t *expected,
+    const uint8_t *actual,
+    size_t len)
+{
+    size_t i;
+
+    if (label == NULL || expected == NULL || actual == NULL || len == 0u) {
+        return;
+    }
+    for (i = 0u; i < len; ++i) {
+        if (expected[i] != actual[i]) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA post-write %s mismatch @0x%08" PRIX32 " file=%02X cart=%02X",
+                label,
+                base_addr + (uint32_t)i,
+                expected[i],
+                actual[i]);
+            return;
+        }
+    }
+}
+
+static void burner_gba_post_write_diag_log_prefix(
+    const char *label,
+    const uint8_t *buf,
+    size_t len)
+{
+    enum {
+        BURNER_GBA_POST_WRITE_PREFIX_BYTES = 16
+    };
+    char line[BURNER_GBA_POST_WRITE_PREFIX_BYTES * 3 + 1];
+    size_t prefix_len;
+    size_t pos = 0u;
+
+    if (label == NULL || buf == NULL || len == 0u) {
+        return;
+    }
+
+    prefix_len = (len < BURNER_GBA_POST_WRITE_PREFIX_BYTES) ? len : (size_t)BURNER_GBA_POST_WRITE_PREFIX_BYTES;
+    for (size_t i = 0u; i < prefix_len && (pos + 3u) < sizeof(line); ++i) {
+        pos += (size_t)snprintf(line + pos, sizeof(line) - pos, "%02X", buf[i]);
+        if (i + 1u < prefix_len && (pos + 1u) < sizeof(line)) {
+            line[pos++] = ' ';
+            line[pos] = '\0';
+        }
+    }
+    line[sizeof(line) - 1u] = '\0';
+    ESP_LOGW(BURNER_TAG, "GBA post-write %s prefix[%u]: %s", label, (unsigned)prefix_len, line);
+}
+
+static void burner_gba_post_write_diag_log_swapped_prefix(
+    const char *label,
+    const uint8_t *buf,
+    size_t len)
+{
+    enum {
+        BURNER_GBA_POST_WRITE_PREFIX_BYTES = 16
+    };
+    uint8_t swapped[BURNER_GBA_POST_WRITE_PREFIX_BYTES];
+    size_t prefix_len;
+
+    if (label == NULL || buf == NULL || len == 0u) {
+        return;
+    }
+
+    prefix_len = (len < BURNER_GBA_POST_WRITE_PREFIX_BYTES) ? len : (size_t)BURNER_GBA_POST_WRITE_PREFIX_BYTES;
+    for (size_t i = 0u; i < prefix_len; ++i) {
+        swapped[i] = (uint8_t)SWAP_D0D1_U8(buf[i]);
+    }
+    burner_gba_post_write_diag_log_prefix(label, swapped, prefix_len);
+}
+
+static void burner_gba_post_write_diag_log_swap_match(
+    const char *label,
+    const uint8_t *expected,
+    const uint8_t *actual,
+    size_t len)
+{
+    enum {
+        BURNER_GBA_POST_WRITE_COMPARE_BYTES = 32
+    };
+    size_t compare_len;
+    size_t match_count = 0u;
+
+    if (label == NULL || expected == NULL || actual == NULL || len == 0u) {
+        return;
+    }
+
+    compare_len = (len < BURNER_GBA_POST_WRITE_COMPARE_BYTES) ? len : (size_t)BURNER_GBA_POST_WRITE_COMPARE_BYTES;
+    for (size_t i = 0u; i < compare_len; ++i) {
+        if ((uint8_t)SWAP_D0D1_U8(expected[i]) == actual[i]) {
+            match_count++;
+        }
+    }
+    ESP_LOGW(
+        BURNER_TAG,
+        "GBA post-write %s swapped-byte matches: %u/%u",
+        label,
+        (unsigned)match_count,
+        (unsigned)compare_len);
+}
+
+static bool burner_gba_apply_header_checksum_fix(
+    uint8_t *buf,
+    size_t len,
+    uint32_t file_offset,
+    bool log_change)
+{
+    enum {
+        BURNER_GBA_HEADER_CHECKSUM_START = 0xA0u,
+        BURNER_GBA_HEADER_CHECKSUM_OFFSET = 0xBDu,
+    };
+    uint8_t checksum = 0u;
+    uint8_t old_checksum;
+
+    if (buf == NULL || file_offset != 0u || len <= BURNER_GBA_HEADER_CHECKSUM_OFFSET) {
+        return false;
+    }
+
+    for (size_t i = BURNER_GBA_HEADER_CHECKSUM_START; i < BURNER_GBA_HEADER_CHECKSUM_OFFSET; ++i) {
+        checksum = (uint8_t)(checksum - buf[i]);
+    }
+    checksum = (uint8_t)((checksum - 0x19u) & 0xFFu);
+    old_checksum = buf[BURNER_GBA_HEADER_CHECKSUM_OFFSET];
+    if (old_checksum == checksum) {
+        return false;
+    }
+
+    buf[BURNER_GBA_HEADER_CHECKSUM_OFFSET] = checksum;
+    if (log_change) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA ROM header checksum auto-fixed: old=%02X new=%02X",
+            old_checksum,
+            checksum);
+    }
+    return true;
+}
+
+static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_param_t *job)
+{
+    enum {
+        BURNER_GBA_POST_WRITE_DIAG_BYTES = 0x200
+    };
+    uint8_t rom_buf[BURNER_GBA_POST_WRITE_DIAG_BYTES];
+    uint8_t host_buf[BURNER_GBA_POST_WRITE_DIAG_BYTES];
+    uint8_t std_buf[BURNER_GBA_POST_WRITE_DIAG_BYTES];
+    uint32_t diag_addr;
+    size_t diag_len;
+    size_t got;
+    bool host_match;
+    bool std_match;
+    esp_err_t err;
+
+    if (fp == NULL || job == NULL || job->total_bytes == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    diag_addr = job->addr_begin;
+    diag_len = (job->total_bytes < BURNER_GBA_POST_WRITE_DIAG_BYTES)
+                   ? (size_t)job->total_bytes
+                   : (size_t)BURNER_GBA_POST_WRITE_DIAG_BYTES;
+    diag_len &= ~((size_t)0x1u);
+    if (diag_len < 2u) {
+        return ESP_OK;
+    }
+
+    if (fseek(fp, 0L, SEEK_SET) != 0) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA post-write header diag skipped: seek failed file_offset=0 addr=0x%08" PRIX32,
+            diag_addr);
+        return ESP_FAIL;
+    }
+    got = fread(rom_buf, 1, diag_len, fp);
+    if (got != diag_len) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA post-write header diag skipped: file read short got=%u need=%u addr=0x%08" PRIX32,
+            (unsigned)got,
+            (unsigned)diag_len,
+            diag_addr);
+        return ESP_FAIL;
+    }
+    (void)burner_gba_apply_header_checksum_fix(rom_buf, diag_len, 0u, false);
+
+    burner_spi_lock_take();
+    err = burner_bacon_gba_verify_read_block_hoststyle(
+        host_buf,
+        diag_len,
+        diag_addr,
+        burner_is_gba_multi_card(job));
+    if (err == ESP_OK) {
+        err = burner_bacon_gba_read_block(
+            std_buf,
+            diag_len,
+            diag_addr,
+            burner_is_gba_multi_card(job));
+    }
+    burner_spi_lock_give();
+    if (err != ESP_OK) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA post-write header diag read failed @0x%08" PRIX32 " err=%s",
+            diag_addr,
+            esp_err_to_name(err));
+        return err;
+    }
+
+    host_match = (memcmp(rom_buf, host_buf, diag_len) == 0);
+    std_match = (memcmp(rom_buf, std_buf, diag_len) == 0);
+
+    if ((!host_match || !std_match) &&
+        !burner_gba_gbx_is_active() &&
+        burner_gba_nor_is_intel_active() &&
+        s_cart_ctx.probe_cfi_ok) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA post-write header diag mismatch after first read; retrying after final Intel reset");
+        burner_spi_lock_take();
+        err = burner_bacon_gba_finalize_write(burner_is_gba_multi_card(job));
+        if (err == ESP_OK) {
+            err = burner_bacon_gba_verify_read_block_hoststyle(
+                host_buf,
+                diag_len,
+                diag_addr,
+                burner_is_gba_multi_card(job));
+        }
+        if (err == ESP_OK) {
+            err = burner_bacon_gba_read_block(
+                std_buf,
+                diag_len,
+                diag_addr,
+                burner_is_gba_multi_card(job));
+        }
+        burner_spi_lock_give();
+        if (err != ESP_OK) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA post-write header diag retry failed @0x%08" PRIX32 " err=%s",
+                diag_addr,
+                esp_err_to_name(err));
+            return err;
+        }
+        host_match = (memcmp(rom_buf, host_buf, diag_len) == 0);
+        std_match = (memcmp(rom_buf, std_buf, diag_len) == 0);
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA post-write header diag retry: hoststyle=%s standard=%s addr=0x%08" PRIX32 " len=%u",
+            host_match ? "match" : "mismatch",
+            std_match ? "match" : "mismatch",
+            diag_addr,
+            (unsigned)diag_len);
+    }
+
+    if (host_match && std_match) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA post-write header diag: hoststyle=match standard=match addr=0x%08" PRIX32 " len=%u",
+            diag_addr,
+            (unsigned)diag_len);
+        return ESP_OK;
+    }
+    if (host_match) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA post-write header diag: hoststyle=match standard=mismatch addr=0x%08" PRIX32 " len=%u swapped=%u",
+            diag_addr,
+            (unsigned)diag_len,
+            s_cart_ctx.d0d1_swapped ? 1u : 0u);
+        burner_gba_post_write_diag_log_first_mismatch("standard", diag_addr, rom_buf, std_buf, diag_len);
+        return ESP_OK;
+    }
+    if (std_match) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA post-write header diag: hoststyle=mismatch standard=match addr=0x%08" PRIX32 " len=%u swapped=%u",
+            diag_addr,
+            (unsigned)diag_len,
+            s_cart_ctx.d0d1_swapped ? 1u : 0u);
+        burner_gba_post_write_diag_log_first_mismatch("hoststyle", diag_addr, rom_buf, host_buf, diag_len);
+        return ESP_OK;
+    }
+
+    ESP_LOGW(
+        BURNER_TAG,
+        "GBA post-write header diag: hoststyle=mismatch standard=mismatch addr=0x%08" PRIX32 " len=%u swapped=%u",
+        diag_addr,
+        (unsigned)diag_len,
+        s_cart_ctx.d0d1_swapped ? 1u : 0u);
+    burner_gba_post_write_diag_log_prefix("file", rom_buf, diag_len);
+    burner_gba_post_write_diag_log_prefix("hoststyle", host_buf, diag_len);
+    burner_gba_post_write_diag_log_prefix("standard", std_buf, diag_len);
+    if (s_cart_ctx.d0d1_swapped) {
+        burner_gba_post_write_diag_log_swapped_prefix("file-swapped", rom_buf, diag_len);
+        burner_gba_post_write_diag_log_swap_match("hoststyle", rom_buf, host_buf, diag_len);
+        burner_gba_post_write_diag_log_swap_match("standard", rom_buf, std_buf, diag_len);
+    }
+    burner_gba_post_write_diag_log_first_mismatch("hoststyle", diag_addr, rom_buf, host_buf, diag_len);
+    burner_gba_post_write_diag_log_first_mismatch("standard", diag_addr, rom_buf, std_buf, diag_len);
+    return ESP_FAIL;
+}
+
+static size_t burner_gba_program_chunk_limit_bytes(void)
+{
+    if (!burner_gba_gbx_is_active() && burner_gba_nor_is_intel_active()) {
+        return 32768u;
+    }
+    return BURN_GBA_PROGRAM_CHUNK_BYTES;
+}
+
 static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 {
     FILE *fp = NULL;
@@ -117,6 +432,18 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             job->rom_name,
             job->rom_path);
         return ESP_ERR_INVALID_SIZE;
+    }
+    if (!burner_gba_gbx_is_active() &&
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL && !s_cart_ctx.probe_cfi_ok) {
+        burner_status_update(
+            BURNER_STATE_ERROR,
+            0,
+            0,
+            job->total_bytes,
+            "intel gba write requires valid cfi",
+            job->rom_name,
+            job->rom_path);
+        return ESP_ERR_NOT_SUPPORTED;
     }
     fp = fopen(job->rom_path, "rb");
     if (fp == NULL) {
@@ -277,7 +604,14 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         }
     }
     burner_gba_sector_erase_ctx_reset();
-    if (use_pipeline_stage && should_erase) {
+    if (should_erase && burner_gba_nor_is_intel_active()) {
+        burner_gba_sector_erase_ctx_begin(
+            addr_begin,
+            addr_begin + job->total_bytes - 1u,
+            s_cart_ctx.sector_size,
+            burner_is_gba_multi_card(job),
+            erase_every_sector);
+    } else if (use_pipeline_stage && should_erase) {
         burner_gba_sector_erase_ctx_begin(
             addr_begin,
             addr_begin + job->total_bytes - 1u,
@@ -285,7 +619,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             burner_is_gba_multi_card(job),
             erase_every_sector);
     }
-    if (should_erase && !use_psram_stage) {
+    if (should_erase && !use_psram_stage && !burner_gba_nor_is_intel_active()) {
         burner_status_mark_erase_begin();
         erase_timer_started = true;
         burner_status_update(
@@ -370,7 +704,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                     should_erase ? "yes" : "no");
             }
 
-            if (should_erase) {
+            if (should_erase && (!burner_gba_nor_is_intel_active() || use_pipeline_stage)) {
                 uint32_t stage_erase_begin = stage_addr;
                 uint32_t stage_erase_end = stage_addr + (uint32_t)stage_bytes - 1u;
 
@@ -569,15 +903,17 @@ gba_stage_erase_done:
                     burner_status_record_tf_to_psram_copy((uint32_t)stage_bytes, tf_read_elapsed_us);
                 }
             }
+            (void)burner_gba_apply_header_checksum_fix(psram_stage_buf, stage_bytes, processed, processed == 0u);
 
             while (stage_off < stage_bytes) {
                 size_t chunk_bytes = stage_bytes - stage_off;
+                size_t chunk_limit = burner_gba_program_chunk_limit_bytes();
                 uint32_t write_addr = addr_begin + processed + (uint32_t)stage_off;
                 uint32_t now_processed;
                 int progress;
 
-                if (chunk_bytes > BURN_GBA_PROGRAM_CHUNK_BYTES) {
-                    chunk_bytes = BURN_GBA_PROGRAM_CHUNK_BYTES;
+                if (chunk_bytes > chunk_limit) {
+                    chunk_bytes = chunk_limit;
                 }
                 if (burner_gba_should_log_program_boundary(
                         write_addr,
@@ -600,7 +936,9 @@ gba_stage_erase_done:
                     chunk_bytes,
                     write_addr,
                     burner_is_gba_multi_card(job),
-                    use_pipeline_stage && should_erase && !burner_gba_nor_is_intel_active());
+                    should_erase &&
+                        ((use_pipeline_stage && !burner_gba_nor_is_intel_active()) ||
+                         (!use_pipeline_stage && burner_gba_nor_is_intel_active())));
                 burner_spi_lock_give();
                 if (err != ESP_OK) {
                     char program_err_msg[96];
@@ -643,11 +981,12 @@ gba_stage_erase_done:
     } else {
         while (processed < job->total_bytes) {
             size_t chunk_bytes = (size_t)(job->total_bytes - processed);
+            size_t chunk_limit = burner_gba_program_chunk_limit_bytes();
             uint32_t write_addr = addr_begin + processed;
             int progress;
 
-            if (chunk_bytes > BURN_GBA_PROGRAM_CHUNK_BYTES) {
-                chunk_bytes = BURN_GBA_PROGRAM_CHUNK_BYTES;
+            if (chunk_bytes > chunk_limit) {
+                chunk_bytes = chunk_limit;
             }
             if (burner_gba_should_log_program_boundary(write_addr, chunk_bytes, processed, job->total_bytes)) {
                 ESP_LOGI(
@@ -681,6 +1020,7 @@ gba_stage_erase_done:
                     job->rom_path);
                 goto write_gba_done;
             }
+            (void)burner_gba_apply_header_checksum_fix(buf, chunk_bytes, processed, processed == 0u);
 
             burner_spi_lock_take();
             err = burner_bacon_gba_program_block(
@@ -688,7 +1028,7 @@ gba_stage_erase_done:
                 chunk_bytes,
                 write_addr,
                 burner_is_gba_multi_card(job),
-                false);
+                should_erase && burner_gba_nor_is_intel_active());
             burner_spi_lock_give();
             if (err != ESP_OK) {
                 char program_err_msg[96];
@@ -756,6 +1096,27 @@ gba_stage_erase_done:
                 processed,
                 job->total_bytes,
                 "final gba flash reset failed",
+                job->rom_name,
+                job->rom_path);
+        }
+    }
+    if (err == ESP_OK) {
+        burner_status_update(
+            BURNER_STATE_BURNING,
+            100,
+            processed,
+            job->total_bytes,
+            "post-write gba header check",
+            job->rom_name,
+            job->rom_path);
+        err = burner_gba_post_write_header_diag(fp, job);
+        if (err != ESP_OK) {
+            burner_status_update(
+                BURNER_STATE_ERROR,
+                0,
+                processed,
+                job->total_bytes,
+                "post-write gba header verify failed",
                 job->rom_name,
                 job->rom_path);
         }
@@ -1007,6 +1368,7 @@ static esp_err_t burner_run_verify_rom_job_gba(const burner_task_param_t *job)
                 }
             }
         }
+        (void)burner_gba_apply_header_checksum_fix(rom_buf, read_len, processed, false);
 
         burner_spi_lock_take();
         err = burner_bacon_gba_verify_read_block_hoststyle(
@@ -1175,6 +1537,18 @@ static esp_err_t burner_run_erase_rom_job_gba(const burner_task_param_t *job)
             job->rom_name,
             job->rom_path);
         return ESP_ERR_INVALID_STATE;
+    }
+    if (!burner_gba_gbx_is_active() &&
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL && !s_cart_ctx.probe_cfi_ok) {
+        burner_status_update(
+            BURNER_STATE_ERROR,
+            0,
+            0,
+            1u,
+            "intel gba chip erase requires valid cfi",
+            job->rom_name,
+            job->rom_path);
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
     burner_status_update(

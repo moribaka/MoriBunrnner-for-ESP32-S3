@@ -105,6 +105,7 @@
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
+#define UI_BURN_ROM_RECIPE_ITEM_COUNT 2
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
 #define UI_BURN_ROM_MAPPER_ITEM_COUNT 2
@@ -113,7 +114,7 @@
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 7
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
-#define UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT 8
+#define UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT 9
 #define UI_BURN_ROM_MBC5_WITH_ROM_ITEM_COUNT 10
 #define UI_BURN_ROM_ACTION_ROWS UI_LIST_VISIBLE_COUNT
 #define UI_BURN_SPLIT_GAP 8
@@ -228,7 +229,8 @@ typedef enum {
 } ui_file_action_t;
 
 typedef enum {
-    UI_BURN_ROM_OP_ANALYZE = 0,
+    UI_BURN_ROM_OP_RECIPE_MODE = 0,
+    UI_BURN_ROM_OP_ANALYZE,
     UI_BURN_ROM_OP_CHOOSE_ROM,
     UI_BURN_ROM_OP_ROM_MAPPER,
     UI_BURN_ROM_OP_WRITE_ROM,
@@ -252,6 +254,7 @@ typedef enum {
 typedef enum {
     UI_BURN_ROM_SUBMENU_NONE = 0,
     UI_BURN_ROM_SUBMENU_WRITE,
+    UI_BURN_ROM_SUBMENU_RECIPE_MODE,
     UI_BURN_ROM_SUBMENU_DUMP_SIZE,
     UI_BURN_ROM_SUBMENU_DUMP_CUSTOM,
     UI_BURN_ROM_SUBMENU_MAPPER,
@@ -363,6 +366,7 @@ typedef enum {
 typedef struct {
     ui_work_type_t type;
     burner_cart_mode_t cart_mode;
+    bool task_with_caps;
 } ui_work_request_t;
 
 typedef struct {
@@ -476,6 +480,7 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index);
 static bool ui_burn_cart_has_slots(void);
 static const char *ui_mbc5_voltage_label(void);
 static void ui_focus_burn_rom_op_locked(ui_model_t *model, ui_burn_rom_op_t op);
+static void ui_persist_burn_settings_locked(ui_model_t *model);
 static const char *ui_selected_gb_mapper_label(void);
 
 static bool ui_lang_is_zh(void)
@@ -583,6 +588,7 @@ static uint8_t s_nav_depth = 0;
 static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
 static burner_write_path_t s_write_path = BURNER_WRITE_PATH_PSRAM;
+static burner_recipe_mode_t s_recipe_mode = BURNER_RECIPE_MODE_CHIS;
 static bool s_ram_fram = false;
 static burner_gba_save_type_t s_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
 static uint32_t s_cart_slot = 0;
@@ -1431,9 +1437,60 @@ static const char *ui_erase_mode_label(void)
     return (s_burn_erase_always != 0u) ? "Force erase" : "Smart skip";
 }
 
+static const char *ui_recipe_mode_label(burner_recipe_mode_t mode)
+{
+    return (mode == BURNER_RECIPE_MODE_GBX) ? "GBX" : "CHIS";
+}
+
+static const char *ui_recipe_mode_hint(burner_recipe_mode_t mode)
+{
+    if (mode == s_recipe_mode) {
+        return ui_lang_is_zh() ? "当前" : "Current";
+    }
+    return (mode == BURNER_RECIPE_MODE_GBX) ?
+               (ui_lang_is_zh() ? ".gbx配置" : ".gbx profile") :
+               (ui_lang_is_zh() ? "自动探测" : "Auto probe");
+}
+
+static bool ui_burn_rom_has_recipe_mode_row(void)
+{
+    return s_cart_mode == BURNER_CART_MODE_GBA;
+}
+
+static void ui_reset_cart_analysis_locked(void)
+{
+    s_cart_analyzed = false;
+    s_analyzed_cart_info[0] = '\0';
+    if (s_status_lock != NULL) {
+        xSemaphoreTake(s_status_lock, portMAX_DELAY);
+        burner_status_probe_reset_locked();
+        xSemaphoreGive(s_status_lock);
+    }
+}
+
+static void ui_apply_recipe_mode_locked(ui_model_t *model, burner_recipe_mode_t mode)
+{
+    bool changed = (s_recipe_mode != mode);
+
+    s_recipe_mode = mode;
+    s_burn_rom_write_menu = false;
+    s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+    if (changed) {
+        ui_persist_burn_settings_locked(model);
+        ui_reset_cart_analysis_locked();
+    }
+    ui_set_status_locked(
+        model,
+        (mode == BURNER_RECIPE_MODE_GBX) ?
+            (ui_lang_is_zh() ? "烧录方式: GBX" : "Burn method: GBX") :
+            (ui_lang_is_zh() ? "烧录方式: CHIS" : "Burn method: CHIS"));
+    ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_RECIPE_MODE);
+}
+
 static void ui_sync_burn_settings_from_runtime(void)
 {
     s_write_path = s_burn_write_path_default;
+    s_recipe_mode = s_burn_recipe_mode_default;
     s_psram_mb = s_burn_psram_window_mb;
     s_mbc5_chunk_kb = s_burn_mbc5_chunk_kb;
     s_dump_chunk_kb = s_burn_dump_chunk_kb;
@@ -1442,6 +1499,7 @@ static void ui_sync_burn_settings_from_runtime(void)
 static void ui_sync_runtime_burn_settings_from_local(void)
 {
     s_burn_write_path_default = s_write_path;
+    s_burn_recipe_mode_default = s_recipe_mode;
     s_burn_psram_window_mb = s_psram_mb;
     s_burn_mbc5_chunk_kb = s_mbc5_chunk_kb;
     s_burn_dump_chunk_kb = s_dump_chunk_kb;
@@ -1744,6 +1802,9 @@ static uint16_t ui_burn_rom_item_count(void)
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
         return UI_BURN_ROM_WRITE_PATH_ITEM_COUNT;
     }
+    if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
+        return UI_BURN_ROM_RECIPE_ITEM_COUNT;
+    }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_SIZE) {
         return (uint16_t)(UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT + (ui_burn_cart_has_slots() ? 1U : 0U));
     }
@@ -1763,7 +1824,7 @@ static uint16_t ui_burn_rom_item_count(void)
         return UI_BURN_RAM_ITEM_COUNT;
     }
     if (!ui_cart_is_unlocked()) {
-        return UI_BURN_ROM_LOCKED_ITEM_COUNT;
+        return (uint16_t)(UI_BURN_ROM_LOCKED_ITEM_COUNT + (ui_burn_rom_has_recipe_mode_row() ? 1U : 0U));
     }
     if (s_cart_mode == BURNER_CART_MODE_GBA) {
         return UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT;
@@ -3356,12 +3417,80 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             mbc5_id[3],
             cfi_ok ? "CFI" : "no CFI");
     } else {
+        burner_gbx_profile_t gbx_profile;
+        bool gbx_profile_matched = false;
+
+        burner_gbx_profile_clear(&gbx_profile);
         save_probe_device_size = device_size;
         if (s_cart_ctx.gba_likely_read_only) {
             snprintf(chip_name, sizeof(chip_name), "%s", ui_tr("Read-only retail ROM"));
             device_size = 0u;
             sector_size = 0u;
             buffer_write_bytes = 0u;
+        } else if (s_recipe_mode == BURNER_RECIPE_MODE_GBX) {
+            err = burner_gbx_lookup_profile_from_id(gba_id, &gbx_profile);
+            if (err != ESP_OK) {
+                burner_nor_format_chip_name(
+                    chip_name,
+                    sizeof(chip_name),
+                    burner_gba_chip_name(gba_id),
+                    s_cart_ctx.gba_cmdset,
+                    device_size);
+                burner_status_set_probe_info(
+                    BURNER_CART_MODE_GBA,
+                    gba_id,
+                    sizeof(gba_id),
+                    device_size,
+                    sector_size,
+                    buffer_write_bytes,
+                    cfi_ok,
+                    false,
+                    false,
+                    gba_d0d1_known,
+                    gba_d0d1_swapped,
+                    chip_name,
+                    "GBX");
+                burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
+                burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
+                ESP_LOGW(
+                    UI_TAG,
+                    "GBX profile not found for GBA ID %02X %02X %02X %02X %02X %02X %02X %02X",
+                    gba_id[0],
+                    gba_id[1],
+                    gba_id[2],
+                    gba_id[3],
+                    gba_id[4],
+                    gba_id[5],
+                    gba_id[6],
+                    gba_id[7]);
+                return err;
+            }
+
+            if (gbx_profile.has_flash_size) {
+                device_size = gbx_profile.flash_size;
+            }
+            if (gbx_profile.has_sector_size &&
+                (!gbx_profile.sector_size_from_cfi || sector_size == 0u)) {
+                sector_size = gbx_profile.sector_size;
+            }
+            if (gbx_profile.has_buffer_size && buffer_write_bytes == 0u) {
+                buffer_write_bytes = gbx_profile.buffer_size;
+            }
+            if (gbx_profile.d0d1_known) {
+                gba_d0d1_known = true;
+                gba_d0d1_swapped = gbx_profile.d0d1_swapped;
+            }
+
+            burner_nor_format_chip_name(
+                chip_name,
+                sizeof(chip_name),
+                gbx_profile.display_name[0] != '\0' ? gbx_profile.display_name : burner_gba_chip_name(gba_id),
+                (gbx_profile.base_cmdset != BURNER_NOR_CMDSET_UNKNOWN) ? gbx_profile.base_cmdset : s_cart_ctx.gba_cmdset,
+                device_size);
+            if (device_size != 0u) {
+                save_probe_device_size = device_size;
+            }
+            gbx_profile_matched = true;
         } else {
             burner_nor_format_chip_name(
                 chip_name,
@@ -3383,7 +3512,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            "");
+            gbx_profile_matched ? "GBX" : "");
         {
             bool detected = false;
             burner_spi_lock_take();
@@ -3402,16 +3531,20 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                 burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
             }
         }
-        snprintf(
-            out,
-            out_len,
-            "%s ID %02X %02X %02X %02X %s",
-            ui_cart_mode_label(cart_mode),
-            gba_id[0],
-            gba_id[1],
-            gba_id[2],
-            gba_id[3],
-            s_cart_ctx.gba_likely_read_only ? ui_tr("Read-only retail ROM") : (cfi_ok ? "CFI" : "no CFI"));
+        if (gbx_profile_matched) {
+            snprintf(out, out_len, "%s GBX %s", ui_cart_mode_label(cart_mode), chip_name);
+        } else {
+            snprintf(
+                out,
+                out_len,
+                "%s ID %02X %02X %02X %02X %s",
+                ui_cart_mode_label(cart_mode),
+                gba_id[0],
+                gba_id[1],
+                gba_id[2],
+                gba_id[3],
+                s_cart_ctx.gba_likely_read_only ? ui_tr("Read-only retail ROM") : (cfi_ok ? "CFI" : "no CFI"));
+        }
     }
     return ESP_OK;
 }
@@ -3510,7 +3643,7 @@ static void ui_finish_work_task(ui_work_type_t type, esp_err_t err, const char *
             snprintf(s_analyzed_cart_info, sizeof(s_analyzed_cart_info), "%s", ok_text != NULL ? ok_text : "");
             s_burn_rom_write_menu = false;
             s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
-            ui_focus_burn_rom_row_locked(&s_model, 1U);
+            ui_focus_burn_rom_row_locked(&s_model, (cart_mode == BURNER_CART_MODE_GBA) ? 2U : 1U);
         } else {
             s_cart_analyzed = false;
             s_analyzed_cart_info[0] = '\0';
@@ -3537,11 +3670,13 @@ static void ui_work_task(void *param)
     ui_work_request_t *request = (ui_work_request_t *)param;
     esp_err_t err = ESP_ERR_INVALID_ARG;
     const char *ok_text = ui_tr("done");
+    bool task_with_caps = false;
 
     if (request == NULL) {
         vTaskDelete(NULL);
         return;
     }
+    task_with_caps = request->task_with_caps;
 
     switch (request->type) {
         case UI_WORK_WIFI_CONNECT_SAVED:
@@ -3601,7 +3736,11 @@ static void ui_work_task(void *param)
 
     ui_finish_work_task(request->type, err, ok_text, request->cart_mode);
     free(request);
-    vTaskDelete(NULL);
+    if (task_with_caps) {
+        vTaskDeleteWithCaps(NULL);
+    } else {
+        vTaskDelete(NULL);
+    }
 }
 
 static void ui_burn_probe_task(void *param)
@@ -3610,11 +3749,13 @@ static void ui_burn_probe_task(void *param)
     esp_err_t err = ESP_ERR_INVALID_ARG;
     const char *ok_text = ui_tr("done");
     char id_text[UI_STATUS_TEXT_MAX_LEN] = {0};
+    bool task_with_caps = false;
 
     if (request == NULL) {
         vTaskDelete(NULL);
         return;
     }
+    task_with_caps = request->task_with_caps;
 
     switch (request->type) {
         case UI_WORK_BURN_READ_ID:
@@ -3633,7 +3774,11 @@ static void ui_burn_probe_task(void *param)
     ui_finish_work_task(request->type, err, ok_text, request->cart_mode);
     ESP_LOGI(UI_TAG, "UI probe task stack free min=%u bytes", (unsigned)uxTaskGetStackHighWaterMark2(NULL));
     free(request);
-    vTaskDelete(NULL);
+    if (task_with_caps) {
+        vTaskDeleteWithCaps(NULL);
+    } else {
+        vTaskDelete(NULL);
+    }
 }
 
 static void ui_start_work_async(ui_work_type_t type)
@@ -3647,6 +3792,7 @@ static void ui_start_work_async(ui_work_type_t type)
     BaseType_t core_id = UI_SYSTEM_TASK_CORE_ID;
     TaskFunction_t task_fn = ui_work_task;
     bool is_burn_probe = (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_UNLOCK_PPB);
+    BaseType_t ret = pdFAIL;
 
     if (!ui_take_model_lock()) {
         return;
@@ -3703,15 +3849,49 @@ static void ui_start_work_async(ui_work_type_t type)
     }
     request->type = type;
     request->cart_mode = s_cart_mode;
+    request->task_with_caps = false;
 
-    if (xTaskCreatePinnedToCore(
+    if (is_burn_probe) {
+        request->task_with_caps = true;
+        ret = xTaskCreatePinnedToCoreWithCaps(
             task_fn,
             task_name,
             stack_size,
             request,
             priority,
             NULL,
-            core_id) != pdPASS) {
+            core_id,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (ret == pdPASS) {
+            return;
+        }
+        request->task_with_caps = false;
+    }
+
+    ret = xTaskCreatePinnedToCore(
+        task_fn,
+        task_name,
+        stack_size,
+        request,
+        priority,
+        NULL,
+        core_id);
+    if (ret != pdPASS) {
+        size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
+        ESP_LOGW(
+            UI_TAG,
+            "UI work task create failed: type=%d ret=%d stack=%u internal_free=%u internal_largest=%u psram_free=%u psram_largest=%u",
+            (int)type,
+            (int)ret,
+            (unsigned)stack_size,
+            (unsigned)internal_free,
+            (unsigned)internal_largest,
+            (unsigned)psram_free,
+            (unsigned)psram_largest);
         free(request);
         ui_finish_work_task(type, ESP_ERR_NO_MEM, NULL, s_cart_mode);
     }
@@ -4062,6 +4242,11 @@ static void ui_back_locked(ui_model_t *model)
         ui_mark_content_dirty(model);
         return;
     }
+    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
+        s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+        ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_RECIPE_MODE);
+        return;
+    }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
         ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_ROM_MAPPER);
@@ -4324,6 +4509,9 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index)
 {
     uint16_t cursor = 0;
 
+    if (ui_burn_rom_has_recipe_mode_row() && index == cursor++) {
+        return UI_BURN_ROM_OP_RECIPE_MODE;
+    }
     if (index == cursor++) {
         return UI_BURN_ROM_OP_ANALYZE;
     }
@@ -4399,6 +4587,19 @@ static void ui_burn_rom_open_write_menu_locked(ui_model_t *model)
     model->scroll = 0;
     ui_mark_content_dirty(model);
     ui_set_status_locked(model, ui_tr("select write method"));
+}
+
+static void ui_burn_rom_open_recipe_menu_locked(ui_model_t *model)
+{
+    if (model == NULL) {
+        return;
+    }
+    s_burn_rom_write_menu = false;
+    s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_RECIPE_MODE;
+    model->selected = (s_recipe_mode == BURNER_RECIPE_MODE_GBX) ? 1U : 0U;
+    model->scroll = 0;
+    ui_mark_content_dirty(model);
+    ui_set_status_locked(model, ui_lang_is_zh() ? "选择烧录方式" : "Select burn method");
 }
 
 static void ui_burn_rom_open_dump_size_menu_locked(ui_model_t *model)
@@ -4623,6 +4824,10 @@ static void ui_select_locked(
                         ui_mark_content_dirty(model);
                     }
                 }
+            } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
+                ui_apply_recipe_mode_locked(
+                    model,
+                    (model->selected == 1U) ? BURNER_RECIPE_MODE_GBX : BURNER_RECIPE_MODE_CHIS);
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
                 s_gb_mapper_override_kind =
                     (model->selected == 1U) ? BURNER_GB_MAPPER_MBC3 : BURNER_GB_MAPPER_MBC5;
@@ -4746,6 +4951,9 @@ static void ui_select_locked(
                 }
             } else {
                 switch (ui_burn_rom_op_for_index(model->selected)) {
+                    case UI_BURN_ROM_OP_RECIPE_MODE:
+                        ui_burn_rom_open_recipe_menu_locked(model);
+                        break;
                     case UI_BURN_ROM_OP_ANALYZE:
                         *work_type = UI_WORK_BURN_READ_ID;
                         *start_work = true;
@@ -5602,6 +5810,13 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         snprintf(hint, hint_len, "%s", s_burn_rom_custom_size_text[0] != '\0' ? s_burn_rom_custom_size_text : ui_tr("MiB"));
         return;
     }
+    if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
+        burner_recipe_mode_t mode = (index == 1U) ? BURNER_RECIPE_MODE_GBX : BURNER_RECIPE_MODE_CHIS;
+
+        snprintf(title, title_len, "%s", ui_recipe_mode_label(mode));
+        snprintf(hint, hint_len, "%s", ui_recipe_mode_hint(mode));
+        return;
+    }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
         snprintf(title, title_len, "%s", (index == 1U) ? "MBC3" : "MBC5");
         if ((index == 0U && s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC5) ||
@@ -5679,7 +5894,12 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         }
         return;
     }
-    if (index == 0U) {
+    if (ui_burn_rom_op_for_index(index) == UI_BURN_ROM_OP_RECIPE_MODE) {
+        snprintf(title, title_len, "%s", ui_lang_is_zh() ? "烧录方式" : ui_tr("Burn method"));
+        snprintf(hint, hint_len, "%s", ui_recipe_mode_label(s_recipe_mode));
+        return;
+    }
+    if (ui_burn_rom_op_for_index(index) == UI_BURN_ROM_OP_ANALYZE) {
         snprintf(title, title_len, "%s", (s_cart_analyzed && s_analyzed_cart_mode == s_cart_mode) ? ui_tr("Re-analyze") : ui_tr("Analyze cart"));
         snprintf(hint, hint_len, "%s", ui_cart_is_unlocked() ? ui_tr("done") : "");
         return;
@@ -5803,6 +6023,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                     ui_tr("erase/PSRAM/chunk/voltage") :
                     ui_tr("erase/PSRAM/dump"));
             return;
+        case UI_BURN_ROM_OP_RECIPE_MODE:
         case UI_BURN_ROM_OP_ANALYZE:
         case UI_BURN_ROM_OP_INVALID:
         default:
