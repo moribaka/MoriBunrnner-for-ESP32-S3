@@ -30,6 +30,9 @@ typedef enum {
 
 esp_err_t ui_init(void);
 void ui_process(void);
+void ui_mark_activity(void);
+uint32_t ui_get_last_activity_ms(void);
+void ui_set_activity_callback(void (*cb)(void));
 void ui_handle_button(ui_button_t button, bool pressed);
 void ui_post_button(ui_button_t button, bool pressed);
 uint8_t ui_get_language(void);

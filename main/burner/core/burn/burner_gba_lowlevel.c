@@ -677,37 +677,6 @@ static bool burner_gba_chis_intel_uses_strict_chislink_flow(void)
            s_cart_ctx.probe_cfi_ok;
 }
 
-static bool burner_gba_intel_program_buffer_needs_runtime_fallback(
-    burner_nor_cmdset_t cmdset,
-    uint16_t reported_bytes,
-    uint16_t active_bytes)
-{
-    if (burner_gba_chis_intel_uses_strict_chislink_flow()) {
-        return false;
-    }
-    return cmdset == BURNER_NOR_CMDSET_INTEL &&
-           s_cart_ctx.probe_cfi_ok &&
-           reported_bytes >= BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES &&
-           active_bytes >= BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES;
-}
-
-static uint16_t burner_gba_intel_next_program_buffer_write_bytes(uint16_t current_bytes)
-{
-    if (current_bytes > BURNER_GBA_INTEL_RUNTIME_BUFFER_DEFAULT_BYTES) {
-        current_bytes = BURNER_GBA_INTEL_RUNTIME_BUFFER_DEFAULT_BYTES;
-    }
-    if (current_bytes > 256u) {
-        return 256u;
-    }
-    if (current_bytes > 128u) {
-        return 128u;
-    }
-    if (current_bytes > BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES) {
-        return BURNER_GBA_INTEL_RUNTIME_BUFFER_MIN_BYTES;
-    }
-    return 0u;
-}
-
 static void burner_gba_sector_erase_ctx_reset(void)
 {
     memset(&s_gba_sector_erase_ctx, 0, sizeof(s_gba_sector_erase_ctx));
@@ -1006,8 +975,8 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         write_len = 2u;
     }
     write_words = write_len / 2u;
-    if (BURNER_SPI_MAX_XFER > 28u) {
-        max_write_words_by_spi = (BURNER_SPI_MAX_XFER - 28u) / 5u;
+    if (BURNER_SPI_MAX_XFER > 23u) {
+        max_write_words_by_spi = (BURNER_SPI_MAX_XFER - 23u) / 10u;
     }
     if (max_write_words_by_spi == 0u) {
         max_write_words_by_spi = 1u;
@@ -1025,7 +994,7 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         return err;
     }
 
-    seq_len = 28u + 5u * write_words;
+    seq_len = 23u + 10u * write_words;
     if (seq_len > BURNER_SPI_MAX_XFER) {
         return ESP_ERR_INVALID_SIZE;
     }
@@ -1053,33 +1022,35 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
     seq[8] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
     seq[9] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
     seq[10] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
-    seq[11] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
-    seq[12] = (uint8_t)(starting_word_address & 0xFFu);
-    seq[13] = (uint8_t)((starting_word_address >> 8) & 0xFFu);
-    seq[14] = (uint8_t)((starting_word_address >> 16) & 0xFFu);
-    seq[15] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-
+    /* Bacon CS0 has no address auto-increment; match ChisLink's per-halfword AGB_FLASH_WRITE(pa+i). */
     for (wr = 0u; wr < write_words; ++wr) {
-        size_t base = 16u + 5u * wr;
-        seq[base + 0u] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-        seq[base + 1u] = buf[wr * 2u];
-        seq[base + 2u] = buf[wr * 2u + 1u];
-        seq[base + 3u] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
+        uint32_t word_address = starting_word_address + (uint32_t)wr;
+        size_t base = 11u + 10u * wr;
+
+        seq[base + 0u] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+        seq[base + 1u] = (uint8_t)(word_address & 0xFFu);
+        seq[base + 2u] = (uint8_t)((word_address >> 8) & 0xFFu);
+        seq[base + 3u] = (uint8_t)((word_address >> 16) & 0xFFu);
         seq[base + 4u] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
+        seq[base + 5u] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
+        seq[base + 6u] = buf[wr * 2u];
+        seq[base + 7u] = buf[wr * 2u + 1u];
+        seq[base + 8u] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
+        seq[base + 9u] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
     }
 
-    seq[16u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
-    seq[17u + 5u * write_words] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
-    seq[18u + 5u * write_words] = addr0;
-    seq[19u + 5u * write_words] = addr1;
-    seq[20u + 5u * write_words] = addr2;
-    seq[21u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-    seq[22u + 5u * write_words] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-    seq[23u + 5u * write_words] = (uint8_t)(confirm_cmd & 0xFFu);
-    seq[24u + 5u * write_words] = (uint8_t)((confirm_cmd >> 8) & 0xFFu);
-    seq[25u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-    seq[26u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-    seq[27u + 5u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
+    seq[11u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
+    seq[12u + 10u * write_words] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+    seq[13u + 10u * write_words] = addr0;
+    seq[14u + 10u * write_words] = addr1;
+    seq[15u + 10u * write_words] = addr2;
+    seq[16u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
+    seq[17u + 10u * write_words] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
+    seq[18u + 10u * write_words] = (uint8_t)(confirm_cmd & 0xFFu);
+    seq[19u + 10u * write_words] = (uint8_t)((confirm_cmd >> 8) & 0xFFu);
+    seq[20u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
+    seq[21u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
+    seq[22u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
 
     err = burner_spi_transfer(seq, NULL, seq_len);
     if (free_seq) {

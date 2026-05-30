@@ -26,6 +26,7 @@
 #include "freertos/task.h"
 #include "ip5306.h"
 #include "lcd_display.h"
+#include "lvgl_port.h"
 #include "lvgl.h"
 #include "power_manager.h"
 #include "usb_msc_tf.h"
@@ -350,6 +351,7 @@ typedef enum {
     UI_WORK_WIFI_CONNECT_SAVED = 0,
     UI_WORK_WIFI_START_AP,
     UI_WORK_WIFI_DISCONNECT,
+    UI_WORK_WIFI_CLOSE_AP,
     UI_WORK_WIFI_CLEAR_SAVED,
     UI_WORK_STORAGE_USB_ENABLE,
     UI_WORK_STORAGE_USB_DISABLE,
@@ -416,6 +418,8 @@ typedef struct {
 static SemaphoreHandle_t s_model_lock = NULL;
 static QueueHandle_t s_button_queue = NULL;
 static ui_button_state_t s_button_states[UI_BUTTON_COUNT];
+static volatile uint32_t s_last_activity_ms = 0;
+static void (*s_activity_cb)(void) = NULL;
 static uint16_t s_root_selected = 0;
 static bool s_ui_inited = false;
 static uint8_t s_ui_language = UI_LANGUAGE_DEFAULT;
@@ -2819,7 +2823,7 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
         ui_set_status_locked(model, ui_tr("ROM selected"));
         ui_focus_burn_rom_op_locked(
             model,
-            (s_cart_mode == BURNER_CART_MODE_MBC5) ? UI_BURN_ROM_OP_ROM_MAPPER : UI_BURN_ROM_OP_WRITE_ROM);
+            UI_BURN_ROM_OP_WRITE_ROM);
     }
     ui_clamp_burn_rom_selection_locked(model);
     ui_drop_nav_target_locked(model->page);
@@ -3629,7 +3633,8 @@ static void ui_finish_work_task(ui_work_type_t type, esp_err_t err, const char *
         return;
     }
     if (type == UI_WORK_WIFI_CONNECT_SAVED || type == UI_WORK_WIFI_START_AP ||
-        type == UI_WORK_WIFI_DISCONNECT || type == UI_WORK_WIFI_CLEAR_SAVED) {
+        type == UI_WORK_WIFI_DISCONNECT || type == UI_WORK_WIFI_CLOSE_AP ||
+        type == UI_WORK_WIFI_CLEAR_SAVED) {
         s_wifi_work_active = false;
     } else if (type == UI_WORK_STORAGE_USB_ENABLE || type == UI_WORK_STORAGE_USB_DISABLE) {
         s_storage_work_active = false;
@@ -3643,7 +3648,7 @@ static void ui_finish_work_task(ui_work_type_t type, esp_err_t err, const char *
             snprintf(s_analyzed_cart_info, sizeof(s_analyzed_cart_info), "%s", ok_text != NULL ? ok_text : "");
             s_burn_rom_write_menu = false;
             s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
-            ui_focus_burn_rom_row_locked(&s_model, (cart_mode == BURNER_CART_MODE_GBA) ? 2U : 1U);
+            ui_focus_burn_rom_op_locked(&s_model, UI_BURN_ROM_OP_CHOOSE_ROM);
         } else {
             s_cart_analyzed = false;
             s_analyzed_cart_info[0] = '\0';
@@ -3691,6 +3696,10 @@ static void ui_work_task(void *param)
             wifi_maneger_disconnect();
             ok_text = ui_tr("Wi-Fi disconnected");
             err = ESP_OK;
+            break;
+        case UI_WORK_WIFI_CLOSE_AP:
+            ok_text = ui_lang_is_zh() ? "已关闭自身热点" : "setup hotspot closed";
+            err = wifi_maneger_provisioning_confirm();
             break;
         case UI_WORK_WIFI_CLEAR_SAVED:
             ok_text = ui_tr("saved Wi-Fi cleared");
@@ -3798,7 +3807,8 @@ static void ui_start_work_async(ui_work_type_t type)
         return;
     }
     if (type == UI_WORK_WIFI_CONNECT_SAVED || type == UI_WORK_WIFI_START_AP ||
-        type == UI_WORK_WIFI_DISCONNECT || type == UI_WORK_WIFI_CLEAR_SAVED) {
+        type == UI_WORK_WIFI_DISCONNECT || type == UI_WORK_WIFI_CLOSE_AP ||
+        type == UI_WORK_WIFI_CLEAR_SAVED) {
         active = &s_wifi_work_active;
         status = ui_tr("Wi-Fi working");
         stack_size = UI_WIFI_TASK_STACK_SIZE;
@@ -4509,13 +4519,13 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index)
 {
     uint16_t cursor = 0;
 
-    if (ui_burn_rom_has_recipe_mode_row() && index == cursor++) {
-        return UI_BURN_ROM_OP_RECIPE_MODE;
-    }
     if (index == cursor++) {
         return UI_BURN_ROM_OP_ANALYZE;
     }
     if (!ui_cart_is_unlocked()) {
+        if (ui_burn_rom_has_recipe_mode_row() && index == cursor++) {
+            return UI_BURN_ROM_OP_RECIPE_MODE;
+        }
         if (index == cursor++) {
             return UI_BURN_ROM_OP_SETTINGS;
         }
@@ -4546,6 +4556,9 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index)
         if (index == cursor++) {
             return UI_BURN_ROM_OP_RAM_MENU;
         }
+    }
+    if (ui_burn_rom_has_recipe_mode_row() && index == cursor++) {
+        return UI_BURN_ROM_OP_RECIPE_MODE;
     }
     if (index == cursor++) {
         return UI_BURN_ROM_OP_SETTINGS;
@@ -4759,9 +4772,12 @@ static void ui_select_locked(
                 *work_type = UI_WORK_WIFI_START_AP;
                 *start_work = true;
             } else if (model->selected == 3U) {
-                *work_type = UI_WORK_WIFI_DISCONNECT;
+                *work_type = UI_WORK_WIFI_CLOSE_AP;
                 *start_work = true;
             } else if (model->selected == 4U) {
+                *work_type = UI_WORK_WIFI_DISCONNECT;
+                *start_work = true;
+            } else if (model->selected == 5U) {
                 *work_type = UI_WORK_WIFI_CLEAR_SAVED;
                 *start_work = true;
             } else {
@@ -5426,7 +5442,15 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     erase_done_bytes = status.erase_phase_done_bytes;
     erase_total = status.erase_phase_total_sectors;
     erase_done = status.erase_phase_done_sectors;
-    if (erase_total_bytes > 0U) {
+    if (erase_total > 0U) {
+        if (erase_done > erase_total) {
+            erase_done = erase_total;
+        }
+        erase_progress = burner_calc_progress_percent_u64(erase_done, erase_total);
+        if (erase_progress > 100) {
+            erase_progress = 100;
+        }
+    } else if (erase_total_bytes > 0U) {
         if (erase_done_bytes > erase_total_bytes) {
             erase_done_bytes = erase_total_bytes;
         }
@@ -5434,16 +5458,10 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
         if (erase_progress > 100) {
             erase_progress = 100;
         }
-    } else if (erase_total == 0U) {
+    } else {
         erase_total = status.erase_sector_count;
         erase_done = status.erase_sector_count;
-    }
-    if (erase_total_bytes == 0U && erase_total > 0U) {
-        if (erase_done > erase_total) {
-            erase_done = erase_total;
-        }
-        erase_progress = burner_calc_progress_percent_u64(erase_done, erase_total);
-        if (erase_progress > 100) {
+        if (erase_total > 0U) {
             erase_progress = 100;
         }
     }
@@ -5588,6 +5606,16 @@ static void ui_fill_wifi_row(const ui_model_t *model, uint16_t index, char *titl
             snprintf(hint, hint_len, "%s", ui_tr("Setup portal"));
             break;
         case 3:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "关闭热点" : "Close hotspot");
+            snprintf(
+                hint,
+                hint_len,
+                "%s",
+                wifi_maneger_provisioning_waiting_confirm() ?
+                    (ui_lang_is_zh() ? "结束配网热点" : "end setup hotspot") :
+                    (ui_lang_is_zh() ? "切回仅路由Wi-Fi" : "switch to STA only"));
+            break;
+        case 4:
             snprintf(title, title_len, "%s", ui_tr("Disconnect"));
             snprintf(hint, hint_len, "%s", ui_tr("Stop STA"));
             break;
@@ -5596,7 +5624,7 @@ static void ui_fill_wifi_row(const ui_model_t *model, uint16_t index, char *titl
             snprintf(hint, hint_len, "%s", ui_tr("Forget profile"));
             break;
     }
-    *symbol = (index == 3U) ? LV_SYMBOL_CLOSE : LV_SYMBOL_WIFI;
+    *symbol = (index == 3U || index == 4U) ? LV_SYMBOL_CLOSE : LV_SYMBOL_WIFI;
     *accent = (model->wifi_state == UI_WIFI_STATE_CONNECTED) ? 0x72EFDD : 0xF7B32B;
 }
 
@@ -6013,6 +6041,16 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             snprintf(title, title_len, "%s", ui_tr("RAM size"));
             snprintf(hint, hint_len, "%" PRIu32 " KiB", s_save_size_kib);
             return;
+        case UI_BURN_ROM_OP_RECIPE_MODE:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "烧录方式" : ui_tr("Burn method"));
+            snprintf(
+                hint,
+                hint_len,
+                "%s",
+                (s_recipe_mode == BURNER_RECIPE_MODE_GBX) ?
+                    (ui_lang_is_zh() ? "GBX" : "GBX") :
+                    (ui_lang_is_zh() ? "CHIS" : "CHIS"));
+            return;
         case UI_BURN_ROM_OP_SETTINGS:
             snprintf(title, title_len, "%s", ui_tr("Settings"));
             snprintf(
@@ -6023,7 +6061,6 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                     ui_tr("erase/PSRAM/chunk/voltage") :
                     ui_tr("erase/PSRAM/dump"));
             return;
-        case UI_BURN_ROM_OP_RECIPE_MODE:
         case UI_BURN_ROM_OP_ANALYZE:
         case UI_BURN_ROM_OP_INVALID:
         default:
@@ -7601,6 +7638,25 @@ void ui_process(void)
     ui_issue_pending_task_cancel();
 }
 
+void ui_mark_activity(void)
+{
+    s_last_activity_ms = esp_log_timestamp();
+    lvgl_port_mark_activity();
+    if (s_activity_cb != NULL) {
+        s_activity_cb();
+    }
+}
+
+uint32_t ui_get_last_activity_ms(void)
+{
+    return s_last_activity_ms;
+}
+
+void ui_set_activity_callback(void (*cb)(void))
+{
+    s_activity_cb = cb;
+}
+
 void ui_post_button(ui_button_t button, bool pressed)
 {
     ui_button_event_t event = {
@@ -7610,6 +7666,9 @@ void ui_post_button(ui_button_t button, bool pressed)
 
     if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
         return;
+    }
+    if (pressed) {
+        ui_mark_activity();
     }
     if (!ui_ensure_button_queue()) {
         return;

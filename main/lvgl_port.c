@@ -3,8 +3,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lcd_display.h"
@@ -17,9 +18,11 @@
 #define LVGL_TASK_PRIORITY 4
 #define LVGL_DRAW_BUF_LINES 40
 #define LVGL_TASK_FRAME_MS 16
+#define LVGL_IDLE_DIM_TIMEOUT_MS (60U * 1000U)
 #define LVGL_TASK_CORE_ID 0
 #define LVGL_PSRAM_POOL_COUNT 4
 #define LVGL_PSRAM_POOL_CHUNK_BYTES (48U * 1024U)
+#define LVGL_IDLE_BRIGHTNESS 0U
 
 static lv_display_t *s_display = NULL;
 static TaskHandle_t s_lvgl_task = NULL;
@@ -28,6 +31,10 @@ static void *s_draw_buf2 = NULL;
 static void *s_lvgl_psram_pools[LVGL_PSRAM_POOL_COUNT] = {0};
 static lv_mem_pool_t s_lvgl_psram_mem_pools[LVGL_PSRAM_POOL_COUNT] = {0};
 static bool s_inited = false;
+static int64_t s_last_activity_us = 0;
+static bool s_idle_dimmed = false;
+static uint8_t s_active_brightness = 0;
+static volatile uint32_t s_idle_dim_suspend_count = 0;
 
 static void *lvgl_alloc_draw_buffer(size_t size, const char *name)
 {
@@ -74,11 +81,69 @@ static void lvgl_task(void *arg)
     (void)arg;
 
     while (1) {
+        (void)lvgl_port_is_idle_dimmed();
         lv_tick_inc(LVGL_TASK_FRAME_MS);
         ui_process();
         (void)lv_timer_handler();
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LVGL_TASK_FRAME_MS));
     }
+}
+
+void lvgl_port_mark_activity(void)
+{
+    int64_t now_us = esp_timer_get_time();
+
+    s_last_activity_us = now_us;
+    if (s_idle_dimmed) {
+        s_idle_dimmed = false;
+        (void)lcd_display_set_brightness(s_active_brightness);
+    }
+}
+
+void lvgl_port_set_idle_dim_suspended(bool suspended)
+{
+    if (suspended) {
+        if (s_idle_dim_suspend_count < UINT32_MAX) {
+            s_idle_dim_suspend_count++;
+        }
+        if (s_idle_dimmed) {
+            s_idle_dimmed = false;
+            (void)lcd_display_set_brightness(s_active_brightness);
+        }
+        return;
+    }
+
+    if (s_idle_dim_suspend_count > 0u) {
+        s_idle_dim_suspend_count--;
+    }
+    if (s_idle_dim_suspend_count == 0u) {
+        (void)lvgl_port_is_idle_dimmed();
+    }
+}
+
+bool lvgl_port_is_idle_dimmed(void)
+{
+    int64_t now_us;
+
+    if (!s_inited) {
+        return false;
+    }
+
+    now_us = esp_timer_get_time();
+    if (s_last_activity_us == 0) {
+        s_last_activity_us = now_us;
+    }
+    if (s_idle_dim_suspend_count > 0u) {
+        return false;
+    }
+    if (!s_idle_dimmed &&
+        (uint64_t)(now_us - s_last_activity_us) >= ((uint64_t)LVGL_IDLE_DIM_TIMEOUT_MS * 1000ULL)) {
+        s_active_brightness = lcd_display_get_brightness();
+        s_idle_dimmed = true;
+        (void)lcd_display_set_brightness(LVGL_IDLE_BRIGHTNESS);
+    }
+
+    return s_idle_dimmed;
 }
 
 esp_err_t lvgl_port_init(void)
@@ -166,6 +231,10 @@ esp_err_t lvgl_port_init(void)
         ESP_LOGE(LVGL_TAG, "ui init failed: %s", esp_err_to_name(err));
         return err;
     }
+
+    s_active_brightness = lcd_display_get_brightness();
+    s_last_activity_us = esp_timer_get_time();
+    s_idle_dimmed = false;
 
     if (xTaskCreatePinnedToCore(
             lvgl_task,

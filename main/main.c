@@ -52,6 +52,14 @@
 #define MORI_BOOT_KEY_POLL_MS 20U
 #define MORI_BOOT_KEY_DEBOUNCE_MS 40U
 #define MORI_BOOT_KEY_LONG_PRESS_MS 700U
+#define MORI_IDLE_MONITOR_TASK_STACK_SIZE 3072
+#define MORI_IDLE_MONITOR_TASK_PRIORITY 2
+#define MORI_IDLE_MONITOR_TASK_CORE_ID 0
+#define MORI_IDLE_MONITOR_POLL_MS 500U
+#define MORI_WIFI_IDLE_OFF_MS (60U * 1000U)
+#define MORI_WIFI_RECONNECT_TASK_STACK_SIZE 4096
+#define MORI_WIFI_RECONNECT_TASK_PRIORITY 3
+#define MORI_WIFI_RECONNECT_TASK_CORE_ID 0
 #define MORI_SETTING_DIR_PATH mount_point "/.setting"
 #define MORI_SYSTEM_INI_PATH MORI_SETTING_DIR_PATH "/mori_system.ini"
 #define MORI_LANG_ZH_INI_PATH MORI_SETTING_DIR_PATH "/lang_zh_cn.ini"
@@ -74,9 +82,14 @@
 
 static volatile bool s_web_started = false;
 static volatile bool s_web_starting = false;
+static volatile bool s_wifi_idle_suspended = false;
+static volatile bool s_wifi_reconnect_running = false;
 static char s_ntp_active_server[MORI_NTP_SERVER_MAX] = "";
 static bool s_ntp_active = false;
 static TaskHandle_t s_boot_key_task = NULL;
+static TaskHandle_t s_idle_monitor_task = NULL;
+
+static void wifi_reconnect_task(void *arg);
 
 static void mori_apply_timezone(void)
 {
@@ -2662,6 +2675,96 @@ static void trigger_web_start_async(void)
     }
 }
 
+static void stop_web_service_if_running(void)
+{
+    if (s_web_started || s_web_starting) {
+        web_ws_stop();
+        s_web_started = false;
+        s_web_starting = false;
+    }
+}
+
+static void idle_monitor_task(void *arg)
+{
+    (void)arg;
+
+    for (;;) {
+        uint32_t last_activity_ms = ui_get_last_activity_ms();
+        uint32_t now_ms = esp_log_timestamp();
+
+        if (last_activity_ms != 0U &&
+            !burner_task_is_running_snapshot() &&
+            !s_wifi_idle_suspended &&
+            (now_ms - last_activity_ms) >= MORI_WIFI_IDLE_OFF_MS) {
+            stop_web_service_if_running();
+            wifi_maneger_disconnect();
+            s_wifi_idle_suspended = true;
+            ESP_LOGI("main", "idle timeout reached, Wi-Fi disconnected");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(MORI_IDLE_MONITOR_POLL_MS));
+    }
+}
+
+static void start_idle_monitor_task(void)
+{
+    if (s_idle_monitor_task != NULL) {
+        return;
+    }
+
+    if (xTaskCreatePinnedToCore(
+            idle_monitor_task,
+            "idle_monitor",
+            MORI_IDLE_MONITOR_TASK_STACK_SIZE,
+            NULL,
+            MORI_IDLE_MONITOR_TASK_PRIORITY,
+            &s_idle_monitor_task,
+            MORI_IDLE_MONITOR_TASK_CORE_ID) != pdPASS) {
+        s_idle_monitor_task = NULL;
+        ESP_LOGW("main", "create idle monitor task failed");
+    }
+}
+
+static void activity_reconnect_wifi_if_needed(void)
+{
+    BaseType_t create_ret;
+
+    if (!s_wifi_idle_suspended || s_wifi_reconnect_running) {
+        return;
+    }
+    if (burner_task_is_running_snapshot()) {
+        return;
+    }
+    if (!wifi_maneger_ready() || !wifi_maneger_has_saved_sta()) {
+        s_wifi_idle_suspended = false;
+        return;
+    }
+
+    s_wifi_reconnect_running = true;
+    create_ret = xTaskCreatePinnedToCore(
+        wifi_reconnect_task,
+        "wifi_reconnect",
+        MORI_WIFI_RECONNECT_TASK_STACK_SIZE,
+        NULL,
+        MORI_WIFI_RECONNECT_TASK_PRIORITY,
+        NULL,
+        MORI_WIFI_RECONNECT_TASK_CORE_ID);
+    if (create_ret != pdPASS) {
+        s_wifi_reconnect_running = false;
+    }
+}
+
+static void wifi_reconnect_task(void *arg)
+{
+    (void)arg;
+
+    ui_set_status_text("connecting saved wifi");
+    s_wifi_idle_suspended = false;
+    wifi_maneger_connect_saved(STA_CONNECT_TIMEOUT_MS);
+    s_wifi_reconnect_running = false;
+    vTaskDelete(NULL);
+}
+
 static void ui_update_sta_ip(void)
 {
     char ip[UI_IP_BUF_LEN] = {0};
@@ -2686,7 +2789,24 @@ static void wifi_state_handler(WIFI_STATE state)
         } else {
             ui_set_status_text("wifi connected");
         }
+        s_wifi_idle_suspended = false;
         ESP_LOGI(wifi_manager_tag, "Wi-Fi connected");
+        mori_apply_ntp_service();
+        trigger_web_start_async();
+    } else if (state == WIFI_STATE_PROVISIONING_CONNECTED) {
+        char ip[UI_IP_BUF_LEN] = {0};
+        char status[96] = {0};
+
+        ui_set_wifi_state(UI_WIFI_STATE_PROVISIONING);
+        ui_update_sta_ip();
+        if (wifi_maneger_get_sta_ip(ip, sizeof(ip)) == ESP_OK) {
+            snprintf(status, sizeof(status), "wifi connected %s", ip);
+            ui_set_status_text(status);
+        } else {
+            ui_set_status_text("wifi connected");
+        }
+        s_wifi_idle_suspended = false;
+        ESP_LOGI(wifi_manager_tag, "Provisioning connected, waiting user confirm");
         mori_apply_ntp_service();
         trigger_web_start_async();
     } else if (state == WIFI_STATE_DISCONNECTED) {
@@ -2698,6 +2818,7 @@ static void wifi_state_handler(WIFI_STATE state)
         ui_set_wifi_state(UI_WIFI_STATE_PROVISIONING);
         ui_set_ip_text("192.168.4.1");
         ui_set_status_text("wifi provisioning mode");
+        s_wifi_idle_suspended = false;
         ESP_LOGI(wifi_manager_tag, "Provision AP enabled");
     }
 }
@@ -2798,7 +2919,10 @@ void app_main(void)
     if (lvgl_err != ESP_OK) {
         ESP_LOGW("main", "LVGL/display init failed, continuing headless: %s", esp_err_to_name(lvgl_err));
     } else {
+        ui_set_activity_callback(activity_reconnect_wifi_if_needed);
         start_boot_key_task();
+        start_idle_monitor_task();
+        ui_mark_activity();
         ui_set_status_text("system initialized");
     }
 

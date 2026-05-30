@@ -1,4 +1,5 @@
 #include "ws_server_internal.h"
+#include "lvgl_port.h"
 
 static void burner_task(void *param)
 {
@@ -8,12 +9,15 @@ static void burner_task(void *param)
     const char *start_msg = "task started";
     bool restore_power = false;
     bool task_with_caps = false;
+    bool idle_dim_suspended = false;
 
     if (job == NULL) {
         vTaskDelete(NULL);
         return;
     }
     task_with_caps = job->task_with_caps;
+    lvgl_port_set_idle_dim_suspended(true);
+    idle_dim_suspended = true;
 
     burner_cancel_reset();
 
@@ -195,6 +199,10 @@ static void burner_task(void *param)
 
 task_done:
     burner_cancel_reset();
+    if (idle_dim_suspended) {
+        lvgl_port_set_idle_dim_suspended(false);
+        idle_dim_suspended = false;
+    }
     ESP_LOGI(
         BURNER_TAG,
         "burn_task stack free min=%u bytes",

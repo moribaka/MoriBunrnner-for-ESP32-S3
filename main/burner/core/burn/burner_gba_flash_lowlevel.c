@@ -1,58 +1,5 @@
 /* Low-level GBA flash program, read, and erase helpers. */
 
-static esp_err_t burner_bacon_gba_intel_program_words(uint32_t byte_addr, const uint8_t *buf, size_t len)
-{
-    size_t off = 0u;
-    esp_err_t err;
-
-    if (buf == NULL || len == 0u || (byte_addr & 0x1u) != 0u || (len & 0x1u) != 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    while (off < len) {
-        uint32_t starting_address = byte_addr + (uint32_t)off;
-        uint32_t starting_word_address = starting_address >> 1;
-        uint16_t pd = (uint16_t)((uint16_t)buf[off] | ((uint16_t)buf[off + 1u] << 8));
-        uint16_t status = 0u;
-
-        err = burner_bacon_gba_command_write_u16(0x000u, 0x0070u);
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_bacon_gba_command_write_u16(0x000u, 0x0010u);
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_bacon_rom_write_u16(starting_word_address, pd);
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_bacon_gba_intel_wait_ready(starting_address, 0x0000u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
-        if (err != ESP_OK) {
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBA intel single-word program timeout @0x%08" PRIX32 " status=0x%04X",
-                starting_address,
-                status);
-            return err;
-        }
-        if (burner_gba_intel_status_has_error(status)) {
-            burner_gba_intel_log_status_error("single-word-program", starting_address, status);
-            (void)burner_bacon_gba_intel_reset();
-            return ESP_ERR_INVALID_RESPONSE;
-        }
-        err = burner_bacon_gba_intel_reset();
-        if (err != ESP_OK) {
-            return err;
-        }
-
-        off += 2u;
-        burner_task_yield_if_due();
-    }
-
-    return ESP_OK;
-}
-
 static esp_err_t burner_bacon_gba_rom_program(
     uint32_t byte_addr,
     const uint8_t *buf,
@@ -81,98 +28,48 @@ static esp_err_t burner_bacon_gba_rom_program(
         uint32_t starting_word_address = starting_address >> 1;
 
         if (intel_cmdset) {
-            if (buffer_write_bytes >= 2u) {
-                uint16_t active_buffer_write_bytes = buffer_write_bytes;
-                bool allow_runtime_fallback = burner_gba_intel_program_buffer_needs_runtime_fallback(
-                    s_cart_ctx.gba_cmdset,
-                    s_cart_ctx.buffer_write_bytes,
-                    active_buffer_write_bytes);
+            size_t write_len = 0u;
 
-                while (true) {
-                    size_t write_len = 0u;
-                    size_t single_write_len;
-                    uint16_t next_buffer_write_bytes;
-
-                    err = burner_bacon_gba_intel_buffered_program_once(
-                        starting_address,
-                        buf + i,
-                        len - i,
-                        active_buffer_write_bytes,
-                        &write_len);
-                    if (err == ESP_OK) {
-                        i += write_len;
-                        burner_task_yield_if_due();
-                        break;
-                    }
-                    if (!allow_runtime_fallback ||
-                        err == ESP_ERR_INVALID_ARG ||
-                        err == ESP_ERR_INVALID_SIZE ||
-                        err == ESP_ERR_NO_MEM ||
-                        err == ESP_ERR_INVALID_STATE) {
-                        return err;
-                    }
-                    next_buffer_write_bytes =
-                        burner_gba_intel_next_program_buffer_write_bytes(active_buffer_write_bytes);
-                    if (next_buffer_write_bytes == 0u || next_buffer_write_bytes >= active_buffer_write_bytes) {
-                        single_write_len = len - i;
-                        if (single_write_len > active_buffer_write_bytes) {
-                            single_write_len = active_buffer_write_bytes;
-                        }
-                        single_write_len = burner_gba_program_safe_chunk_bytes(
-                            starting_address,
-                            single_write_len,
-                            (size_t)active_buffer_write_bytes);
-                        if (single_write_len < 2u) {
-                            single_write_len = 2u;
-                        }
-                        ESP_LOGW(
-                            BURNER_TAG,
-                            "GBA intel buffered fallback -> single-word at 0x%08" PRIX32
-                            " len=%u active=%u err=%s",
-                            starting_address,
-                            (unsigned)single_write_len,
-                            (unsigned)active_buffer_write_bytes,
-                            esp_err_to_name(err));
-                        err = burner_bacon_gba_intel_reset();
-                        if (err != ESP_OK) {
-                            return err;
-                        }
-                        err = burner_bacon_gba_intel_program_words(starting_address, buf + i, single_write_len);
-                        if (err != ESP_OK) {
-                            return err;
-                        }
-                        i += single_write_len;
-                        burner_task_yield_if_due();
-                        break;
-                    }
-                    ESP_LOGW(
-                        BURNER_TAG,
-                        "GBA intel runtime buffer fallback: probe_buf=%u active=%u next=%u addr=0x%08" PRIX32
-                        " err=%s",
-                        (unsigned)s_cart_ctx.buffer_write_bytes,
-                        (unsigned)active_buffer_write_bytes,
-                        (unsigned)next_buffer_write_bytes,
-                        starting_address,
-                        esp_err_to_name(err));
-                    err = burner_bacon_gba_intel_reset();
-                    if (err != ESP_OK) {
-                        return err;
-                    }
-                    active_buffer_write_bytes = next_buffer_write_bytes;
-                    buffer_write_bytes = next_buffer_write_bytes;
-                    s_cart_ctx.program_buffer_write_bytes = next_buffer_write_bytes;
-                }
-                continue;
+            if (buffer_write_bytes < 2u) {
+                ESP_LOGE(
+                    BURNER_TAG,
+                    "GBA intel buffered program unavailable @0x%08" PRIX32
+                    ": cfi_buf=%u, single-word fallback disabled",
+                    starting_address,
+                    (unsigned)buffer_write_bytes);
+                return ESP_ERR_NOT_SUPPORTED;
             }
 
-            {
-                err = burner_bacon_gba_intel_program_words(starting_address, buf + i, 2u);
-                if (err != ESP_OK) {
-                    return err;
-                }
-                i += 2u;
-                continue;
+            err = burner_bacon_gba_intel_buffered_program_once(
+                starting_address,
+                buf + i,
+                len - i,
+                buffer_write_bytes,
+                &write_len);
+            if (err != ESP_OK) {
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "GBA intel buffered program failed @0x%08" PRIX32
+                    ": cfi_buf=%u err=%s",
+                    starting_address,
+                    (unsigned)buffer_write_bytes,
+                    esp_err_to_name(err));
+                (void)burner_bacon_gba_intel_reset();
+                return err;
             }
+            if (write_len == 0u) {
+                ESP_LOGW(
+                    BURNER_TAG,
+                    "GBA intel buffered program made no progress @0x%08" PRIX32
+                    ": cfi_buf=%u",
+                    starting_address,
+                    (unsigned)buffer_write_bytes);
+                (void)burner_bacon_gba_intel_reset();
+                return ESP_ERR_INVALID_RESPONSE;
+            }
+            i += write_len;
+            burner_task_yield_if_due();
+            continue;
         } else if (buffer_write_bytes < 2u) {
             uint8_t seq[41];
             uint16_t pd = (uint16_t)((uint16_t)buf[i] | ((uint16_t)buf[i + 1u] << 8));

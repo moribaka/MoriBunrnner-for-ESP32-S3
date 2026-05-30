@@ -326,6 +326,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     bool should_erase = false;
     bool use_psram_stage = false;
     bool use_pipeline_stage = false;
+    bool intel_active = false;
     bool force_erase_sectors = true;
     bool erase_every_sector = false;
     size_t stage_capacity = 0;
@@ -445,6 +446,30 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             job->rom_path);
         return ESP_ERR_NOT_SUPPORTED;
     }
+    intel_active = burner_gba_nor_is_intel_active();
+    if (intel_active && job->write_path == BURNER_WRITE_PATH_PSRAM) {
+        psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
+        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+        (void)snprintf(
+            psram_alloc_fail_msg,
+            sizeof(psram_alloc_fail_msg),
+            "alloc %uMB psram staging failed",
+            (unsigned)psram_window_mb);
+        (void)snprintf(
+            psram_erase_prefetch_msg,
+            sizeof(psram_erase_prefetch_msg),
+            "intel erase gba flash sectors (%uMB) + prefetch tf->psram",
+            (unsigned)psram_window_mb);
+        (void)snprintf(
+            psram_copy_msg,
+            sizeof(psram_copy_msg),
+            "copy tf->psram (%uMB window)",
+            (unsigned)psram_window_mb);
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBA Intel PSRAM policy: fixed %uMB window, erase+prefetch then program",
+            (unsigned)psram_window_mb);
+    }
     fp = fopen(job->rom_path, "rb");
     if (fp == NULL) {
         burner_status_update(
@@ -533,13 +558,13 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     }
 
     force_erase_sectors = job->erase_always;
-    erase_every_sector = force_erase_sectors || burner_gba_nor_is_intel_active();
+    erase_every_sector = force_erase_sectors || intel_active;
     if (force_erase_sectors) {
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
             "GBA burn erase policy: force erase for all write paths");
-    } else if (burner_gba_nor_is_intel_active()) {
+    } else if (intel_active) {
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,
@@ -604,14 +629,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         }
     }
     burner_gba_sector_erase_ctx_reset();
-    if (should_erase && burner_gba_nor_is_intel_active()) {
-        burner_gba_sector_erase_ctx_begin(
-            addr_begin,
-            addr_begin + job->total_bytes - 1u,
-            s_cart_ctx.sector_size,
-            burner_is_gba_multi_card(job),
-            erase_every_sector);
-    } else if (use_pipeline_stage && should_erase) {
+    if (use_pipeline_stage && should_erase) {
         burner_gba_sector_erase_ctx_begin(
             addr_begin,
             addr_begin + job->total_bytes - 1u,
@@ -619,7 +637,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             burner_is_gba_multi_card(job),
             erase_every_sector);
     }
-    if (should_erase && !use_psram_stage && !burner_gba_nor_is_intel_active()) {
+    if (should_erase && !use_psram_stage) {
         burner_status_mark_erase_begin();
         erase_timer_started = true;
         burner_status_update(
@@ -704,7 +722,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                     should_erase ? "yes" : "no");
             }
 
-            if (should_erase && (!burner_gba_nor_is_intel_active() || use_pipeline_stage)) {
+            if (should_erase) {
                 uint32_t stage_erase_begin = stage_addr;
                 uint32_t stage_erase_end = stage_addr + (uint32_t)stage_bytes - 1u;
 
@@ -936,9 +954,7 @@ gba_stage_erase_done:
                     chunk_bytes,
                     write_addr,
                     burner_is_gba_multi_card(job),
-                    should_erase &&
-                        ((use_pipeline_stage && !burner_gba_nor_is_intel_active()) ||
-                         (!use_pipeline_stage && burner_gba_nor_is_intel_active())));
+                    should_erase && use_pipeline_stage && !intel_active);
                 burner_spi_lock_give();
                 if (err != ESP_OK) {
                     char program_err_msg[96];
@@ -1028,7 +1044,7 @@ gba_stage_erase_done:
                 chunk_bytes,
                 write_addr,
                 burner_is_gba_multi_card(job),
-                should_erase && burner_gba_nor_is_intel_active());
+                false);
             burner_spi_lock_give();
             if (err != ESP_OK) {
                 char program_err_msg[96];
