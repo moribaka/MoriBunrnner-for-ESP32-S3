@@ -320,12 +320,13 @@ static esp_err_t burner_bacon_gba_program_block(
         }
         uint32_t rom_addr = offset + (uint32_t)programmed;
         uint32_t bank = 0u;
+        uint32_t local_addr = rom_addr;
         uint32_t bank_remain = UINT32_MAX - rom_addr;
         uint32_t sector_end = 0u;
         size_t remain = len - programmed;
         size_t chunk;
 
-        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &local_addr, &bank_remain);
         chunk = (remain < bank_remain) ? remain : bank_remain;
         if (geometry_valid) {
             err = burner_nor_geometry_sector_bounds(&s_cart_ctx.geometry, rom_addr, NULL, &sector_end, NULL);
@@ -352,7 +353,7 @@ static esp_err_t burner_bacon_gba_program_block(
         }
 
         err = burner_bacon_gba_rom_program(
-            rom_addr,
+            local_addr,
             data + programmed,
             chunk,
             s_cart_ctx.program_buffer_write_bytes);
@@ -390,12 +391,13 @@ esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset,
         }
         uint32_t rom_addr = offset + (uint32_t)copied;
         uint32_t bank = 0u;
+        uint32_t local_addr = rom_addr;
         uint32_t bank_remain = UINT32_MAX - rom_addr;
         size_t remain = len - copied;
         size_t chunk;
         size_t read_words;
 
-        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &local_addr, &bank_remain);
         chunk = (remain < bank_remain) ? remain : bank_remain;
 
         if (is_multi_card) {
@@ -407,7 +409,7 @@ esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset,
 
         read_words = chunk / 2u;
         if (read_words > 0u) {
-            err = burner_bacon_rom_read_u16_batched(rom_addr >> 1, out + copied, read_words);
+            err = burner_bacon_rom_read_u16_batched(local_addr >> 1, out + copied, read_words);
             if (err != ESP_OK) {
                 return err;
             }
@@ -415,7 +417,7 @@ esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset,
 
         if ((chunk & 0x1u) != 0u) {
             uint16_t word = 0;
-            err = burner_bacon_rom_read_u16((rom_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
+            err = burner_bacon_rom_read_u16((local_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
             if (err != ESP_OK) {
                 return err;
             }
@@ -446,12 +448,13 @@ static esp_err_t burner_bacon_gba_verify_read_block(uint8_t *out, size_t len, ui
         }
         uint32_t rom_addr = offset + (uint32_t)copied;
         uint32_t bank = 0u;
+        uint32_t local_addr = rom_addr;
         uint32_t bank_remain = UINT32_MAX - rom_addr;
         size_t remain = len - copied;
         size_t chunk;
         size_t read_words;
 
-        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &local_addr, &bank_remain);
         chunk = (remain < bank_remain) ? remain : bank_remain;
 
         if (is_multi_card) {
@@ -463,7 +466,7 @@ static esp_err_t burner_bacon_gba_verify_read_block(uint8_t *out, size_t len, ui
 
         read_words = chunk / 2u;
         if (read_words > 0u) {
-            err = burner_bacon_rom_verify_read_u16_batched(rom_addr >> 1, out + copied, read_words);
+            err = burner_bacon_rom_verify_read_u16_batched(local_addr >> 1, out + copied, read_words);
             if (err != ESP_OK) {
                 return err;
             }
@@ -471,7 +474,7 @@ static esp_err_t burner_bacon_gba_verify_read_block(uint8_t *out, size_t len, ui
 
         if ((chunk & 0x1u) != 0u) {
             uint16_t word = 0;
-            err = burner_bacon_rom_read_u16((rom_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
+            err = burner_bacon_rom_read_u16((local_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
             if (err != ESP_OK) {
                 return err;
             }
@@ -497,6 +500,7 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
     while (copied < len) {
         uint32_t rom_addr;
         uint32_t bank;
+        uint32_t local_addr;
         uint32_t bank_remain;
         size_t remain;
         size_t chunk;
@@ -508,7 +512,7 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
         }
 
         rom_addr = offset + (uint32_t)copied;
-        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &bank_remain);
+        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &local_addr, &bank_remain);
         remain = len - copied;
         chunk = (remain < bank_remain) ? remain : bank_remain;
 
@@ -521,7 +525,7 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
 
         read_words = chunk / 2u;
         if (read_words > 0u) {
-            err = burner_bacon_rom_verify_read_u16_batched_hoststyle(rom_addr >> 1, out + copied, read_words);
+            err = burner_bacon_rom_verify_read_u16_batched_hoststyle(local_addr >> 1, out + copied, read_words);
             if (err != ESP_OK) {
                 return err;
             }
@@ -529,7 +533,7 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
 
         if ((chunk & 0x1u) != 0u) {
             uint16_t word = 0;
-            err = burner_bacon_rom_read_u16((rom_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
+            err = burner_bacon_rom_read_u16((local_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
             if (err != ESP_OK) {
                 return err;
             }
@@ -624,7 +628,8 @@ static esp_err_t burner_bacon_gba_diag_read_sector_ppb(uint32_t sector_addr, uin
 static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms)
 {
     uint32_t bank = 0u;
-    uint32_t sa_word = flash_addr >> 1;
+    uint32_t local_addr = flash_addr;
+    uint32_t sa_word;
     uint16_t read_back = 0;
     uint16_t ppb_lock_status = 0u;
     uint16_t sector_ppb = 0u;
@@ -642,7 +647,8 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     }
 
     intel_cmdset = burner_gba_nor_is_intel_active();
-    burner_gba_resolve_write_addr(flash_addr, is_multi_card, &bank, NULL);
+    burner_gba_resolve_write_addr(flash_addr, is_multi_card, &bank, &local_addr, NULL);
+    sa_word = local_addr >> 1;
 
     if (is_multi_card) {
         err = burner_gba_switch_bank_if_needed(bank);
@@ -672,11 +678,11 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gba_intel_wait_ready(flash_addr, 0x0000u, timeout_ms, &read_back);
+        err = burner_bacon_gba_intel_wait_ready(local_addr, 0x0000u, timeout_ms, &read_back);
         if (err == ESP_OK) {
             if (burner_gba_intel_status_has_error(read_back)) {
                 ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
-                sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(flash_addr, &sector_ppb);
+                sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(local_addr, &sector_ppb);
                 burner_gba_intel_log_status_error("erase", flash_addr, read_back);
                 ESP_LOGW(
                     BURNER_TAG,
@@ -759,7 +765,7 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     }
 
     ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
-    sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(flash_addr, &sector_ppb);
+    sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(local_addr, &sector_ppb);
     ESP_LOGW(
         BURNER_TAG,
         "GBA erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32

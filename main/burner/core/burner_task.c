@@ -200,6 +200,7 @@ static void burner_task(void *param)
 task_done:
     burner_cancel_reset();
     if (idle_dim_suspended) {
+        ui_mark_activity();
         lvgl_port_set_idle_dim_suspended(false);
         idle_dim_suspended = false;
     }
