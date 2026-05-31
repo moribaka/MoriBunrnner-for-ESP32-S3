@@ -27,6 +27,8 @@ static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank);
 static uint32_t burner_erase_timeout_ms_for_bytes(uint32_t bytes);
 static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms);
 static uint32_t s_gba_active_nor_flags = 0u;
+static bool s_gba_active_intel_generic_cfi = false;
+static bool s_gba_active_intel_e9_entry = false;
 
 static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, size_t len)
 {
@@ -661,7 +663,10 @@ static void burner_gba_intel_log_status_error(const char *op, uint32_t byte_addr
 
 static uint16_t burner_gba_intel_buffer_entry_command(void)
 {
-    return ((s_gba_active_nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) ? 0x00E9u : 0x00E8u;
+    return (((s_gba_active_nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) ||
+            s_gba_active_intel_e9_entry)
+               ? 0x00E9u
+               : 0x00E8u;
 }
 
 static uint16_t burner_gba_program_buffer_write_bytes(uint16_t reported_bytes, burner_nor_cmdset_t cmdset)
@@ -877,17 +882,58 @@ static bool burner_gba_nor_is_intel_active(void)
     return s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL;
 }
 
+static bool burner_gba_uses_flashgbx_bank_select_type1(void)
+{
+    if ((s_gba_active_nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) {
+        return true;
+    }
+    if (!burner_gba_gbx_is_active() &&
+        s_gba_active_intel_generic_cfi &&
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL &&
+        s_cart_ctx.device_size > BURN_GBA_LINEAR_ADDR_BYTES) {
+        return true;
+    }
+    return s_cart_ctx.gbx.active &&
+           s_cart_ctx.gbx.has_flash_bank_select_type &&
+           s_cart_ctx.gbx.flash_bank_select_type == 1u;
+}
+
+static const char *burner_gba_multicard_mapping_name(void)
+{
+    if ((s_gba_active_nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) {
+        return "FlashGBX Intel 32MB-bank";
+    }
+    if (!burner_gba_gbx_is_active() &&
+        s_gba_active_intel_generic_cfi &&
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL &&
+        s_cart_ctx.device_size > BURN_GBA_LINEAR_ADDR_BYTES) {
+        return "FlashGBX Intel generic 32MB-bank";
+    }
+    if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_AMD) {
+        return "Bacon AMD 32MB-bank";
+    }
+    return "32MB-bank multicart";
+}
+
 static esp_err_t burner_bacon_gba_rom_switch_bank(uint8_t bank)
 {
     uint8_t high = (uint8_t)((bank & 0x0Fu) << 4);
     uint8_t low = 0x40u;
+    uint8_t mode = 0x00u;
     esp_err_t err = ESP_OK;
 
     err = burner_bacon_ram_write(0x0002u, &high, 1u);
     if (err != ESP_OK) {
         return err;
     }
-    return burner_bacon_ram_write(0x0003u, &low, 1u);
+    err = burner_bacon_ram_write(0x0003u, &low, 1u);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (!burner_gba_uses_flashgbx_bank_select_type1()) {
+        return ESP_OK;
+    }
+    return burner_bacon_ram_write(0x0004u, &mode, 1u);
 }
 
 static size_t burner_gba_program_safe_chunk_bytes(uint32_t byte_addr, size_t requested_len, size_t write_unit_bytes)
@@ -1087,20 +1133,26 @@ static void burner_gba_resolve_write_addr(
     uint32_t rom_addr,
     bool is_multi_card,
     uint32_t *bank_out,
+    uint32_t *local_addr_out,
     uint32_t *bank_remain_out)
 {
     uint32_t bank = 0u;
+    uint32_t local_addr = rom_addr;
     uint32_t bank_remain = UINT32_MAX - rom_addr;
     uint32_t bank_off;
 
     if (is_multi_card) {
         bank = rom_addr / BURN_GBA_BANK_BYTES;
         bank_off = rom_addr % BURN_GBA_BANK_BYTES;
+        local_addr = bank_off;
         bank_remain = BURN_GBA_BANK_BYTES - bank_off;
     }
 
     if (bank_out != NULL) {
         *bank_out = bank;
+    }
+    if (local_addr_out != NULL) {
+        *local_addr_out = local_addr;
     }
     if (bank_remain_out != NULL) {
         *bank_remain_out = bank_remain;
@@ -1502,7 +1554,8 @@ static void burner_log_gba_diag_compare_word(const char *phase, uint32_t word_ad
  * normal ROM payload bytes are left as the cart-edge logical data.
  */
 #define SWAP_D0D1_U8(data) (((data) & 0xFCU) | (((data) & 0x01U) << 1) | (((data) & 0x02U) >> 1))
-#define SWAP_D0D1_U16(data) ((SWAP_D0D1_U8((data) & 0xFFU)) | ((uint16_t)SWAP_D0D1_U8(((data) >> 8) & 0xFFU) << 8))
+#define SWAP_D0D1_U16(data) \
+    ((uint16_t)(((data) & 0xFFFCU) | (((data) & 0x0001U) << 1) | (((data) & 0x0002U) >> 1)))
 
 static inline uint16_t burner_apply_d0d1_swap_on_read(uint16_t data, bool is_swapped)
 {
@@ -2289,6 +2342,54 @@ static void burner_gba_select_probe_id(
     memset(id_out, 0, 8u);
 }
 
+static bool burner_gba_id_looks_like_intel_style(const uint8_t id[8])
+{
+    if (id == NULL || id[1] != 0x00u) {
+        return false;
+    }
+    if (id[3] != 0x00u && id[3] != 0x88u && id[3] != 0x89u) {
+        return false;
+    }
+
+    switch (id[0]) {
+        case 0x1Cu: /* Mitsubishi */
+        case 0x20u: /* ST/Micron */
+        case 0x89u: /* Intel */
+        case 0x8Au: /* Intel/Numonyx */
+        case 0xB0u: /* Sharp */
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool burner_gba_intel_id_uses_e9_entry(const uint8_t id[8])
+{
+    if (!burner_gba_id_looks_like_intel_style(id)) {
+        return false;
+    }
+    return ((uint16_t)id[2] | ((uint16_t)id[3] << 8)) == 0x88B0u;
+}
+
+static bool burner_gba_cfi_primary_is_intel_compat(
+    uint16_t primary_id,
+    const uint8_t intel_id[8],
+    bool intel_id_valid)
+{
+    if (!intel_id_valid || !burner_gba_id_looks_like_intel_style(intel_id)) {
+        return false;
+    }
+
+    switch (primary_id) {
+        case 0x0100u:
+        case 0x0200u:
+        case 0x0300u:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool burner_gba_probe_load_entry_geometry(
     const burner_nor_entry_t *entry,
     uint32_t *device_size,
@@ -2533,6 +2634,8 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
     s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_gba_active_nor_flags = 0u;
+    s_gba_active_intel_generic_cfi = false;
+    s_gba_active_intel_e9_entry = false;
     s_cart_ctx.d0d1_known = false;
     s_cart_ctx.d0d1_swapped = false; /* Default: no swap */
     s_cart_ctx.gba_likely_read_only = false;
@@ -2737,6 +2840,27 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             continue;
         }
 
+        if (known_entry == NULL &&
+            cfi_cmdset == BURNER_NOR_CMDSET_UNKNOWN &&
+            burner_gba_cfi_primary_is_intel_compat(cfi_primary_cmdset_id, intel_id, intel_id_valid)) {
+            cfi_cmdset = BURNER_NOR_CMDSET_INTEL;
+            ESP_LOGI(
+                BURNER_TAG,
+                "GBA Intel generic CFI primary compatibility @%" PRIu32 "Hz try=%" PRIu32
+                ": primary=0x%04X id=%02X %02X %02X %02X %02X %02X %02X %02X",
+                probe_hz,
+                attempt + 1u,
+                cfi_primary_cmdset_id,
+                intel_id[0],
+                intel_id[1],
+                intel_id[2],
+                intel_id[3],
+                intel_id[4],
+                intel_id[5],
+                intel_id[6],
+                intel_id[7]);
+        }
+
         if (known_entry != NULL) {
             resolved_cmdset = burner_nor_entry_cmdset(known_entry);
             if (cfi_cmdset != BURNER_NOR_CMDSET_UNKNOWN && cfi_cmdset != resolved_cmdset) {
@@ -2874,8 +2998,26 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
         s_cart_ctx.geometry = cfi_geometry;
         s_cart_ctx.gba_cmdset = resolved_cmdset;
         s_cart_ctx.gba_likely_read_only = false;
+        s_gba_active_intel_generic_cfi =
+            (known_entry == NULL) &&
+            resolved_cmdset == BURNER_NOR_CMDSET_INTEL;
+        s_gba_active_intel_e9_entry =
+            resolved_cmdset == BURNER_NOR_CMDSET_INTEL &&
+            burner_gba_intel_id_uses_e9_entry(id_out);
         id_looks_like_header = burner_gba_id_looks_like_rom_header(id_out);
         id_matches_plain_rom = burner_gba_id_matches_plain_rom_data(id_out);
+
+        if (s_gba_active_intel_generic_cfi) {
+            ESP_LOGI(
+                BURNER_TAG,
+                "GBA Intel generic CFI compatibility: no ID-library match, using CFI flash=%" PRIu32
+                " sector=%" PRIu32 " buf=%u primary=0x%04X entry=0x%02X",
+                *device_size,
+                *sector_size,
+                (unsigned)*buffer_write_bytes,
+                cfi_primary_cmdset_id,
+                s_gba_active_intel_e9_entry ? 0xE9u : 0xE8u);
+        }
 
         ESP_LOGI(
             BURNER_TAG,
@@ -3036,17 +3178,28 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    err = burner_bacon_gba_probe_locked(
-        id,
-        &device_size,
-        &sector_size,
-        &buffer_write_bytes,
-        &cfi_ok);
+    if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
+        err = burner_gba_gbx_probe_locked(
+            id,
+            NULL,
+            &device_size,
+            &sector_size,
+            &buffer_write_bytes,
+            &cfi_ok);
+    } else {
+        err = burner_bacon_gba_probe_locked(
+            id,
+            &device_size,
+            &sector_size,
+            &buffer_write_bytes,
+            &cfi_ok);
+    }
     if (err != ESP_OK) {
         ESP_LOGE(BURNER_TAG, "GBA probe failed: %s", esp_err_to_name(err));
         return err;
     }
-    if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_UNKNOWN) {
+    if (job->recipe_mode != BURNER_RECIPE_MODE_GBX &&
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_UNKNOWN) {
         s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_AMD;
     }
     err = burner_gba_gbx_prepare_profile(
@@ -3059,6 +3212,10 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         cfi_ok);
     if (err != ESP_OK) {
         return err;
+    }
+    if (burner_gba_gbx_is_active()) {
+        s_gba_active_intel_generic_cfi = false;
+        s_gba_active_intel_e9_entry = false;
     }
     if (device_size == 0u || sector_size == 0u) {
         ESP_LOGE(BURNER_TAG, "GBA probe returned incomplete geometry");
@@ -3123,19 +3280,13 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             }
         }
         if ((nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) {
-            uint32_t gbx_linear_size = BURN_GBA_LINEAR_ADDR_BYTES;
-
-            if (device_size > gbx_linear_size) {
-                ESP_LOGW(
+            if (device_size > BURN_GBA_LINEAR_ADDR_BYTES) {
+                ESP_LOGI(
                     BURNER_TAG,
-                    "GBA Intel 88B0 ChisLink compatibility: clamp linear flash size %" PRIu32 " -> %" PRIu32,
+                    "GBA Intel 88B0 FlashGBX compatibility: keep flash size %" PRIu32
+                    ", use %uMB banked writes",
                     device_size,
-                    gbx_linear_size);
-                device_size = gbx_linear_size;
-                if (burner_nor_geometry_set_uniform(&s_cart_ctx.geometry, device_size, sector_size) != ESP_OK) {
-                    ESP_LOGE(BURNER_TAG, "GBA Intel 88B0 geometry clamp failed");
-                    return ESP_ERR_INVALID_SIZE;
-                }
+                    (unsigned)(BURN_GBA_BANK_BYTES / (1024u * 1024u)));
             }
             if (chislink_intel_compat && program_buffer_write_bytes != 0u) {
                 ESP_LOGI(
@@ -3151,6 +3302,27 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             if (!chislink_intel_compat) {
                 program_buffer_write_bytes = 0u;
             }
+        }
+        if (s_gba_active_intel_generic_cfi &&
+            s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL) {
+            ESP_LOGI(
+                BURNER_TAG,
+                "GBA Intel generic CFI prepare: flash=%" PRIu32 " sector=%" PRIu32
+                " buf=%u entry=0x%02X banked=%u",
+                device_size,
+                sector_size,
+                (unsigned)program_buffer_write_bytes,
+                s_gba_active_intel_e9_entry ? 0xE9u : 0xE8u,
+                device_size > BURN_GBA_LINEAR_ADDR_BYTES ? 1u : 0u);
+        }
+        if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_AMD &&
+            device_size > BURN_GBA_LINEAR_ADDR_BYTES) {
+            ESP_LOGI(
+                BURNER_TAG,
+                "GBA AMD Bacon compatibility: keep flash size %" PRIu32
+                ", use %uMB banked writes",
+                device_size,
+                (unsigned)(BURN_GBA_BANK_BYTES / (1024u * 1024u)));
         }
     }
 
@@ -3208,7 +3380,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     ESP_LOGI(
         BURNER_TAG,
         "GBA mapping: %s bank=%uMB force_multi=%d range=0x%08" PRIX32 "-0x%08" PRIX32,
-        burner_is_gba_multi_card(job) ? "32MB-bank multicart" : "linear single-card",
+        burner_is_gba_multi_card(job) ? burner_gba_multicard_mapping_name() : "linear single-card",
         (unsigned)(BURN_GBA_BANK_BYTES / (1024u * 1024u)),
         job->gba_force_multi ? 1 : 0,
         job->addr_begin,

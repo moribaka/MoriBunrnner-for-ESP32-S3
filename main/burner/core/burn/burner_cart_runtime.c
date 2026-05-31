@@ -35,6 +35,9 @@ static esp_err_t burner_bacon_mbc5_program_block(const uint8_t *data, size_t len
     if (!s_cart_ctx.prepared) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (burner_gbc_gbx_is_active()) {
+        return burner_gbc_gbx_program_block(data, len, offset);
+    }
 
     while (programmed < len) {
         err = burner_cancel_poll();
@@ -82,9 +85,6 @@ static bool burner_is_gba_multi_card(const burner_task_param_t *job)
     if (job == NULL || job->cart_mode != BURNER_CART_MODE_GBA) {
         return false;
     }
-    if ((s_gba_active_nor_flags & BURNER_NOR_FLAG_INTEL_88B0) != 0u) {
-        return false;
-    }
     if (job->gba_force_multi) {
         return true;
     }
@@ -102,6 +102,9 @@ esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job)
     err = burner_bacon_mbc5_prepare_power();
     if (err != ESP_OK) {
         return err;
+    }
+    if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
+        return burner_gbc_gbx_prepare(job);
     }
     return burner_bacon_mbc5_prepare(job->total_bytes);
 }
@@ -369,7 +372,7 @@ static esp_err_t burner_bacon_gba_scan_ppb_locked(
         }
         if (device_size > BURN_GBA_LINEAR_ADDR_BYTES) {
             uint32_t bank = 0u;
-            burner_gba_resolve_write_addr(sector_addr, true, &bank, NULL);
+            burner_gba_resolve_write_addr(sector_addr, true, &bank, &ppb_addr, NULL);
             err = burner_gba_switch_bank_if_needed(bank);
             if (err != ESP_OK) {
                 return err;

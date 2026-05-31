@@ -187,8 +187,13 @@ typedef struct {
 #define BURNER_CART_ID_DEBUG_SAMPLE_MAX 64U
 #define BURNER_GBX_PROFILE_NAME_LEN 64
 #define BURNER_GBX_PROFILE_CMDSET_LEN 24
+#define BURNER_GBX_PROFILE_TYPE_LEN 8
+#define BURNER_GBX_PROFILE_WRITE_PIN_LEN 12
+#define BURNER_GBX_PROFILE_MBC_LEN 24
 #define BURNER_GBX_CMD_STEP_MAX 16U
 #define BURNER_GBX_UNLOCK_READ_MAX 8U
+#define BURNER_GBX_FLASH_ID_MAX 16U
+#define BURNER_GBX_FLASH_ID_LEN_MAX 8U
 
 typedef enum {
     BURNER_GBA_CMD_ADDR_WORD = 0, /* unlock: 0x555/0x2AA, CFI enter: 0x055 */
@@ -222,8 +227,12 @@ typedef enum {
     BURNER_GBX_ADDR_NONE = 0,
     BURNER_GBX_ADDR_ABS,
     BURNER_GBX_ADDR_SA,
+    BURNER_GBX_ADDR_SA_PLUS_1,
     BURNER_GBX_ADDR_SA_PLUS_2,
+    BURNER_GBX_ADDR_SA_PLUS_66,
     BURNER_GBX_ADDR_SA_PLUS_132,
+    BURNER_GBX_ADDR_SA_PLUS_16384,
+    BURNER_GBX_ADDR_SA_PLUS_28672,
     BURNER_GBX_ADDR_PA,
 } burner_gbx_addr_kind_t;
 
@@ -280,18 +289,28 @@ typedef struct {
     bool has_reset_every;
     bool has_chip_erase_timeout;
     bool has_flash_bank_select_type;
+    bool has_read_identifier_at;
+    bool has_start_addr;
+    bool has_first_bank;
     uint8_t flash_bank_select_type;
-    uint8_t reserved0;
+    uint8_t flash_id_count;
+    uint8_t flash_id_bank_count;
     uint16_t buffer_size;
     uint32_t flash_size;
     uint32_t sector_size;
     uint32_t reset_every;
+    uint32_t read_identifier_at;
+    uint32_t start_addr;
+    uint32_t first_bank;
     uint32_t chip_erase_timeout_ms;
     burner_nor_cmdset_t base_cmdset;
     burner_nor_geometry_t sector_geometry;
+    char type[BURNER_GBX_PROFILE_TYPE_LEN];
     char display_name[BURNER_GBX_PROFILE_NAME_LEN];
     char file_name[BURNER_GBX_PROFILE_NAME_LEN];
     char command_set_name[BURNER_GBX_PROFILE_CMDSET_LEN];
+    char write_pin[BURNER_GBX_PROFILE_WRITE_PIN_LEN];
+    char mbc_name[BURNER_GBX_PROFILE_MBC_LEN];
     burner_gbx_cmd_list_t unlock;
     burner_gbx_cmd_list_t reset;
     burner_gbx_cmd_list_t read_status_register;
@@ -307,7 +326,16 @@ typedef struct {
     burner_gbx_wait_list_t chip_erase_wait_for;
     uint8_t unlock_read_count;
     burner_gbx_unlock_read_step_t unlock_read[BURNER_GBX_UNLOCK_READ_MAX];
+    uint8_t flash_id_len[BURNER_GBX_FLASH_ID_MAX];
+    uint8_t flash_ids[BURNER_GBX_FLASH_ID_MAX][BURNER_GBX_FLASH_ID_LEN_MAX];
+    uint8_t flash_id_bank_len[BURNER_GBX_FLASH_ID_MAX];
+    uint8_t flash_ids_banks[BURNER_GBX_FLASH_ID_MAX][BURNER_GBX_FLASH_ID_LEN_MAX];
 } burner_gbx_profile_t;
+
+typedef esp_err_t (*burner_gbx_profile_visitor_t)(
+    const burner_gbx_profile_t *profile,
+    void *user,
+    bool *stop_out);
 
 typedef struct {
     bool prepared;
@@ -1045,8 +1073,39 @@ const char *burner_gba_cmd_data_lane_name(burner_gba_cmd_data_lane_t lane);
 void burner_format_hex_bytes(const uint8_t *data, size_t len, char *out, size_t out_len);
 bool burner_gba_id_looks_like_rom_header(const uint8_t id[8]);
 void burner_gbx_profile_clear(burner_gbx_profile_t *profile);
+size_t burner_gbx_profile_match_id(
+    const burner_gbx_profile_t *profile,
+    const uint8_t *gba_id,
+    size_t gba_id_len);
+esp_err_t burner_gbx_visit_agb_profiles(burner_gbx_profile_visitor_t visitor, void *user);
+esp_err_t burner_gbx_visit_dmg_profiles(burner_gbx_profile_visitor_t visitor, void *user);
+esp_err_t burner_gbx_visit_profiles_by_type(
+    const char *type,
+    burner_gbx_profile_visitor_t visitor,
+    void *user);
 esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out);
+bool burner_gbc_gbx_is_active(void);
+esp_err_t burner_gbc_gbx_probe_locked(
+    uint8_t id_out[4],
+    burner_gbx_profile_t *profile_out,
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out,
+    burner_nor_cmdset_t *cmdset_out);
+esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job);
+esp_err_t burner_gbc_gbx_reset_to_read_mode(bool full_reset, uint32_t max_address);
+esp_err_t burner_gbc_gbx_program_block(const uint8_t *data, size_t len, uint32_t offset);
+esp_err_t burner_gbc_gbx_erase_sector(uint32_t flash_addr, uint32_t timeout_ms);
+esp_err_t burner_gbc_gbx_chip_erase_once(void);
 bool burner_gba_gbx_is_active(void);
+esp_err_t burner_gba_gbx_probe_locked(
+    uint8_t id_out[8],
+    burner_gbx_profile_t *profile_out,
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out);
 esp_err_t burner_gba_gbx_prepare_profile(
     const burner_task_param_t *job,
     const uint8_t id[8],

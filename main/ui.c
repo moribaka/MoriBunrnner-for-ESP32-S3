@@ -1458,7 +1458,7 @@ static const char *ui_recipe_mode_hint(burner_recipe_mode_t mode)
 
 static bool ui_burn_rom_has_recipe_mode_row(void)
 {
-    return s_cart_mode == BURNER_CART_MODE_GBA;
+    return s_cart_mode == BURNER_CART_MODE_GBA || s_cart_mode == BURNER_CART_MODE_MBC5;
 }
 
 static void ui_reset_cart_analysis_locked(void)
@@ -3340,6 +3340,8 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     uint16_t buffer_write_bytes = 0;
     burner_gba_save_type_t gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
     uint32_t gba_save_size = 0;
+    const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
+    bool gbx_profile_matched = false;
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
     bool cfi_ok = false;
@@ -3359,19 +3361,31 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     if (cart_mode == BURNER_CART_MODE_MBC5) {
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_mbc5_get_cfi(
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_geometry,
-                &mbc5_cmdset);
-            if (err == ESP_OK) {
-                cfi_ok = true;
-                if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
-                    err = burner_bacon_mbc5_get_id(mbc5_id);
-                    if (err != ESP_OK) {
-                        memset(mbc5_id, 0, sizeof(mbc5_id));
-                        err = ESP_OK;
+            if (s_recipe_mode == BURNER_RECIPE_MODE_GBX) {
+                err = burner_gbc_gbx_probe_locked(
+                    mbc5_id,
+                    NULL,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok,
+                    &mbc5_cmdset);
+                gbx_profile_matched = (err == ESP_OK);
+            } else {
+                err = burner_bacon_mbc5_get_cfi(
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_geometry,
+                    &mbc5_cmdset);
+                if (err == ESP_OK) {
+                    cfi_ok = true;
+                    if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
+                        err = burner_bacon_mbc5_get_id(mbc5_id);
+                        if (err != ESP_OK) {
+                            memset(mbc5_id, 0, sizeof(mbc5_id));
+                            err = ESP_OK;
+                        }
                     }
                 }
             }
@@ -3379,7 +3393,23 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     } else {
         err = burner_bacon_gba_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+            if (s_recipe_mode == BURNER_RECIPE_MODE_GBX) {
+                err = burner_gba_gbx_probe_locked(
+                    gba_id,
+                    NULL,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+                gbx_profile_matched = (err == ESP_OK);
+            } else {
+                err = burner_bacon_gba_probe_locked(
+                    gba_id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+            }
             burner_bacon_gba_d0d1_status(&gba_d0d1_known, &gba_d0d1_swapped);
         }
     }
@@ -3393,7 +3423,9 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            burner_mbc5_chip_name(mbc5_id),
+            (gbx_profile_matched && gbx_profile->display_name[0] != '\0') ?
+                gbx_profile->display_name :
+                burner_mbc5_chip_name(mbc5_id),
             mbc5_cmdset,
             device_size);
         burner_status_set_probe_info(
@@ -3409,92 +3441,43 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             false,
             false,
             chip_name,
-            "MBC5");
-        snprintf(
-            out,
-            out_len,
-            "%s ID %02X %02X %02X %02X %s",
-            ui_cart_mode_label(cart_mode),
-            mbc5_id[0],
-            mbc5_id[1],
-            mbc5_id[2],
-            mbc5_id[3],
-            cfi_ok ? "CFI" : "no CFI");
+            gbx_profile_matched ? "GBX" : "MBC5");
+        if (gbx_profile_matched) {
+            snprintf(out, out_len, "%s GBX %s", ui_cart_mode_label(cart_mode), chip_name);
+        } else {
+            snprintf(
+                out,
+                out_len,
+                "%s ID %02X %02X %02X %02X %s",
+                ui_cart_mode_label(cart_mode),
+                mbc5_id[0],
+                mbc5_id[1],
+                mbc5_id[2],
+                mbc5_id[3],
+                cfi_ok ? "CFI" : "no CFI");
+        }
     } else {
-        burner_gbx_profile_t gbx_profile;
-        bool gbx_profile_matched = false;
-
-        burner_gbx_profile_clear(&gbx_profile);
         save_probe_device_size = device_size;
         if (s_cart_ctx.gba_likely_read_only) {
             snprintf(chip_name, sizeof(chip_name), "%s", ui_tr("Read-only retail ROM"));
             device_size = 0u;
             sector_size = 0u;
             buffer_write_bytes = 0u;
-        } else if (s_recipe_mode == BURNER_RECIPE_MODE_GBX) {
-            err = burner_gbx_lookup_profile_from_id(gba_id, &gbx_profile);
-            if (err != ESP_OK) {
-                burner_nor_format_chip_name(
-                    chip_name,
-                    sizeof(chip_name),
-                    burner_gba_chip_name(gba_id),
-                    s_cart_ctx.gba_cmdset,
-                    device_size);
-                burner_status_set_probe_info(
-                    BURNER_CART_MODE_GBA,
-                    gba_id,
-                    sizeof(gba_id),
-                    device_size,
-                    sector_size,
-                    buffer_write_bytes,
-                    cfi_ok,
-                    false,
-                    false,
-                    gba_d0d1_known,
-                    gba_d0d1_swapped,
-                    chip_name,
-                    "GBX");
-                burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
-                burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
-                ESP_LOGW(
-                    UI_TAG,
-                    "GBX profile not found for GBA ID %02X %02X %02X %02X %02X %02X %02X %02X",
-                    gba_id[0],
-                    gba_id[1],
-                    gba_id[2],
-                    gba_id[3],
-                    gba_id[4],
-                    gba_id[5],
-                    gba_id[6],
-                    gba_id[7]);
-                return err;
-            }
-
-            if (gbx_profile.has_flash_size) {
-                device_size = gbx_profile.flash_size;
-            }
-            if (gbx_profile.has_sector_size &&
-                (!gbx_profile.sector_size_from_cfi || sector_size == 0u)) {
-                sector_size = gbx_profile.sector_size;
-            }
-            if (gbx_profile.has_buffer_size && buffer_write_bytes == 0u) {
-                buffer_write_bytes = gbx_profile.buffer_size;
-            }
-            if (gbx_profile.d0d1_known) {
+        } else if (gbx_profile_matched) {
+            if (gbx_profile->d0d1_known) {
                 gba_d0d1_known = true;
-                gba_d0d1_swapped = gbx_profile.d0d1_swapped;
+                gba_d0d1_swapped = gbx_profile->d0d1_swapped;
             }
 
             burner_nor_format_chip_name(
                 chip_name,
                 sizeof(chip_name),
-                gbx_profile.display_name[0] != '\0' ? gbx_profile.display_name : burner_gba_chip_name(gba_id),
-                (gbx_profile.base_cmdset != BURNER_NOR_CMDSET_UNKNOWN) ? gbx_profile.base_cmdset : s_cart_ctx.gba_cmdset,
+                gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name : burner_gba_chip_name(gba_id),
+                (gbx_profile->base_cmdset != BURNER_NOR_CMDSET_UNKNOWN) ? gbx_profile->base_cmdset : s_cart_ctx.gba_cmdset,
                 device_size);
             if (device_size != 0u) {
                 save_probe_device_size = device_size;
             }
-            gbx_profile_matched = true;
         } else {
             burner_nor_format_chip_name(
                 chip_name,

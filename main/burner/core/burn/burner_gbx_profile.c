@@ -178,12 +178,28 @@ static bool burner_gbx_parse_addr_token(
         *addr_kind_out = BURNER_GBX_ADDR_SA;
         return true;
     }
+    if (strcasecmp(item->valuestring, "SA+1") == 0) {
+        *addr_kind_out = BURNER_GBX_ADDR_SA_PLUS_1;
+        return true;
+    }
     if (strcasecmp(item->valuestring, "SA+2") == 0) {
         *addr_kind_out = BURNER_GBX_ADDR_SA_PLUS_2;
         return true;
     }
+    if (strcasecmp(item->valuestring, "SA+66") == 0) {
+        *addr_kind_out = BURNER_GBX_ADDR_SA_PLUS_66;
+        return true;
+    }
     if (strcasecmp(item->valuestring, "SA+132") == 0) {
         *addr_kind_out = BURNER_GBX_ADDR_SA_PLUS_132;
+        return true;
+    }
+    if (strcasecmp(item->valuestring, "SA+16384") == 0) {
+        *addr_kind_out = BURNER_GBX_ADDR_SA_PLUS_16384;
+        return true;
+    }
+    if (strcasecmp(item->valuestring, "SA+28672") == 0) {
+        *addr_kind_out = BURNER_GBX_ADDR_SA_PLUS_28672;
         return true;
     }
     if (strcasecmp(item->valuestring, "PA") == 0) {
@@ -401,43 +417,116 @@ static esp_err_t burner_gbx_parse_unlock_read_list(
     return ESP_OK;
 }
 
-static size_t burner_gbx_match_id_list(const cJSON *id_list, const uint8_t gba_id[8])
+static esp_err_t burner_gbx_parse_flash_id_list(
+    const cJSON *id_list,
+    uint8_t ids[BURNER_GBX_FLASH_ID_MAX][BURNER_GBX_FLASH_ID_LEN_MAX],
+    uint8_t lens[BURNER_GBX_FLASH_ID_MAX],
+    uint8_t *count_out)
 {
-    size_t best_len = 0u;
     const cJSON *candidate = NULL;
+    uint8_t count = 0u;
 
-    if (!cJSON_IsArray(id_list) || gba_id == NULL) {
-        return 0u;
+    if (ids == NULL || lens == NULL || count_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    memset(ids, 0, BURNER_GBX_FLASH_ID_MAX * BURNER_GBX_FLASH_ID_LEN_MAX);
+    memset(lens, 0, BURNER_GBX_FLASH_ID_MAX);
+    *count_out = 0u;
+
+    if (id_list == NULL) {
+        return ESP_OK;
+    }
+    if (!cJSON_IsArray(id_list)) {
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
     cJSON_ArrayForEach(candidate, id_list) {
-        bool matched = true;
         int id_count = 0;
 
         if (!cJSON_IsArray(candidate)) {
             continue;
         }
         id_count = cJSON_GetArraySize((cJSON *)candidate);
-        if (id_count <= 0 || id_count > 8 || (size_t)id_count <= best_len) {
+        if (id_count <= 0 || id_count > (int)BURNER_GBX_FLASH_ID_LEN_MAX) {
             continue;
+        }
+        if (count >= BURNER_GBX_FLASH_ID_MAX) {
+            ESP_LOGW(BURNER_TAG, "GBX profile has too many flash IDs; extra entries ignored");
+            break;
         }
         for (int i = 0; i < id_count; ++i) {
             const cJSON *id_item = cJSON_GetArrayItem((cJSON *)candidate, i);
 
             if (!cJSON_IsNumber(id_item) ||
                 id_item->valuedouble < 0.0 ||
-                id_item->valuedouble > 255.0 ||
-                (uint8_t)id_item->valuedouble != gba_id[i]) {
-                matched = false;
-                break;
+                id_item->valuedouble > 255.0) {
+                return ESP_ERR_NOT_SUPPORTED;
             }
+            ids[count][i] = (uint8_t)id_item->valuedouble;
         }
-        if (matched) {
-            best_len = (size_t)id_count;
+        lens[count] = (uint8_t)id_count;
+        ++count;
+    }
+
+    *count_out = count;
+    return ESP_OK;
+}
+
+static size_t burner_gbx_match_parsed_id_list(
+    const uint8_t ids[BURNER_GBX_FLASH_ID_MAX][BURNER_GBX_FLASH_ID_LEN_MAX],
+    const uint8_t lens[BURNER_GBX_FLASH_ID_MAX],
+    uint8_t count,
+    const uint8_t *gba_id,
+    size_t gba_id_len)
+{
+    size_t best_len = 0u;
+
+    if (ids == NULL || lens == NULL || gba_id == NULL || gba_id_len == 0u) {
+        return 0u;
+    }
+
+    for (uint32_t index = 0u; index < count && index < BURNER_GBX_FLASH_ID_MAX; ++index) {
+        size_t candidate_len = lens[index];
+
+        if (candidate_len == 0u ||
+            candidate_len > BURNER_GBX_FLASH_ID_LEN_MAX ||
+            candidate_len > gba_id_len ||
+            candidate_len <= best_len) {
+            continue;
+        }
+        if (memcmp(ids[index], gba_id, candidate_len) == 0) {
+            best_len = candidate_len;
         }
     }
 
     return best_len;
+}
+
+size_t burner_gbx_profile_match_id(
+    const burner_gbx_profile_t *profile,
+    const uint8_t *gba_id,
+    size_t gba_id_len)
+{
+    size_t best_len = 0u;
+    size_t bank_len = 0u;
+
+    if (profile == NULL || gba_id == NULL || gba_id_len == 0u) {
+        return 0u;
+    }
+
+    best_len = burner_gbx_match_parsed_id_list(
+        profile->flash_ids,
+        profile->flash_id_len,
+        profile->flash_id_count,
+        gba_id,
+        gba_id_len);
+    bank_len = burner_gbx_match_parsed_id_list(
+        profile->flash_ids_banks,
+        profile->flash_id_bank_len,
+        profile->flash_id_bank_count,
+        gba_id,
+        gba_id_len);
+    return bank_len > best_len ? bank_len : best_len;
 }
 
 static esp_err_t burner_gbx_parse_sector_geometry_from_json(
@@ -530,6 +619,16 @@ static esp_err_t burner_gbx_parse_profile_root(
         (int)(sizeof(profile_out->file_name) - 1u),
         entry_name);
 
+    item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "type");
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        snprintf(
+            profile_out->type,
+            sizeof(profile_out->type),
+            "%.*s",
+            (int)(sizeof(profile_out->type) - 1u),
+            item->valuestring);
+    }
+
     item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "command_set");
     if (cJSON_IsString(item) && item->valuestring != NULL) {
         snprintf(
@@ -545,6 +644,24 @@ static esp_err_t burner_gbx_parse_profile_root(
     if (cJSON_IsNumber(item) && item->valuedouble >= 0.0 && item->valuedouble <= (double)UINT32_MAX) {
         profile_out->flash_size = (uint32_t)item->valuedouble;
         profile_out->has_flash_size = true;
+    }
+
+    item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "read_identifier_at");
+    if (cJSON_IsNumber(item) && item->valuedouble >= 0.0 && item->valuedouble <= (double)UINT32_MAX) {
+        profile_out->read_identifier_at = (uint32_t)item->valuedouble;
+        profile_out->has_read_identifier_at = true;
+    }
+
+    item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "start_addr");
+    if (cJSON_IsNumber(item) && item->valuedouble >= 0.0 && item->valuedouble <= (double)UINT32_MAX) {
+        profile_out->start_addr = (uint32_t)item->valuedouble;
+        profile_out->has_start_addr = true;
+    }
+
+    item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "first_bank");
+    if (cJSON_IsNumber(item) && item->valuedouble >= 0.0 && item->valuedouble <= (double)UINT32_MAX) {
+        profile_out->first_bank = (uint32_t)item->valuedouble;
+        profile_out->has_first_bank = true;
     }
 
     item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "buffer_size");
@@ -586,6 +703,32 @@ static esp_err_t burner_gbx_parse_profile_root(
         profile_out->has_flash_bank_select_type = true;
     }
 
+    item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "write_pin");
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        snprintf(
+            profile_out->write_pin,
+            sizeof(profile_out->write_pin),
+            "%.*s",
+            (int)(sizeof(profile_out->write_pin) - 1u),
+            item->valuestring);
+    }
+
+    item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "mbc");
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        snprintf(
+            profile_out->mbc_name,
+            sizeof(profile_out->mbc_name),
+            "%.*s",
+            (int)(sizeof(profile_out->mbc_name) - 1u),
+            item->valuestring);
+    } else if (cJSON_IsNumber(item)) {
+        snprintf(
+            profile_out->mbc_name,
+            sizeof(profile_out->mbc_name),
+            "0x%X",
+            (unsigned)(uint32_t)item->valuedouble);
+    }
+
     item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "d0d1_swapped");
     if (!cJSON_IsBool(item)) {
         item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "d0_d1_swapped");
@@ -609,6 +752,23 @@ static esp_err_t burner_gbx_parse_profile_root(
                 (int)(sizeof(profile_out->display_name) - 1u),
                 item->valuestring);
         }
+    }
+
+    err = burner_gbx_parse_flash_id_list(
+        cJSON_GetObjectItemCaseSensitive((cJSON *)root, "flash_ids"),
+        profile_out->flash_ids,
+        profile_out->flash_id_len,
+        &profile_out->flash_id_count);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_gbx_parse_flash_id_list(
+        cJSON_GetObjectItemCaseSensitive((cJSON *)root, "flash_ids_banks"),
+        profile_out->flash_ids_banks,
+        profile_out->flash_id_bank_len,
+        &profile_out->flash_id_bank_count);
+    if (err != ESP_OK) {
+        return err;
     }
 
     item = cJSON_GetObjectItemCaseSensitive((cJSON *)root, "sector_size");
@@ -714,19 +874,32 @@ static esp_err_t burner_gbx_parse_profile_root(
     return ESP_OK;
 }
 
-esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out)
+static bool burner_gbx_profile_entry_is_candidate(const char *entry_name)
+{
+    const char *ext = NULL;
+
+    if (entry_name == NULL || strncasecmp(entry_name, "fc_", 3) != 0) {
+        return false;
+    }
+    ext = strrchr(entry_name, '.');
+    return ext != NULL && (strcasecmp(ext, ".txt") == 0 || strcasecmp(ext, ".json") == 0);
+}
+
+esp_err_t burner_gbx_visit_profiles_by_type(
+    const char *type,
+    burner_gbx_profile_visitor_t visitor,
+    void *user)
 {
     static const char *const s_dirs[] = {
         ".gbx",
         ".gbx/flashcart",
     };
-    size_t best_match_len = 0u;
+    bool any_profile = false;
 
-    if (gba_id == NULL || profile_out == NULL) {
+    if (type == NULL || visitor == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    burner_gbx_profile_clear(profile_out);
     for (size_t dir_index = 0u; dir_index < (sizeof(s_dirs) / sizeof(s_dirs[0])); ++dir_index) {
         char dir_path[WEB_FILE_PATH_LEN_MAX] = {0};
         DIR *dir = NULL;
@@ -746,19 +919,14 @@ esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_
             char *json_text = NULL;
             cJSON *root = NULL;
             const cJSON *type_item = NULL;
-            burner_gbx_profile_t candidate;
-            size_t match_len = 0u;
+            burner_gbx_profile_t *candidate = NULL;
             esp_err_t parse_err;
+            bool stop = false;
 
             if (entry == NULL) {
                 break;
             }
-            if (strncasecmp(entry->d_name, "fc_", 3) != 0) {
-                continue;
-            }
-            if (strrchr(entry->d_name, '.') == NULL ||
-                (strcasecmp(strrchr(entry->d_name, '.'), ".txt") != 0 &&
-                 strcasecmp(strrchr(entry->d_name, '.'), ".json") != 0)) {
+            if (!burner_gbx_profile_entry_is_candidate(entry->d_name)) {
                 continue;
             }
             if (snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name) >= (int)sizeof(full_path)) {
@@ -786,36 +954,103 @@ esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_
             type_item = cJSON_GetObjectItemCaseSensitive(root, "type");
             if (!cJSON_IsString(type_item) ||
                 type_item->valuestring == NULL ||
-                strcasecmp(type_item->valuestring, "AGB") != 0) {
+                strcasecmp(type_item->valuestring, type) != 0) {
                 cJSON_Delete(root);
                 continue;
             }
 
-            match_len = burner_gbx_match_id_list(cJSON_GetObjectItemCaseSensitive(root, "flash_ids"), gba_id);
-            {
-                size_t bank_match_len =
-                    burner_gbx_match_id_list(cJSON_GetObjectItemCaseSensitive(root, "flash_ids_banks"), gba_id);
-                if (bank_match_len > match_len) {
-                    match_len = bank_match_len;
-                }
-            }
-            if (match_len <= best_match_len) {
+            candidate = (burner_gbx_profile_t *)calloc(1u, sizeof(*candidate));
+            if (candidate == NULL) {
                 cJSON_Delete(root);
-                continue;
+                closedir(dir);
+                return ESP_ERR_NO_MEM;
             }
 
-            parse_err = burner_gbx_parse_profile_root(root, entry->d_name, &candidate);
+            parse_err = burner_gbx_parse_profile_root(root, entry->d_name, candidate);
             cJSON_Delete(root);
             if (parse_err != ESP_OK) {
+                free(candidate);
                 continue;
             }
+            any_profile = true;
 
-            best_match_len = match_len;
-            *profile_out = candidate;
+            parse_err = visitor(candidate, user, &stop);
+            free(candidate);
+            if (parse_err != ESP_OK) {
+                closedir(dir);
+                return parse_err;
+            }
+            if (stop) {
+                closedir(dir);
+                return ESP_OK;
+            }
         }
 
         closedir(dir);
     }
 
-    return (best_match_len != 0u) ? ESP_OK : ESP_ERR_NOT_FOUND;
+    return any_profile ? ESP_OK : ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t burner_gbx_visit_agb_profiles(burner_gbx_profile_visitor_t visitor, void *user)
+{
+    return burner_gbx_visit_profiles_by_type("AGB", visitor, user);
+}
+
+esp_err_t burner_gbx_visit_dmg_profiles(burner_gbx_profile_visitor_t visitor, void *user)
+{
+    return burner_gbx_visit_profiles_by_type("DMG", visitor, user);
+}
+
+typedef struct {
+    const uint8_t *id;
+    size_t id_len;
+    size_t best_match_len;
+    burner_gbx_profile_t *profile_out;
+} burner_gbx_lookup_ctx_t;
+
+static esp_err_t burner_gbx_lookup_profile_visitor(
+    const burner_gbx_profile_t *profile,
+    void *user,
+    bool *stop_out)
+{
+    burner_gbx_lookup_ctx_t *ctx = (burner_gbx_lookup_ctx_t *)user;
+    size_t match_len;
+
+    if (profile == NULL || ctx == NULL || stop_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *stop_out = false;
+    match_len = burner_gbx_profile_match_id(profile, ctx->id, ctx->id_len);
+    if (match_len > ctx->best_match_len) {
+        ctx->best_match_len = match_len;
+        *ctx->profile_out = *profile;
+        if (match_len >= ctx->id_len) {
+            *stop_out = true;
+        }
+    }
+    return ESP_OK;
+}
+
+esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out)
+{
+    burner_gbx_lookup_ctx_t ctx = {
+        .id = gba_id,
+        .id_len = 8u,
+        .best_match_len = 0u,
+        .profile_out = profile_out,
+    };
+    esp_err_t err;
+
+    if (gba_id == NULL || profile_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    burner_gbx_profile_clear(profile_out);
+    err = burner_gbx_visit_agb_profiles(burner_gbx_lookup_profile_visitor, &ctx);
+    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+        return err;
+    }
+    return (ctx.best_match_len != 0u) ? ESP_OK : ESP_ERR_NOT_FOUND;
 }
