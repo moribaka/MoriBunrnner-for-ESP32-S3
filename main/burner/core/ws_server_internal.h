@@ -1091,6 +1091,7 @@ void burner_gbx_profile_apply_match_name(
     uint8_t match_index,
     bool bank_match);
 esp_err_t burner_gbx_rebuild_cache(uint32_t *profile_count_out, uint32_t *entry_count_out);
+esp_err_t burner_gbx_ensure_cache(void);
 esp_err_t burner_gbx_find_cached_profile(
     const char *type,
     const burner_gbx_cmd_list_t *method,

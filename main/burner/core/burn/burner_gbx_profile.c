@@ -1527,6 +1527,11 @@ esp_err_t burner_gbx_rebuild_cache(uint32_t *profile_count_out, uint32_t *entry_
     }
 
     if (err == ESP_OK) {
+        if (header.entry_count == 0u) {
+            err = ESP_ERR_NOT_FOUND;
+        }
+    }
+    if (err == ESP_OK) {
         if (fseek(fp, 0, SEEK_SET) != 0 ||
             fwrite(&header, 1u, sizeof(header), fp) != sizeof(header)) {
             err = ESP_FAIL;
@@ -1560,6 +1565,39 @@ esp_err_t burner_gbx_rebuild_cache(uint32_t *profile_count_out, uint32_t *entry_
         header.entry_count,
         BURNER_GBX_CACHE_FILE_REL);
     return ESP_OK;
+}
+
+esp_err_t burner_gbx_ensure_cache(void)
+{
+    char cache_full[WEB_FILE_PATH_LEN_MAX] = {0};
+    struct stat st;
+    uint32_t profile_count = 0u;
+    uint32_t entry_count = 0u;
+    esp_err_t err;
+
+    if (card == NULL || usb_msc_tf_in_use_by_host()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!burner_build_full_path(BURNER_GBX_CACHE_FILE_REL, cache_full, sizeof(cache_full))) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (stat(cache_full, &st) == 0) {
+        ESP_LOGI(BURNER_TAG, "GBX cache exists, keep existing file: %s", BURNER_GBX_CACHE_FILE_REL);
+        return ESP_OK;
+    }
+
+    ESP_LOGI(BURNER_TAG, "GBX cache missing, auto rebuild: %s", BURNER_GBX_CACHE_FILE_REL);
+    err = burner_gbx_rebuild_cache(&profile_count, &entry_count);
+    if (err == ESP_OK) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBX cache auto rebuilt: profiles=%" PRIu32 " entries=%" PRIu32,
+            profile_count,
+            entry_count);
+    } else {
+        ESP_LOGW(BURNER_TAG, "GBX cache auto rebuild skipped/failed: %s", esp_err_to_name(err));
+    }
+    return err;
 }
 
 esp_err_t burner_gbx_find_cached_profile(
