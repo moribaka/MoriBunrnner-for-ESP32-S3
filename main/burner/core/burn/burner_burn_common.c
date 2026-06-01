@@ -1351,6 +1351,7 @@ static void burner_tf_prefetch_task(void *arg)
         ctx->err = (ctx->read_len == ctx->bytes) ? ESP_OK : ESP_FAIL;
         if (ctx->err == ESP_OK && ctx->read_len > 0u && read_elapsed_us > 0u) {
             burner_status_record_tf_to_psram_copy((uint32_t)ctx->read_len, read_elapsed_us);
+            burner_gba_chis_diag_add_tf_read(read_elapsed_us);
         }
     }
 

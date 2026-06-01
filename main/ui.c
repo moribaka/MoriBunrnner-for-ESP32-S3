@@ -125,6 +125,7 @@
 #define UI_BURN_SAVE_ITEM_COUNT 8
 #define UI_SETTINGS_ITEM_COUNT 10
 #define UI_TASK_STATUS_ITEM_COUNT 12
+#define UI_TASK_RESULT_ITEM_COUNT 15
 #define UI_TASK_CANCEL_CONFIRM_ITEM_COUNT 2U
 #define UI_TASK_ERASE_PROGRESS_ROW 6U
 #define UI_TASK_BURN_PROGRESS_ROW 7U
@@ -193,6 +194,7 @@ typedef enum {
     UI_PAGE_BURN_SAVE,
     UI_PAGE_SETTINGS,
     UI_PAGE_TASK_STATUS,
+    UI_PAGE_TASK_RESULT,
 } ui_page_t;
 
 typedef enum {
@@ -328,6 +330,8 @@ typedef struct {
     uint32_t erase_done_sectors;
     uint32_t erase_total_sectors;
     uint64_t burn_elapsed_us;
+    burner_status_t task_result_status;
+    bool task_result_status_valid;
     uint8_t battery_percent;
     bool battery_valid;
     bool battery_charging;
@@ -466,6 +470,18 @@ static ui_model_t s_model = {
     .fps_text = "FPS --",
     .dirty = true,
 };
+
+static void ui_capture_task_result_locked(ui_model_t *model, const burner_status_t *status)
+{
+    if (model == NULL || status == NULL) {
+        return;
+    }
+    if (model->task_result_status_valid) {
+        return;
+    }
+    model->task_result_status = *status;
+    model->task_result_status_valid = true;
+}
 
 static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
     {.title = "System", .hint = "web overview", .symbol = "SYS", .action = UI_ACTION_OPEN_SYSTEM, .accent = UI_COLOR_WHITE},
@@ -2388,6 +2404,8 @@ static const char *ui_page_title(ui_page_t page)
             return ui_tr("Settings");
         case UI_PAGE_TASK_STATUS:
             return ui_tr("Task");
+        case UI_PAGE_TASK_RESULT:
+            return ui_tr("Result");
         default:
             return "MORI";
     }
@@ -3984,6 +4002,8 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
             return UI_SETTINGS_ITEM_COUNT;
         case UI_PAGE_TASK_STATUS:
             return s_task_cancel_confirm ? UI_TASK_CANCEL_CONFIRM_ITEM_COUNT : UI_TASK_STATUS_ITEM_COUNT;
+        case UI_PAGE_TASK_RESULT:
+            return UI_TASK_RESULT_ITEM_COUNT;
         default:
             return 0;
     }
@@ -4022,6 +4042,9 @@ static void ui_open_page_locked(ui_model_t *model, ui_page_t page)
     model->parent_page = parent;
     model->selected = (page == UI_PAGE_ROOT) ? s_root_selected : 0;
     model->scroll = 0;
+    if (page != UI_PAGE_TASK_RESULT) {
+        model->task_result_status_valid = false;
+    }
     if (page != UI_PAGE_BURN_ROM) {
         s_burn_rom_write_menu = false;
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
@@ -4053,6 +4076,7 @@ static void ui_open_root_locked(ui_model_t *model)
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
     s_burn_rom_write_prompt_until_ms = 0;
     s_burn_rom_verify_prompt_until_ms = 0;
+    model->task_result_status_valid = false;
     s_nav_depth = 0;
     ui_set_status_locked(model, ui_tr("ready"));
 }
@@ -4218,6 +4242,19 @@ static void ui_back_locked(ui_model_t *model)
         return;
     }
     if (model->page == UI_PAGE_TASK_STATUS) {
+        ui_page_t return_page = model->parent_page;
+
+        model->page = return_page;
+        model->parent_page = ui_task_return_parent_page(return_page);
+        model->selected = 0;
+        model->scroll = 0;
+        ui_drop_nav_target_locked(model->page);
+        ui_mark_chrome_dirty(model);
+        ui_mark_content_dirty(model);
+        model->dirty = true;
+        return;
+    }
+    if (model->page == UI_PAGE_TASK_RESULT) {
         ui_page_t return_page = model->parent_page;
 
         model->page = return_page;
@@ -5179,6 +5216,9 @@ static void ui_select_locked(
                 ui_set_status_locked(model, ui_tr("task status"));
             }
             break;
+        case UI_PAGE_TASK_RESULT:
+            ui_set_status_locked(model, ui_tr("result summary"));
+            break;
         default:
             ui_set_status_locked(model, ui_tr("read only"));
             break;
@@ -5239,6 +5279,32 @@ static void ui_handle_button_action(ui_button_t button)
         return;
     }
     if (!ui_take_model_lock()) {
+        return;
+    }
+    if (s_model.page == UI_PAGE_TASK_RESULT) {
+        switch (button) {
+            case UI_BUTTON_UP:
+                ui_menu_move_locked(&s_model, -1);
+                break;
+            case UI_BUTTON_DOWN:
+                ui_menu_move_locked(&s_model, 1);
+                break;
+            case UI_BUTTON_LEFT:
+                ui_menu_move_locked(&s_model, -UI_ROW_COUNT);
+                break;
+            case UI_BUTTON_RIGHT:
+                ui_menu_move_locked(&s_model, UI_ROW_COUNT);
+                break;
+            case UI_BUTTON_BACK:
+                ui_back_locked(&s_model);
+                break;
+            case UI_BUTTON_SELECT:
+            case UI_BUTTON_PANEL_TOGGLE:
+            case UI_BUTTON_MENU:
+            default:
+                break;
+        }
+        xSemaphoreGive(s_model_lock);
         return;
     }
 
@@ -5529,6 +5595,7 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     if (release_start) {
         s_task_cancel_confirm = false;
         s_task_cancel_request_pending = false;
+        ui_capture_task_result_locked(&s_model, &status);
         if (s_task_cancel_exit_pending &&
             s_model.page == UI_PAGE_TASK_STATUS &&
             (status.state == BURNER_STATE_CANCELLED || status.state == BURNER_STATE_ERROR)) {
@@ -5542,10 +5609,18 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
             s_model.dirty = true;
         } else if (status.state == BURNER_STATE_DONE || status.state == BURNER_STATE_CANCELLED ||
                    status.state == BURNER_STATE_ERROR) {
+            if (s_model.page == UI_PAGE_TASK_STATUS) {
+                s_model.page = UI_PAGE_TASK_RESULT;
+                s_model.selected = 0;
+                s_model.scroll = 0;
+                ui_mark_chrome_dirty(&s_model);
+                ui_mark_content_dirty(&s_model);
+                s_model.dirty = true;
+            }
             s_task_cancel_exit_pending = false;
         }
     }
-    if (s_model.page == UI_PAGE_TASK_STATUS) {
+    if (s_model.page == UI_PAGE_TASK_STATUS || s_model.page == UI_PAGE_TASK_RESULT) {
         ui_mark_content_dirty(&s_model);
     }
     xSemaphoreGive(s_model_lock);
@@ -6292,6 +6367,105 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
     }
 }
 
+static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
+{
+    burner_status_t status = {0};
+    char size_a[24] = {0};
+    char size_b[24] = {0};
+    char text[24] = {0};
+    uint64_t elapsed_us;
+
+    if (model != NULL && model->task_result_status_valid) {
+        status = model->task_result_status;
+    } else {
+        burner_status_snapshot(&status);
+    }
+    elapsed_us = status.task_elapsed_us > 0ULL ? status.task_elapsed_us : model->burn_elapsed_us;
+
+    switch (index) {
+        case 0:
+            snprintf(title, title_len, "%s", ui_tr("State"));
+            snprintf(hint, hint_len, "%s", ui_burn_state_text(status.state));
+            break;
+        case 1:
+            snprintf(title, title_len, "%s", ui_tr("ROM/File"));
+            snprintf(hint, hint_len, "%s", status.rom_name[0] != '\0' ? status.rom_name : "--");
+            break;
+        case 2:
+            snprintf(title, title_len, "%s", ui_tr("Bytes"));
+            ui_format_bytes_text(
+                status.processed_bytes > 0U ? status.processed_bytes : model->burn_processed,
+                size_a,
+                sizeof(size_a));
+            ui_format_bytes_text(
+                status.total_bytes > 0U ? status.total_bytes : model->burn_total,
+                size_b,
+                sizeof(size_b));
+            snprintf(hint, hint_len, "%s/%s", size_a, size_b);
+            break;
+        case 3:
+            snprintf(title, title_len, "%s", ui_tr("Total time"));
+            ui_format_elapsed(elapsed_us, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 4:
+            snprintf(title, title_len, "%s", ui_tr("Erase time"));
+            ui_format_elapsed(status.erase_elapsed_us, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 5:
+            snprintf(title, title_len, "%s", ui_tr("Write time"));
+            ui_format_elapsed(status.write_elapsed_us, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 6:
+            snprintf(title, title_len, "%s", ui_tr("Write max"));
+            ui_format_speed_text(status.speed_max_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 7:
+            snprintf(title, title_len, "%s", ui_tr("Write avg"));
+            ui_format_speed_text(status.speed_avg_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 8:
+            snprintf(title, title_len, "%s", ui_tr("Write min"));
+            ui_format_speed_text(status.speed_min_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 9:
+            snprintf(title, title_len, "%s", ui_tr("TF->PSRAM max"));
+            ui_format_speed_text(status.tf_to_psram_speed_max_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 10:
+            snprintf(title, title_len, "%s", ui_tr("TF->PSRAM avg"));
+            ui_format_speed_text(status.tf_to_psram_speed_avg_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 11:
+            snprintf(title, title_len, "%s", ui_tr("Dump read max"));
+            ui_format_speed_text(status.dump_read_speed_max_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 12:
+            snprintf(title, title_len, "%s", ui_tr("Dump read avg"));
+            ui_format_speed_text(status.dump_read_speed_avg_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        case 13:
+            snprintf(title, title_len, "%s", ui_tr("Dump write max"));
+            ui_format_speed_text(status.dump_write_speed_max_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+        default:
+            snprintf(title, title_len, "%s", ui_tr("Dump write avg"));
+            ui_format_speed_text(status.dump_write_speed_avg_bps, text, sizeof(text));
+            snprintf(hint, hint_len, "%s", text);
+            break;
+    }
+}
+
 static void ui_fill_settings_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
     (void)model;
@@ -6605,6 +6779,9 @@ static void ui_px_fill_row(
             break;
         case UI_PAGE_TASK_STATUS:
             ui_fill_task_row(model, index, title, title_len, hint, hint_len);
+            break;
+        case UI_PAGE_TASK_RESULT:
+            ui_fill_task_result_row(model, index, title, title_len, hint, hint_len);
             break;
         case UI_PAGE_SETTINGS:
             ui_fill_settings_row(model, index, title, title_len, hint, hint_len);
@@ -7803,6 +7980,7 @@ void ui_show_burn_task_status(uint32_t total_hint)
     }
 
     ui_task_cancel_confirm_reset_locked();
+    s_model.task_result_status_valid = false;
     s_model.page = UI_PAGE_TASK_STATUS;
     s_model.parent_page = UI_PAGE_BURNER;
     s_model.selected = 0;
