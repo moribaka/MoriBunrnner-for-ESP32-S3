@@ -1,5 +1,6 @@
 #include "ws_server_internal.h"
 #include "lvgl_port.h"
+#include "power_manager.h"
 
 static void burner_task(void *param)
 {
@@ -10,12 +11,16 @@ static void burner_task(void *param)
     bool restore_power = false;
     bool task_with_caps = false;
     bool idle_dim_suspended = false;
+    bool perf_lock_acquired = false;
 
     if (job == NULL) {
         vTaskDelete(NULL);
         return;
     }
     task_with_caps = job->task_with_caps;
+    if (power_manager_perf_lock_acquire("burn_task") == ESP_OK) {
+        perf_lock_acquired = true;
+    }
     lvgl_port_set_idle_dim_suspended(true);
     idle_dim_suspended = true;
 
@@ -203,6 +208,10 @@ task_done:
         ui_mark_activity();
         lvgl_port_set_idle_dim_suspended(false);
         idle_dim_suspended = false;
+    }
+    if (perf_lock_acquired) {
+        power_manager_perf_lock_release("burn_task");
+        perf_lock_acquired = false;
     }
     ESP_LOGI(
         BURNER_TAG,

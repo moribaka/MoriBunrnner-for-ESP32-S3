@@ -95,6 +95,7 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"ROM dump started", "ROM dump started"},
     {"ROM selected", "ROM selected"},
     {"ROM/File", "ROM/File"},
+    {"ROM: Choose MBC", "ROM: Choose MBC"},
     {"ROM: Choose file", "ROM: Choose file"},
     {"ROM: Dump", "ROM: Dump"},
     {"ROM: Erase chip", "ROM: Erase chip"},

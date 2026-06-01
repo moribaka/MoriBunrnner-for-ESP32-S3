@@ -3,11 +3,24 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "sdkconfig.h"
+
+#if CONFIG_PM_ENABLE
+#include "esp_pm.h"
+#endif
 
 static const char *TAG = "power_manager";
 
 static power_chip_type_t s_power_chip_type = POWER_CHIP_NONE;
 static bool s_power_ready = false;
+
+#if CONFIG_PM_ENABLE
+static esp_pm_lock_handle_t s_perf_lock = NULL;
+static SemaphoreHandle_t s_perf_lock_mutex = NULL;
+static uint32_t s_perf_lock_refs = 0u;
+#endif
 
 static uint8_t power_manager_estimate_battery_percent_from_mv(uint32_t battery_mv)
 {
@@ -18,6 +31,114 @@ static uint8_t power_manager_estimate_battery_percent_from_mv(uint32_t battery_m
         return 100u;
     }
     return (uint8_t)(((battery_mv - 3300u) * 100u) / 900u);
+}
+
+esp_err_t power_manager_cpu_freq_init(void)
+{
+#if CONFIG_PM_ENABLE
+    esp_pm_config_t pm_config = {
+        .max_freq_mhz = 160,
+        .min_freq_mhz = 80,
+        .light_sleep_enable = false,
+    };
+    esp_err_t err;
+
+    err = esp_pm_configure(&pm_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "CPU DFS configure failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    if (s_perf_lock == NULL) {
+        err = esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "mori_perf", &s_perf_lock);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "CPU perf lock create failed: %s", esp_err_to_name(err));
+            return err;
+        }
+    }
+    if (s_perf_lock_mutex == NULL) {
+        s_perf_lock_mutex = xSemaphoreCreateMutex();
+        if (s_perf_lock_mutex == NULL) {
+            ESP_LOGW(TAG, "CPU perf lock mutex create failed");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    ESP_LOGI(TAG, "CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off");
+    return ESP_OK;
+#else
+    ESP_LOGI(TAG, "CPU DFS disabled in sdkconfig; fixed CPU=%dMHz", CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+esp_err_t power_manager_perf_lock_acquire(const char *owner)
+{
+#if CONFIG_PM_ENABLE
+    esp_err_t err = ESP_OK;
+
+    if (s_perf_lock == NULL) {
+        err = power_manager_cpu_freq_init();
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+    if (s_perf_lock_mutex != NULL) {
+        xSemaphoreTake(s_perf_lock_mutex, portMAX_DELAY);
+    }
+    if (s_perf_lock_refs == 0u) {
+        err = esp_pm_lock_acquire(s_perf_lock);
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "CPU perf lock acquired by %s", owner != NULL ? owner : "unknown");
+        }
+    }
+    if (err == ESP_OK) {
+        s_perf_lock_refs++;
+    }
+    if (s_perf_lock_mutex != NULL) {
+        xSemaphoreGive(s_perf_lock_mutex);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "CPU perf lock acquire failed for %s: %s",
+            owner != NULL ? owner : "unknown",
+            esp_err_to_name(err));
+    }
+    return err;
+#else
+    (void)owner;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+void power_manager_perf_lock_release(const char *owner)
+{
+#if CONFIG_PM_ENABLE
+    esp_err_t err = ESP_OK;
+
+    if (s_perf_lock == NULL) {
+        return;
+    }
+    if (s_perf_lock_mutex != NULL) {
+        xSemaphoreTake(s_perf_lock_mutex, portMAX_DELAY);
+    }
+    if (s_perf_lock_refs > 0u) {
+        s_perf_lock_refs--;
+        if (s_perf_lock_refs == 0u) {
+            err = esp_pm_lock_release(s_perf_lock);
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "CPU perf lock released by %s", owner != NULL ? owner : "unknown");
+            }
+        }
+    }
+    if (s_perf_lock_mutex != NULL) {
+        xSemaphoreGive(s_perf_lock_mutex);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "CPU perf lock release failed for %s: %s",
+            owner != NULL ? owner : "unknown",
+            esp_err_to_name(err));
+    }
+#else
+    (void)owner;
+#endif
 }
 
 esp_err_t power_manager_init(i2c_master_bus_handle_t bus)

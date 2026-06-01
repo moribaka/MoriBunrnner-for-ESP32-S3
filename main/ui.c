@@ -102,7 +102,7 @@
 #define UI_TF_ITEM_COUNT 7
 #define UI_WIFI_ITEM_COUNT 5
 #define UI_POWER_ITEM_COUNT 6
-#define UI_SYSTEM_ITEM_COUNT 7
+#define UI_SYSTEM_ITEM_COUNT 8
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
@@ -363,6 +363,7 @@ typedef enum {
     UI_WORK_DEVICE_RESTART,
     UI_WORK_BRIGHTNESS_UP,
     UI_WORK_BRIGHTNESS_DOWN,
+    UI_WORK_UPDATE_GBX_CACHE,
 } ui_work_type_t;
 
 typedef struct {
@@ -484,6 +485,7 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index);
 static bool ui_burn_cart_has_slots(void);
 static const char *ui_mbc5_voltage_label(void);
 static void ui_focus_burn_rom_op_locked(ui_model_t *model, ui_burn_rom_op_t op);
+static void ui_burn_rom_open_mapper_menu_locked(ui_model_t *model);
 static void ui_persist_burn_settings_locked(ui_model_t *model);
 static const char *ui_selected_gb_mapper_label(void);
 
@@ -2816,14 +2818,21 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
     } else {
         *ui_last_rom_file_for_mode_mut(s_cart_mode) = *entry;
         *ui_last_rom_kind_for_mode_mut(s_cart_mode) = kind;
+        if (s_cart_mode == BURNER_CART_MODE_MBC5) {
+            s_gb_mapper_override_kind = BURNER_GB_MAPPER_UNKNOWN;
+        }
         s_burn_rom_write_menu = false;
         model->page = UI_PAGE_BURN_ROM;
         model->parent_page = UI_PAGE_BURNER;
-        s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
         ui_set_status_locked(model, ui_tr("ROM selected"));
-        ui_focus_burn_rom_op_locked(
-            model,
-            UI_BURN_ROM_OP_WRITE_ROM);
+        if (s_cart_mode == BURNER_CART_MODE_MBC5) {
+            ui_burn_rom_open_mapper_menu_locked(model);
+        } else {
+            s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+            ui_focus_burn_rom_op_locked(
+                model,
+                UI_BURN_ROM_OP_WRITE_ROM);
+        }
     }
     ui_clamp_burn_rom_selection_locked(model);
     ui_drop_nav_target_locked(model->page);
@@ -2960,18 +2969,26 @@ static void ui_start_file_action_task(void *param)
     char error_msg[160] = {0};
     esp_err_t err = ESP_ERR_INVALID_ARG;
     bool task_with_caps = false;
+    bool perf_lock_acquired = false;
 
     if (request == NULL) {
         vTaskDelete(NULL);
         return;
     }
     task_with_caps = request->task_with_caps;
+    if (power_manager_perf_lock_acquire("ui_file_start") == ESP_OK) {
+        perf_lock_acquired = true;
+    }
 
     err = burner_backend_init();
     if (err != ESP_OK) {
         snprintf(error_msg, sizeof(error_msg), "burn backend init failed: %s", esp_err_to_name(err));
         ui_finish_file_start_task(request, err, &result, error_msg);
         free(request);
+        if (perf_lock_acquired) {
+            power_manager_perf_lock_release("ui_file_start");
+            perf_lock_acquired = false;
+        }
         if (task_with_caps) {
             vTaskDeleteWithCaps(NULL);
         } else {
@@ -3060,6 +3077,10 @@ static void ui_start_file_action_task(void *param)
     ESP_LOGI(UI_TAG, "LCD file action task stack free min=%u bytes", (unsigned)uxTaskGetStackHighWaterMark2(NULL));
     ui_finish_file_start_task(request, err, &result, error_msg);
     free(request);
+    if (perf_lock_acquired) {
+        power_manager_perf_lock_release("ui_file_start");
+        perf_lock_acquired = false;
+    }
     if (task_with_caps) {
         vTaskDeleteWithCaps(NULL);
     } else {
@@ -3619,7 +3640,8 @@ static void ui_finish_work_task(ui_work_type_t type, esp_err_t err, const char *
         type == UI_WORK_WIFI_DISCONNECT || type == UI_WORK_WIFI_CLOSE_AP ||
         type == UI_WORK_WIFI_CLEAR_SAVED) {
         s_wifi_work_active = false;
-    } else if (type == UI_WORK_STORAGE_USB_ENABLE || type == UI_WORK_STORAGE_USB_DISABLE) {
+    } else if (type == UI_WORK_STORAGE_USB_ENABLE || type == UI_WORK_STORAGE_USB_DISABLE ||
+               type == UI_WORK_UPDATE_GBX_CACHE) {
         s_storage_work_active = false;
     } else if (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_UNLOCK_PPB) {
         s_burn_probe_active = false;
@@ -3658,6 +3680,7 @@ static void ui_work_task(void *param)
     ui_work_request_t *request = (ui_work_request_t *)param;
     esp_err_t err = ESP_ERR_INVALID_ARG;
     const char *ok_text = ui_tr("done");
+    char ok_buf[UI_STATUS_TEXT_MAX_LEN] = {0};
     bool task_with_caps = false;
 
     if (request == NULL) {
@@ -3721,6 +3744,24 @@ static void ui_work_task(void *param)
             burner_schedule_restart();
             err = ESP_OK;
             break;
+        case UI_WORK_UPDATE_GBX_CACHE: {
+            uint32_t profile_count = 0u;
+            uint32_t entry_count = 0u;
+
+            err = burner_gbx_rebuild_cache(&profile_count, &entry_count);
+            if (err == ESP_OK) {
+                snprintf(
+                    ok_buf,
+                    sizeof(ok_buf),
+                    "GBX缓存 %" PRIu32 "/%" PRIu32,
+                    profile_count,
+                    entry_count);
+                ok_text = ok_buf;
+            } else {
+                ok_text = "GBX缓存失败";
+            }
+            break;
+        }
         default:
             err = ESP_ERR_INVALID_ARG;
             break;
@@ -3784,6 +3825,7 @@ static void ui_start_work_async(ui_work_type_t type)
     BaseType_t core_id = UI_SYSTEM_TASK_CORE_ID;
     TaskFunction_t task_fn = ui_work_task;
     bool is_burn_probe = (type == UI_WORK_BURN_READ_ID || type == UI_WORK_BURN_UNLOCK_PPB);
+    bool is_gbx_cache = (type == UI_WORK_UPDATE_GBX_CACHE);
     BaseType_t ret = pdFAIL;
 
     if (!ui_take_model_lock()) {
@@ -3796,10 +3838,11 @@ static void ui_start_work_async(ui_work_type_t type)
         status = ui_tr("Wi-Fi working");
         stack_size = UI_WIFI_TASK_STACK_SIZE;
         priority = UI_WIFI_TASK_PRIORITY;
-    } else if (type == UI_WORK_STORAGE_USB_ENABLE || type == UI_WORK_STORAGE_USB_DISABLE) {
+    } else if (type == UI_WORK_STORAGE_USB_ENABLE || type == UI_WORK_STORAGE_USB_DISABLE || is_gbx_cache) {
         active = &s_storage_work_active;
-        status = ui_tr("storage working");
-        stack_size = UI_STORAGE_TASK_STACK_SIZE;
+        status = is_gbx_cache ? "更新GBX缓存" : ui_tr("storage working");
+        task_name = is_gbx_cache ? "ui_gbx_cache" : "ui_work";
+        stack_size = is_gbx_cache ? UI_BURN_PROBE_TASK_STACK_SIZE : UI_STORAGE_TASK_STACK_SIZE;
         priority = UI_STORAGE_TASK_PRIORITY;
     } else if (is_burn_probe) {
         active = &s_burn_probe_active;
@@ -3844,7 +3887,7 @@ static void ui_start_work_async(ui_work_type_t type)
     request->cart_mode = s_cart_mode;
     request->task_with_caps = false;
 
-    if (is_burn_probe) {
+    if (is_burn_probe || is_gbx_cache) {
         request->task_with_caps = true;
         ret = xTaskCreatePinnedToCoreWithCaps(
             task_fn,
@@ -4362,6 +4405,14 @@ static esp_err_t ui_prepare_last_file_action_locked(
         ui_set_status_locked(model, ui_tr("task starting"));
         return ESP_ERR_INVALID_STATE;
     }
+    if (!want_save &&
+        model != NULL &&
+        model->page == UI_PAGE_BURN_ROM &&
+        s_cart_mode == BURNER_CART_MODE_MBC5 &&
+        s_gb_mapper_override_kind == BURNER_GB_MAPPER_UNKNOWN) {
+        ui_burn_rom_open_mapper_menu_locked(model);
+        return ESP_ERR_INVALID_STATE;
+    }
     if (card == NULL || usb_msc_tf_in_use_by_host()) {
         ui_set_status_locked(model, ui_tr("TF not available"));
         return ESP_ERR_INVALID_STATE;
@@ -4708,6 +4759,9 @@ static void ui_select_locked(
                 ui_open_page_locked(model, UI_PAGE_TF);
             } else if (model->selected == 6U) {
                 ui_open_page_locked(model, UI_PAGE_SETTINGS);
+            } else if (model->selected == 7U) {
+                *work_type = UI_WORK_UPDATE_GBX_CACHE;
+                *start_work = true;
             } else {
                 ui_set_status_locked(model, ui_tr("system overview"));
             }
@@ -5684,9 +5738,13 @@ static void ui_fill_system_row(const ui_model_t *model, uint16_t index, char *ti
             snprintf(title, title_len, "%s", ui_tr("TF manager"));
             snprintf(hint, hint_len, "%s", card != NULL ? ui_tr("ready") : ui_tr("missing"));
             break;
-        default:
+        case 6:
             snprintf(title, title_len, "%s", ui_tr("Settings"));
             snprintf(hint, hint_len, "%s", ui_tr("device tools"));
+            break;
+        default:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "更新GBX缓存" : "Update GBX cache");
+            snprintf(hint, hint_len, "%s", ".gbx/gbx_cache.bin");
             break;
     }
 }
@@ -5951,12 +6009,13 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             }
             return;
         case UI_BURN_ROM_OP_ROM_MAPPER:
-            snprintf(title, title_len, "ROM: %s", ui_selected_gb_mapper_label());
             if (s_gb_mapper_override_kind == BURNER_GB_MAPPER_UNKNOWN) {
+                snprintf(title, title_len, "%s", ui_tr("ROM: Choose MBC"));
                 if (hint_len > 0U) {
                     hint[0] = '\0';
                 }
             } else {
+                snprintf(title, title_len, "ROM: %s", ui_selected_gb_mapper_label());
                 snprintf(hint, hint_len, "%s", ui_tr("done"));
             }
             return;
