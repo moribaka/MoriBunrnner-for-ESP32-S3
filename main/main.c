@@ -2855,6 +2855,12 @@ static void mount_sdcard_if_possible(void)
             ESP_LOGW("main", "load burn_config.ini failed: %s", esp_err_to_name(burn_cfg_err));
         }
     }
+    {
+        esp_err_t gbx_cache_err = burner_gbx_ensure_cache();
+        if (gbx_cache_err != ESP_OK) {
+            ESP_LOGW("main", "ensure GBX cache failed: %s", esp_err_to_name(gbx_cache_err));
+        }
+    }
     mori_apply_ui_language_from_system_ini();
 }
 
