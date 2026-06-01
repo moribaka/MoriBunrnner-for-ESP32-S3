@@ -277,6 +277,7 @@ typedef struct {
 
 typedef struct {
     bool active;
+    bool runtime_commands_enabled;
     bool power_cycle;
     bool wait_read_status_register;
     bool d0d1_known;
@@ -307,6 +308,8 @@ typedef struct {
     burner_nor_geometry_t sector_geometry;
     char type[BURNER_GBX_PROFILE_TYPE_LEN];
     char display_name[BURNER_GBX_PROFILE_NAME_LEN];
+    uint8_t display_name_count;
+    char display_names[BURNER_GBX_FLASH_ID_MAX][BURNER_GBX_PROFILE_NAME_LEN];
     char file_name[BURNER_GBX_PROFILE_NAME_LEN];
     char command_set_name[BURNER_GBX_PROFILE_CMDSET_LEN];
     char write_pin[BURNER_GBX_PROFILE_WRITE_PIN_LEN];
@@ -1077,6 +1080,28 @@ size_t burner_gbx_profile_match_id(
     const burner_gbx_profile_t *profile,
     const uint8_t *gba_id,
     size_t gba_id_len);
+size_t burner_gbx_profile_match_id_ex(
+    const burner_gbx_profile_t *profile,
+    const uint8_t *gba_id,
+    size_t gba_id_len,
+    uint8_t *match_index_out,
+    bool *bank_match_out);
+void burner_gbx_profile_apply_match_name(
+    burner_gbx_profile_t *profile,
+    uint8_t match_index,
+    bool bank_match);
+esp_err_t burner_gbx_rebuild_cache(uint32_t *profile_count_out, uint32_t *entry_count_out);
+esp_err_t burner_gbx_find_cached_profile(
+    const char *type,
+    const burner_gbx_cmd_list_t *method,
+    const uint8_t *id,
+    size_t id_len,
+    burner_gbx_profile_t *profile_out,
+    size_t *match_len_out);
+esp_err_t burner_gbx_visit_cached_methods_by_type(
+    const char *type,
+    burner_gbx_profile_visitor_t visitor,
+    void *user);
 esp_err_t burner_gbx_visit_agb_profiles(burner_gbx_profile_visitor_t visitor, void *user);
 esp_err_t burner_gbx_visit_dmg_profiles(burner_gbx_profile_visitor_t visitor, void *user);
 esp_err_t burner_gbx_visit_profiles_by_type(

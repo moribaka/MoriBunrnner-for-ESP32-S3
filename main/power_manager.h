@@ -44,6 +44,9 @@ typedef struct {
 } power_manager_telemetry_t;
 
 esp_err_t power_manager_init(i2c_master_bus_handle_t bus);
+esp_err_t power_manager_cpu_freq_init(void);
+esp_err_t power_manager_perf_lock_acquire(const char *owner);
+void power_manager_perf_lock_release(const char *owner);
 power_chip_type_t power_manager_chip_type(void);
 bool power_manager_ready(void);
 const char *power_manager_chip_name(void);

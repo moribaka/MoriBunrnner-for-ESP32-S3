@@ -8,7 +8,7 @@ typedef struct {
 
 bool burner_gba_gbx_is_active(void)
 {
-    return s_cart_ctx.gbx.active;
+    return s_cart_ctx.gbx.active && s_cart_ctx.gbx.runtime_commands_enabled;
 }
 
 static esp_err_t burner_gba_gbx_prepare_bank_addr(
@@ -141,7 +141,7 @@ static esp_err_t burner_gba_gbx_execute_status_reads(
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gba_command_write_u16(local_byte_addr >> 1, step->data_value);
+        err = burner_bacon_rom_write_u16(local_byte_addr >> 1, step->data_value);
         if (err != ESP_OK) {
             return err;
         }
@@ -194,7 +194,6 @@ static esp_err_t burner_gba_gbx_wait_step(
         if (err != ESP_OK) {
             return err;
         }
-        read_back = burner_apply_d0d1_swap_on_read(read_back, s_cart_ctx.d0d1_swapped);
         if ((read_back & wait_step->mask) == expected) {
             return ESP_OK;
         }
@@ -246,7 +245,7 @@ static esp_err_t burner_gba_gbx_execute_plain_sequence(
             if (err != ESP_OK) {
                 return err;
             }
-            err = burner_bacon_gba_command_write_u16(local_byte_addr >> 1, value);
+            err = burner_bacon_rom_write_u16(local_byte_addr >> 1, value);
             if (err != ESP_OK) {
                 return err;
             }
@@ -261,27 +260,6 @@ static esp_err_t burner_gba_gbx_execute_plain_sequence(
     }
 
     return ESP_OK;
-}
-
-static bool burner_gba_gbx_cmd_list_equal(const burner_gbx_cmd_list_t *left, const burner_gbx_cmd_list_t *right)
-{
-    if (left == NULL || right == NULL || left->count != right->count) {
-        return false;
-    }
-
-    for (uint32_t i = 0u; i < left->count; ++i) {
-        const burner_gbx_cmd_step_t *a = &left->steps[i];
-        const burner_gbx_cmd_step_t *b = &right->steps[i];
-
-        if (a->addr_kind != b->addr_kind ||
-            a->addr_value != b->addr_value ||
-            a->data_kind != b->data_kind ||
-            a->data_value != b->data_value) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 static esp_err_t burner_gba_gbx_run_unlock_read_for_profile(
@@ -334,7 +312,6 @@ static esp_err_t burner_gba_gbx_read_chip_bytes(uint32_t byte_addr, uint8_t *out
         if (err != ESP_OK) {
             return err;
         }
-        word = burner_apply_d0d1_swap_on_read(word, s_cart_ctx.d0d1_swapped);
         out[off] = (uint8_t)(word & 0xFFu);
         out[off + 1u] = (uint8_t)((word >> 8) & 0xFFu);
     }
@@ -442,43 +419,6 @@ static esp_err_t burner_gba_gbx_read_id_with_profile(
 }
 
 typedef struct {
-    const burner_gbx_profile_t *method_profile;
-    const uint8_t *id;
-    size_t id_len;
-    size_t best_match_len;
-    burner_gbx_profile_t *matched_profile;
-} burner_gba_gbx_match_ctx_t;
-
-static esp_err_t burner_gba_gbx_match_profile_visitor(
-    const burner_gbx_profile_t *profile,
-    void *user,
-    bool *stop_out)
-{
-    burner_gba_gbx_match_ctx_t *ctx = (burner_gba_gbx_match_ctx_t *)user;
-    size_t match_len;
-
-    if (profile == NULL || ctx == NULL || ctx->matched_profile == NULL || stop_out == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    *stop_out = false;
-    if (!burner_gba_gbx_cmd_list_equal(&profile->read_identifier, &ctx->method_profile->read_identifier)) {
-        return ESP_OK;
-    }
-
-    match_len = burner_gbx_profile_match_id(profile, ctx->id, ctx->id_len);
-    if (match_len > ctx->best_match_len) {
-        ctx->best_match_len = match_len;
-        *ctx->matched_profile = *profile;
-        if (match_len >= ctx->id_len) {
-            *stop_out = true;
-        }
-    }
-
-    return ESP_OK;
-}
-
-typedef struct {
     bool found;
     uint8_t id[BURNER_GBX_FLASH_ID_LEN_MAX];
     burner_gbx_profile_t *profile;
@@ -490,7 +430,7 @@ static esp_err_t burner_gba_gbx_probe_method_visitor(
     bool *stop_out)
 {
     burner_gba_gbx_probe_ctx_t *ctx = (burner_gba_gbx_probe_ctx_t *)user;
-    burner_gba_gbx_match_ctx_t match_ctx;
+    size_t cache_match_len = 0u;
     uint8_t id[BURNER_GBX_FLASH_ID_LEN_MAX] = {0};
     bool changed = false;
     esp_err_t err;
@@ -514,19 +454,22 @@ static esp_err_t burner_gba_gbx_probe_method_visitor(
         return ESP_OK;
     }
 
-    memset(&match_ctx, 0, sizeof(match_ctx));
-    match_ctx.method_profile = profile;
-    match_ctx.id = id;
-    match_ctx.id_len = BURNER_GBX_FLASH_ID_LEN_MAX;
-    match_ctx.matched_profile = ctx->profile;
-    err = burner_gbx_visit_agb_profiles(burner_gba_gbx_match_profile_visitor, &match_ctx);
-    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
-        return err;
-    }
-    if (match_ctx.best_match_len == 0u) {
+    err = burner_gbx_find_cached_profile(
+        "AGB",
+        &profile->read_identifier,
+        id,
+        BURNER_GBX_FLASH_ID_LEN_MAX,
+        ctx->profile,
+        &cache_match_len);
+    if (err == ESP_OK && cache_match_len != 0u) {
+        memcpy(ctx->id, id, sizeof(ctx->id));
+        ctx->found = true;
+        *stop_out = true;
         ESP_LOGI(
             BURNER_TAG,
-            "GBX ID method produced unmatched id=%02X %02X %02X %02X %02X %02X %02X %02X via %s",
+            "GBX profile matched by cache: method=%s profile=%s id=%02X %02X %02X %02X %02X %02X %02X %02X",
+            profile->file_name,
+            ctx->profile->file_name,
             id[0],
             id[1],
             id[2],
@@ -534,27 +477,13 @@ static esp_err_t burner_gba_gbx_probe_method_visitor(
             id[4],
             id[5],
             id[6],
-            id[7],
-            profile->file_name);
+            id[7]);
         return ESP_OK;
     }
+    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND && err != ESP_ERR_INVALID_VERSION) {
+        ESP_LOGW(BURNER_TAG, "GBX cache match unavailable: %s", esp_err_to_name(err));
+    }
 
-    memcpy(ctx->id, id, sizeof(ctx->id));
-    ctx->found = true;
-    *stop_out = true;
-    ESP_LOGI(
-        BURNER_TAG,
-        "GBX profile matched by FlashGBX method: method=%s profile=%s id=%02X %02X %02X %02X %02X %02X %02X %02X",
-        profile->file_name,
-        ctx->profile->file_name,
-        id[0],
-        id[1],
-        id[2],
-        id[3],
-        id[4],
-        id[5],
-        id[6],
-        id[7]);
     return ESP_OK;
 }
 
@@ -688,9 +617,15 @@ esp_err_t burner_gba_gbx_probe_locked(
         ESP_LOGW(BURNER_TAG, "GBX probe D0/D1 detection failed, assuming normal: %s", esp_err_to_name(err));
     }
 
-    err = burner_gbx_visit_agb_profiles(burner_gba_gbx_probe_method_visitor, &probe_ctx);
+    err = burner_gbx_visit_cached_methods_by_type("AGB", burner_gba_gbx_probe_method_visitor, &probe_ctx);
     if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+        if (err == ESP_ERR_INVALID_VERSION) {
+            ESP_LOGE(BURNER_TAG, "GBX cache version mismatch; update GBX cache from system menu");
+        }
         goto cleanup;
+    }
+    if (err == ESP_ERR_NOT_FOUND) {
+        ESP_LOGE(BURNER_TAG, "GBX cache unavailable or no cached AGB methods; update GBX cache from system menu");
     }
     if (!probe_ctx.found) {
         ESP_LOGE(BURNER_TAG, "GBX probe failed: no FlashGBX profile matched");
@@ -855,7 +790,7 @@ static esp_err_t burner_gba_gbx_single_write_word(
             if (step->data_kind == BURNER_GBX_DATA_PD) {
                 err = burner_bacon_rom_write_u16(local_byte_addr >> 1, word);
             } else if (step->data_kind == BURNER_GBX_DATA_VALUE) {
-                err = burner_bacon_gba_command_write_u16(local_byte_addr >> 1, step->data_value);
+                err = burner_bacon_rom_write_u16(local_byte_addr >> 1, step->data_value);
             } else {
                 return ESP_ERR_NOT_SUPPORTED;
             }
@@ -917,9 +852,9 @@ static esp_err_t burner_gba_gbx_buffer_write_chunk(
             }
 
             if (step->data_kind == BURNER_GBX_DATA_VALUE) {
-                err = burner_bacon_gba_command_write_u16(local_byte_addr >> 1, step->data_value);
+                err = burner_bacon_rom_write_u16(local_byte_addr >> 1, step->data_value);
             } else if (step->data_kind == BURNER_GBX_DATA_BS) {
-                err = burner_bacon_gba_command_write_u16(local_byte_addr >> 1, ctx.buffer_size_value);
+                err = burner_bacon_rom_write_u16(local_byte_addr >> 1, ctx.buffer_size_value);
             } else if (step->data_kind == BURNER_GBX_DATA_PD) {
                 for (size_t wr = 0u; wr < write_words; ++wr) {
                     uint16_t word = (uint16_t)((uint16_t)buf[wr * 2u] | ((uint16_t)buf[wr * 2u + 1u] << 8));
@@ -1152,24 +1087,14 @@ esp_err_t burner_gba_gbx_prepare_profile(
     if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_UNKNOWN && profile->command_set_name[0] != '\0') {
         ESP_LOGW(
             BURNER_TAG,
-            "GBX profile uses custom command_set=%s, runtime will follow profile commands",
+            "GBX profile uses custom command_set=%s, CHIS runtime may not support it",
             profile->command_set_name);
     }
-    if (profile->buffer_write.count > 0u && *buffer_write_bytes >= 2u) {
-        *program_buffer_write_bytes = *buffer_write_bytes;
-    } else if (profile->single_write.count > 0u) {
-        *program_buffer_write_bytes = 0u;
-    } else {
-        ESP_LOGE(
-            BURNER_TAG,
-            "GBX profile missing program commands: file=%s",
-            profile->file_name);
-        return ESP_ERR_NOT_SUPPORTED;
-    }
+    *program_buffer_write_bytes = 0u;
 
     ESP_LOGI(
         BURNER_TAG,
-        "GBX profile active: file=%s chip=%s flash=%" PRIu32 " sector=%" PRIu32
+        "GBX profile identify-only: file=%s chip=%s flash=%" PRIu32 " sector=%" PRIu32
         " buf=%u cmdset=%s cfi=%s swapped=%u",
         s_cart_ctx.gbx.file_name,
         s_cart_ctx.gbx.display_name[0] != '\0' ? s_cart_ctx.gbx.display_name : "unknown",

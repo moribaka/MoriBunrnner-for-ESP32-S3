@@ -110,7 +110,7 @@ typedef struct {
 
 bool burner_gbc_gbx_is_active(void)
 {
-    return s_cart_ctx.gbx.active;
+    return s_cart_ctx.gbx.active && s_cart_ctx.gbx.runtime_commands_enabled;
 }
 
 static bool burner_gbc_gbx_profile_write_supported(const burner_gbx_profile_t *profile)
@@ -581,70 +581,13 @@ static esp_err_t burner_gbc_gbx_read_id_with_profile(
     return ESP_OK;
 }
 
-static bool burner_gbc_gbx_cmd_list_equal(const burner_gbx_cmd_list_t *left, const burner_gbx_cmd_list_t *right)
-{
-    if (left == NULL || right == NULL || left->count != right->count) {
-        return false;
-    }
-
-    for (uint32_t i = 0u; i < left->count; ++i) {
-        const burner_gbx_cmd_step_t *a = &left->steps[i];
-        const burner_gbx_cmd_step_t *b = &right->steps[i];
-
-        if (a->addr_kind != b->addr_kind ||
-            a->addr_value != b->addr_value ||
-            a->data_kind != b->data_kind ||
-            a->data_value != b->data_value) {
-            return false;
-        }
-    }
-    return true;
-}
-
-typedef struct {
-    const burner_gbx_profile_t *method_profile;
-    const uint8_t *id;
-    size_t id_len;
-    size_t best_match_len;
-    burner_gbx_profile_t *matched_profile;
-} burner_gbc_gbx_match_ctx_t;
-
-static esp_err_t burner_gbc_gbx_match_profile_visitor(
-    const burner_gbx_profile_t *profile,
-    void *user,
-    bool *stop_out)
-{
-    burner_gbc_gbx_match_ctx_t *ctx = (burner_gbc_gbx_match_ctx_t *)user;
-    size_t match_len;
-
-    if (profile == NULL || ctx == NULL || ctx->matched_profile == NULL || stop_out == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    *stop_out = false;
-    if (!burner_gbc_gbx_profile_write_supported(profile) ||
-        !burner_gbc_gbx_cmd_list_equal(&profile->read_identifier, &ctx->method_profile->read_identifier)) {
-        return ESP_OK;
-    }
-
-    match_len = burner_gbx_profile_match_id(profile, ctx->id, ctx->id_len);
-    if (match_len > ctx->best_match_len) {
-        ctx->best_match_len = match_len;
-        *ctx->matched_profile = *profile;
-        if (match_len >= ctx->id_len) {
-            *stop_out = true;
-        }
-    }
-    return ESP_OK;
-}
-
 static esp_err_t burner_gbc_gbx_probe_method_visitor(
     const burner_gbx_profile_t *profile,
     void *user,
     bool *stop_out)
 {
     burner_gbc_gbx_probe_ctx_t *ctx = (burner_gbc_gbx_probe_ctx_t *)user;
-    burner_gbc_gbx_match_ctx_t match_ctx;
+    size_t cache_match_len = 0u;
     uint8_t id[BURNER_GBX_FLASH_ID_LEN_MAX] = {0};
     size_t id_len = 0u;
     bool changed = false;
@@ -668,39 +611,32 @@ static esp_err_t burner_gbc_gbx_probe_method_visitor(
         return ESP_OK;
     }
 
-    memset(&match_ctx, 0, sizeof(match_ctx));
-    match_ctx.method_profile = profile;
-    match_ctx.id = id;
-    match_ctx.id_len = id_len;
-    match_ctx.matched_profile = ctx->profile;
-    err = burner_gbx_visit_dmg_profiles(burner_gbc_gbx_match_profile_visitor, &match_ctx);
-    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
-        return err;
-    }
-    if (match_ctx.best_match_len == 0u) {
+    err = burner_gbx_find_cached_profile(
+        "DMG",
+        &profile->read_identifier,
+        id,
+        id_len,
+        ctx->profile,
+        &cache_match_len);
+    if (err == ESP_OK && cache_match_len != 0u) {
+        memcpy(ctx->id, id, sizeof(ctx->id));
+        ctx->found = true;
+        *stop_out = true;
         ESP_LOGI(
             BURNER_TAG,
-            "GBC GBX ID method produced unmatched id=%02X %02X %02X %02X via %s",
+            "GBC GBX profile matched by cache: method=%s profile=%s id=%02X %02X %02X %02X",
+            profile->file_name,
+            ctx->profile->file_name,
             id[0],
             id[1],
             id[2],
-            id[3],
-            profile->file_name);
+            id[3]);
         return ESP_OK;
     }
+    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND && err != ESP_ERR_INVALID_VERSION) {
+        ESP_LOGW(BURNER_TAG, "GBC GBX cache match unavailable: %s", esp_err_to_name(err));
+    }
 
-    memcpy(ctx->id, id, sizeof(ctx->id));
-    ctx->found = true;
-    *stop_out = true;
-    ESP_LOGI(
-        BURNER_TAG,
-        "GBC GBX profile matched: method=%s profile=%s id=%02X %02X %02X %02X",
-        profile->file_name,
-        ctx->profile->file_name,
-        id[0],
-        id[1],
-        id[2],
-        id[3]);
     return ESP_OK;
 }
 
@@ -796,9 +732,15 @@ esp_err_t burner_gbc_gbx_probe_locked(
     }
 
     ESP_LOGI(BURNER_TAG, "GBC GBX probe: FlashGBX DMG profile scan starting");
-    err = burner_gbx_visit_dmg_profiles(burner_gbc_gbx_probe_method_visitor, &probe_ctx);
+    err = burner_gbx_visit_cached_methods_by_type("DMG", burner_gbc_gbx_probe_method_visitor, &probe_ctx);
     if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+        if (err == ESP_ERR_INVALID_VERSION) {
+            ESP_LOGE(BURNER_TAG, "GBC GBX cache version mismatch; update GBX cache from system menu");
+        }
         goto cleanup;
+    }
+    if (err == ESP_ERR_NOT_FOUND) {
+        ESP_LOGE(BURNER_TAG, "GBC GBX cache unavailable or no cached DMG methods; update GBX cache from system menu");
     }
     if (!probe_ctx.found) {
         ESP_LOGE(BURNER_TAG, "GBC GBX probe failed: no FlashGBX DMG profile matched");
@@ -919,16 +861,10 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
             device_size);
         return ESP_ERR_INVALID_SIZE;
     }
-    if (s_cart_ctx.gbx.buffer_write.count == 0u && s_cart_ctx.gbx.single_write.count == 0u) {
-        ESP_LOGE(BURNER_TAG, "GBC GBX profile missing program commands: %s", s_cart_ctx.gbx.file_name);
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-
     s_cart_ctx.prepared = true;
     s_cart_ctx.current_bank = UINT16_MAX;
     s_cart_ctx.buffer_write_bytes = buffer_write_bytes;
-    s_cart_ctx.program_buffer_write_bytes =
-        (s_cart_ctx.gbx.buffer_write.count > 0u && buffer_write_bytes > 0u) ? buffer_write_bytes : 0u;
+    s_cart_ctx.program_buffer_write_bytes = buffer_write_bytes;
     s_cart_ctx.sector_size = sector_size;
     s_cart_ctx.device_size = device_size;
     s_cart_ctx.probe_cfi_ok = cfi_ok;
@@ -943,7 +879,7 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
         device_size);
     ESP_LOGI(
         BURNER_TAG,
-        "GBC GBX prepared: chip=%s flash=%" PRIu32 " sector=%" PRIu32
+        "GBC GBX identify-only prepared: chip=%s flash=%" PRIu32 " sector=%" PRIu32
         " geom=%s largest=%" PRIu32 " regions=%u buf=%u profile=%s start=0x%08" PRIX32 " first_bank=%" PRIu32,
         chip_name,
         device_size,

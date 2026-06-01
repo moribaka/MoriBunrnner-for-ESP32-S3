@@ -2879,6 +2879,7 @@ void app_main(void)
     esp_reset_reason_t reset_reason = esp_reset_reason();
 
     ESP_LOGI("main", "boot start, reset_reason=%s (%d)", main_reset_reason_str(reset_reason), (int)reset_reason);
+    (void)power_manager_cpu_freq_init();
     mori_apply_timezone();
 
     ui_set_status_text("system initializing");

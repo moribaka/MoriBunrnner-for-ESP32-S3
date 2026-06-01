@@ -92,6 +92,7 @@ const ui_text_entry_t g_ui_text_zh[] = {
     {"ROM dump started", "ROM读取已启动"},
     {"ROM selected", "已选择ROM"},
     {"ROM/File", "ROM/文件"},
+    {"ROM: Choose MBC", "ROM: 选择MBC"},
     {"ROM: Choose file", "ROM: 选择文件"},
     {"ROM: Dump", "ROM: 读取"},
     {"ROM: Erase chip", "ROM: 整片擦除"},

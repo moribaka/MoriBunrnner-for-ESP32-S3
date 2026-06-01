@@ -3168,6 +3168,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     uint64_t requested_top64 = 0;
     bool cfi_ok = false;
     bool chislink_intel_compat = false;
+    bool gbx_profile_matched = false;
     esp_err_t err;
 
     if (job == NULL || job->total_bytes == 0u) {
@@ -3186,6 +3187,20 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             &sector_size,
             &buffer_write_bytes,
             &cfi_ok);
+        if (err == ESP_OK) {
+            gbx_profile_matched = s_cart_ctx.gbx.active;
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA GBX strict profile match failed; falling back to CHIS/CFI probe");
+            burner_gbx_profile_clear(&s_cart_ctx.gbx);
+            err = burner_bacon_gba_probe_locked(
+                id,
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_ok);
+        }
     } else {
         err = burner_bacon_gba_probe_locked(
             id,
@@ -3198,20 +3213,22 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         ESP_LOGE(BURNER_TAG, "GBA probe failed: %s", esp_err_to_name(err));
         return err;
     }
-    if (job->recipe_mode != BURNER_RECIPE_MODE_GBX &&
+    if (!gbx_profile_matched &&
         s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_UNKNOWN) {
         s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_AMD;
     }
-    err = burner_gba_gbx_prepare_profile(
-        job,
-        id,
-        &device_size,
-        &sector_size,
-        &buffer_write_bytes,
-        &program_buffer_write_bytes,
-        cfi_ok);
-    if (err != ESP_OK) {
-        return err;
+    if (job->recipe_mode != BURNER_RECIPE_MODE_GBX || gbx_profile_matched) {
+        err = burner_gba_gbx_prepare_profile(
+            job,
+            id,
+            &device_size,
+            &sector_size,
+            &buffer_write_bytes,
+            &program_buffer_write_bytes,
+            cfi_ok);
+        if (err != ESP_OK) {
+            return err;
+        }
     }
     if (burner_gba_gbx_is_active()) {
         s_gba_active_intel_generic_cfi = false;
@@ -3255,6 +3272,15 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     }
 
     nor_flags = burner_gba_nor_flags_from_id(id);
+    if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL) {
+        s_gba_active_intel_e9_entry = burner_gba_intel_id_uses_e9_entry(id);
+        if (s_gba_active_intel_e9_entry) {
+            nor_flags |= BURNER_NOR_FLAG_INTEL_88B0;
+        }
+        if (job->recipe_mode == BURNER_RECIPE_MODE_GBX && cfi_ok && burner_gba_chip_name(id) == NULL) {
+            s_gba_active_intel_generic_cfi = true;
+        }
+    }
     if (!burner_gba_gbx_is_active()) {
         chislink_intel_compat =
             (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL) && cfi_ok;
