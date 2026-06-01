@@ -26,9 +26,256 @@ static bool burner_gba_chis_intel_uses_strict_chislink_flow(void);
 static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank);
 static uint32_t burner_erase_timeout_ms_for_bytes(uint32_t bytes);
 static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms);
+static uint32_t burner_gba_unlock_addr0(void);
+static uint32_t burner_gba_unlock_addr1(void);
 static uint32_t s_gba_active_nor_flags = 0u;
 static bool s_gba_active_intel_generic_cfi = false;
 static bool s_gba_active_intel_e9_entry = false;
+
+typedef struct {
+    bool active;
+    uint64_t job_start_us;
+    uint32_t total_bytes;
+    uint32_t stage_count;
+    uint32_t program_calls;
+    uint32_t program_once_calls;
+    uint32_t wait_ready_calls;
+    uint32_t reset_calls;
+    uint32_t bank_switch_calls;
+    uint32_t erase_calls;
+    uint32_t programmed_bytes;
+    uint64_t erase_us;
+    uint64_t prefetch_wait_us;
+    uint64_t tf_read_us;
+    uint64_t program_total_us;
+    uint64_t program_lowlevel_us;
+    uint64_t program_once_total_us;
+    uint64_t program_once_build_us;
+    uint64_t program_once_spi_us;
+    uint64_t program_once_wait_entry_us;
+    uint64_t program_once_wait_done_us;
+    uint64_t program_once_reset_us;
+    uint64_t wait_ready_us;
+    uint64_t reset_us;
+    uint64_t bank_switch_us;
+    uint64_t finalize_us;
+    uint64_t post_verify_us;
+} burner_gba_chis_diag_t;
+
+static burner_gba_chis_diag_t s_gba_chis_diag = {0};
+
+static uint64_t burner_gba_diag_now_us(void)
+{
+    return (uint64_t)esp_timer_get_time();
+}
+
+static void burner_gba_chis_diag_add_u64(uint64_t *field, uint64_t value)
+{
+    if (field == NULL || value == 0u) {
+        return;
+    }
+    if (*field > UINT64_MAX - value) {
+        *field = UINT64_MAX;
+    } else {
+        *field += value;
+    }
+}
+
+static void burner_gba_chis_diag_begin(const burner_task_param_t *job)
+{
+    memset(&s_gba_chis_diag, 0, sizeof(s_gba_chis_diag));
+    s_gba_chis_diag.active = (job != NULL && job->recipe_mode == BURNER_RECIPE_MODE_CHIS);
+    s_gba_chis_diag.job_start_us = burner_gba_diag_now_us();
+    s_gba_chis_diag.total_bytes = (job != NULL) ? job->total_bytes : 0u;
+}
+
+static void burner_gba_chis_diag_stage_begin(void)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.stage_count++;
+    }
+}
+
+static void burner_gba_chis_diag_add_erase(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.erase_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_prefetch_wait(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.prefetch_wait_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_tf_read(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.tf_read_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_program_call(size_t bytes, uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.program_calls++;
+        if ((uint64_t)s_gba_chis_diag.programmed_bytes + (uint64_t)bytes > (uint64_t)UINT32_MAX) {
+            s_gba_chis_diag.programmed_bytes = UINT32_MAX;
+        } else {
+            s_gba_chis_diag.programmed_bytes += (uint32_t)bytes;
+        }
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_total_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_program_lowlevel(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_lowlevel_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_program_once(
+    uint64_t total_us,
+    uint64_t build_us,
+    uint64_t spi_us,
+    uint64_t entry_wait_us,
+    uint64_t done_wait_us,
+    uint64_t reset_us)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.program_once_calls++;
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_total_us, total_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_build_us, build_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_spi_us, spi_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_wait_entry_us, entry_wait_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_wait_done_us, done_wait_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_reset_us, reset_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_wait_ready(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.wait_ready_calls++;
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.wait_ready_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_reset(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.reset_calls++;
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.reset_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_bank_switch(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.bank_switch_calls++;
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.bank_switch_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_erase_call(void)
+{
+    if (s_gba_chis_diag.active) {
+        s_gba_chis_diag.erase_calls++;
+    }
+}
+
+static void burner_gba_chis_diag_add_finalize(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.finalize_us, elapsed_us);
+    }
+}
+
+static void burner_gba_chis_diag_add_post_verify(uint64_t elapsed_us)
+{
+    if (s_gba_chis_diag.active) {
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.post_verify_us, elapsed_us);
+    }
+}
+
+static uint32_t burner_gba_chis_diag_us_to_ms(uint64_t us)
+{
+    return burner_us_to_ms_clamped(us);
+}
+
+static void burner_gba_chis_diag_log_stage(uint32_t addr, size_t bytes, uint32_t processed_before, uint32_t processed_after)
+{
+    if (!s_gba_chis_diag.active) {
+        return;
+    }
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA CHIS diag stage #%u addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "->%" PRIu32
+        " erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32 "ms program=%" PRIu32 "ms",
+        (unsigned)s_gba_chis_diag.stage_count,
+        addr,
+        (unsigned)bytes,
+        processed_before,
+        processed_after,
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.erase_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.tf_read_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_total_us));
+}
+
+static void burner_gba_chis_diag_log_summary(esp_err_t err)
+{
+    uint64_t elapsed_us;
+
+    if (!s_gba_chis_diag.active) {
+        return;
+    }
+    elapsed_us = burner_gba_diag_now_us() - s_gba_chis_diag.job_start_us;
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA CHIS diag summary: err=%s total=%" PRIu32 "ms bytes=%" PRIu32 "/%" PRIu32
+        " stages=%u program_calls=%u once=%u erase_calls=%u wait_ready=%u reset=%u bank_switch=%u",
+        esp_err_to_name(err),
+        burner_gba_chis_diag_us_to_ms(elapsed_us),
+        s_gba_chis_diag.programmed_bytes,
+        s_gba_chis_diag.total_bytes,
+        (unsigned)s_gba_chis_diag.stage_count,
+        (unsigned)s_gba_chis_diag.program_calls,
+        (unsigned)s_gba_chis_diag.program_once_calls,
+        (unsigned)s_gba_chis_diag.erase_calls,
+        (unsigned)s_gba_chis_diag.wait_ready_calls,
+        (unsigned)s_gba_chis_diag.reset_calls,
+        (unsigned)s_gba_chis_diag.bank_switch_calls);
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA CHIS diag time: erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32
+        "ms program=%" PRIu32 "ms lowlevel=%" PRIu32 "ms finalize=%" PRIu32 "ms post_verify=%" PRIu32 "ms",
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.erase_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.tf_read_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_total_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_lowlevel_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.finalize_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.post_verify_us));
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBA CHIS diag lowlevel: once_total=%" PRIu32 "ms build=%" PRIu32 "ms spi=%" PRIu32
+        "ms wait_entry=%" PRIu32 "ms wait_done=%" PRIu32 "ms once_reset=%" PRIu32 "ms wait_ready_total=%" PRIu32
+        "ms reset_total=%" PRIu32 "ms bank_switch=%" PRIu32 "ms",
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_total_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_build_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_spi_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_entry_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_done_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_reset_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.wait_ready_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.reset_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.bank_switch_us));
+    s_gba_chis_diag.active = false;
+}
 
 static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, size_t len)
 {
@@ -508,12 +755,16 @@ static esp_err_t burner_bacon_wait_u16_mask(
 static esp_err_t burner_bacon_gba_intel_reset(void)
 {
     esp_err_t err;
+    uint64_t reset_start_us = burner_gba_diag_now_us();
 
     err = burner_bacon_gba_command_write_u16(0x000u, 0x0050u);
     if (err != ESP_OK) {
+        burner_gba_chis_diag_add_reset(burner_gba_diag_now_us() - reset_start_us);
         return err;
     }
-    return burner_bacon_gba_command_write_u16(0x000u, 0x00FFu);
+    err = burner_bacon_gba_command_write_u16(0x000u, 0x00FFu);
+    burner_gba_chis_diag_add_reset(burner_gba_diag_now_us() - reset_start_us);
+    return err;
 }
 
 static esp_err_t burner_bacon_gba_reset_to_read_mode_for_cmdset(burner_nor_cmdset_t cmdset)
@@ -595,14 +846,18 @@ esp_err_t burner_bacon_gba_finalize_write(bool is_multi_card)
 static esp_err_t burner_bacon_gba_intel_wait_ready(uint32_t flash_addr, uint16_t command, uint32_t timeout_ms, uint16_t *status_out)
 {
     esp_err_t err;
+    uint64_t wait_start_us = burner_gba_diag_now_us();
 
     if (command != 0u) {
         err = burner_bacon_gba_command_write_u16(flash_addr >> 1, command);
         if (err != ESP_OK) {
+            burner_gba_chis_diag_add_wait_ready(burner_gba_diag_now_us() - wait_start_us);
             return err;
         }
     }
-    return burner_bacon_wait_u16_mask(flash_addr, 0x0080u, 0x0080u, timeout_ms, status_out);
+    err = burner_bacon_wait_u16_mask(flash_addr, 0x0080u, 0x0080u, timeout_ms, status_out);
+    burner_gba_chis_diag_add_wait_ready(burner_gba_diag_now_us() - wait_start_us);
+    return err;
 }
 
 #define BURNER_GBA_INTEL_STATUS_DEVICE_PROTECT 0x0002u
@@ -673,6 +928,72 @@ static uint16_t burner_gba_program_buffer_write_bytes(uint16_t reported_bytes, b
 {
     (void)cmdset;
     return reported_bytes;
+}
+
+typedef struct {
+    bool valid;
+    bool d0d1_swapped;
+    uint16_t intel_entry_command;
+    uint32_t unlock0_addr;
+    uint32_t unlock1_addr;
+    uint8_t opt_addr;
+    uint8_t opt_wr_setup;
+    uint8_t opt_wr_data;
+    uint8_t opt_wr_low;
+    uint8_t opt_release;
+    uint8_t unlock0_addr_bytes[3];
+    uint8_t unlock1_addr_bytes[3];
+    uint16_t amd_aa;
+    uint16_t amd_55;
+    uint16_t amd_a0;
+    uint16_t amd_25;
+    uint16_t amd_29;
+    uint16_t intel_d0;
+} burner_gba_program_cmd_cache_t;
+
+static burner_gba_program_cmd_cache_t s_gba_program_cmd_cache = {0};
+
+static void burner_gba_patch_u24(uint8_t *dst, uint32_t value)
+{
+    dst[0] = (uint8_t)(value & 0xFFu);
+    dst[1] = (uint8_t)((value >> 8) & 0xFFu);
+    dst[2] = (uint8_t)((value >> 16) & 0xFFu);
+}
+
+static const burner_gba_program_cmd_cache_t *burner_gba_program_cmd_cache_get(void)
+{
+    uint32_t unlock0_addr = burner_gba_unlock_addr0();
+    uint32_t unlock1_addr = burner_gba_unlock_addr1();
+    uint16_t intel_entry_command = burner_gba_intel_buffer_entry_command();
+
+    if (s_gba_program_cmd_cache.valid &&
+        s_gba_program_cmd_cache.d0d1_swapped == s_cart_ctx.d0d1_swapped &&
+        s_gba_program_cmd_cache.intel_entry_command == intel_entry_command &&
+        s_gba_program_cmd_cache.unlock0_addr == unlock0_addr &&
+        s_gba_program_cmd_cache.unlock1_addr == unlock1_addr) {
+        return &s_gba_program_cmd_cache;
+    }
+
+    memset(&s_gba_program_cmd_cache, 0, sizeof(s_gba_program_cmd_cache));
+    s_gba_program_cmd_cache.valid = true;
+    s_gba_program_cmd_cache.d0d1_swapped = s_cart_ctx.d0d1_swapped;
+    s_gba_program_cmd_cache.intel_entry_command = intel_entry_command;
+    s_gba_program_cmd_cache.unlock0_addr = unlock0_addr;
+    s_gba_program_cmd_cache.unlock1_addr = unlock1_addr;
+    s_gba_program_cmd_cache.opt_addr = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+    s_gba_program_cmd_cache.opt_wr_setup = burner_bacon_option_byte0(0, true, true, true, false, true, true);
+    s_gba_program_cmd_cache.opt_wr_data = burner_bacon_option_byte0(2, true, true, true, false, true, true);
+    s_gba_program_cmd_cache.opt_wr_low = burner_bacon_option_byte0(0, true, true, true, false, true, false);
+    s_gba_program_cmd_cache.opt_release = burner_bacon_option_byte0(0, true, true, true, true, true, true);
+    burner_gba_patch_u24(s_gba_program_cmd_cache.unlock0_addr_bytes, unlock0_addr);
+    burner_gba_patch_u24(s_gba_program_cmd_cache.unlock1_addr_bytes, unlock1_addr);
+    s_gba_program_cmd_cache.amd_aa = burner_apply_d0d1_swap_on_write(0x00AAu, s_cart_ctx.d0d1_swapped);
+    s_gba_program_cmd_cache.amd_55 = burner_apply_d0d1_swap_on_write(0x0055u, s_cart_ctx.d0d1_swapped);
+    s_gba_program_cmd_cache.amd_a0 = burner_apply_d0d1_swap_on_write(0x00A0u, s_cart_ctx.d0d1_swapped);
+    s_gba_program_cmd_cache.amd_25 = burner_apply_d0d1_swap_on_write(0x0025u, s_cart_ctx.d0d1_swapped);
+    s_gba_program_cmd_cache.amd_29 = burner_apply_d0d1_swap_on_write(0x0029u, s_cart_ctx.d0d1_swapped);
+    s_gba_program_cmd_cache.intel_d0 = burner_apply_d0d1_swap_on_write(0x00D0u, s_cart_ctx.d0d1_swapped);
+    return &s_gba_program_cmd_cache;
 }
 
 static bool burner_gba_chis_intel_uses_strict_chislink_flow(void)
@@ -994,11 +1315,18 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
     uint32_t command_address;
     uint32_t command_word_address;
     uint16_t status = 0u;
-    uint16_t confirm_cmd;
     uint16_t write_count_word;
     uint16_t entry_cmd;
     size_t wr;
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd;
+    uint64_t once_start_us = burner_gba_diag_now_us();
+    uint64_t build_us = 0u;
+    uint64_t entry_wait_us = 0u;
+    uint64_t spi_us = 0u;
+    uint64_t done_wait_us = 0u;
+    uint64_t reset_us = 0u;
+    uint64_t t0;
 
     if (written_out != NULL) {
         *written_out = 0u;
@@ -1034,8 +1362,11 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
 
     command_address = starting_address;
     command_word_address = command_address >> 1;
-    entry_cmd = burner_gba_intel_buffer_entry_command();
+    cmd = burner_gba_program_cmd_cache_get();
+    entry_cmd = cmd->intel_entry_command;
+    t0 = burner_gba_diag_now_us();
     err = burner_bacon_gba_intel_wait_ready(command_address, entry_cmd, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+    entry_wait_us = burner_gba_diag_now_us() - t0;
     if (err != ESP_OK) {
         return err;
     }
@@ -1044,12 +1375,12 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
     if (seq_len > BURNER_SPI_MAX_XFER) {
         return ESP_ERR_INVALID_SIZE;
     }
+    t0 = burner_gba_diag_now_us();
     seq = burner_spi_alloc_tx_buffer(seq_len, &free_seq);
     if (seq == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
-    confirm_cmd = burner_apply_d0d1_swap_on_write(0x00D0u, s_cart_ctx.d0d1_swapped);
     addr0 = (uint8_t)(command_word_address & 0xFFu);
     addr1 = (uint8_t)((command_word_address >> 8) & 0xFFu);
     addr2 = (uint8_t)((command_word_address >> 16) & 0xFFu);
@@ -1057,48 +1388,51 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         (uint16_t)(write_words - 1u),
         s_cart_ctx.d0d1_swapped);
 
-    seq[0] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+    seq[0] = cmd->opt_addr;
     seq[1] = addr0;
     seq[2] = addr1;
     seq[3] = addr2;
-    seq[4] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-    seq[5] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
+    seq[4] = cmd->opt_wr_setup;
+    seq[5] = cmd->opt_wr_data;
     seq[6] = (uint8_t)(write_count_word & 0xFFu);
     seq[7] = (uint8_t)((write_count_word >> 8) & 0xFFu);
-    seq[8] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-    seq[9] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-    seq[10] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
+    seq[8] = cmd->opt_wr_low;
+    seq[9] = cmd->opt_wr_setup;
+    seq[10] = cmd->opt_release;
     /* Bacon CS0 has no address auto-increment; match ChisLink's per-halfword AGB_FLASH_WRITE(pa+i). */
     for (wr = 0u; wr < write_words; ++wr) {
         uint32_t word_address = starting_word_address + (uint32_t)wr;
         size_t base = 11u + 10u * wr;
 
-        seq[base + 0u] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+        seq[base + 0u] = cmd->opt_addr;
         seq[base + 1u] = (uint8_t)(word_address & 0xFFu);
         seq[base + 2u] = (uint8_t)((word_address >> 8) & 0xFFu);
         seq[base + 3u] = (uint8_t)((word_address >> 16) & 0xFFu);
-        seq[base + 4u] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-        seq[base + 5u] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
+        seq[base + 4u] = cmd->opt_wr_setup;
+        seq[base + 5u] = cmd->opt_wr_data;
         seq[base + 6u] = buf[wr * 2u];
         seq[base + 7u] = buf[wr * 2u + 1u];
-        seq[base + 8u] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-        seq[base + 9u] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
+        seq[base + 8u] = cmd->opt_wr_low;
+        seq[base + 9u] = cmd->opt_wr_setup;
     }
 
-    seq[11u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
-    seq[12u + 10u * write_words] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+    seq[11u + 10u * write_words] = cmd->opt_release;
+    seq[12u + 10u * write_words] = cmd->opt_addr;
     seq[13u + 10u * write_words] = addr0;
     seq[14u + 10u * write_words] = addr1;
     seq[15u + 10u * write_words] = addr2;
-    seq[16u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-    seq[17u + 10u * write_words] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-    seq[18u + 10u * write_words] = (uint8_t)(confirm_cmd & 0xFFu);
-    seq[19u + 10u * write_words] = (uint8_t)((confirm_cmd >> 8) & 0xFFu);
-    seq[20u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-    seq[21u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-    seq[22u + 10u * write_words] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
+    seq[16u + 10u * write_words] = cmd->opt_wr_setup;
+    seq[17u + 10u * write_words] = cmd->opt_wr_data;
+    seq[18u + 10u * write_words] = (uint8_t)(cmd->intel_d0 & 0xFFu);
+    seq[19u + 10u * write_words] = (uint8_t)((cmd->intel_d0 >> 8) & 0xFFu);
+    seq[20u + 10u * write_words] = cmd->opt_wr_low;
+    seq[21u + 10u * write_words] = cmd->opt_wr_setup;
+    seq[22u + 10u * write_words] = cmd->opt_release;
+    build_us = burner_gba_diag_now_us() - t0;
 
+    t0 = burner_gba_diag_now_us();
     err = burner_spi_transfer(seq, NULL, seq_len);
+    spi_us = burner_gba_diag_now_us() - t0;
     if (free_seq) {
         free(seq);
     }
@@ -1106,7 +1440,9 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         return err;
     }
 
+    t0 = burner_gba_diag_now_us();
     err = burner_bacon_gba_intel_wait_ready(command_address, 0x0070u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+    done_wait_us = burner_gba_diag_now_us() - t0;
     if (err != ESP_OK) {
         ESP_LOGW(
             BURNER_TAG,
@@ -1120,7 +1456,16 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         (void)burner_bacon_gba_intel_reset();
         return ESP_ERR_INVALID_RESPONSE;
     }
+    t0 = burner_gba_diag_now_us();
     err = burner_bacon_gba_intel_reset();
+    reset_us = burner_gba_diag_now_us() - t0;
+    burner_gba_chis_diag_add_program_once(
+        burner_gba_diag_now_us() - once_start_us,
+        build_us,
+        spi_us,
+        entry_wait_us,
+        done_wait_us,
+        reset_us);
     if (err != ESP_OK) {
         return err;
     }
@@ -1162,6 +1507,7 @@ static void burner_gba_resolve_write_addr(
 static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank)
 {
     esp_err_t err;
+    uint64_t bank_start_us;
 
     if (bank > UINT8_MAX) {
         return ESP_ERR_INVALID_SIZE;
@@ -1170,14 +1516,17 @@ static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank)
         return ESP_OK;
     }
 
+    bank_start_us = burner_gba_diag_now_us();
     err = burner_bacon_gba_rom_switch_bank((uint8_t)bank);
     if (err != ESP_OK) {
+        burner_gba_chis_diag_add_bank_switch(burner_gba_diag_now_us() - bank_start_us);
         return err;
     }
     vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
     (void)burner_bacon_gba_reset_to_read_mode();
     vTaskDelay(pdMS_TO_TICKS(BURNER_GBA_BANK_SWITCH_SETTLE_MS));
     s_cart_ctx.current_bank = (uint16_t)bank;
+    burner_gba_chis_diag_add_bank_switch(burner_gba_diag_now_us() - bank_start_us);
     return ESP_OK;
 }
 

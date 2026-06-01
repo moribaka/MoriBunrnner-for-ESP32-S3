@@ -302,7 +302,7 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
         }
     }
 
-    burner_status_mark_write_begin();
+    burner_status_mark_write_manual_begin();
     write_timer_started = true;
     if (use_psram_stage) {
         while (processed < job->total_bytes) {
@@ -479,18 +479,22 @@ mbc5_stage_erase_done:
             while (stage_off < stage_bytes) {
                 size_t chunk_bytes = stage_bytes - stage_off;
                 uint32_t now_processed;
+                uint64_t program_sample_start_us;
+                uint64_t program_sample_elapsed_us;
                 int progress;
 
                 if (chunk_bytes > program_chunk_bytes) {
                     chunk_bytes = program_chunk_bytes;
                 }
 
+                program_sample_start_us = (uint64_t)esp_timer_get_time();
                 burner_spi_lock_take();
                 err = burner_bacon_mbc5_program_block(
                     psram_stage_buf + stage_off,
                     chunk_bytes,
                     addr_begin + processed + (uint32_t)stage_off);
                 burner_spi_lock_give();
+                program_sample_elapsed_us = (uint64_t)esp_timer_get_time() - program_sample_start_us;
                 if (err != ESP_OK) {
                     char program_err_msg[96];
                     (void)snprintf(
@@ -509,6 +513,7 @@ mbc5_stage_erase_done:
                         job->rom_path);
                     goto write_done;
                 }
+                burner_status_record_write_sample((uint32_t)chunk_bytes, program_sample_elapsed_us);
 
                 stage_off += chunk_bytes;
                 now_processed = processed + (uint32_t)stage_off;
@@ -532,6 +537,8 @@ mbc5_stage_erase_done:
     } else {
         while (processed < job->total_bytes) {
             size_t chunk_bytes = (size_t)(job->total_bytes - processed);
+            uint64_t program_sample_start_us;
+            uint64_t program_sample_elapsed_us;
             int progress;
 
             if (chunk_bytes > program_chunk_bytes) {
@@ -560,9 +567,11 @@ mbc5_stage_erase_done:
                 goto write_done;
             }
 
+            program_sample_start_us = (uint64_t)esp_timer_get_time();
             burner_spi_lock_take();
             err = burner_bacon_mbc5_program_block(buf, chunk_bytes, addr_begin + processed);
             burner_spi_lock_give();
+            program_sample_elapsed_us = (uint64_t)esp_timer_get_time() - program_sample_start_us;
             if (err != ESP_OK) {
                 char program_err_msg[96];
                 (void)snprintf(
@@ -581,6 +590,7 @@ mbc5_stage_erase_done:
                     job->rom_path);
                 goto write_done;
             }
+            burner_status_record_write_sample((uint32_t)chunk_bytes, program_sample_elapsed_us);
 
             processed += (uint32_t)chunk_bytes;
             progress = burner_calc_progress_percent_u64(processed, job->total_bytes);

@@ -1,5 +1,7 @@
 #include "ws_server_internal.h"
 
+#include "esp_memory_utils.h"
+
 uint8_t burner_bacon_option_byte0(
     uint8_t batch_size,
     bool dir_a,
@@ -142,7 +144,7 @@ esp_err_t burner_spi_transfer_cs(
         return ESP_ERR_INVALID_STATE;
     }
 
-    chunk_limit = BURNER_SPI_STREAM_CHUNK_BYTES;
+    chunk_limit = BURNER_SPI_CS_XFER_CHUNK_BYTES;
     if (chunk_limit == 0u || chunk_limit > BURNER_SPI_MAX_XFER) {
         chunk_limit = BURNER_SPI_MAX_XFER;
     }
@@ -206,12 +208,12 @@ esp_err_t burner_spi_transfer_cs_legacy(
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (s_mcu_spi_tx_shadow != NULL && len <= BURNER_SPI_STREAM_CHUNK_BYTES) {
+    if (s_mcu_spi_tx_shadow != NULL && len <= BURNER_SPI_SHADOW_CHUNK_BYTES) {
         memcpy(s_mcu_spi_tx_shadow, tx, len);
         tx_buf = s_mcu_spi_tx_shadow;
         use_tx_shadow = true;
     }
-    if (rx != NULL && s_mcu_spi_rw_shadow != NULL && len <= BURNER_SPI_STREAM_CHUNK_BYTES) {
+    if (rx != NULL && s_mcu_spi_rw_shadow != NULL && len <= BURNER_SPI_SHADOW_CHUNK_BYTES) {
         rx_buf = s_mcu_spi_rw_shadow;
         use_rx_shadow = true;
     }
@@ -263,12 +265,16 @@ esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len)
             trans.flags |= SPI_TRANS_USE_RXDATA;
         }
     } else {
-        tx_buf = burner_spi_alloc_tx_buffer(len, &free_tx_buf);
-        if (tx_buf == NULL) {
-            return ESP_ERR_NO_MEM;
+        if (esp_ptr_dma_capable(tx)) {
+            trans.tx_buffer = tx;
+        } else {
+            tx_buf = burner_spi_alloc_tx_buffer(len, &free_tx_buf);
+            if (tx_buf == NULL) {
+                return ESP_ERR_NO_MEM;
+            }
+            memcpy(tx_buf, tx, len);
+            trans.tx_buffer = tx_buf;
         }
-        memcpy(tx_buf, tx, len);
-        trans.tx_buffer = tx_buf;
         if (rx != NULL) {
             rx_buf = burner_spi_alloc_rw_buffer(len, &free_rx_buf);
             if (rx_buf == NULL) {
@@ -316,7 +322,7 @@ uint8_t *burner_spi_alloc_rw_buffer(size_t len, bool *needs_free)
         return NULL;
     }
 
-    if (s_mcu_spi_rw_shadow != NULL && len <= BURNER_SPI_STREAM_CHUNK_BYTES) {
+    if (s_mcu_spi_rw_shadow != NULL && len <= BURNER_SPI_SHADOW_CHUNK_BYTES) {
         return s_mcu_spi_rw_shadow;
     }
 
@@ -340,7 +346,7 @@ uint8_t *burner_spi_alloc_tx_buffer(size_t len, bool *needs_free)
         return NULL;
     }
 
-    if (s_mcu_spi_tx_shadow != NULL && len <= BURNER_SPI_STREAM_CHUNK_BYTES) {
+    if (s_mcu_spi_tx_shadow != NULL && len <= BURNER_SPI_SHADOW_CHUNK_BYTES) {
         return s_mcu_spi_tx_shadow;
     }
 
@@ -610,8 +616,8 @@ esp_err_t burner_spi_init(void)
         BURNER_TAG,
         "MCU SPI ready: actual=%" PRIu32 "Hz dma_scratch_tx=%u dma_scratch_rw=%u",
         s_mcu_spi_actual_hz,
-        (unsigned)BURNER_SPI_STREAM_CHUNK_BYTES,
-        (unsigned)BURNER_SPI_STREAM_CHUNK_BYTES);
+        (unsigned)BURNER_SPI_SHADOW_CHUNK_BYTES,
+        (unsigned)BURNER_SPI_SHADOW_CHUNK_BYTES);
     burner_bacon_mark_activity_locked();
     return ESP_OK;
 #else

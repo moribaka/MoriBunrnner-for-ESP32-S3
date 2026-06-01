@@ -446,6 +446,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             job->rom_path);
         return ESP_ERR_NOT_SUPPORTED;
     }
+    burner_gba_chis_diag_begin(job);
     intel_active = burner_gba_nor_is_intel_active();
     if (intel_active && job->write_path == BURNER_WRITE_PATH_PSRAM) {
         psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
@@ -480,7 +481,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             "open rom failed",
             job->rom_name,
             job->rom_path);
-        return ESP_FAIL;
+        err = ESP_FAIL;
+        goto write_gba_done;
     }
 
     err = burner_tf_reader_start(&tf_reader, fp);
@@ -493,8 +495,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             "create tf reader failed",
             job->rom_name,
             job->rom_path);
-        fclose(fp);
-        return err;
+        goto write_gba_done;
     }
     tf_reader_started = true;
 
@@ -638,6 +639,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             erase_every_sector);
     }
     if (should_erase && !use_psram_stage) {
+        uint64_t erase_start_us;
+
         burner_status_mark_erase_begin();
         erase_timer_started = true;
         burner_status_update(
@@ -649,6 +652,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             job->rom_name,
             job->rom_path);
 
+        erase_start_us = burner_gba_diag_now_us();
         err = burner_run_gba_range_erase(
             addr_begin,
             addr_begin + job->total_bytes - 1u,
@@ -658,6 +662,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             erase_every_sector);
         burner_status_mark_erase_end();
         erase_timer_started = false;
+        burner_gba_chis_diag_add_erase(burner_gba_diag_now_us() - erase_start_us);
 
         if (err != ESP_OK) {
             burner_status_update(
@@ -672,7 +677,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         }
     }
 
-    burner_status_mark_write_begin();
+    burner_status_mark_write_manual_begin();
     write_timer_started = true;
     if (use_psram_stage) {
         while (processed < job->total_bytes) {
@@ -680,6 +685,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             size_t stage_off = 0;
             uint32_t stage_addr = addr_begin + processed;
             bool stage_prefetched = false;
+            uint32_t stage_processed_before = processed;
 
             if (use_pipeline_stage) {
                 uint32_t pipeline_stage_bytes = 0u;
@@ -710,6 +716,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             } else if (stage_bytes > stage_capacity) {
                 stage_bytes = stage_capacity;
             }
+            burner_gba_chis_diag_stage_begin();
             if (burner_gba_should_log_program_boundary(stage_addr, stage_bytes, processed, job->total_bytes)) {
                 ESP_LOGI(
                     BURNER_TAG,
@@ -725,6 +732,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             if (should_erase) {
                 uint32_t stage_erase_begin = stage_addr;
                 uint32_t stage_erase_end = stage_addr + (uint32_t)stage_bytes - 1u;
+                uint64_t stage_erase_start_us = 0u;
 
                 burner_status_update(
                     BURNER_STATE_BURNING,
@@ -766,6 +774,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                     }
                 }
 
+                stage_erase_start_us = burner_gba_diag_now_us();
                 burner_status_mark_erase_begin();
                 erase_timer_started = true;
                 if (use_pipeline_stage) {
@@ -782,6 +791,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                             err = ESP_OK;
                             burner_status_mark_erase_end();
                             erase_timer_started = false;
+                            burner_gba_chis_diag_add_erase(burner_gba_diag_now_us() - stage_erase_start_us);
                             goto gba_stage_erase_done;
                         }
                     }
@@ -795,10 +805,13 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                 }
                 burner_status_mark_erase_end();
                 erase_timer_started = false;
+                burner_gba_chis_diag_add_erase(burner_gba_diag_now_us() - stage_erase_start_us);
 
 gba_stage_erase_done:
                 if (prefetch_inflight && prefetch_done != NULL) {
+                    uint64_t prefetch_wait_start_us = burner_gba_diag_now_us();
                     xSemaphoreTake(prefetch_done, portMAX_DELAY);
+                    burner_gba_chis_diag_add_prefetch_wait(burner_gba_diag_now_us() - prefetch_wait_start_us);
                     prefetch_inflight = false;
                 }
                 if (prefetch_done != NULL) {
@@ -866,7 +879,9 @@ gba_stage_erase_done:
                 }
 
                 if (prefetch_inflight && prefetch_done != NULL) {
+                    uint64_t prefetch_wait_start_us = burner_gba_diag_now_us();
                     xSemaphoreTake(prefetch_done, portMAX_DELAY);
+                    burner_gba_chis_diag_add_prefetch_wait(burner_gba_diag_now_us() - prefetch_wait_start_us);
                     prefetch_inflight = false;
                 }
                 if (prefetch_done != NULL) {
@@ -919,6 +934,7 @@ gba_stage_erase_done:
                 }
                 if (stage_bytes > 0u && tf_read_elapsed_us > 0u) {
                     burner_status_record_tf_to_psram_copy((uint32_t)stage_bytes, tf_read_elapsed_us);
+                    burner_gba_chis_diag_add_tf_read(tf_read_elapsed_us);
                 }
             }
             (void)burner_gba_apply_header_checksum_fix(psram_stage_buf, stage_bytes, processed, processed == 0u);
@@ -928,6 +944,8 @@ gba_stage_erase_done:
                 size_t chunk_limit = burner_gba_program_chunk_limit_bytes();
                 uint32_t write_addr = addr_begin + processed + (uint32_t)stage_off;
                 uint32_t now_processed;
+                uint64_t program_sample_start_us;
+                uint64_t program_sample_elapsed_us;
                 int progress;
 
                 if (chunk_bytes > chunk_limit) {
@@ -948,6 +966,7 @@ gba_stage_erase_done:
                         burner_write_path_to_str(job->write_path));
                 }
 
+                program_sample_start_us = burner_gba_diag_now_us();
                 burner_spi_lock_take();
                 err = burner_bacon_gba_program_block(
                     psram_stage_buf + stage_off,
@@ -956,6 +975,7 @@ gba_stage_erase_done:
                     burner_is_gba_multi_card(job),
                     should_erase && use_pipeline_stage && !intel_active);
                 burner_spi_lock_give();
+                program_sample_elapsed_us = burner_gba_diag_now_us() - program_sample_start_us;
                 if (err != ESP_OK) {
                     char program_err_msg[96];
                     (void)snprintf(
@@ -974,6 +994,7 @@ gba_stage_erase_done:
                         job->rom_path);
                     goto write_gba_done;
                 }
+                burner_status_record_write_sample((uint32_t)chunk_bytes, program_sample_elapsed_us);
 
                 stage_off += chunk_bytes;
                 now_processed = processed + (uint32_t)stage_off;
@@ -993,17 +1014,24 @@ gba_stage_erase_done:
             }
 
             processed += (uint32_t)stage_bytes;
+            burner_gba_chis_diag_log_stage(stage_addr, stage_bytes, stage_processed_before, processed);
         }
     } else {
         while (processed < job->total_bytes) {
             size_t chunk_bytes = (size_t)(job->total_bytes - processed);
             size_t chunk_limit = burner_gba_program_chunk_limit_bytes();
             uint32_t write_addr = addr_begin + processed;
+            uint32_t processed_before = processed;
+            uint64_t tf_read_start_us;
+            uint64_t tf_read_elapsed_us;
+            uint64_t program_sample_start_us;
+            uint64_t program_sample_elapsed_us;
             int progress;
 
             if (chunk_bytes > chunk_limit) {
                 chunk_bytes = chunk_limit;
             }
+            burner_gba_chis_diag_stage_begin();
             if (burner_gba_should_log_program_boundary(write_addr, chunk_bytes, processed, job->total_bytes)) {
                 ESP_LOGI(
                     BURNER_TAG,
@@ -1024,7 +1052,9 @@ gba_stage_erase_done:
                 job->rom_name,
                 job->rom_path);
 
+            tf_read_start_us = burner_gba_diag_now_us();
             err = burner_tf_reader_read(&tf_reader, buf, chunk_bytes);
+            tf_read_elapsed_us = burner_gba_diag_now_us() - tf_read_start_us;
             if (err != ESP_OK) {
                 burner_status_update(
                     BURNER_STATE_ERROR,
@@ -1036,8 +1066,10 @@ gba_stage_erase_done:
                     job->rom_path);
                 goto write_gba_done;
             }
+            burner_gba_chis_diag_add_tf_read(tf_read_elapsed_us);
             (void)burner_gba_apply_header_checksum_fix(buf, chunk_bytes, processed, processed == 0u);
 
+            program_sample_start_us = burner_gba_diag_now_us();
             burner_spi_lock_take();
             err = burner_bacon_gba_program_block(
                 buf,
@@ -1046,6 +1078,7 @@ gba_stage_erase_done:
                 burner_is_gba_multi_card(job),
                 false);
             burner_spi_lock_give();
+            program_sample_elapsed_us = burner_gba_diag_now_us() - program_sample_start_us;
             if (err != ESP_OK) {
                 char program_err_msg[96];
                 (void)snprintf(
@@ -1064,6 +1097,7 @@ gba_stage_erase_done:
                     job->rom_path);
                 goto write_gba_done;
             }
+            burner_status_record_write_sample((uint32_t)chunk_bytes, program_sample_elapsed_us);
 
             processed += (uint32_t)chunk_bytes;
             progress = burner_calc_progress_percent_u64(processed, job->total_bytes);
@@ -1079,6 +1113,7 @@ gba_stage_erase_done:
                 job->rom_name,
                 job->rom_path);
             burner_emit_progress_cb(progress, processed);
+            burner_gba_chis_diag_log_stage(write_addr, chunk_bytes, processed_before, processed);
         }
     }
 
@@ -1102,9 +1137,11 @@ gba_stage_erase_done:
             "finalizing gba flash state",
             job->rom_name,
             job->rom_path);
+        uint64_t finalize_start_us = burner_gba_diag_now_us();
         burner_spi_lock_take();
         err = burner_bacon_gba_finalize_write(burner_is_gba_multi_card(job));
         burner_spi_lock_give();
+        burner_gba_chis_diag_add_finalize(burner_gba_diag_now_us() - finalize_start_us);
         if (err != ESP_OK) {
             burner_status_update(
                 BURNER_STATE_ERROR,
@@ -1125,7 +1162,9 @@ gba_stage_erase_done:
             "post-write gba header check",
             job->rom_name,
             job->rom_path);
+        uint64_t post_verify_start_us = burner_gba_diag_now_us();
         err = burner_gba_post_write_header_diag(fp, job);
+        burner_gba_chis_diag_add_post_verify(burner_gba_diag_now_us() - post_verify_start_us);
         if (err != ESP_OK) {
             burner_status_update(
                 BURNER_STATE_ERROR,
@@ -1147,12 +1186,15 @@ write_gba_done:
         burner_status_mark_write_end();
     }
     if (prefetch_inflight && prefetch_done != NULL) {
+        uint64_t prefetch_wait_start_us = burner_gba_diag_now_us();
         xSemaphoreTake(prefetch_done, portMAX_DELAY);
+        burner_gba_chis_diag_add_prefetch_wait(burner_gba_diag_now_us() - prefetch_wait_start_us);
         prefetch_inflight = false;
     }
     if (prefetch_done != NULL) {
         vSemaphoreDelete(prefetch_done);
     }
+    burner_gba_chis_diag_log_summary(err);
     if (tf_reader_started) {
         burner_tf_reader_stop(&tf_reader);
     }

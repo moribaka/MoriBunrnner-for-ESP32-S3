@@ -162,7 +162,9 @@ typedef struct {
 /* #define BURNER_SPI_CLOCK_HZ (60 * 1000 * 1000) */
 /* #define BURNER_SPI_CLOCK_HZ (20 * 1000 * 1000) */
 #define BURNER_SPI_MAX_XFER (16 * 1024)
-#define BURNER_SPI_STREAM_CHUNK_BYTES 2048U
+#define BURNER_SPI_STREAM_CHUNK_BYTES (16U * 1024U)
+#define BURNER_SPI_CS_XFER_CHUNK_BYTES BURNER_SPI_MAX_XFER
+#define BURNER_SPI_SHADOW_CHUNK_BYTES BURNER_SPI_STREAM_CHUNK_BYTES
 #define BURNER_CPU_YIELD_INTERVAL_US 20000ULL
 #define BURNER_PROBE_SCAN_WINDOW_BYTES (64u * 1024u)
 #define BURNER_ROM_POLL_TIMEOUT_MS 2000
@@ -185,7 +187,7 @@ typedef struct {
 #define BURNER_GBA_SPI_CS_HOLD_US 5U
 #define BURNER_GBA_ROM_PHASE_GAP_US 1U
 #define BURNER_POWER_SETTLE_MS 100
-#define BURNER_IDLE_POWER_TIMEOUT_MS 5000
+#define BURNER_IDLE_POWER_TIMEOUT_MS (60U * 1000U)
 #define BURNER_IDLE_MONITOR_INTERVAL_MS 500
 #define BURNER_MBC5_SLOT_MAX 17U
 #define BURNER_CART_ID_DEBUG_SAMPLE_DEFAULT 32U
@@ -492,6 +494,7 @@ typedef struct {
     uint32_t speed_avg_bps;
     uint32_t speed_min_bps;
     uint32_t speed_max_bps;
+    bool write_speed_manual;
     uint64_t task_start_us;
     uint64_t task_elapsed_us;
     uint32_t erase_sector_count;
@@ -518,6 +521,8 @@ typedef struct {
     uint32_t dump_write_speed_max_bps;
     uint32_t mbc5_buffer_write_ok_count;
     uint32_t mbc5_buffer_fallback_count;
+    uint32_t write_speed_total_bytes;
+    uint64_t write_speed_total_us;
     uint32_t tf_to_psram_total_bytes;
     uint64_t tf_to_psram_total_us;
     uint32_t dump_read_total_bytes;
@@ -722,8 +727,8 @@ TaskHandle_t s_burn_task = NULL;
 TaskHandle_t s_bacon_idle_task = NULL;
 spi_device_handle_t s_mcu_spi = NULL;
 bool s_mcu_spi_ready = false;
-static DMA_ATTR uint8_t s_mcu_spi_tx_shadow_storage[BURNER_SPI_STREAM_CHUNK_BYTES];
-static DMA_ATTR uint8_t s_mcu_spi_rw_shadow_storage[BURNER_SPI_STREAM_CHUNK_BYTES];
+static DMA_ATTR uint8_t s_mcu_spi_tx_shadow_storage[BURNER_SPI_SHADOW_CHUNK_BYTES];
+static DMA_ATTR uint8_t s_mcu_spi_rw_shadow_storage[BURNER_SPI_SHADOW_CHUNK_BYTES];
 uint8_t *s_mcu_spi_tx_shadow = s_mcu_spi_tx_shadow_storage;
 uint8_t *s_mcu_spi_rw_shadow = s_mcu_spi_rw_shadow_storage;
 const uint32_t s_mcu_spi_clock_hz = BURNER_SPI_CLOCK_HZ;
@@ -859,6 +864,8 @@ void burner_status_mark_erase_begin(void);
 void burner_status_mark_erase_end(void);
 void burner_status_mark_write_begin(void);
 void burner_status_mark_write_end(void);
+void burner_status_mark_write_manual_begin(void);
+void burner_status_record_write_sample(uint32_t bytes, uint64_t elapsed_us);
 void burner_status_mark_task_begin(void);
 void burner_status_mark_task_end(void);
 uint32_t burner_erase_sector_count_from_bytes(uint64_t bytes, uint32_t sector_size);

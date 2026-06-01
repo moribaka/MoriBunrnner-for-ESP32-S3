@@ -133,6 +133,7 @@ void burner_status_phase_reset_locked(void)
     s_status.erase_elapsed_us = 0u;
     s_status.write_start_us = 0u;
     s_status.write_elapsed_us = 0u;
+    s_status.write_speed_manual = false;
     s_status.tf_to_psram_speed_current_bps = 0u;
     s_status.tf_to_psram_speed_avg_bps = 0u;
     s_status.tf_to_psram_speed_min_bps = 0u;
@@ -147,6 +148,8 @@ void burner_status_phase_reset_locked(void)
     s_status.dump_write_speed_max_bps = 0u;
     s_status.mbc5_buffer_write_ok_count = 0u;
     s_status.mbc5_buffer_fallback_count = 0u;
+    s_status.write_speed_total_bytes = 0u;
+    s_status.write_speed_total_us = 0u;
     s_status.tf_to_psram_total_bytes = 0u;
     s_status.tf_to_psram_total_us = 0u;
     s_status.dump_read_total_bytes = 0u;
@@ -410,8 +413,25 @@ void burner_status_mark_write_begin(void)
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
     s_status.write_start_us = now_us;
     burner_status_speed_reset_locked();
+    s_status.write_speed_manual = false;
     s_status.speed_warmup_until_us = now_us + BURNER_SPEED_WARMUP_US;
     s_status.speed_last_bytes = s_status.processed_bytes;
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_mark_write_manual_begin(void)
+{
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.write_start_us = 0u;
+    s_status.write_elapsed_us = 0u;
+    burner_status_speed_reset_locked();
+    s_status.write_speed_manual = true;
+    s_status.write_speed_total_bytes = 0u;
+    s_status.write_speed_total_us = 0u;
     xSemaphoreGive(s_status_lock);
 }
 
@@ -424,6 +444,11 @@ void burner_status_mark_write_end(void)
     }
 
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    if (s_status.write_speed_manual) {
+        s_status.write_start_us = 0u;
+        xSemaphoreGive(s_status_lock);
+        return;
+    }
     if (s_status.write_start_us > 0u) {
         now_us = (uint64_t)esp_timer_get_time();
         if (now_us > s_status.write_start_us) {
@@ -603,6 +628,7 @@ void burner_status_record_tf_to_psram_copy(uint32_t bytes, uint64_t elapsed_us)
     }
 
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.write_elapsed_us += elapsed_us;
     burner_status_record_speed_sample_locked(
         bytes,
         elapsed_us,
@@ -612,6 +638,25 @@ void burner_status_record_tf_to_psram_copy(uint32_t bytes, uint64_t elapsed_us)
         &s_status.tf_to_psram_speed_max_bps,
         &s_status.tf_to_psram_total_bytes,
         &s_status.tf_to_psram_total_us);
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_record_write_sample(uint32_t bytes, uint64_t elapsed_us)
+{
+    if (s_status_lock == NULL || bytes == 0u || elapsed_us == 0u) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    burner_status_record_speed_sample_locked(
+        bytes,
+        elapsed_us,
+        &s_status.speed_current_bps,
+        &s_status.speed_avg_bps,
+        &s_status.speed_min_bps,
+        &s_status.speed_max_bps,
+        &s_status.write_speed_total_bytes,
+        &s_status.write_speed_total_us);
     xSemaphoreGive(s_status_lock);
 }
 
@@ -716,6 +761,14 @@ void burner_status_speed_update_locked(
     bool prev_tracks = burner_status_tracks_speed(prev_state);
     bool now_tracks = burner_status_tracks_speed(s_status.state);
     uint64_t now_us;
+
+    if (s_status.write_speed_manual) {
+        if (!now_tracks && s_status.state == BURNER_STATE_IDLE) {
+            burner_status_speed_reset_locked();
+        }
+        s_status.speed_last_bytes = processed;
+        return;
+    }
 
     if (!now_tracks) {
         if (s_status.state == BURNER_STATE_IDLE) {
