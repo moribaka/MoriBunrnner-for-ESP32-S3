@@ -213,7 +213,7 @@ typedef enum {
     BURNER_GBA_CMD_DATA_HIGH,    /* command byte on D15..D8 */
 } burner_gba_cmd_data_lane_t;
 
-#define BURNER_NOR_GEOMETRY_REGION_MAX 4U
+#define BURNER_NOR_GEOMETRY_REGION_MAX 8U
 
 typedef struct {
     uint32_t addr_begin;
@@ -933,6 +933,12 @@ esp_err_t burner_gbx_ensure_cache(void);
 esp_err_t burner_gbx_find_cached_profile(
     const char *type,
     const burner_gbx_cmd_list_t *method,
+    const uint8_t *id,
+    size_t id_len,
+    burner_gbx_profile_t *profile_out,
+    size_t *match_len_out);
+esp_err_t burner_gbx_find_cached_profile_by_id(
+    const char *type,
     const uint8_t *id,
     size_t id_len,
     burner_gbx_profile_t *profile_out,
