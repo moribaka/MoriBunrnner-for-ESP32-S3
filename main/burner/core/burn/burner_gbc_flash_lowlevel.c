@@ -851,6 +851,21 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
         &cfi_ok,
         &cmdset);
     if (err != ESP_OK) {
+        if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBC GBX strict profile match failed; falling back to CHIS/CFI probe");
+            burner_gbx_profile_clear(&s_cart_ctx.gbx);
+            return burner_bacon_mbc5_prepare_probe_info_locked(
+                id,
+                job->total_bytes,
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_ok,
+                &cmdset,
+                NULL);
+        }
         return err;
     }
     if (job->total_bytes > device_size) {

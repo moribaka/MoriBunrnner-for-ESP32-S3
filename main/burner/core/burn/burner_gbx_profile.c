@@ -5,7 +5,7 @@
 #define BURNER_GBX_CACHE_FILE_REL BURNER_GBX_CACHE_DIR_REL "/gbx_cache.bin"
 #define BURNER_GBX_CACHE_TMP_REL BURNER_GBX_CACHE_DIR_REL "/gbx_cache.tmp"
 #define BURNER_GBX_CACHE_MAGIC 0x5842474Du /* MGBX */
-#define BURNER_GBX_CACHE_VERSION 3U
+#define BURNER_GBX_CACHE_VERSION 4U
 #define BURNER_GBX_CACHE_PATH_LEN 128U
 #define BURNER_GBX_CACHE_MAX_BYTES (2U * 1024U * 1024U)
 
@@ -1309,6 +1309,34 @@ static esp_err_t burner_gbx_cache_load(void)
     return ESP_OK;
 }
 
+static esp_err_t burner_gbx_cache_load_full_profile(
+    const burner_gbx_cache_entry_t *entry,
+    burner_gbx_profile_t *profile_out)
+{
+    esp_err_t err;
+
+    if (entry == NULL || profile_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_gbx_parse_profile_file_rel(entry->rel_path, profile_out);
+    if (err != ESP_OK) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBX cache matched stale/missing profile: file=%s rel=%s err=%s",
+            entry->file_name,
+            entry->rel_path,
+            esp_err_to_name(err));
+        burner_gbx_profile_clear(profile_out);
+        return err;
+    }
+    burner_gbx_profile_apply_match_name(
+        profile_out,
+        entry->match_index,
+        entry->bank_id != 0u);
+    return ESP_OK;
+}
+
 static esp_err_t burner_gbx_cache_write_entry(
     FILE *fp,
     const char *rel_path,
@@ -1670,7 +1698,84 @@ esp_err_t burner_gbx_find_cached_profile(
         return ESP_ERR_NOT_FOUND;
     }
 
-    burner_gbx_cache_entry_to_profile(best, best->id_len, profile_out);
+    err = burner_gbx_cache_load_full_profile(best, profile_out);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (match_len_out != NULL) {
+        *match_len_out = best_len;
+    }
+    return ESP_OK;
+}
+
+esp_err_t burner_gbx_find_cached_profile_by_id(
+    const char *type,
+    const uint8_t *id,
+    size_t id_len,
+    burner_gbx_profile_t *profile_out,
+    size_t *match_len_out)
+{
+    const burner_gbx_cache_entry_t *best = NULL;
+    size_t best_len = 0u;
+    bool ambiguous = false;
+    esp_err_t err;
+
+    if (type == NULL || id == NULL || id_len == 0u || profile_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (match_len_out != NULL) {
+        *match_len_out = 0u;
+    }
+    burner_gbx_profile_clear(profile_out);
+
+    err = burner_gbx_cache_load();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    for (uint32_t i = 0u; i < s_gbx_cache_entry_count; ++i) {
+        const burner_gbx_cache_entry_t *entry = &s_gbx_cache_entries[i];
+        size_t candidate_len = entry->id_len;
+
+        if (strcasecmp(entry->type, type) != 0 ||
+            candidate_len == 0u ||
+            candidate_len > BURNER_GBX_FLASH_ID_LEN_MAX ||
+            candidate_len > id_len ||
+            (candidate_len < id_len &&
+             !burner_gbx_id_tail_is_blank(id, candidate_len, id_len)) ||
+            candidate_len < best_len) {
+            continue;
+        }
+        if (memcmp(entry->id, id, candidate_len) != 0) {
+            continue;
+        }
+        if (candidate_len > best_len || best == NULL) {
+            best = entry;
+            best_len = candidate_len;
+            ambiguous = false;
+        } else if (candidate_len == best_len &&
+                   best != NULL &&
+                   strncmp(entry->rel_path, best->rel_path, sizeof(entry->rel_path)) != 0) {
+            ambiguous = true;
+        }
+    }
+    if (best == NULL || ambiguous) {
+        if (ambiguous) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBX cache ID match ambiguous: type=%s id_len=%u best_len=%u first=%s",
+                type,
+                (unsigned)id_len,
+                (unsigned)best_len,
+                best != NULL ? best->file_name : "none");
+        }
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    err = burner_gbx_cache_load_full_profile(best, profile_out);
+    if (err != ESP_OK) {
+        return err;
+    }
     if (match_len_out != NULL) {
         *match_len_out = best_len;
     }
@@ -1860,6 +1965,392 @@ esp_err_t burner_gbx_visit_dmg_profiles(burner_gbx_profile_visitor_t visitor, vo
 }
 
 typedef struct {
+    const char *type;
+    const burner_gbx_cmd_list_t *method;
+    const uint8_t *id;
+    size_t id_len;
+    burner_nor_cmdset_t cmdset;
+    bool d0d1_known;
+    bool d0d1_swapped;
+    uint32_t flash_size;
+    uint32_t sector_size;
+    const burner_nor_geometry_t *geometry;
+    bool geometry_valid;
+    bool cfi_ok;
+    size_t best_match_len;
+    int32_t best_score;
+    uint8_t best_match_index;
+    bool best_bank_match;
+    bool ambiguous;
+    burner_gbx_profile_t *profile_out;
+} burner_gbx_probe_lookup_ctx_t;
+
+static bool burner_gbx_geometry_equal(
+    const burner_nor_geometry_t *left,
+    const burner_nor_geometry_t *right)
+{
+    if (left == NULL || right == NULL ||
+        !burner_nor_geometry_is_valid(left) ||
+        !burner_nor_geometry_is_valid(right) ||
+        left->region_count != right->region_count ||
+        left->uniform_sector_size != right->uniform_sector_size ||
+        left->smallest_sector_size != right->smallest_sector_size ||
+        left->largest_sector_size != right->largest_sector_size) {
+        return false;
+    }
+
+    for (uint32_t i = 0u; i < left->region_count && i < BURNER_NOR_GEOMETRY_REGION_MAX; ++i) {
+        if (left->regions[i].addr_begin != right->regions[i].addr_begin ||
+            left->regions[i].addr_end != right->regions[i].addr_end ||
+            left->regions[i].sector_size != right->regions[i].sector_size) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int32_t burner_gbx_profile_probe_score(
+    const burner_gbx_profile_t *profile,
+    const burner_gbx_probe_lookup_ctx_t *ctx,
+    size_t *match_len_out,
+    uint8_t *match_index_out,
+    bool *bank_match_out)
+{
+    size_t match_len = 0u;
+    uint8_t match_index = 0u;
+    bool bank_match = false;
+    int32_t score = 0;
+
+    if (profile == NULL || ctx == NULL || ctx->id == NULL || ctx->id_len == 0u) {
+        return INT32_MIN;
+    }
+    if (match_len_out != NULL) {
+        *match_len_out = 0u;
+    }
+    if (match_index_out != NULL) {
+        *match_index_out = 0u;
+    }
+    if (bank_match_out != NULL) {
+        *bank_match_out = false;
+    }
+    if (ctx->type != NULL &&
+        profile->type[0] != '\0' &&
+        strcasecmp(profile->type, ctx->type) != 0) {
+        return INT32_MIN;
+    }
+    if (ctx->method != NULL &&
+        !burner_gbx_cmd_list_equal(&profile->read_identifier, ctx->method)) {
+        return INT32_MIN;
+    }
+
+    match_len = burner_gbx_profile_match_id_ex(
+        profile,
+        ctx->id,
+        ctx->id_len,
+        &match_index,
+        &bank_match);
+    if (match_len == 0u) {
+        return INT32_MIN;
+    }
+    if (ctx->cmdset != BURNER_NOR_CMDSET_UNKNOWN &&
+        profile->base_cmdset != BURNER_NOR_CMDSET_UNKNOWN &&
+        profile->base_cmdset != ctx->cmdset) {
+        return INT32_MIN;
+    }
+    if (ctx->d0d1_known &&
+        profile->d0d1_known &&
+        profile->d0d1_swapped != ctx->d0d1_swapped) {
+        return INT32_MIN;
+    }
+
+    score = (int32_t)(match_len * 1000u);
+    if (ctx->method != NULL) {
+        score += 600;
+    }
+    if (ctx->cmdset != BURNER_NOR_CMDSET_UNKNOWN &&
+        profile->base_cmdset == ctx->cmdset) {
+        score += 500;
+    }
+    if (ctx->d0d1_known &&
+        profile->d0d1_known &&
+        profile->d0d1_swapped == ctx->d0d1_swapped) {
+        score += 120;
+    }
+    if (ctx->flash_size != 0u &&
+        profile->has_flash_size &&
+        profile->flash_size == ctx->flash_size) {
+        score += ctx->cfi_ok ? 400 : 100;
+    }
+    if (ctx->sector_size != 0u &&
+        profile->has_sector_size &&
+        profile->sector_size == ctx->sector_size) {
+        score += ctx->cfi_ok ? 250 : 60;
+    }
+    if (ctx->geometry_valid && profile->has_sector_geometry) {
+        if (burner_gbx_geometry_equal(&profile->sector_geometry, ctx->geometry)) {
+            score += ctx->cfi_ok ? 350 : 90;
+        } else if (ctx->sector_size != 0u &&
+                   burner_nor_geometry_report_sector_size(&profile->sector_geometry) == ctx->sector_size) {
+            score += 40;
+        }
+    }
+    if (profile->has_flash_size) {
+        score += 15;
+    }
+    if (profile->has_sector_geometry) {
+        score += 20;
+    } else if (profile->has_sector_size) {
+        score += 10;
+    }
+    if (profile->has_buffer_size) {
+        score += 5;
+    }
+    if (profile->has_flash_bank_select_type) {
+        score += 8;
+    }
+
+    if (match_len_out != NULL) {
+        *match_len_out = match_len;
+    }
+    if (match_index_out != NULL) {
+        *match_index_out = match_index;
+    }
+    if (bank_match_out != NULL) {
+        *bank_match_out = bank_match;
+    }
+    return score;
+}
+
+static void burner_gbx_probe_lookup_consider(
+    burner_gbx_probe_lookup_ctx_t *ctx,
+    const burner_gbx_profile_t *profile,
+    int32_t score,
+    size_t match_len,
+    uint8_t match_index,
+    bool bank_match)
+{
+    if (ctx == NULL || profile == NULL || ctx->profile_out == NULL || score == INT32_MIN) {
+        return;
+    }
+
+    if (ctx->best_match_len == 0u ||
+        score > ctx->best_score ||
+        (score == ctx->best_score && match_len > ctx->best_match_len)) {
+        *ctx->profile_out = *profile;
+        ctx->best_score = score;
+        ctx->best_match_len = match_len;
+        ctx->best_match_index = match_index;
+        ctx->best_bank_match = bank_match;
+        ctx->ambiguous = false;
+        return;
+    }
+
+    if (score == ctx->best_score &&
+        match_len == ctx->best_match_len &&
+        strncmp(profile->file_name, ctx->profile_out->file_name, sizeof(profile->file_name)) != 0) {
+        ctx->ambiguous = true;
+    }
+}
+
+static esp_err_t burner_gbx_probe_lookup_visitor(
+    const burner_gbx_profile_t *profile,
+    void *user,
+    bool *stop_out)
+{
+    burner_gbx_probe_lookup_ctx_t *ctx = (burner_gbx_probe_lookup_ctx_t *)user;
+    size_t match_len = 0u;
+    uint8_t match_index = 0u;
+    bool bank_match = false;
+    int32_t score;
+
+    if (profile == NULL || ctx == NULL || stop_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *stop_out = false;
+    score = burner_gbx_profile_probe_score(
+        profile,
+        ctx,
+        &match_len,
+        &match_index,
+        &bank_match);
+    if (score != INT32_MIN) {
+        burner_gbx_probe_lookup_consider(
+            ctx,
+            profile,
+            score,
+            match_len,
+            match_index,
+            bank_match);
+    }
+    return ESP_OK;
+}
+
+static bool burner_gbx_cache_entry_probe_candidate(
+    const burner_gbx_cache_entry_t *entry,
+    const burner_gbx_probe_lookup_ctx_t *ctx)
+{
+    size_t candidate_len;
+
+    if (entry == NULL || ctx == NULL || ctx->type == NULL || ctx->id == NULL || ctx->id_len == 0u) {
+        return false;
+    }
+    if (strcasecmp(entry->type, ctx->type) != 0) {
+        return false;
+    }
+    if (ctx->method != NULL &&
+        (entry->method_hash == 0u ||
+         !burner_gbx_cmd_list_equal(&entry->read_identifier, ctx->method))) {
+        return false;
+    }
+
+    candidate_len = entry->id_len;
+    if (candidate_len == 0u ||
+        candidate_len > BURNER_GBX_FLASH_ID_LEN_MAX ||
+        candidate_len > ctx->id_len ||
+        (candidate_len < ctx->id_len &&
+         !burner_gbx_id_tail_is_blank(ctx->id, candidate_len, ctx->id_len))) {
+        return false;
+    }
+    return memcmp(entry->id, ctx->id, candidate_len) == 0;
+}
+
+static esp_err_t burner_gbx_find_probe_profile_from_cache(
+    burner_gbx_probe_lookup_ctx_t *ctx)
+{
+    char last_rel_path[BURNER_GBX_CACHE_PATH_LEN] = {0};
+    esp_err_t err;
+
+    if (ctx == NULL || ctx->profile_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_gbx_cache_load();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    for (uint32_t i = 0u; i < s_gbx_cache_entry_count; ++i) {
+        const burner_gbx_cache_entry_t *entry = &s_gbx_cache_entries[i];
+        burner_gbx_profile_t profile = {0};
+        size_t match_len = 0u;
+        uint8_t match_index = 0u;
+        bool bank_match = false;
+        int32_t score;
+
+        if (!burner_gbx_cache_entry_probe_candidate(entry, ctx)) {
+            continue;
+        }
+        if (strncmp(last_rel_path, entry->rel_path, sizeof(last_rel_path)) == 0) {
+            continue;
+        }
+        snprintf(last_rel_path, sizeof(last_rel_path), "%.*s", (int)(sizeof(last_rel_path) - 1u), entry->rel_path);
+
+        err = burner_gbx_parse_profile_file_rel(entry->rel_path, &profile);
+        if (err != ESP_OK) {
+            continue;
+        }
+
+        score = burner_gbx_profile_probe_score(
+            &profile,
+            ctx,
+            &match_len,
+            &match_index,
+            &bank_match);
+        if (score == INT32_MIN) {
+            continue;
+        }
+        burner_gbx_probe_lookup_consider(
+            ctx,
+            &profile,
+            score,
+            match_len,
+            match_index,
+            bank_match);
+    }
+
+    if (ctx->best_match_len == 0u || ctx->ambiguous) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    burner_gbx_profile_apply_match_name(
+        ctx->profile_out,
+        ctx->best_match_index,
+        ctx->best_bank_match);
+    return ESP_OK;
+}
+
+static esp_err_t burner_gbx_find_agb_profile_for_probe(
+    const uint8_t *id,
+    size_t id_len,
+    burner_nor_cmdset_t cmdset,
+    bool d0d1_known,
+    bool d0d1_swapped,
+    uint32_t flash_size,
+    uint32_t sector_size,
+    const burner_nor_geometry_t *geometry,
+    bool cfi_ok,
+    burner_gbx_profile_t *profile_out,
+    size_t *match_len_out)
+{
+    burner_gbx_probe_lookup_ctx_t ctx = {
+        .type = "AGB",
+        .method = NULL,
+        .id = id,
+        .id_len = id_len,
+        .cmdset = cmdset,
+        .d0d1_known = d0d1_known,
+        .d0d1_swapped = d0d1_swapped,
+        .flash_size = flash_size,
+        .sector_size = sector_size,
+        .geometry = geometry,
+        .geometry_valid = (geometry != NULL) && burner_nor_geometry_is_valid(geometry),
+        .cfi_ok = cfi_ok,
+        .best_match_len = 0u,
+        .best_score = INT32_MIN,
+        .best_match_index = 0u,
+        .best_bank_match = false,
+        .ambiguous = false,
+        .profile_out = profile_out,
+    };
+    esp_err_t err;
+
+    if (id == NULL || id_len == 0u || profile_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (match_len_out != NULL) {
+        *match_len_out = 0u;
+    }
+    burner_gbx_profile_clear(profile_out);
+
+    err = burner_gbx_find_probe_profile_from_cache(&ctx);
+    if (err != ESP_OK) {
+        ctx.best_match_len = 0u;
+        ctx.best_score = INT32_MIN;
+        ctx.best_match_index = 0u;
+        ctx.best_bank_match = false;
+        ctx.ambiguous = false;
+        burner_gbx_profile_clear(profile_out);
+        err = burner_gbx_visit_agb_profiles(burner_gbx_probe_lookup_visitor, &ctx);
+        if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+            return err;
+        }
+        if (ctx.best_match_len == 0u || ctx.ambiguous) {
+            return ESP_ERR_NOT_FOUND;
+        }
+        burner_gbx_profile_apply_match_name(
+            profile_out,
+            ctx.best_match_index,
+            ctx.best_bank_match);
+    }
+
+    if (match_len_out != NULL) {
+        *match_len_out = ctx.best_match_len;
+    }
+    return ESP_OK;
+}
+
+typedef struct {
     const uint8_t *id;
     size_t id_len;
     size_t best_match_len;
@@ -1892,22 +2383,27 @@ static esp_err_t burner_gbx_lookup_profile_visitor(
 
 esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out)
 {
-    burner_gbx_lookup_ctx_t ctx = {
-        .id = gba_id,
-        .id_len = 8u,
-        .best_match_len = 0u,
-        .profile_out = profile_out,
-    };
     esp_err_t err;
 
     if (gba_id == NULL || profile_out == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    burner_gbx_profile_clear(profile_out);
-    err = burner_gbx_visit_agb_profiles(burner_gbx_lookup_profile_visitor, &ctx);
-    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
-        return err;
+    err = burner_gbx_find_cached_profile_by_id("AGB", gba_id, 8u, profile_out, NULL);
+    if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
+        burner_gbx_lookup_ctx_t ctx = {
+            .id = gba_id,
+            .id_len = 8u,
+            .best_match_len = 0u,
+            .profile_out = profile_out,
+        };
+
+        burner_gbx_profile_clear(profile_out);
+        err = burner_gbx_visit_agb_profiles(burner_gbx_lookup_profile_visitor, &ctx);
+        if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+            return err;
+        }
+        return (ctx.best_match_len != 0u) ? ESP_OK : ESP_ERR_NOT_FOUND;
     }
-    return (ctx.best_match_len != 0u) ? ESP_OK : ESP_ERR_NOT_FOUND;
+    return err;
 }
