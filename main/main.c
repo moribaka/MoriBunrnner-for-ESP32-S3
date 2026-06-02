@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_sntp.h"
 #include "esp_system.h"
 #include "power_manager.h"
@@ -2639,12 +2640,23 @@ static void init_i2c_peripherals(void)
 static void web_start_task(void *arg)
 {
     (void)arg;
+    esp_err_t err;
 
-    if (web_ws_start(NULL) == ESP_OK) {
+    err = web_ws_start(NULL);
+    if (err == ESP_OK) {
         s_web_started = true;
     } else {
+        size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        size_t internal_largest =
+            heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+
         ui_set_status_text("web service start failed");
-        ESP_LOGE(wifi_manager_tag, "Burner web start failed");
+        ESP_LOGE(
+            wifi_manager_tag,
+            "Burner web start failed: %s (internal_free=%u largest=%u)",
+            esp_err_to_name(err),
+            (unsigned)internal_free,
+            (unsigned)internal_largest);
     }
 
     s_web_starting = false;
@@ -2808,7 +2820,6 @@ static void wifi_state_handler(WIFI_STATE state)
         s_wifi_idle_suspended = false;
         ESP_LOGI(wifi_manager_tag, "Provisioning connected, waiting user confirm");
         mori_apply_ntp_service();
-        trigger_web_start_async();
     } else if (state == WIFI_STATE_DISCONNECTED) {
         ui_set_wifi_state(UI_WIFI_STATE_DISCONNECTED);
         ui_set_ip_text("--");

@@ -175,8 +175,8 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         "</body></html>";
     static const char confirm_head[] =
         "<h2>Wi-Fi Connected</h2>"
-        "<p>ESP32 is now connected to your router. Keep this setup hotspot connected until you finish switching to the new address.</p>"
-        "<p>Please open this address on your phone/computer:</p>";
+        "<p>ESP32 is now connected to your router.</p>"
+        "<p>Tap confirm below to close the setup hotspot, then open this address on your phone/computer:</p>";
     static const char confirm_tail[] =
         "<form method='get' action='/'>"
         "<button type='submit'>Refresh Status</button>"
@@ -838,7 +838,13 @@ esp_err_t wifi_maneger_provisioning_confirm(void)
         if (err == ESP_OK) {
             ESP_LOGI(wifi_manager_tag, "Provisioning confirmed, switched to STA mode");
         }
-        return err;
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    if (is_sta_connected && wifi_callback != NULL) {
+        wifi_callback(WIFI_STATE_CONNECTED);
     }
     return ESP_OK;
 }
