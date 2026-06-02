@@ -1237,6 +1237,49 @@ static void burner_gbx_cache_unload(void)
     s_gbx_cache_profile_count = 0u;
 }
 
+static esp_err_t burner_gbx_cache_validate_file(void)
+{
+    char full_path[WEB_FILE_PATH_LEN_MAX] = {0};
+    struct stat st;
+    FILE *fp = NULL;
+    burner_gbx_cache_header_t header = {0};
+    size_t entries_bytes;
+
+    if (!burner_build_full_path(BURNER_GBX_CACHE_FILE_REL, full_path, sizeof(full_path))) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (stat(full_path, &st) != 0 || st.st_size < (off_t)sizeof(header) ||
+        st.st_size > (off_t)BURNER_GBX_CACHE_MAX_BYTES) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    fp = fopen(full_path, "rb");
+    if (fp == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    if (fread(&header, 1u, sizeof(header), fp) != sizeof(header)) {
+        fclose(fp);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    fclose(fp);
+
+    if (header.magic != BURNER_GBX_CACHE_MAGIC ||
+        header.version != BURNER_GBX_CACHE_VERSION ||
+        header.entry_size != sizeof(burner_gbx_cache_entry_t) ||
+        header.entry_count == 0u) {
+        return ESP_ERR_INVALID_VERSION;
+    }
+
+    entries_bytes = (size_t)header.entry_count * sizeof(burner_gbx_cache_entry_t);
+    if (entries_bytes / sizeof(burner_gbx_cache_entry_t) != header.entry_count ||
+        entries_bytes + sizeof(header) > (size_t)st.st_size ||
+        entries_bytes + sizeof(header) > BURNER_GBX_CACHE_MAX_BYTES) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    return ESP_OK;
+}
+
 static esp_err_t burner_gbx_cache_load(void)
 {
     char full_path[WEB_FILE_PATH_LEN_MAX] = {0};
@@ -1597,8 +1640,6 @@ esp_err_t burner_gbx_rebuild_cache(uint32_t *profile_count_out, uint32_t *entry_
 
 esp_err_t burner_gbx_ensure_cache(void)
 {
-    char cache_full[WEB_FILE_PATH_LEN_MAX] = {0};
-    struct stat st;
     uint32_t profile_count = 0u;
     uint32_t entry_count = 0u;
     esp_err_t err;
@@ -1606,15 +1647,22 @@ esp_err_t burner_gbx_ensure_cache(void)
     if (card == NULL || usb_msc_tf_in_use_by_host()) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (!burner_build_full_path(BURNER_GBX_CACHE_FILE_REL, cache_full, sizeof(cache_full))) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-    if (stat(cache_full, &st) == 0) {
+    err = burner_gbx_cache_validate_file();
+    if (err == ESP_OK) {
         ESP_LOGI(BURNER_TAG, "GBX cache exists, keep existing file: %s", BURNER_GBX_CACHE_FILE_REL);
         return ESP_OK;
     }
+    burner_gbx_cache_unload();
+    if (err != ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBX cache invalid, rebuilding: file=%s err=%s",
+            BURNER_GBX_CACHE_FILE_REL,
+            esp_err_to_name(err));
+    } else {
+        ESP_LOGI(BURNER_TAG, "GBX cache missing, auto rebuild: %s", BURNER_GBX_CACHE_FILE_REL);
+    }
 
-    ESP_LOGI(BURNER_TAG, "GBX cache missing, auto rebuild: %s", BURNER_GBX_CACHE_FILE_REL);
     err = burner_gbx_rebuild_cache(&profile_count, &entry_count);
     if (err == ESP_OK) {
         ESP_LOGI(
