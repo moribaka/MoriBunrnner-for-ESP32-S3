@@ -445,6 +445,7 @@ typedef enum {
 
 typedef enum {
     BURNER_RECIPE_MODE_CHIS = 0,
+    BURNER_RECIPE_MODE_CHISLINK,
     BURNER_RECIPE_MODE_GBX,
 } burner_recipe_mode_t;
 
@@ -1915,6 +1916,8 @@ const char *burner_recipe_mode_to_str(burner_recipe_mode_t mode)
     switch (mode) {
     case BURNER_RECIPE_MODE_GBX:
         return "gbx";
+    case BURNER_RECIPE_MODE_CHISLINK:
+        return "chislink";
     case BURNER_RECIPE_MODE_CHIS:
     default:
         return "chis";
@@ -1932,6 +1935,13 @@ bool burner_parse_recipe_mode_text(const char *text, burner_recipe_mode_t *mode_
     }
     if (strcasecmp(text, "gbx") == 0) {
         *mode_out = BURNER_RECIPE_MODE_GBX;
+        return true;
+    }
+    if (strcasecmp(text, "chislink") == 0 ||
+        strcasecmp(text, "chis_link") == 0 ||
+        strcasecmp(text, "chis-link") == 0 ||
+        strcasecmp(text, "chislinkpremium") == 0) {
+        *mode_out = BURNER_RECIPE_MODE_CHISLINK;
         return true;
     }
     return false;

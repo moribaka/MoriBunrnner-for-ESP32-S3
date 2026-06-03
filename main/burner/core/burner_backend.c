@@ -599,7 +599,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0') {
         if (!burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode_val)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis or gbx");
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
         }
         update_recipe_mode = true;
     }
