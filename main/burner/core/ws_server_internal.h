@@ -434,6 +434,7 @@ typedef enum {
 
 typedef enum {
     BURNER_RECIPE_MODE_CHIS = 0,
+    BURNER_RECIPE_MODE_CHISLINK,
     BURNER_RECIPE_MODE_GBX,
 } burner_recipe_mode_t;
 
@@ -1204,6 +1205,12 @@ esp_err_t burner_gba_gbx_program_block(
 esp_err_t burner_gba_gbx_erase_sector(uint32_t flash_addr, bool is_multi_card, uint32_t timeout_ms);
 esp_err_t burner_gba_gbx_chip_erase_once(void);
 esp_err_t burner_bacon_gba_probe_locked(
+    uint8_t id_out[8],
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out);
+esp_err_t burner_chislink_gba_probe_locked(
     uint8_t id_out[8],
     uint32_t *device_size,
     uint32_t *sector_size,

@@ -783,7 +783,9 @@ esp_err_t burner_gba_gbx_probe_locked(
     burner_gba_gbx_probe_ctx_t probe_ctx = {0};
     burner_gbx_profile_t *matched_profile = NULL;
     burner_gbx_profile_t *candidate_profile = NULL;
-    uint8_t chis_id[8] = {0};
+    uint8_t geometry_id[8] = {0};
+    bool geometry_probe_used = false;
+    bool need_geometry_probe = false;
     esp_err_t err;
 
     if (id_out == NULL || device_size == NULL || sector_size == NULL ||
@@ -802,19 +804,24 @@ esp_err_t burner_gba_gbx_probe_locked(
 
     burner_gbx_profile_clear(&s_cart_ctx.gbx);
 
-    ESP_LOGI(BURNER_TAG, "GBX probe: CHIS state first, then FlashGBX AGB method scan");
-    err = burner_bacon_gba_probe_locked(
-        chis_id,
-        device_size,
-        sector_size,
-        buffer_write_bytes,
-        cfi_ok_out);
-    if (err != ESP_OK) {
-        return err;
+    s_cart_ctx.gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD;
+    s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
+    s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    s_gba_active_nor_flags = 0u;
+    s_gba_active_intel_generic_cfi = false;
+    s_gba_active_intel_e9_entry = false;
+    s_cart_ctx.d0d1_known = false;
+    s_cart_ctx.d0d1_swapped = false;
+    s_cart_ctx.gba_likely_read_only = false;
+    burner_nor_geometry_clear(&s_cart_ctx.geometry);
+
+    err = burner_gba_detect_d0d1_swap(&s_cart_ctx.d0d1_swapped, &s_cart_ctx.gba_cmd_data_lane);
+    if (err == ESP_OK) {
+        s_cart_ctx.d0d1_known = true;
+    } else {
+        s_cart_ctx.d0d1_swapped = false;
+        s_cart_ctx.gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW;
     }
-    /* Keep the successful CHIS ID available for fallback callers even if the
-       subsequent GBX method scan cannot resolve a unique profile. */
-    memcpy(id_out, chis_id, sizeof(chis_id));
 
     matched_profile = (burner_gbx_profile_t *)calloc(1u, sizeof(*matched_profile));
     if (matched_profile == NULL) {
@@ -826,11 +833,13 @@ esp_err_t burner_gba_gbx_probe_locked(
         return ESP_ERR_NO_MEM;
     }
 
-    probe_ctx.cmdset = s_cart_ctx.gba_cmdset;
-    probe_ctx.flash_size = *device_size;
-    probe_ctx.sector_size = *sector_size;
-    probe_ctx.geometry = &s_cart_ctx.geometry;
-    probe_ctx.cfi_ok = *cfi_ok_out;
+    ESP_LOGI(BURNER_TAG, "GBX probe: FlashGBX AGB method scan first, CHIS fallback by caller");
+
+    probe_ctx.cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    probe_ctx.flash_size = 0u;
+    probe_ctx.sector_size = 0u;
+    probe_ctx.geometry = NULL;
+    probe_ctx.cfi_ok = false;
     probe_ctx.d0d1_known = s_cart_ctx.d0d1_known;
     probe_ctx.d0d1_swapped = s_cart_ctx.d0d1_swapped;
     probe_ctx.found = false;
@@ -852,21 +861,9 @@ esp_err_t burner_gba_gbx_probe_locked(
     if (!probe_ctx.found || probe_ctx.ambiguous) {
         ESP_LOGE(
             BURNER_TAG,
-            "GBX probe failed: no unique FlashGBX AGB profile matched method scan (ambiguous=%u methods=%" PRIu32 ") CHIS id=%02X %02X %02X %02X %02X %02X %02X %02X flash=%" PRIu32 " sector=%" PRIu32 " cmdset=%s cfi=%s",
+            "GBX probe failed: no unique FlashGBX AGB profile matched method scan (ambiguous=%u methods=%" PRIu32 ")",
             probe_ctx.ambiguous ? 1u : 0u,
-            probe_ctx.method_results,
-            chis_id[0],
-            chis_id[1],
-            chis_id[2],
-            chis_id[3],
-            chis_id[4],
-            chis_id[5],
-            chis_id[6],
-            chis_id[7],
-            *device_size,
-            *sector_size,
-            burner_nor_cmdset_name(s_cart_ctx.gba_cmdset),
-            *cfi_ok_out ? "ok" : "unavailable");
+            probe_ctx.method_results);
         err = ESP_ERR_NOT_FOUND;
         goto cleanup;
     }
@@ -880,6 +877,62 @@ esp_err_t burner_gba_gbx_probe_locked(
         *cfi_ok_out);
     if (err != ESP_OK) {
         goto cleanup;
+    }
+    need_geometry_probe =
+        (*device_size == 0u) ||
+        (*sector_size == 0u) ||
+        (*buffer_write_bytes == 0u && !matched_profile->has_buffer_size) ||
+        (matched_profile->base_cmdset == BURNER_NOR_CMDSET_INTEL && !*cfi_ok_out) ||
+        (matched_profile->sector_size_from_cfi && !*cfi_ok_out);
+    if (need_geometry_probe) {
+        ESP_LOGI(
+            BURNER_TAG,
+            "GBX probe geometry helper: profile=%s needs CHIS/CFI fill flash=%" PRIu32
+            " sector=%" PRIu32 " buf=%u cfi=%s",
+            matched_profile->file_name,
+            *device_size,
+            *sector_size,
+            (unsigned)*buffer_write_bytes,
+            *cfi_ok_out ? "ok" : "unavailable");
+        err = burner_bacon_gba_probe_locked(
+            geometry_id,
+            device_size,
+            sector_size,
+            buffer_write_bytes,
+            cfi_ok_out);
+        if (err == ESP_OK) {
+            geometry_probe_used = true;
+            memcpy(id_out, probe_ctx.id, 8u);
+            err = burner_gba_gbx_apply_profile_geometry(
+                matched_profile,
+                device_size,
+                sector_size,
+                buffer_write_bytes,
+                *cfi_ok_out);
+            if (err != ESP_OK) {
+                goto cleanup;
+            }
+        } else {
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBX probe geometry helper failed: profile=%s err=%s; using profile metadata only",
+                matched_profile->file_name,
+                esp_err_to_name(err));
+            *device_size = 0u;
+            *sector_size = 0u;
+            *buffer_write_bytes = 0u;
+            *cfi_ok_out = false;
+            burner_nor_geometry_clear(&s_cart_ctx.geometry);
+            err = burner_gba_gbx_apply_profile_geometry(
+                matched_profile,
+                device_size,
+                sector_size,
+                buffer_write_bytes,
+                false);
+            if (err != ESP_OK) {
+                goto cleanup;
+            }
+        }
     }
     if (*device_size == 0u || *sector_size == 0u) {
         ESP_LOGE(BURNER_TAG, "GBX probe incomplete geometry: profile=%s", matched_profile->file_name);
@@ -895,7 +948,7 @@ esp_err_t burner_gba_gbx_probe_locked(
     ESP_LOGI(
         BURNER_TAG,
         "GBX probe ok: file=%s chip=%s flash=%" PRIu32 " sector=%" PRIu32
-        " buf=%u cfi=%s cmdset=%s match_len=%u id=%02X %02X %02X %02X %02X %02X %02X %02X",
+        " buf=%u cfi=%s cmdset=%s geom_helper=%u match_len=%u id=%02X %02X %02X %02X %02X %02X %02X %02X",
         matched_profile->file_name,
         matched_profile->display_name[0] != '\0' ? matched_profile->display_name : "unknown",
         *device_size,
@@ -903,6 +956,7 @@ esp_err_t burner_gba_gbx_probe_locked(
         (unsigned)*buffer_write_bytes,
         *cfi_ok_out ? "ok" : "unavailable",
         burner_nor_cmdset_name(s_cart_ctx.gba_cmdset),
+        geometry_probe_used ? 1u : 0u,
         (unsigned)probe_ctx.best_match_len,
         id_out[0],
         id_out[1],

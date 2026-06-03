@@ -918,7 +918,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0' &&
         !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis or gbx");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
     }
 
     if (s_status_lock != NULL) {
@@ -1000,6 +1000,13 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                     gbx_fallback_used = true;
                     err = ESP_OK;
                 }
+            } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
+                err = burner_chislink_gba_probe_locked(
+                    gba_id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
             } else {
                 err = burner_bacon_gba_probe_locked(
                     gba_id,
@@ -1123,7 +1130,9 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : ""));
+            gbx_profile_matched ? "GBX" :
+                                  (gbx_fallback_used ? "CHIS" :
+                                                       ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : "")));
         {
             esp_err_t analysis_err = burner_probe_gba_rom_analysis(
                 save_probe_device_size,
@@ -1175,7 +1184,9 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             id_hex,
             gba_chip_label,
             burner_recipe_mode_to_str(recipe_mode),
-            gbx_profile_matched ? "gbx" : (gbx_fallback_used ? "chis_fallback" : "chis"),
+            gbx_profile_matched ? "gbx" :
+                                  (gbx_fallback_used ? "chis_fallback" :
+                                                       ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis")),
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),
             gba_cmd_mode,

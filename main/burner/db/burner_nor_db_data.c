@@ -13,6 +13,8 @@
 
 #define BURNER_GBA_PROFILE_AMD_AAA_AA "AGB:AMD:AAA/555:AA/55"
 #define BURNER_GBA_PROFILE_AMD_AAA_A9 "AGB:AMD:AAA/555:A9/56"
+#define BURNER_GBA_PROFILE_AMD_MSP54LV_69 "AGB:AMD:MSP54LV:69/96/50"
+#define BURNER_GBA_PROFILE_AMD_MSP55_WIDE "AGB:AMD:MSP55LV100:wide-id"
 #define BURNER_GBA_PROFILE_AMD_555_AA "AGB:AMD:555/2AA:AA/55"
 #define BURNER_GBA_PROFILE_INTEL_DIRECT "AGB:INTEL:direct-id"
 #define BURNER_GBA_PROFILE_INTEL_DUAL_DIRECT "AGB:INTEL:dual-direct-id"
@@ -258,6 +260,58 @@ const burner_nor_entry_t g_burner_nor_db_gba[] = {
             .id_len = 8u,
             .id = BURNER_NOR_ID8_PREFIX4(0x04u, 0x00u, 0x7Eu, 0x22u),
             .id_mask = BURNER_NOR_ID_MASK8_PREFIX4,
+        },
+        {
+            .bus = BURNER_NOR_IDBUS_GBA,
+            .name = "GL256S / MSP54LV A9 family",
+            .profile = BURNER_GBA_PROFILE_AMD_AAA_A9,
+            .cmdset = BURNER_NOR_CMDSET_AMD,
+            .device_size = 32u * 1024u * 1024u,
+            .sector_size = 128u * 1024u,
+            .buffer_write_bytes = 64u,
+            .flags = BURNER_NOR_FLAG_NONE,
+            .id_len = 8u,
+            .id = BURNER_NOR_ID8_PREFIX4(0x02u, 0x00u, 0x7Du, 0x22u),
+            .id_mask = BURNER_NOR_ID_MASK8_PREFIX4,
+        },
+        {
+            .bus = BURNER_NOR_IDBUS_GBA,
+            .name = "MXP54_16D_ERATH / MSP54LV256",
+            .profile = BURNER_GBA_PROFILE_AMD_MSP54LV_69,
+            .cmdset = BURNER_NOR_CMDSET_AMD,
+            .device_size = 32u * 1024u * 1024u,
+            .sector_size = 128u * 1024u,
+            .buffer_write_bytes = 64u,
+            .flags = BURNER_NOR_FLAG_NONE,
+            .id_len = 8u,
+            .id = BURNER_NOR_ID8_PREFIX4(0x02u, 0x00u, 0xBDu, 0x22u),
+            .id_mask = BURNER_NOR_ID_MASK8_PREFIX4,
+        },
+        {
+            .bus = BURNER_NOR_IDBUS_GBA,
+            .name = "MSP55LV100S wide-id family",
+            .profile = BURNER_GBA_PROFILE_AMD_MSP55_WIDE,
+            .cmdset = BURNER_NOR_CMDSET_AMD,
+            .device_size = 64u * 1024u * 1024u,
+            .sector_size = 128u * 1024u,
+            .buffer_write_bytes = 32u,
+            .flags = BURNER_NOR_FLAG_NONE,
+            .id_len = 8u,
+            .id = BURNER_NOR_ID8_PREFIX4(0x02u, 0x01u, 0x7Du, 0x7Eu),
+            .id_mask = BURNER_NOR_ID_MASK8_PREFIX4,
+        },
+        {
+            .bus = BURNER_NOR_IDBUS_GBA,
+            .name = "MSP55LV100G wide-id family",
+            .profile = BURNER_GBA_PROFILE_AMD_MSP55_WIDE,
+            .cmdset = BURNER_NOR_CMDSET_AMD,
+            .device_size = 32u * 1024u * 1024u,
+            .sector_size = 256u * 1024u,
+            .buffer_write_bytes = 32u,
+            .flags = BURNER_NOR_FLAG_NONE,
+            .id_len = 8u,
+            .id = BURNER_NOR_ID8_EXACT(0x02u, 0x01u, 0x02u, 0x01u, 0x7Du, 0x7Eu, 0x7Du, 0x7Eu),
+            .id_mask = BURNER_NOR_ID_MASK8_EXACT,
         },
         {
             .bus = BURNER_NOR_IDBUS_GBA,

@@ -7,6 +7,7 @@ static uint8_t s_gba_amd_buffer_template[BURNER_GBA_AMD_BUFFER_TEMPLATE_MAX_BYTE
 static size_t s_gba_amd_buffer_template_words = 0u;
 static bool s_gba_amd_buffer_template_valid = false;
 static bool s_gba_amd_buffer_template_d0d1_swapped = false;
+static burner_gba_amd_runtime_profile_t s_gba_amd_buffer_template_profile = BURNER_GBA_AMD_RUNTIME_STANDARD;
 static uint32_t s_gba_amd_buffer_template_unlock0 = 0u;
 static uint32_t s_gba_amd_buffer_template_unlock1 = 0u;
 
@@ -33,6 +34,7 @@ static esp_err_t burner_gba_amd_buffer_template_get(
     if (s_gba_amd_buffer_template_valid &&
         s_gba_amd_buffer_template_words == write_words &&
         s_gba_amd_buffer_template_d0d1_swapped == s_cart_ctx.d0d1_swapped &&
+        s_gba_amd_buffer_template_profile == cmd->amd_profile &&
         s_gba_amd_buffer_template_unlock0 == cmd->unlock0_addr &&
         s_gba_amd_buffer_template_unlock1 == cmd->unlock1_addr) {
         *template_out = s_gba_amd_buffer_template;
@@ -41,9 +43,10 @@ static esp_err_t burner_gba_amd_buffer_template_get(
     }
 
     memset(seq, 0, seq_len);
-    write_count_word = burner_apply_d0d1_swap_on_write(
-        (uint16_t)(write_words - 1u),
-        s_cart_ctx.d0d1_swapped);
+    write_count_word = (uint16_t)(write_words - 1u);
+    if (!cmd->amd_count_uses_raw) {
+        write_count_word = burner_apply_d0d1_swap_on_write(write_count_word, s_cart_ctx.d0d1_swapped);
+    }
 
     seq[0] = cmd->opt_addr;
     memcpy(&seq[1], cmd->unlock0_addr_bytes, 3u);
@@ -98,6 +101,7 @@ static esp_err_t burner_gba_amd_buffer_template_get(
     s_gba_amd_buffer_template_valid = true;
     s_gba_amd_buffer_template_words = write_words;
     s_gba_amd_buffer_template_d0d1_swapped = s_cart_ctx.d0d1_swapped;
+    s_gba_amd_buffer_template_profile = cmd->amd_profile;
     s_gba_amd_buffer_template_unlock0 = cmd->unlock0_addr;
     s_gba_amd_buffer_template_unlock1 = cmd->unlock1_addr;
     *template_out = s_gba_amd_buffer_template;
@@ -180,54 +184,46 @@ static esp_err_t burner_bacon_gba_rom_program(
         } else if (buffer_write_bytes < 2u) {
             uint8_t seq[41];
             uint16_t pd = (uint16_t)((uint16_t)buf[i] | ((uint16_t)buf[i + 1u] << 8));
-            uint16_t cmd_aa = burner_apply_d0d1_swap_on_write(0x00AAu, s_cart_ctx.d0d1_swapped);
-            uint16_t cmd_55 = burner_apply_d0d1_swap_on_write(0x0055u, s_cart_ctx.d0d1_swapped);
-            uint16_t cmd_a0 = burner_apply_d0d1_swap_on_write(0x00A0u, s_cart_ctx.d0d1_swapped);
+            const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
             uint8_t addr0 = (uint8_t)(starting_word_address & 0xFFu);
             uint8_t addr1 = (uint8_t)((starting_word_address >> 8) & 0xFFu);
             uint8_t addr2 = (uint8_t)((starting_word_address >> 16) & 0xFFu);
 
-            seq[0] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
-            seq[1] = 0x55u;
-            seq[2] = 0x05u;
-            seq[3] = 0x00u;
-            seq[4] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[5] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[6] = (uint8_t)(cmd_aa & 0xFFu);
-            seq[7] = (uint8_t)((cmd_aa >> 8) & 0xFFu);
-            seq[8] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-            seq[9] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[10] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
-            seq[11] = 0xAAu;
-            seq[12] = 0x02u;
-            seq[13] = 0x00u;
-            seq[14] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[15] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[16] = (uint8_t)(cmd_55 & 0xFFu);
-            seq[17] = (uint8_t)((cmd_55 >> 8) & 0xFFu);
-            seq[18] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-            seq[19] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[20] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
-            seq[21] = 0x55u;
-            seq[22] = 0x05u;
-            seq[23] = 0x00u;
-            seq[24] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[25] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
-            seq[26] = (uint8_t)(cmd_a0 & 0xFFu);
-            seq[27] = (uint8_t)((cmd_a0 >> 8) & 0xFFu);
-            seq[28] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-            seq[29] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[30] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
+            seq[0] = cmd->opt_addr;
+            memcpy(&seq[1], cmd->unlock0_addr_bytes, 3u);
+            seq[4] = cmd->opt_wr_setup;
+            seq[5] = cmd->opt_wr_data;
+            seq[6] = (uint8_t)(cmd->amd_aa & 0xFFu);
+            seq[7] = (uint8_t)((cmd->amd_aa >> 8) & 0xFFu);
+            seq[8] = cmd->opt_wr_low;
+            seq[9] = cmd->opt_wr_setup;
+            seq[10] = cmd->opt_addr;
+            memcpy(&seq[11], cmd->unlock1_addr_bytes, 3u);
+            seq[14] = cmd->opt_wr_setup;
+            seq[15] = cmd->opt_wr_data;
+            seq[16] = (uint8_t)(cmd->amd_55 & 0xFFu);
+            seq[17] = (uint8_t)((cmd->amd_55 >> 8) & 0xFFu);
+            seq[18] = cmd->opt_wr_low;
+            seq[19] = cmd->opt_wr_setup;
+            seq[20] = cmd->opt_addr;
+            memcpy(&seq[21], cmd->unlock0_addr_bytes, 3u);
+            seq[24] = cmd->opt_wr_setup;
+            seq[25] = cmd->opt_wr_data;
+            seq[26] = (uint8_t)(cmd->amd_a0 & 0xFFu);
+            seq[27] = (uint8_t)((cmd->amd_a0 >> 8) & 0xFFu);
+            seq[28] = cmd->opt_wr_low;
+            seq[29] = cmd->opt_wr_setup;
+            seq[30] = cmd->opt_addr;
             seq[31] = addr0;
             seq[32] = addr1;
             seq[33] = addr2;
-            seq[34] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[35] = burner_bacon_option_byte0(2, true, true, true, false, true, true);
+            seq[34] = cmd->opt_wr_setup;
+            seq[35] = cmd->opt_wr_data;
             seq[36] = buf[i + 0u];
             seq[37] = buf[i + 1u];
-            seq[38] = burner_bacon_option_byte0(0, true, true, true, false, true, false);
-            seq[39] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            seq[40] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
+            seq[38] = cmd->opt_wr_low;
+            seq[39] = cmd->opt_wr_setup;
+            seq[40] = cmd->opt_release;
 
             err = burner_spi_transfer(seq, NULL, sizeof(seq));
             if (err != ESP_OK) {
@@ -318,9 +314,10 @@ static esp_err_t burner_bacon_gba_rom_program(
                     seq[base + 2u] = buf[i + wr * 2u + 1u];
                 }
             } else {
-                write_count_word = burner_apply_d0d1_swap_on_write(
-                    (uint16_t)(write_words - 1u),
-                    s_cart_ctx.d0d1_swapped);
+                write_count_word = (uint16_t)(write_words - 1u);
+                if (!cmd->amd_count_uses_raw) {
+                    write_count_word = burner_apply_d0d1_swap_on_write(write_count_word, s_cart_ctx.d0d1_swapped);
+                }
 
                 seq[0] = cmd->opt_addr;
                 memcpy(&seq[1], cmd->unlock0_addr_bytes, 3u);
@@ -775,6 +772,7 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     int64_t deadline_us;
     esp_err_t err;
     bool intel_cmdset;
+    const burner_gba_program_cmd_cache_t *cmd = NULL;
 
     if (timeout_ms == 0u) {
         return ESP_ERR_TIMEOUT;
@@ -856,32 +854,34 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         return err;
     }
 
+    cmd = burner_gba_program_cmd_cache_get();
+
     err = burner_bacon_gba_reset_to_read_mode();
     if (err != ESP_OK) {
         return err;
     }
 
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_aa);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    err = burner_bacon_rom_write_u16(cmd->unlock1_addr, cmd->amd_55);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0080u);
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_80);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_aa);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    err = burner_bacon_rom_write_u16(cmd->unlock1_addr, cmd->amd_55);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(sa_word, 0x0030u);
+    err = burner_bacon_rom_write_u16(sa_word, cmd->amd_30);
     if (err != ESP_OK) {
         return err;
     }
@@ -902,8 +902,10 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 
-    ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
-    sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(local_addr, &sector_ppb);
+    if (cmd->amd_profile == BURNER_GBA_AMD_RUNTIME_STANDARD) {
+        ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
+        sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(local_addr, &sector_ppb);
+    }
     ESP_LOGW(
         BURNER_TAG,
         "GBA erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32
@@ -1130,6 +1132,7 @@ static esp_err_t burner_bacon_gba_chip_erase_once(void)
     int64_t deadline_us;
     esp_err_t err;
     bool intel_cmdset;
+    const burner_gba_program_cmd_cache_t *cmd = NULL;
 
     if (burner_gba_gbx_is_active()) {
         return burner_gba_gbx_chip_erase_once();
@@ -1168,27 +1171,36 @@ static esp_err_t burner_bacon_gba_chip_erase_once(void)
         return err;
     }
 
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    cmd = burner_gba_program_cmd_cache_get();
+    if (!cmd->amd_chip_erase_supported) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA AMD chip erase unsupported for runtime profile=%s; use sector erase during write",
+            burner_gba_amd_runtime_profile_name(cmd->amd_profile));
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_aa);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    err = burner_bacon_rom_write_u16(cmd->unlock1_addr, cmd->amd_55);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0080u);
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_80);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_aa);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    err = burner_bacon_rom_write_u16(cmd->unlock1_addr, cmd->amd_55);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0010u);
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_10);
     if (err != ESP_OK) {
         return err;
     }
@@ -1219,6 +1231,10 @@ static esp_err_t burner_bacon_gba_chip_erase(void)
 
     if (burner_gba_gbx_is_active()) {
         return burner_gba_gbx_chip_erase_once();
+    }
+
+    if (s_gba_amd_runtime_profile != BURNER_GBA_AMD_RUNTIME_STANDARD) {
+        return burner_bacon_gba_chip_erase_once();
     }
 
     err = burner_bacon_gba_read_id(id, s_cart_ctx.d0d1_swapped);

@@ -106,7 +106,7 @@
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
-#define UI_BURN_ROM_RECIPE_ITEM_COUNT 2
+#define UI_BURN_ROM_RECIPE_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
 #define UI_BURN_ROM_MAPPER_ITEM_COUNT 2
@@ -1526,6 +1526,9 @@ static const char *ui_erase_mode_label(void)
 
 static const char *ui_recipe_mode_label(burner_recipe_mode_t mode)
 {
+    if (mode == BURNER_RECIPE_MODE_CHISLINK) {
+        return "CHISLINK";
+    }
     return (mode == BURNER_RECIPE_MODE_GBX) ? "GBX" : "CHIS";
 }
 
@@ -1534,9 +1537,38 @@ static const char *ui_recipe_mode_hint(burner_recipe_mode_t mode)
     if (mode == s_recipe_mode) {
         return ui_lang_is_zh() ? "当前" : "Current";
     }
+    if (mode == BURNER_RECIPE_MODE_CHISLINK) {
+        return "CHISLink ID";
+    }
     return (mode == BURNER_RECIPE_MODE_GBX) ?
                (ui_lang_is_zh() ? ".gbx配置" : ".gbx profile") :
                (ui_lang_is_zh() ? "自动探测" : "Auto probe");
+}
+
+static burner_recipe_mode_t ui_recipe_mode_for_index(uint16_t index)
+{
+    switch (index) {
+        case 1:
+            return BURNER_RECIPE_MODE_CHISLINK;
+        case 2:
+            return BURNER_RECIPE_MODE_GBX;
+        case 0:
+        default:
+            return BURNER_RECIPE_MODE_CHIS;
+    }
+}
+
+static uint16_t ui_recipe_mode_index(burner_recipe_mode_t mode)
+{
+    switch (mode) {
+        case BURNER_RECIPE_MODE_CHISLINK:
+            return 1U;
+        case BURNER_RECIPE_MODE_GBX:
+            return 2U;
+        case BURNER_RECIPE_MODE_CHIS:
+        default:
+            return 0U;
+    }
 }
 
 static bool ui_burn_rom_has_recipe_mode_row(void)
@@ -1565,6 +1597,11 @@ static void ui_apply_recipe_mode_locked(ui_model_t *model, burner_recipe_mode_t 
     if (changed) {
         ui_persist_burn_settings_locked(model);
         ui_reset_cart_analysis_locked();
+    }
+    if (mode == BURNER_RECIPE_MODE_CHISLINK) {
+        ui_set_status_locked(model, "Burn method: CHISLINK");
+        ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_RECIPE_MODE);
+        return;
     }
     ui_set_status_locked(
         model,
@@ -3602,6 +3639,13 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     gbx_fallback_used = true;
                     err = ESP_OK;
                 }
+            } else if (s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
+                err = burner_chislink_gba_probe_locked(
+                    gba_id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
             } else {
                 err = burner_bacon_gba_probe_locked(
                     gba_id,
@@ -3718,7 +3762,9 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : ""));
+            gbx_profile_matched ? "GBX" :
+                                  (gbx_fallback_used ? "CHIS" :
+                                                       ((s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : "")));
         {
             bool detected = false;
             burner_spi_lock_take();
@@ -4996,7 +5042,7 @@ static void ui_burn_rom_open_recipe_menu_locked(ui_model_t *model)
     }
     s_burn_rom_write_menu = false;
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_RECIPE_MODE;
-    model->selected = (s_recipe_mode == BURNER_RECIPE_MODE_GBX) ? 1U : 0U;
+    model->selected = ui_recipe_mode_index(s_recipe_mode);
     model->scroll = 0;
     ui_mark_content_dirty(model);
     ui_set_status_locked(model, ui_lang_is_zh() ? "选择烧录方式" : "Select burn method");
@@ -5240,7 +5286,7 @@ static void ui_select_locked(
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
                 ui_apply_recipe_mode_locked(
                     model,
-                    (model->selected == 1U) ? BURNER_RECIPE_MODE_GBX : BURNER_RECIPE_MODE_CHIS);
+                    ui_recipe_mode_for_index(model->selected));
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_MAPPER) {
                 s_gb_mapper_override_kind =
                     (model->selected == 1U) ? BURNER_GB_MAPPER_MBC3 : BURNER_GB_MAPPER_MBC5;
@@ -6256,7 +6302,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         return;
     }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
-        burner_recipe_mode_t mode = (index == 1U) ? BURNER_RECIPE_MODE_GBX : BURNER_RECIPE_MODE_CHIS;
+        burner_recipe_mode_t mode = ui_recipe_mode_for_index(index);
 
         snprintf(title, title_len, "%s", ui_recipe_mode_label(mode));
         snprintf(hint, hint_len, "%s", ui_recipe_mode_hint(mode));
@@ -6461,13 +6507,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             return;
         case UI_BURN_ROM_OP_RECIPE_MODE:
             snprintf(title, title_len, "%s", ui_lang_is_zh() ? "烧录方式" : ui_tr("Burn method"));
-            snprintf(
-                hint,
-                hint_len,
-                "%s",
-                (s_recipe_mode == BURNER_RECIPE_MODE_GBX) ?
-                    (ui_lang_is_zh() ? "GBX" : "GBX") :
-                    (ui_lang_is_zh() ? "CHIS" : "CHIS"));
+            snprintf(hint, hint_len, "%s", ui_recipe_mode_label(s_recipe_mode));
             return;
         case UI_BURN_ROM_OP_SETTINGS:
             snprintf(title, title_len, "%s", ui_tr("Settings"));
