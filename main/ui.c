@@ -125,7 +125,7 @@
 #define UI_BURN_SAVE_ITEM_COUNT 8
 #define UI_SETTINGS_ITEM_COUNT 10
 #define UI_TASK_STATUS_ITEM_COUNT 12
-#define UI_TASK_RESULT_ITEM_COUNT 15
+#define UI_TASK_RESULT_ITEM_COUNT 18
 #define UI_TASK_CANCEL_CONFIRM_ITEM_COUNT 2U
 #define UI_TASK_ERASE_PROGRESS_ROW 6U
 #define UI_TASK_BURN_PROGRESS_ROW 7U
@@ -330,7 +330,6 @@ typedef struct {
     uint32_t erase_done_sectors;
     uint32_t erase_total_sectors;
     uint64_t burn_elapsed_us;
-    burner_status_t task_result_status;
     bool task_result_status_valid;
     uint8_t battery_percent;
     bool battery_valid;
@@ -446,6 +445,9 @@ static uint32_t s_render_frames_this_second = 0;
 static uint32_t s_last_battery_refresh_ms = 0;
 static uint32_t s_last_live_refresh_ms = 0;
 static uint32_t s_last_button_queue_full_log_ms = 0;
+static burner_status_t *s_task_result_status = NULL;
+static bool s_task_result_capture_armed = false;
+static bool s_task_result_active_seen = false;
 
 static lv_obj_t *s_canvas = NULL;
 static uint16_t *s_canvas_buf = NULL;
@@ -456,6 +458,17 @@ static void ui_task_cancel_confirm_close_locked(ui_model_t *model, const char *s
 static void ui_issue_pending_task_cancel(void);
 static bool ui_task_status_operation_active(void);
 static ui_page_t ui_task_return_parent_page(ui_page_t page);
+static ui_page_t ui_burn_task_entry_return_page(ui_page_t page);
+static void ui_clear_task_result_runtime_locked(ui_model_t *model);
+static void ui_calc_burn_snapshot_fields(
+    const burner_status_t *status,
+    int *progress_out,
+    int *erase_progress_out,
+    uint32_t *processed_out,
+    uint32_t *total_out,
+    uint32_t *erase_done_out,
+    uint32_t *erase_total_out);
+static void ui_present_active_burn_task_locked(ui_model_t *model, const burner_status_t *status, ui_page_t return_page);
 
 static ui_model_t s_model = {
     .page = UI_PAGE_ROOT,
@@ -471,16 +484,68 @@ static ui_model_t s_model = {
     .dirty = true,
 };
 
+static burner_status_t *ui_task_result_status_buffer(void)
+{
+    if (s_task_result_status != NULL) {
+        return s_task_result_status;
+    }
+
+    s_task_result_status =
+        (burner_status_t *)heap_caps_calloc(1, sizeof(*s_task_result_status), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (s_task_result_status == NULL) {
+        s_task_result_status =
+            (burner_status_t *)heap_caps_calloc(1, sizeof(*s_task_result_status), MALLOC_CAP_8BIT);
+    }
+    if (s_task_result_status == NULL) {
+        ESP_LOGW(UI_TAG, "task result status cache allocation failed");
+    }
+    return s_task_result_status;
+}
+
+static void ui_clear_task_result_locked(ui_model_t *model)
+{
+    if (model != NULL) {
+        model->task_result_status_valid = false;
+    }
+    if (s_task_result_status != NULL) {
+        memset(s_task_result_status, 0, sizeof(*s_task_result_status));
+    }
+    s_task_result_capture_armed = false;
+    s_task_result_active_seen = false;
+}
+
+static void ui_clear_task_result_runtime_locked(ui_model_t *model)
+{
+    ui_clear_task_result_locked(model);
+    burner_status_clear_task_result();
+    if (model != NULL) {
+        model->burn_progress = 0;
+        model->burn_processed = 0;
+        model->burn_total = 0;
+        model->erase_progress = 0;
+        model->erase_done_sectors = 0;
+        model->erase_total_sectors = 0;
+        model->burn_elapsed_us = 0;
+    }
+}
+
 static void ui_capture_task_result_locked(ui_model_t *model, const burner_status_t *status)
 {
+    burner_status_t *cache = NULL;
+
     if (model == NULL || status == NULL) {
         return;
     }
-    if (model->task_result_status_valid) {
+    if (!s_task_result_capture_armed || !s_task_result_active_seen) {
         return;
     }
-    model->task_result_status = *status;
+    cache = ui_task_result_status_buffer();
+    if (cache == NULL) {
+        return;
+    }
+    *cache = *status;
     model->task_result_status_valid = true;
+    s_task_result_capture_armed = false;
 }
 
 static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
@@ -1658,6 +1723,74 @@ static void ui_format_probe_id(const burner_status_t *status, char *out, size_t 
             strncat(out, " ", out_len - strlen(out) - 1U);
         }
     }
+}
+
+static const char *ui_nor_cmdset_label(burner_nor_cmdset_t cmdset)
+{
+    switch (cmdset) {
+        case BURNER_NOR_CMDSET_AMD:
+            return "AMD";
+        case BURNER_NOR_CMDSET_INTEL:
+            return "INTEL";
+        case BURNER_NOR_CMDSET_UNKNOWN:
+        default:
+            return ui_tr("unknown");
+    }
+}
+
+static burner_nor_cmdset_t ui_probe_cmdset(const burner_status_t *status)
+{
+    if (status == NULL || !status->probe_valid) {
+        return BURNER_NOR_CMDSET_UNKNOWN;
+    }
+
+    if (status->probe_cart_mode == BURNER_CART_MODE_GBA) {
+        return burner_gba_cmdset_from_id(status->probe_id);
+    }
+    return burner_mbc5_cmdset_from_id(status->probe_id);
+}
+
+static const burner_nor_family_t *ui_probe_family(const burner_status_t *status)
+{
+    if (status == NULL || !status->probe_valid) {
+        return NULL;
+    }
+
+    if (status->probe_cart_mode == BURNER_CART_MODE_GBA) {
+        return burner_gba_family_from_id(status->probe_id);
+    }
+    return burner_mbc5_family_from_id(status->probe_id);
+}
+
+static void ui_format_probe_family_text(const burner_status_t *status, char *out, size_t out_len)
+{
+    const burner_nor_family_t *family = NULL;
+    burner_nor_cmdset_t cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (status == NULL || !status->probe_valid) {
+        snprintf(out, out_len, "--");
+        return;
+    }
+
+    family = ui_probe_family(status);
+    cmdset = ui_probe_cmdset(status);
+    if (family != NULL && family->name != NULL && family->name[0] != '\0') {
+        if (cmdset != BURNER_NOR_CMDSET_UNKNOWN) {
+            snprintf(out, out_len, "%s / %s", family->name, ui_nor_cmdset_label(cmdset));
+        } else {
+            snprintf(out, out_len, "%s", family->name);
+        }
+        return;
+    }
+    if (cmdset != BURNER_NOR_CMDSET_UNKNOWN) {
+        snprintf(out, out_len, "%s", ui_nor_cmdset_label(cmdset));
+        return;
+    }
+
+    snprintf(out, out_len, "--");
 }
 
 static void ui_format_gba_d0d1_text(const burner_status_t *status, char *out, size_t out_len)
@@ -3381,6 +3514,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     uint32_t gba_save_size = 0;
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
     bool gbx_profile_matched = false;
+    bool gbx_fallback_used = false;
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
     bool cfi_ok = false;
@@ -3410,6 +3544,27 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &cfi_ok,
                     &mbc5_cmdset);
                 gbx_profile_matched = (err == ESP_OK);
+                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
+                    ESP_LOGW(UI_TAG, "UI MBC5 GBX probe fallback to CHIS/CFI: %s", esp_err_to_name(err));
+                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
+                    gbx_fallback_used = true;
+                    err = burner_bacon_mbc5_get_cfi(
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_geometry,
+                        &mbc5_cmdset);
+                    if (err == ESP_OK) {
+                        cfi_ok = true;
+                        if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
+                            err = burner_bacon_mbc5_get_id(mbc5_id);
+                            if (err != ESP_OK) {
+                                memset(mbc5_id, 0, sizeof(mbc5_id));
+                                err = ESP_OK;
+                            }
+                        }
+                    }
+                }
             } else {
                 err = burner_bacon_mbc5_get_cfi(
                     &device_size,
@@ -3441,6 +3596,12 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &buffer_write_bytes,
                     &cfi_ok);
                 gbx_profile_matched = (err == ESP_OK);
+                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
+                    ESP_LOGW(UI_TAG, "UI GBA GBX probe fallback to CHIS/CFI: %s", esp_err_to_name(err));
+                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
+                    gbx_fallback_used = true;
+                    err = ESP_OK;
+                }
             } else {
                 err = burner_bacon_gba_probe_locked(
                     gba_id,
@@ -3457,6 +3618,25 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
 
     if (err != ESP_OK) {
         return err;
+    }
+    if (cart_mode == BURNER_CART_MODE_GBA && s_recipe_mode == BURNER_RECIPE_MODE_GBX && gbx_profile_matched) {
+        burner_gba_gbx_cache_probe_result(
+            gba_id,
+            device_size,
+            sector_size,
+            buffer_write_bytes,
+            cfi_ok,
+            true);
+    } else if (cart_mode == BURNER_CART_MODE_GBA && s_recipe_mode == BURNER_RECIPE_MODE_GBX && gbx_fallback_used) {
+        burner_gba_gbx_cache_probe_result(
+            gba_id,
+            device_size,
+            sector_size,
+            buffer_write_bytes,
+            cfi_ok,
+            false);
+    } else {
+        burner_gba_gbx_clear_cached_probe();
     }
     if (cart_mode == BURNER_CART_MODE_MBC5) {
         burner_nor_format_chip_name(
@@ -3480,7 +3660,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             false,
             false,
             chip_name,
-            gbx_profile_matched ? "GBX" : "MBC5");
+            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : "MBC5"));
         if (gbx_profile_matched) {
             snprintf(out, out_len, "%s GBX %s", ui_cart_mode_label(cart_mode), chip_name);
         } else {
@@ -3538,7 +3718,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            gbx_profile_matched ? "GBX" : "");
+            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : ""));
         {
             bool detected = false;
             burner_spi_lock_take();
@@ -3810,6 +3990,7 @@ static void ui_burn_probe_task(void *param)
 
     switch (request->type) {
         case UI_WORK_BURN_READ_ID:
+            burner_reset_cart_probe_state();
             err = ui_read_cart_id_once(id_text, sizeof(id_text), request->cart_mode);
             ok_text = (err == ESP_OK) ? id_text : ui_tr("read id failed");
             break;
@@ -3892,6 +4073,11 @@ static void ui_start_work_async(ui_work_type_t type)
     }
     if (active != NULL) {
         *active = true;
+    }
+    if (type == UI_WORK_BURN_READ_ID) {
+        ui_reset_cart_analysis_locked();
+        ui_mark_content_dirty(&s_model);
+        s_model.dirty = true;
     }
     ui_set_status_locked(&s_model, status);
     xSemaphoreGive(s_model_lock);
@@ -4038,13 +4224,13 @@ static void ui_open_page_locked(ui_model_t *model, ui_page_t page)
     }
     parent = model->page;
     ui_push_current_page_locked(model);
+    if (parent == UI_PAGE_TASK_RESULT && page != UI_PAGE_TASK_RESULT) {
+        ui_clear_task_result_runtime_locked(model);
+    }
     model->page = page;
     model->parent_page = parent;
     model->selected = (page == UI_PAGE_ROOT) ? s_root_selected : 0;
     model->scroll = 0;
-    if (page != UI_PAGE_TASK_RESULT) {
-        model->task_result_status_valid = false;
-    }
     if (page != UI_PAGE_BURN_ROM) {
         s_burn_rom_write_menu = false;
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
@@ -4076,7 +4262,7 @@ static void ui_open_root_locked(ui_model_t *model)
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
     s_burn_rom_write_prompt_until_ms = 0;
     s_burn_rom_verify_prompt_until_ms = 0;
-    model->task_result_status_valid = false;
+    ui_clear_task_result_runtime_locked(model);
     s_nav_depth = 0;
     ui_set_status_locked(model, ui_tr("ready"));
 }
@@ -4087,6 +4273,17 @@ static bool ui_task_status_operation_active(void)
 
     burner_status_snapshot(&status);
     return s_file_start_active || status.state == BURNER_STATE_RECEIVING || status.state == BURNER_STATE_BURNING;
+}
+
+static ui_page_t ui_burn_task_entry_return_page(ui_page_t page)
+{
+    switch (page) {
+        case UI_PAGE_BURN_ROM:
+        case UI_PAGE_BURN_SAVE:
+            return page;
+        default:
+            return UI_PAGE_BURNER;
+    }
 }
 
 static ui_page_t ui_task_return_parent_page(ui_page_t page)
@@ -4102,6 +4299,126 @@ static ui_page_t ui_task_return_parent_page(ui_page_t page)
         default:
             return UI_PAGE_ROOT;
     }
+}
+
+static void ui_calc_burn_snapshot_fields(
+    const burner_status_t *status,
+    int *progress_out,
+    int *erase_progress_out,
+    uint32_t *processed_out,
+    uint32_t *total_out,
+    uint32_t *erase_done_out,
+    uint32_t *erase_total_out)
+{
+    int progress = 0;
+    int erase_progress = 0;
+    uint32_t processed = 0;
+    uint32_t total = 0;
+    uint32_t erase_done_bytes = 0;
+    uint32_t erase_total_bytes = 0;
+    uint32_t erase_done = 0;
+    uint32_t erase_total = 0;
+
+    if (status != NULL) {
+        progress = status->progress;
+        processed = status->processed_bytes;
+        total = status->total_bytes;
+        erase_total_bytes = status->erase_phase_total_bytes;
+        erase_done_bytes = status->erase_phase_done_bytes;
+        erase_total = status->erase_phase_total_sectors;
+        erase_done = status->erase_phase_done_sectors;
+    }
+    if (progress < 0) {
+        progress = 0;
+    } else if (progress > 100) {
+        progress = 100;
+    }
+    if (total > 0U && processed > total) {
+        processed = total;
+    }
+    if (erase_total > 0U) {
+        if (erase_done > erase_total) {
+            erase_done = erase_total;
+        }
+        erase_progress = burner_calc_progress_percent_u64(erase_done, erase_total);
+        if (erase_progress > 100) {
+            erase_progress = 100;
+        }
+    } else if (erase_total_bytes > 0U) {
+        if (erase_done_bytes > erase_total_bytes) {
+            erase_done_bytes = erase_total_bytes;
+        }
+        erase_progress = burner_calc_progress_percent_u64(erase_done_bytes, erase_total_bytes);
+        if (erase_progress > 100) {
+            erase_progress = 100;
+        }
+    } else if (status != NULL) {
+        erase_total = status->erase_sector_count;
+        erase_done = status->erase_sector_count;
+        if (erase_total > 0U) {
+            erase_progress = 100;
+        }
+    }
+
+    if (progress_out != NULL) {
+        *progress_out = progress;
+    }
+    if (erase_progress_out != NULL) {
+        *erase_progress_out = erase_progress;
+    }
+    if (processed_out != NULL) {
+        *processed_out = processed;
+    }
+    if (total_out != NULL) {
+        *total_out = total;
+    }
+    if (erase_done_out != NULL) {
+        *erase_done_out = erase_done;
+    }
+    if (erase_total_out != NULL) {
+        *erase_total_out = erase_total;
+    }
+}
+
+static void ui_present_active_burn_task_locked(ui_model_t *model, const burner_status_t *status, ui_page_t return_page)
+{
+    int progress = 0;
+    int erase_progress = 0;
+    uint32_t processed = 0;
+    uint32_t total = 0;
+    uint32_t erase_done = 0;
+    uint32_t erase_total = 0;
+
+    if (model == NULL || status == NULL) {
+        return;
+    }
+
+    ui_calc_burn_snapshot_fields(
+        status,
+        &progress,
+        &erase_progress,
+        &processed,
+        &total,
+        &erase_done,
+        &erase_total);
+
+    ui_task_cancel_confirm_reset_locked();
+    model->task_result_status_valid = false;
+    model->page = UI_PAGE_TASK_STATUS;
+    model->parent_page = return_page;
+    model->selected = 0;
+    model->scroll = 0;
+    model->burn_progress = progress;
+    model->burn_processed = processed;
+    model->burn_total = total;
+    model->erase_progress = erase_progress;
+    model->erase_done_sectors = erase_done;
+    model->erase_total_sectors = erase_total;
+    model->burn_elapsed_us = status->task_elapsed_us;
+    ui_set_status_locked(model, status->message[0] != '\0' ? status->message : ui_tr("task status"));
+    ui_mark_chrome_dirty(model);
+    ui_mark_content_dirty(model);
+    model->dirty = true;
 }
 
 static void ui_task_cancel_confirm_reset_locked(void)
@@ -4257,11 +4574,13 @@ static void ui_back_locked(ui_model_t *model)
     if (model->page == UI_PAGE_TASK_RESULT) {
         ui_page_t return_page = model->parent_page;
 
+        ui_clear_task_result_runtime_locked(model);
         model->page = return_page;
         model->parent_page = ui_task_return_parent_page(return_page);
         model->selected = 0;
         model->scroll = 0;
         ui_drop_nav_target_locked(model->page);
+        ui_set_status_locked(model, ui_tr("ready"));
         ui_mark_chrome_dirty(model);
         ui_mark_content_dirty(model);
         model->dirty = true;
@@ -4779,7 +5098,14 @@ static void ui_select_locked(
                         ui_open_page_locked(model, UI_PAGE_POWER);
                         break;
                     case UI_ACTION_OPEN_BURNER:
-                        ui_open_page_locked(model, UI_PAGE_BURNER);
+                        if (ui_task_status_operation_active()) {
+                            burner_status_t status = {0};
+
+                            burner_status_snapshot(&status);
+                            ui_present_active_burn_task_locked(model, &status, UI_PAGE_BURNER);
+                        } else {
+                            ui_open_page_locked(model, UI_PAGE_BURNER);
+                        }
                         break;
                     case UI_ACTION_OPEN_SETTINGS:
                         ui_open_page_locked(model, UI_PAGE_SETTINGS);
@@ -5520,8 +5846,6 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     burner_status_t status = {0};
     int progress;
     int erase_progress = 0;
-    uint32_t erase_done_bytes = 0;
-    uint32_t erase_total_bytes = 0;
     uint32_t erase_done = 0;
     uint32_t erase_total = 0;
     bool release_start = false;
@@ -5532,42 +5856,14 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     s_last_live_refresh_ms = now_ms;
 
     burner_status_snapshot(&status);
-    progress = status.progress;
-    if (progress < 0) {
-        progress = 0;
-    } else if (progress > 100) {
-        progress = 100;
-    }
-    if (status.total_bytes > 0U && status.processed_bytes > status.total_bytes) {
-        status.processed_bytes = status.total_bytes;
-    }
-    erase_total_bytes = status.erase_phase_total_bytes;
-    erase_done_bytes = status.erase_phase_done_bytes;
-    erase_total = status.erase_phase_total_sectors;
-    erase_done = status.erase_phase_done_sectors;
-    if (erase_total > 0U) {
-        if (erase_done > erase_total) {
-            erase_done = erase_total;
-        }
-        erase_progress = burner_calc_progress_percent_u64(erase_done, erase_total);
-        if (erase_progress > 100) {
-            erase_progress = 100;
-        }
-    } else if (erase_total_bytes > 0U) {
-        if (erase_done_bytes > erase_total_bytes) {
-            erase_done_bytes = erase_total_bytes;
-        }
-        erase_progress = burner_calc_progress_percent_u64(erase_done_bytes, erase_total_bytes);
-        if (erase_progress > 100) {
-            erase_progress = 100;
-        }
-    } else {
-        erase_total = status.erase_sector_count;
-        erase_done = status.erase_sector_count;
-        if (erase_total > 0U) {
-            erase_progress = 100;
-        }
-    }
+    ui_calc_burn_snapshot_fields(
+        &status,
+        &progress,
+        &erase_progress,
+        &status.processed_bytes,
+        &status.total_bytes,
+        &erase_done,
+        &erase_total);
     if (status.state == BURNER_STATE_DONE || status.state == BURNER_STATE_ERROR ||
         status.state == BURNER_STATE_CANCELLED) {
         release_start = true;
@@ -5575,6 +5871,14 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
 
     if (!ui_take_model_lock()) {
         return;
+    }
+    if (!s_file_start_active &&
+        burner_status_is_operation_active_state(status.state) &&
+        (s_model.page == UI_PAGE_BURNER || s_model.page == UI_PAGE_BURN_ROM || s_model.page == UI_PAGE_BURN_SAVE)) {
+        ui_present_active_burn_task_locked(
+            &s_model,
+            &status,
+            ui_burn_task_entry_return_page(s_model.page));
     }
     if (s_model.burn_progress != progress ||
         s_model.burn_processed != status.processed_bytes ||
@@ -6370,13 +6674,15 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
 static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
     burner_status_t status = {0};
+    const burner_status_t *cached_status = ui_task_result_status_buffer();
     char size_a[24] = {0};
     char size_b[24] = {0};
     char text[24] = {0};
+    char probe_text[96] = {0};
     uint64_t elapsed_us;
 
-    if (model != NULL && model->task_result_status_valid) {
-        status = model->task_result_status;
+    if (model != NULL && model->task_result_status_valid && cached_status != NULL) {
+        status = *cached_status;
     } else {
         burner_status_snapshot(&status);
     }
@@ -6458,10 +6764,24 @@ static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, cha
             ui_format_speed_text(status.dump_write_speed_max_bps, text, sizeof(text));
             snprintf(hint, hint_len, "%s", text);
             break;
-        default:
+        case 14:
             snprintf(title, title_len, "%s", ui_tr("Dump write avg"));
             ui_format_speed_text(status.dump_write_speed_avg_bps, text, sizeof(text));
             snprintf(hint, hint_len, "%s", text);
+            break;
+        case 15:
+            snprintf(title, title_len, "NOR family");
+            ui_format_probe_family_text(&status, probe_text, sizeof(probe_text));
+            snprintf(hint, hint_len, "%s", probe_text);
+            break;
+        case 16:
+            snprintf(title, title_len, "NOR chip");
+            snprintf(hint, hint_len, "%s", ui_probe_chip_name(&status));
+            break;
+        default:
+            snprintf(title, title_len, "NOR ID");
+            ui_format_probe_id(&status, probe_text, sizeof(probe_text));
+            snprintf(hint, hint_len, "%s", probe_text);
             break;
     }
 }
@@ -7980,7 +8300,7 @@ void ui_show_burn_task_status(uint32_t total_hint)
     }
 
     ui_task_cancel_confirm_reset_locked();
-    s_model.task_result_status_valid = false;
+    ui_clear_task_result_locked(&s_model);
     s_model.page = UI_PAGE_TASK_STATUS;
     s_model.parent_page = UI_PAGE_BURNER;
     s_model.selected = 0;

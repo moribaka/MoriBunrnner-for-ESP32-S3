@@ -6,6 +6,7 @@ static esp_err_t burner_send_builtin_html(httpd_req_t *req, const char *html)
         return ESP_ERR_INVALID_ARG;
     }
 
+    web_ws_mark_activity();
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     return httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
@@ -19,6 +20,7 @@ esp_err_t burner_static_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "resource not found");
     }
 
+    web_ws_mark_activity();
     return burner_send_static_file(req, rel_path);
 }
 
@@ -34,6 +36,7 @@ esp_err_t burner_sys_page_handler(httpd_req_t *req)
 
 esp_err_t burner_business_page_handler(httpd_req_t *req)
 {
+    web_ws_mark_activity();
     return burner_send_static_file(req, WEB_MAIN_FILE_REL);
 }
 

@@ -3518,6 +3518,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     bool cfi_ok = false;
     bool chislink_intel_compat = false;
     bool gbx_profile_matched = false;
+    bool cached_probe_used = false;
     esp_err_t err;
 
     if (job == NULL || job->total_bytes == 0u) {
@@ -3529,14 +3530,25 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     }
 
     if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
-        err = burner_gba_gbx_probe_locked(
-            id,
-            NULL,
-            &device_size,
-            &sector_size,
-            &buffer_write_bytes,
-            &cfi_ok);
-        if (err == ESP_OK) {
+        if (burner_gba_gbx_take_cached_probe(
+                id,
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_ok,
+                &gbx_profile_matched)) {
+            err = ESP_OK;
+            cached_probe_used = true;
+        } else {
+            err = burner_gba_gbx_probe_locked(
+                id,
+                NULL,
+                &device_size,
+                &sector_size,
+                &buffer_write_bytes,
+                &cfi_ok);
+        }
+        if (err == ESP_OK && !cached_probe_used) {
             gbx_profile_matched = s_cart_ctx.gbx.active;
         } else if (err == ESP_ERR_NOT_FOUND) {
             ESP_LOGW(

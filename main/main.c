@@ -2821,6 +2821,7 @@ static void wifi_state_handler(WIFI_STATE state)
         ESP_LOGI(wifi_manager_tag, "Provisioning connected, waiting user confirm");
         mori_apply_ntp_service();
     } else if (state == WIFI_STATE_DISCONNECTED) {
+        stop_web_service_if_running();
         ui_set_wifi_state(UI_WIFI_STATE_DISCONNECTED);
         ui_set_ip_text("--");
         ui_set_status_text("wifi disconnected");
@@ -2866,12 +2867,7 @@ static void mount_sdcard_if_possible(void)
             ESP_LOGW("main", "load burn_config.ini failed: %s", esp_err_to_name(burn_cfg_err));
         }
     }
-    {
-        esp_err_t gbx_cache_err = burner_gbx_ensure_cache();
-        if (gbx_cache_err != ESP_OK) {
-            ESP_LOGW("main", "ensure GBX cache failed: %s", esp_err_to_name(gbx_cache_err));
-        }
-    }
+    ESP_LOGI("main", "GBX cache auto rebuild disabled; update manually from system menu");
     mori_apply_ui_language_from_system_ini();
 }
 

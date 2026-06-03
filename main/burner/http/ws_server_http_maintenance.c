@@ -55,6 +55,61 @@ static void burner_http_format_probe_id_hex(
     burner_format_hex_bytes(probe_id, probe_len, out, out_len);
 }
 
+static burner_nor_cmdset_t burner_http_probe_cmdset_from_id(
+    burner_cart_mode_t cart_mode,
+    const uint8_t *probe_id)
+{
+    if (probe_id == NULL) {
+        return BURNER_NOR_CMDSET_UNKNOWN;
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        return burner_gba_cmdset_from_id(probe_id);
+    }
+    return burner_mbc5_cmdset_from_id(probe_id);
+}
+
+static const burner_nor_family_t *burner_http_probe_family_from_id(
+    burner_cart_mode_t cart_mode,
+    const uint8_t *probe_id)
+{
+    if (probe_id == NULL) {
+        return NULL;
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        return burner_gba_family_from_id(probe_id);
+    }
+    return burner_mbc5_family_from_id(probe_id);
+}
+
+static const char *burner_http_probe_cmdset_name(const burner_status_t *status)
+{
+    burner_nor_cmdset_t cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+
+    if (status == NULL || !status->probe_valid) {
+        return "unknown";
+    }
+
+    cmdset = burner_http_probe_cmdset_from_id(status->probe_cart_mode, status->probe_id);
+    return burner_nor_cmdset_name(cmdset);
+}
+
+static const char *burner_http_probe_family_name(const burner_status_t *status)
+{
+    const burner_nor_family_t *family = NULL;
+
+    if (status == NULL || !status->probe_valid) {
+        return "";
+    }
+
+    family = burner_http_probe_family_from_id(status->probe_cart_mode, status->probe_id);
+    if (family == NULL || family->name == NULL) {
+        return "";
+    }
+    return family->name;
+}
+
 esp_err_t burner_web_main_upload_handler(httpd_req_t *req)
 {
     if (req == NULL) {
@@ -810,19 +865,28 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
 esp_err_t burner_cart_id_handler(httpd_req_t *req)
 {
     char mode_arg[16] = {0};
+    char recipe_mode_arg[16] = {0};
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_GBA;
+    burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
+    burner_nor_cmdset_t probe_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    const burner_nor_family_t *probe_family = NULL;
     uint8_t gba_id[8] = {0};
     uint8_t mbc5_id[4] = {0};
     uint32_t device_size = 0;
+    uint32_t save_probe_device_size = 0;
     uint32_t sector_size = 0;
     uint16_t buffer_write_bytes = 0;
     char id_hex[32];
     char chip_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
-    char resp[480];
+    char resp[960];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
     const char *gba_chip_label = NULL;
     const char *gb_mapper = "unknown";
+    const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
+    bool gbx_profile_matched = false;
+    bool gbx_fallback_used = false;
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
     bool gba_likely_read_only = false;
@@ -840,6 +904,9 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
     }
+    if (!burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid recipe_mode query");
+    }
     if (mode_arg[0] == '\0') {
         mode_arg[0] = 'g';
         mode_arg[1] = 'b';
@@ -848,6 +915,10 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     }
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+    if (recipe_mode_arg[0] != '\0' &&
+        !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis or gbx");
     }
 
     if (s_status_lock != NULL) {
@@ -868,29 +939,75 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
 
     burner_spi_lock_take();
     if (cart_mode == BURNER_CART_MODE_MBC5) {
-        burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
-
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_mbc5_prepare_probe_info_locked(
-                mbc5_id,
-                1u,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok,
-                &mbc5_cmdset,
-                &gb_mapper);
+            if (recipe_mode == BURNER_RECIPE_MODE_GBX) {
+                err = burner_gbc_gbx_probe_locked(
+                    mbc5_id,
+                    NULL,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok,
+                    &mbc5_cmdset);
+                gbx_profile_matched = (err == ESP_OK);
+                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
+                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
+                    gbx_fallback_used = true;
+                    err = burner_bacon_mbc5_get_cfi(
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        NULL,
+                        &mbc5_cmdset);
+                    if (err == ESP_OK) {
+                        cfi_ok = true;
+                        if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
+                            err = burner_bacon_mbc5_get_id(mbc5_id);
+                            if (err != ESP_OK) {
+                                memset(mbc5_id, 0, sizeof(mbc5_id));
+                                err = ESP_OK;
+                            }
+                        }
+                    }
+                }
+            } else {
+                err = burner_bacon_mbc5_prepare_probe_info_locked(
+                    mbc5_id,
+                    1u,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok,
+                    &mbc5_cmdset,
+                    &gb_mapper);
+            }
         }
     } else {
         err = burner_bacon_gba_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_gba_probe_locked(
-                gba_id,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok);
+            if (recipe_mode == BURNER_RECIPE_MODE_GBX) {
+                err = burner_gba_gbx_probe_locked(
+                    gba_id,
+                    NULL,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+                gbx_profile_matched = (err == ESP_OK);
+                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
+                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
+                    gbx_fallback_used = true;
+                    err = ESP_OK;
+                }
+            } else {
+                err = burner_bacon_gba_probe_locked(
+                    gba_id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+            }
             if (err == ESP_OK) {
                 gba_cmd_mode = burner_gba_cmd_addr_mode_name(s_cart_ctx.gba_cmd_addr_mode);
                 gba_cmd_data_lane = burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane);
@@ -926,12 +1043,21 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cart id read failed");
     }
 
+    probe_cmdset = burner_http_probe_cmdset_from_id(
+        cart_mode,
+        (cart_mode == BURNER_CART_MODE_GBA) ? gba_id : mbc5_id);
+    probe_family = burner_http_probe_family_from_id(
+        cart_mode,
+        (cart_mode == BURNER_CART_MODE_GBA) ? gba_id : mbc5_id);
+
     if (cart_mode == BURNER_CART_MODE_MBC5) {
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            burner_mbc5_chip_name(mbc5_id),
-            BURNER_NOR_CMDSET_UNKNOWN,
+            (gbx_profile_matched && gbx_profile->display_name[0] != '\0') ?
+                gbx_profile->display_name :
+                burner_mbc5_chip_name(mbc5_id),
+            mbc5_cmdset,
             device_size);
         burner_status_set_probe_info(
             BURNER_CART_MODE_MBC5,
@@ -946,7 +1072,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             false,
             false,
             chip_name,
-            gb_mapper);
+            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : gb_mapper));
         burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
         burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
         n = snprintf(
@@ -965,29 +1091,41 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             resp,
             sizeof(resp),
             "{\"ok\":true,\"mode\":\"mbc5\",\"mapper\":\"%s\",\"power\":{\"v5\":%s,\"v3\":%s},"
-            "\"id\":\"%s\",\"chip\":\"%s\","
+            "\"id\":\"%s\",\"chip\":\"%s\",\"recipe_mode\":\"%s\",\"probe_source\":\"%s\","
+            "\"nor_family\":\"%s\",\"nor_cmdset\":\"%s\","
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u}",
-            gb_mapper,
+            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : gb_mapper),
             (s_mbc5_power_5v_enabled != 0u) ? "true" : "false",
             (s_mbc5_power_5v_enabled != 0u) ? "false" : "true",
             id_hex,
-            burner_mbc5_chip_name(mbc5_id),
+            chip_name,
+            burner_recipe_mode_to_str(recipe_mode),
+            gbx_profile_matched ? "gbx" : (gbx_fallback_used ? "chis_fallback" : "chis"),
+            (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
+            burner_nor_cmdset_name(probe_cmdset),
             cfi_ok ? "true" : "false",
             device_size,
             sector_size,
             (unsigned)buffer_write_bytes);
     } else {
+        save_probe_device_size = device_size;
+        if (gbx_profile_matched && gbx_profile->d0d1_known) {
+            gba_d0d1_known = true;
+            gba_d0d1_swapped = gbx_profile->d0d1_swapped;
+        }
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            burner_gba_chip_name(gba_id),
-            s_cart_ctx.gba_cmdset,
+            gbx_profile_matched && gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name : burner_gba_chip_name(gba_id),
+            gbx_profile_matched && gbx_profile->base_cmdset != BURNER_NOR_CMDSET_UNKNOWN ? gbx_profile->base_cmdset : s_cart_ctx.gba_cmdset,
             device_size);
         if (gba_likely_read_only) {
             snprintf(chip_name, sizeof(chip_name), "%s", "Retail ROM / read-only");
             device_size = 0u;
             sector_size = 0u;
             buffer_write_bytes = 0u;
+        } else if (device_size != 0u) {
+            save_probe_device_size = device_size;
         }
         gba_chip_label = chip_name;
         burner_status_set_probe_info(
@@ -1003,12 +1141,26 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            "");
+            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : ""));
+        {
+            esp_err_t analysis_err = burner_probe_gba_rom_analysis(
+                save_probe_device_size,
+                &gba_save_type,
+                &gba_save_size,
+                &gba_save_detected,
+                &gba_patch_kind,
+                &gba_patch_detected);
+
+            if (analysis_err != ESP_OK) {
+                gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
+                gba_save_size = 0u;
+                gba_save_detected = false;
+                gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
+                gba_patch_detected = false;
+            }
+        }
         burner_status_set_gba_save_probe(gba_save_type, gba_save_size, gba_save_detected);
-        burner_status_set_gba_sram_patch_probe(
-            gba_patch_kind,
-            true,
-            gba_patch_detected);
+        burner_status_set_gba_sram_patch_probe(gba_patch_kind, true, gba_patch_detected);
         n = snprintf(
             id_hex,
             sizeof(id_hex),
@@ -1029,7 +1181,9 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             resp,
             sizeof(resp),
             "{\"ok\":true,\"mode\":\"gba\",\"power\":{\"v5\":false,\"v3\":true},"
-            "\"id\":\"%s\",\"chip\":\"%s\",\"cmd_mode\":\"%s\",\"cmd_data_lane\":\"%s\","
+            "\"id\":\"%s\",\"chip\":\"%s\",\"recipe_mode\":\"%s\",\"probe_source\":\"%s\","
+            "\"nor_family\":\"%s\",\"nor_cmdset\":\"%s\","
+            "\"cmd_mode\":\"%s\",\"cmd_data_lane\":\"%s\","
             "\"id_looks_like_rom_header\":%s,"
             "\"likely_read_only_retail\":%s,"
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
@@ -1038,6 +1192,10 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             "\"gba_sram_patch_kind\":\"%s\",\"gba_sram_patch_scanned\":true,\"gba_sram_patch_detected\":%s}",
             id_hex,
             gba_chip_label,
+            burner_recipe_mode_to_str(recipe_mode),
+            gbx_profile_matched ? "gbx" : (gbx_fallback_used ? "chis_fallback" : "chis"),
+            (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
+            burner_nor_cmdset_name(probe_cmdset),
             gba_cmd_mode,
             gba_cmd_data_lane,
             gba_id_looks_like_rom_header ? "true" : "false",
@@ -1066,6 +1224,8 @@ esp_err_t burner_status_handler(httpd_req_t *req)
     burner_status_t snap;
     char *resp = NULL;
     char probe_id_hex[32] = {0};
+    const char *probe_family_name = "";
+    const char *probe_cmdset_name = "unknown";
     esp_err_t send_err;
     uint32_t task_ms;
     uint32_t erase_ms;
@@ -1093,6 +1253,8 @@ esp_err_t burner_status_handler(httpd_req_t *req)
     dump_wait_ms = burner_us_to_ms_clamped(snap.dump_wait_total_us);
     dump_finalize_ms = burner_us_to_ms_clamped(snap.dump_finalize_total_us);
     burner_http_format_probe_id_hex(snap.probe_cart_mode, snap.probe_id, probe_id_hex, sizeof(probe_id_hex));
+    probe_family_name = burner_http_probe_family_name(&snap);
+    probe_cmdset_name = burner_http_probe_cmdset_name(&snap);
     n = snprintf(
         resp,
         resp_len,
@@ -1123,7 +1285,8 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         "\"probe_gba_sram_patch_kind\":\"%s\",\"probe_gba_sram_patch_scanned\":%s,"
         "\"probe_gba_sram_patch_detected\":%s,"
         "\"probe_device_size\":%" PRIu32 ",\"probe_sector_size\":%" PRIu32 ",\"probe_buffer_write_bytes\":%u,"
-        "\"probe_chip_name\":\"%s\",\"probe_id\":\"%s\""
+        "\"probe_chip_name\":\"%s\",\"probe_mapper\":\"%s\",\"probe_id\":\"%s\","
+        "\"probe_family\":\"%s\",\"probe_cmdset\":\"%s\""
         ",\"rom\":\"%s\",\"message\":\"%s\"}",
         burner_state_to_str(snap.state),
         snap.progress,
@@ -1188,7 +1351,10 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         snap.probe_sector_size,
         (unsigned)snap.probe_buffer_write_bytes,
         snap.probe_chip_name,
+        snap.probe_mapper_name,
         probe_id_hex,
+        probe_family_name,
+        probe_cmdset_name,
         snap.rom_name,
         snap.message);
     if (n < 0 || n >= (int)resp_len) {
@@ -1223,6 +1389,36 @@ esp_err_t burner_cancel_handler(httpd_req_t *req)
         sizeof(resp),
         "{\"ok\":true,\"state\":\"%s\",\"message\":\"cancel requested\"}",
         burner_state_to_str(snap.state));
+    if (n <= 0 || n >= (int)sizeof(resp)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    return burner_send_json(req, resp);
+}
+
+esp_err_t burner_gbx_cache_rebuild_handler(httpd_req_t *req)
+{
+    uint32_t profile_count = 0u;
+    uint32_t entry_count = 0u;
+    char resp[256];
+    int n;
+    esp_err_t err;
+
+    if (burner_task_is_running_snapshot()) {
+        return httpd_resp_send_custom_err(req, "409 Conflict", "burn task is running");
+    }
+
+    err = burner_gbx_rebuild_cache(&profile_count, &entry_count);
+    if (err != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "gbx cache rebuild failed");
+    }
+
+    n = snprintf(
+        resp,
+        sizeof(resp),
+        "{\"ok\":true,\"message\":\"gbx cache rebuilt\",\"profile_count\":%" PRIu32 ",\"entry_count\":%" PRIu32 "}",
+        profile_count,
+        entry_count);
     if (n <= 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }

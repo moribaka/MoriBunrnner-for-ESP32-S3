@@ -2190,6 +2190,7 @@
             gbaFixedEraseWindow: true,
             baconSpiConfiguredHz: 0,
             baconSpiActualHz: 0,
+            recipeMode: 'chis',
             romFile: null,
             saveFile: null,
             selectedTfRomPath: '',
@@ -2710,6 +2711,16 @@
                             <button class="btn" id="modeMbc5Btn" onclick="setCartMode('mbc5')">🎮 GB/GBC 卡带 (MBC5)</button>
                         </div>
                         <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
+                            <div class="setting-item" style="flex: 1; min-width: 220px;">
+                                <label class="setting-label">识别配方</label>
+                                <select class="input" id="recipeModeSelect" onchange="setRecipeMode(this.value)">
+                                    <option value="chis">CHIS 自动探测</option>
+                                    <option value="gbx">GBX 配置优先</option>
+                                </select>
+                                <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    影响读卡识别、GBX 匹配和烧录准备时采用的识别来源。
+                                </div>
+                            </div>
                             <div class="setting-item" style="flex: 1; min-width: 280px;">
                                 <label class="setting-label">烧录路径</label>
                                 <select class="input" id="writePathModeSelect" onchange="setWritePathMode(this.value)">
@@ -2885,6 +2896,9 @@
                         <div id="cartProbeInfo" style="padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.7;">
                             尚未探测。点击“读取 ID”后，这里会显示当前卡带分析结果。
                         </div>
+                        <div style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="btn" onclick="rebuildGbxCache()">🧱 更新 GBX 缓存</button>
+                        </div>
                     </div>
                 </div>
 
@@ -2955,6 +2969,7 @@
 
             state.cartMode = state.cartMode === 'mbc5' ? 'mbc5' : 'gba';
             updateCartModeUI();
+            setRecipeMode(state.recipeMode || 'chis', false);
             setPipelineEraseMode(state.pipelineEraseMode || 'smart');
             setWritePathMode(state.writePathMode || 'psram');
             setPsramWindowMb(state.psramWindowMb ?? 0);
@@ -2970,6 +2985,21 @@
             updateCartModeUI();
             updateCartProbeInfo(state.cartProbeData || state.burnStatus, state.cartMode);
             addBurnLog('切换至 ' + (mode === 'gba' ? 'GBA' : 'MBC5') + ' 模式', 'info');
+        }
+
+        function setRecipeMode(mode, logChange = true) {
+            const normalized = String(mode || 'chis').toLowerCase() === 'gbx' ? 'gbx' : 'chis';
+            const changed = state.recipeMode !== normalized;
+            state.recipeMode = normalized;
+
+            const select = document.getElementById('recipeModeSelect');
+            if (select && select.value !== normalized) {
+                select.value = normalized;
+            }
+
+            if (changed && logChange) {
+                addBurnLog('识别配方切换为 ' + formatRecipeModeLabel(normalized), 'info');
+            }
         }
 
         function getEffectiveWritePath(mode, requestedPath) {
@@ -3244,6 +3274,23 @@
             return swapped ? 'swapped' : 'normal';
         }
 
+        function formatRecipeModeLabel(mode) {
+            return String(mode || '').toLowerCase() === 'gbx' ? 'GBX' : 'CHIS';
+        }
+
+        function formatProbeSourceLabel(source) {
+            switch (String(source || '').toLowerCase()) {
+                case 'gbx':
+                    return 'GBX';
+                case 'chis_fallback':
+                    return 'CHIS fallback';
+                case 'chis':
+                    return 'CHIS';
+                default:
+                    return source ? String(source) : '--';
+            }
+        }
+
         function normalizeCartProbeData(data, modeOverride) {
             if (!data || typeof data !== 'object') {
                 return null;
@@ -3270,7 +3317,11 @@
                     mode: String(data.probe_mode || modeOverride || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba',
                     id: String(data.probe_id || '').trim(),
                     chip: String(data.probe_chip_name || '').trim(),
-                    mapper: '',
+                    mapper: String(data.probe_mapper || '').trim(),
+                    family: String(data.probe_family || '').trim(),
+                    cmdset: String(data.probe_cmdset || '').trim(),
+                    recipeMode: String(data.recipe_mode || state.recipeMode || 'chis').toLowerCase(),
+                    source: String(data.probe_source || '').trim(),
                     cmdMode: '',
                     cmdDataLane: '',
                     cfiOk: parseApiBoolean(data.probe_cfi_ok, false),
@@ -3308,6 +3359,10 @@
                 id: String(data.id || '').trim(),
                 chip: String(data.chip || '').trim(),
                 mapper: String(data.mapper || '').trim(),
+                family: String(data.nor_family || '').trim(),
+                cmdset: String(data.nor_cmdset || '').trim(),
+                recipeMode: String(data.recipe_mode || state.recipeMode || 'chis').toLowerCase(),
+                source: String(data.probe_source || '').trim(),
                 cmdMode: String(data.cmd_mode || '').trim(),
                 cmdDataLane: String(data.cmd_data_lane || '').trim(),
                 cfiOk: parseApiBoolean(data.cfi_ok, false),
@@ -3374,9 +3429,19 @@
             } else {
                 lines.push(`卡带模式: ${formatCartModeLabel(probe.mode)}`);
             }
+            lines.push(`识别配方: ${formatRecipeModeLabel(probe.recipeMode)}`);
+            if (probe.source) {
+                lines.push(`识别来源: ${formatProbeSourceLabel(probe.source)}`);
+            }
 
             if (probe.mapper) {
                 lines.push(`Mapper: ${String(probe.mapper).toUpperCase()}`);
+            }
+            if (probe.family) {
+                lines.push(`NOR 家族: ${probe.family}`);
+            }
+            if (probe.cmdset) {
+                lines.push(`NOR 命令集: ${String(probe.cmdset).toUpperCase()}`);
             }
             lines.push(`芯片: ${probe.chip || '未知'}`);
             lines.push(`ID: ${probe.id || '--'}`);
@@ -3437,6 +3502,25 @@
             }
 
             infoEl.innerHTML = formatCartProbeData(state.cartProbeData, modeOverride);
+        }
+
+        async function rebuildGbxCache() {
+            addBurnLog('开始重建 GBX 缓存...', 'info');
+            try {
+                const response = await apiCall('/api/gbx/cache/rebuild', { method: 'POST' });
+                const data = await readApiPayload(response);
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.message || ('HTTP ' + response.status));
+                }
+
+                const profileCount = Number(data.profile_count || 0);
+                const entryCount = Number(data.entry_count || 0);
+                addBurnLog(`GBX 缓存已重建: profiles=${profileCount}, entries=${entryCount}`, 'success');
+                showToast('GBX 缓存已更新', 'success');
+            } catch (error) {
+                addBurnLog('GBX 缓存更新失败: ' + error.message, 'error');
+                showToast('GBX 缓存更新失败', 'error');
+            }
         }
 
         function updateCartModeUI() {
@@ -3722,8 +3806,20 @@
             }
 
             addBurnLog('后端模式: ' + (data.mode || mode), 'info');
+            if (data.recipe_mode) {
+                addBurnLog('识别配方: ' + formatRecipeModeLabel(data.recipe_mode), 'info');
+            }
+            if (data.probe_source) {
+                addBurnLog('识别来源: ' + formatProbeSourceLabel(data.probe_source), 'info');
+            }
             if (data.mapper) {
                 addBurnLog('Mapper: ' + String(data.mapper).toUpperCase(), 'info');
+            }
+            if (data.nor_family) {
+                addBurnLog('NOR 家族: ' + data.nor_family, 'info');
+            }
+            if (data.nor_cmdset) {
+                addBurnLog('NOR 命令集: ' + String(data.nor_cmdset).toUpperCase(), 'info');
             }
             if (data.cmd_mode) {
                 addBurnLog(
@@ -3862,6 +3958,7 @@
             const response = await apiCall(
                 '/api/cart/id_debug?mode=' +
                 encodeURIComponent(mode) +
+                '&recipe_mode=' + encodeURIComponent(String(state.recipeMode || 'chis')) +
                 '&sample_addr=' + encodeURIComponent(String(config.sampleAddr)) +
                 '&sample_len=' + encodeURIComponent(String(config.sampleLen)));
             const data = await response.json();
@@ -3907,7 +4004,10 @@
             showBurnStatus('读取ID', '读取中...');
 
             try {
-                const response = await apiCall('/api/cart/id?mode=' + encodeURIComponent(mode));
+                const response = await apiCall(
+                    '/api/cart/id?mode=' +
+                    encodeURIComponent(mode) +
+                    '&recipe_mode=' + encodeURIComponent(String(state.recipeMode || 'chis')));
                 const data = await response.json();
                 if (!response.ok || !data.ok) {
                     throw new Error(data.message || ('HTTP ' + response.status));
@@ -3939,6 +4039,7 @@
                 const response = await apiCall(
                     '/api/cart/id_debug?mode=' +
                     encodeURIComponent(mode) +
+                    '&recipe_mode=' + encodeURIComponent(String(state.recipeMode || 'chis')) +
                     '&sample_addr=0&sample_len=32');
                 const data = await response.json();
                 if (!response.ok || !data.ok) {
@@ -5517,6 +5618,18 @@
                         </div>
                         <div id="ppbUnlockStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap;">
                             空闲
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="card-header">
+                        <h3 class="card-title">🧱 GBX 缓存</h3>
+                    </div>
+                    <div style="padding: 16px;">
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">当 FlashGBX 配置更新、识别结果异常，或者需要刷新 `.gbx/gbx_cache.bin` 时，在这里重建缓存。</p>
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn" onclick="rebuildGbxCache()">🧱 重建 GBX 缓存</button>
                         </div>
                     </div>
                 </div>
@@ -7201,9 +7314,13 @@
                 const probeSummary = state.cartProbeData && state.cartProbeData._normalizedProbe === true
                     ? [
                         `模式: ${formatCartModeLabel(state.cartProbeData.mode)}`,
+                        `配方: ${formatRecipeModeLabel(state.cartProbeData.recipeMode)}`,
+                        `来源: ${formatProbeSourceLabel(state.cartProbeData.source)}`,
+                        state.cartProbeData.family ? `家族: ${state.cartProbeData.family}` : '',
+                        state.cartProbeData.cmdset ? `命令集: ${String(state.cartProbeData.cmdset).toUpperCase()}` : '',
                         `芯片: ${state.cartProbeData.chip || '未知'}`,
                         `ID: ${state.cartProbeData.id || '--'}`
-                    ].join('<br>')
+                    ].filter(Boolean).join('<br>')
                     : '尚未探测';
 
                 statusGrid.innerHTML = `
@@ -7706,6 +7823,7 @@
             const psram = (data && data.psram) ? data.psram : 'auto';
             const powerSettleMs = Number(data && data.power_settle_ms ? data.power_settle_ms : 100);
             const writePath = (data && data.write_path) ? data.write_path : 'psram';
+            const recipeMode = (data && data.recipe_mode) ? data.recipe_mode : 'chis';
             const pipelineErase = (data && (data.pipeline_erase || data.erase_mode)) ? (data.pipeline_erase || data.erase_mode) : 'smart';
             const psramMb = (data && data.psram_mb !== undefined) ? String(data.psram_mb) : '0';
             const psramLabel = (psramMb === '0' || psramMb.toLowerCase() === 'auto') ? 'Auto' : `${psramMb} MB`;
@@ -7719,6 +7837,7 @@
                 `读写 PSRAM 核心: ${psram}`,
                 `切压延时: ${powerSettleMs} ms`,
                 `默认烧录路径: ${writePath}`,
+                `默认识别配方: ${formatRecipeModeLabel(recipeMode)}`,
                 `擦除策略: ${pipelineErase}`,
                 `PSRAM 窗口: ${psramLabel}`,
                 `MBC5 写入块: ${mbc5ChunkKb} KB`,
@@ -7751,6 +7870,7 @@
                 tfEl.value = (data.tf || 'auto').toLowerCase();
                 psramEl.value = (data.psram || 'auto').toLowerCase();
                 settleEl.value = String(data.power_settle_ms || 100);
+                setRecipeMode(data.recipe_mode || 'chis', false);
                 setWritePathMode(data.write_path || 'psram');
                 setPipelineEraseMode(data.pipeline_erase || data.erase_mode || 'smart');
                 setPsramWindowMb(data.psram_mb !== undefined ? data.psram_mb : 0);
@@ -7781,6 +7901,7 @@
             const psram = String(psramEl.value || 'auto').toLowerCase();
             const powerSettleMs = String(settleEl.value || '100');
             const writePath = String(state.writePathMode || 'psram').toLowerCase();
+            const recipeMode = String(state.recipeMode || 'chis').toLowerCase();
             const pipelineErase = String(getPipelineEraseMode() || 'smart').toLowerCase();
             const psramMb = String(getPsramWindowMb());
             const mbc5ChunkKb = String(getMbc5ChunkKb());
@@ -7796,6 +7917,7 @@
                 query.set('psram', psram);
                 query.set('power_settle_ms', powerSettleMs);
                 query.set('write_path', writePath);
+                query.set('recipe_mode', recipeMode);
                 query.set('pipeline_erase', pipelineErase);
                 query.set('psram_mb', psramMb);
                 query.set('mbc5_chunk_kb', mbc5ChunkKb);
@@ -7815,6 +7937,7 @@
                 tfEl.value = (data.tf || 'auto').toLowerCase();
                 psramEl.value = (data.psram || 'auto').toLowerCase();
                 settleEl.value = String(data.power_settle_ms || 100);
+                setRecipeMode(data.recipe_mode || recipeMode, false);
                 setWritePathMode(data.write_path || 'psram');
                 setPipelineEraseMode(data.pipeline_erase || data.erase_mode || 'smart');
                 setPsramWindowMb(data.psram_mb !== undefined ? data.psram_mb : 0);

@@ -140,6 +140,12 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_cart_unlock_ppb_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t gbx_cache_rebuild_uri = {
+        .uri = "/api/gbx/cache/rebuild",
+        .method = HTTP_POST,
+        .handler = burner_gbx_cache_rebuild_handler,
+        .user_ctx = NULL,
+    };
     httpd_uri_t tf_list_uri = {
         .uri = "/api/tf/list",
         .method = HTTP_GET,
@@ -339,7 +345,8 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
 
     config.max_uri_handlers = 60;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
-    config.core_id = 0;
+    config.core_id = WEB_HTTPD_CORE_ID;
+    config.task_priority = WEB_HTTPD_TASK_PRIORITY;
     if (esp_psram_is_initialized()) {
         config.task_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
     }
@@ -461,6 +468,11 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &cart_unlock_ppb_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &gbx_cache_rebuild_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;
