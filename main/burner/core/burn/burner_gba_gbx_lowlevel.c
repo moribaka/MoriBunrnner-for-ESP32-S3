@@ -16,8 +16,9 @@ typedef struct {
     bool d0d1_swapped;
     bool found;
     bool ambiguous;
-    int32_t best_score;
     size_t best_match_len;
+    uint32_t best_method_specificity;
+    uint32_t method_results;
     burner_gbx_profile_t *profile_out;
     burner_gbx_profile_t *candidate_profile;
     uint8_t id[BURNER_GBX_FLASH_ID_LEN_MAX];
@@ -36,7 +37,7 @@ typedef struct {
 } burner_gba_gbx_cached_probe_t;
 
 #define BURNER_GBA_GBX_CACHED_PROBE_ID_LEN 8u
-#define BURNER_GBA_GBX_CACHED_PROBE_MAX_AGE_US (60u * 1000u * 1000u)
+#define BURNER_GBA_GBX_CACHED_PROBE_MAX_AGE_US (10ULL * 60ULL * 1000ULL * 1000ULL)
 
 static burner_gba_gbx_cached_probe_t s_gba_gbx_cached_probe = {0};
 
@@ -140,6 +141,14 @@ bool burner_gba_gbx_take_cached_probe(
     now_us = (uint64_t)esp_timer_get_time();
     if (now_us < s_gba_gbx_cached_probe.stored_at_us ||
         (now_us - s_gba_gbx_cached_probe.stored_at_us) > BURNER_GBA_GBX_CACHED_PROBE_MAX_AGE_US) {
+        uint64_t age_us = (now_us >= s_gba_gbx_cached_probe.stored_at_us)
+                              ? (now_us - s_gba_gbx_cached_probe.stored_at_us)
+                              : 0u;
+        ESP_LOGW(
+            BURNER_TAG,
+            "GBA GBX cached probe expired: age=%" PRIu64 "ms max=%" PRIu64 "ms",
+            age_us / 1000u,
+            (uint64_t)(BURNER_GBA_GBX_CACHED_PROBE_MAX_AGE_US / 1000u));
         burner_gba_gbx_clear_cached_probe();
         return false;
     }
@@ -595,36 +604,77 @@ static esp_err_t burner_gba_gbx_read_id_with_profile(
     return ESP_OK;
 }
 
+static bool burner_gba_gbx_cmd_step_is_abs_value(
+    const burner_gbx_cmd_step_t *step,
+    uint32_t addr,
+    uint16_t value)
+{
+    return step != NULL &&
+           step->addr_kind == BURNER_GBX_ADDR_ABS &&
+           step->addr_value == addr &&
+           step->data_kind == BURNER_GBX_DATA_VALUE &&
+           step->data_value == value;
+}
+
+static uint32_t burner_gba_gbx_method_specificity(const burner_gbx_cmd_list_t *method)
+{
+    if (method == NULL || method->count == 0u) {
+        return 0u;
+    }
+    if (method->count == 1u &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[0], 0u, 0x0090u)) {
+        return 10u;
+    }
+    if (method->count == 3u &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[0], 0x0AAAu, 0x00AAu) &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[1], 0x0555u, 0x0055u) &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[2], 0x0AAAu, 0x0090u)) {
+        return 20u;
+    }
+    if (method->count == 3u &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[0], 0x0AAAu, 0x00A9u) &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[1], 0x0555u, 0x0056u) &&
+        burner_gba_gbx_cmd_step_is_abs_value(&method->steps[2], 0x0AAAu, 0x0090u)) {
+        return 20u;
+    }
+    return 100u + method->count;
+}
+
 static void burner_gba_gbx_probe_lookup_consider(
     burner_gba_gbx_probe_ctx_t *ctx,
     const burner_gbx_profile_t *profile,
     const uint8_t *id,
     size_t id_len,
     size_t match_len,
-    int32_t score,
     bool candidate_ambiguous)
 {
+    uint32_t method_specificity;
+
     if (ctx == NULL || profile == NULL || id == NULL || ctx->profile_out == NULL) {
         return;
     }
+    if (match_len == 0u) {
+        return;
+    }
+
+    method_specificity = burner_gba_gbx_method_specificity(&profile->read_identifier);
 
     if (!ctx->found ||
-        score > ctx->best_score ||
-        (score == ctx->best_score && match_len > ctx->best_match_len)) {
+        method_specificity > ctx->best_method_specificity ||
+        (method_specificity == ctx->best_method_specificity && match_len > ctx->best_match_len)) {
         *ctx->profile_out = *profile;
         memset(ctx->id, 0, sizeof(ctx->id));
         memcpy(ctx->id, id, id_len < sizeof(ctx->id) ? id_len : sizeof(ctx->id));
-        ctx->best_score = score;
         ctx->best_match_len = match_len;
+        ctx->best_method_specificity = method_specificity;
         ctx->found = true;
         ctx->ambiguous = candidate_ambiguous;
         return;
     }
 
-    if (score == ctx->best_score &&
+    if (method_specificity == ctx->best_method_specificity &&
         match_len == ctx->best_match_len &&
-        (candidate_ambiguous ||
-         strncmp(profile->file_name, ctx->profile_out->file_name, sizeof(profile->file_name)) != 0)) {
+        candidate_ambiguous) {
         ctx->ambiguous = true;
     }
 }
@@ -639,7 +689,6 @@ static esp_err_t burner_gba_gbx_probe_method_visitor(
     uint8_t id[BURNER_GBX_FLASH_ID_LEN_MAX] = {0};
     size_t id_len = 0u;
     size_t match_len = 0u;
-    int32_t score = INT32_MIN;
     bool changed = false;
     bool candidate_ambiguous = false;
     esp_err_t err;
@@ -663,28 +712,21 @@ static esp_err_t burner_gba_gbx_probe_method_visitor(
     if (err != ESP_OK || !changed) {
         return ESP_OK;
     }
+    ctx->method_results++;
 
     burner_gbx_profile_clear(candidate);
-    err = burner_gbx_find_agb_profile_for_probe(
+    err = burner_gbx_find_agb_profile_for_method_id(
         &profile->read_identifier,
         id,
         id_len,
-        ctx->cmdset,
-        ctx->d0d1_known,
-        ctx->d0d1_swapped,
-        ctx->flash_size,
-        ctx->sector_size,
-        ctx->geometry,
-        ctx->cfi_ok,
         candidate,
         &match_len,
-        &score,
         &candidate_ambiguous);
     if (err != ESP_OK) {
         return (err == ESP_ERR_NOT_FOUND) ? ESP_OK : err;
     }
 
-    burner_gba_gbx_probe_lookup_consider(ctx, candidate, id, id_len, match_len, score, candidate_ambiguous);
+    burner_gba_gbx_probe_lookup_consider(ctx, candidate, id, id_len, match_len, candidate_ambiguous);
     return ESP_OK;
 }
 
@@ -770,6 +812,9 @@ esp_err_t burner_gba_gbx_probe_locked(
     if (err != ESP_OK) {
         return err;
     }
+    /* Keep the successful CHIS ID available for fallback callers even if the
+       subsequent GBX method scan cannot resolve a unique profile. */
+    memcpy(id_out, chis_id, sizeof(chis_id));
 
     matched_profile = (burner_gbx_profile_t *)calloc(1u, sizeof(*matched_profile));
     if (matched_profile == NULL) {
@@ -790,8 +835,9 @@ esp_err_t burner_gba_gbx_probe_locked(
     probe_ctx.d0d1_swapped = s_cart_ctx.d0d1_swapped;
     probe_ctx.found = false;
     probe_ctx.ambiguous = false;
-    probe_ctx.best_score = INT32_MIN;
     probe_ctx.best_match_len = 0u;
+    probe_ctx.best_method_specificity = 0u;
+    probe_ctx.method_results = 0u;
     probe_ctx.profile_out = matched_profile;
     probe_ctx.candidate_profile = candidate_profile;
 
@@ -806,8 +852,9 @@ esp_err_t burner_gba_gbx_probe_locked(
     if (!probe_ctx.found || probe_ctx.ambiguous) {
         ESP_LOGE(
             BURNER_TAG,
-            "GBX probe failed: no unique FlashGBX AGB profile matched method scan (ambiguous=%u) CHIS id=%02X %02X %02X %02X %02X %02X %02X %02X flash=%" PRIu32 " sector=%" PRIu32 " cmdset=%s cfi=%s",
+            "GBX probe failed: no unique FlashGBX AGB profile matched method scan (ambiguous=%u methods=%" PRIu32 ") CHIS id=%02X %02X %02X %02X %02X %02X %02X %02X flash=%" PRIu32 " sector=%" PRIu32 " cmdset=%s cfi=%s",
             probe_ctx.ambiguous ? 1u : 0u,
+            probe_ctx.method_results,
             chis_id[0],
             chis_id[1],
             chis_id[2],
