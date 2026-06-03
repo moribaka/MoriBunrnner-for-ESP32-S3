@@ -239,28 +239,10 @@ static uint32_t burner_gba_chis_diag_us_to_ms(uint64_t us)
 
 static void burner_gba_chis_diag_log_stage(uint32_t addr, size_t bytes, uint32_t processed_before, uint32_t processed_after)
 {
-    const char *label;
-
-    if (!s_gba_chis_diag.active) {
-        return;
-    }
-    label = s_gba_chis_diag.intel_active ? "Intel" : "CHIS";
-    ESP_LOGI(
-        BURNER_TAG,
-        "GBA %s diag stage #%u addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "->%" PRIu32
-        " erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32
-        "ms program=%" PRIu32 "ms reset=%" PRIu32 "ms",
-        label,
-        (unsigned)s_gba_chis_diag.stage_count,
-        addr,
-        (unsigned)bytes,
-        processed_before,
-        processed_after,
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_erase_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_prefetch_wait_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_tf_read_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_program_total_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_program_once_reset_us));
+    (void)addr;
+    (void)bytes;
+    (void)processed_before;
+    (void)processed_after;
 }
 
 static void burner_gba_chis_diag_log_summary(esp_err_t err)
@@ -279,49 +261,17 @@ static void burner_gba_chis_diag_log_summary(esp_err_t err)
     }
     ESP_LOGI(
         BURNER_TAG,
-        "GBA %s diag summary: err=%s total=%" PRIu32 "ms bytes=%" PRIu32 "/%" PRIu32
-        " stages=%u program_calls=%u once=%u avg_once_bytes=%" PRIu32
-        " erase_calls=%u wait_ready=%u reset=%u bank_switch=%u",
+        "GBA %s summary: err=%s total=%" PRIu32 "ms bytes=%" PRIu32 "/%" PRIu32
+        " erase=%" PRIu32 "ms tf=%" PRIu32 "ms program=%" PRIu32 "ms avg_once=%" PRIu32 "B",
         label,
         esp_err_to_name(err),
         burner_gba_chis_diag_us_to_ms(elapsed_us),
         s_gba_chis_diag.programmed_bytes,
         s_gba_chis_diag.total_bytes,
-        (unsigned)s_gba_chis_diag.stage_count,
-        (unsigned)s_gba_chis_diag.program_calls,
-        (unsigned)s_gba_chis_diag.program_once_calls,
-        avg_once_bytes,
-        (unsigned)s_gba_chis_diag.erase_calls,
-        (unsigned)s_gba_chis_diag.wait_ready_calls,
-        (unsigned)s_gba_chis_diag.reset_calls,
-        (unsigned)s_gba_chis_diag.bank_switch_calls);
-    ESP_LOGI(
-        BURNER_TAG,
-        "GBA %s diag time: erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32
-        "ms program=%" PRIu32 "ms lowlevel=%" PRIu32 "ms finalize=%" PRIu32 "ms post_verify=%" PRIu32 "ms",
-        label,
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.erase_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.tf_read_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_total_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_lowlevel_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.finalize_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.post_verify_us));
-    ESP_LOGI(
-        BURNER_TAG,
-        "GBA %s diag lowlevel: once_total=%" PRIu32 "ms build=%" PRIu32 "ms spi=%" PRIu32
-        "ms wait_entry=%" PRIu32 "ms wait_done=%" PRIu32 "ms once_reset=%" PRIu32 "ms wait_ready_total=%" PRIu32
-        "ms reset_total=%" PRIu32 "ms bank_switch=%" PRIu32 "ms",
-        label,
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_total_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_build_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_spi_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_entry_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_done_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_reset_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.wait_ready_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.reset_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.bank_switch_us));
+        avg_once_bytes);
     s_gba_chis_diag.active = false;
 }
 
@@ -1343,6 +1293,93 @@ static uint32_t burner_gba_sector_begin_for_addr(uint32_t byte_addr)
     return byte_addr;
 }
 
+#define BURNER_GBA_INTEL_64B_TEMPLATE_WORDS 32u
+#define BURNER_GBA_INTEL_64B_TEMPLATE_SEQ_LEN (23u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS)
+
+typedef struct {
+    bool valid;
+    bool d0d1_swapped;
+    uint16_t write_count_word;
+    uint16_t intel_d0;
+    uint8_t opt_addr;
+    uint8_t opt_wr_setup;
+    uint8_t opt_wr_data;
+    uint8_t opt_wr_low;
+    uint8_t opt_release;
+    uint8_t seq[BURNER_GBA_INTEL_64B_TEMPLATE_SEQ_LEN];
+} burner_gba_intel_64b_template_t;
+
+static burner_gba_intel_64b_template_t s_gba_intel_64b_template = {0};
+
+static bool burner_gba_intel_64b_template_matches(
+    const burner_gba_program_cmd_cache_t *cmd,
+    uint16_t write_count_word)
+{
+    return cmd != NULL &&
+           s_gba_intel_64b_template.valid &&
+           s_gba_intel_64b_template.d0d1_swapped == s_cart_ctx.d0d1_swapped &&
+           s_gba_intel_64b_template.write_count_word == write_count_word &&
+           s_gba_intel_64b_template.intel_d0 == cmd->intel_d0 &&
+           s_gba_intel_64b_template.opt_addr == cmd->opt_addr &&
+           s_gba_intel_64b_template.opt_wr_setup == cmd->opt_wr_setup &&
+           s_gba_intel_64b_template.opt_wr_data == cmd->opt_wr_data &&
+           s_gba_intel_64b_template.opt_wr_low == cmd->opt_wr_low &&
+           s_gba_intel_64b_template.opt_release == cmd->opt_release;
+}
+
+static void burner_gba_intel_64b_template_build(
+    const burner_gba_program_cmd_cache_t *cmd,
+    uint16_t write_count_word)
+{
+    uint8_t *seq;
+
+    if (cmd == NULL) {
+        memset(&s_gba_intel_64b_template, 0, sizeof(s_gba_intel_64b_template));
+        return;
+    }
+
+    memset(&s_gba_intel_64b_template, 0, sizeof(s_gba_intel_64b_template));
+    s_gba_intel_64b_template.valid = true;
+    s_gba_intel_64b_template.d0d1_swapped = s_cart_ctx.d0d1_swapped;
+    s_gba_intel_64b_template.write_count_word = write_count_word;
+    s_gba_intel_64b_template.intel_d0 = cmd->intel_d0;
+    s_gba_intel_64b_template.opt_addr = cmd->opt_addr;
+    s_gba_intel_64b_template.opt_wr_setup = cmd->opt_wr_setup;
+    s_gba_intel_64b_template.opt_wr_data = cmd->opt_wr_data;
+    s_gba_intel_64b_template.opt_wr_low = cmd->opt_wr_low;
+    s_gba_intel_64b_template.opt_release = cmd->opt_release;
+
+    seq = s_gba_intel_64b_template.seq;
+    seq[0] = cmd->opt_addr;
+    seq[4] = cmd->opt_wr_setup;
+    seq[5] = cmd->opt_wr_data;
+    seq[6] = (uint8_t)(write_count_word & 0xFFu);
+    seq[7] = (uint8_t)((write_count_word >> 8) & 0xFFu);
+    seq[8] = cmd->opt_wr_low;
+    seq[9] = cmd->opt_wr_setup;
+    seq[10] = cmd->opt_release;
+
+    for (size_t wr = 0u; wr < BURNER_GBA_INTEL_64B_TEMPLATE_WORDS; ++wr) {
+        size_t base = 11u + 10u * wr;
+
+        seq[base + 0u] = cmd->opt_addr;
+        seq[base + 4u] = cmd->opt_wr_setup;
+        seq[base + 5u] = cmd->opt_wr_data;
+        seq[base + 8u] = cmd->opt_wr_low;
+        seq[base + 9u] = cmd->opt_wr_setup;
+    }
+
+    seq[11u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_release;
+    seq[12u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_addr;
+    seq[16u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_wr_setup;
+    seq[17u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_wr_data;
+    seq[18u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = (uint8_t)(cmd->intel_d0 & 0xFFu);
+    seq[19u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = (uint8_t)((cmd->intel_d0 >> 8) & 0xFFu);
+    seq[20u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_wr_low;
+    seq[21u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_wr_setup;
+    seq[22u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS] = cmd->opt_release;
+}
+
 static esp_err_t burner_bacon_gba_intel_buffered_program_once(
     uint32_t starting_address,
     const uint8_t *buf,
@@ -1429,53 +1466,72 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         return ESP_ERR_NO_MEM;
     }
 
-    addr0 = (uint8_t)(command_word_address & 0xFFu);
-    addr1 = (uint8_t)((command_word_address >> 8) & 0xFFu);
-    addr2 = (uint8_t)((command_word_address >> 16) & 0xFFu);
     write_count_word = burner_apply_d0d1_swap_on_write(
         (uint16_t)(write_words - 1u),
         s_cart_ctx.d0d1_swapped);
 
-    seq[0] = cmd->opt_addr;
-    seq[1] = addr0;
-    seq[2] = addr1;
-    seq[3] = addr2;
-    seq[4] = cmd->opt_wr_setup;
-    seq[5] = cmd->opt_wr_data;
-    seq[6] = (uint8_t)(write_count_word & 0xFFu);
-    seq[7] = (uint8_t)((write_count_word >> 8) & 0xFFu);
-    seq[8] = cmd->opt_wr_low;
-    seq[9] = cmd->opt_wr_setup;
-    seq[10] = cmd->opt_release;
-    /* Bacon CS0 has no address auto-increment; match ChisLink's per-halfword AGB_FLASH_WRITE(pa+i). */
-    for (wr = 0u; wr < write_words; ++wr) {
-        uint32_t word_address = starting_word_address + (uint32_t)wr;
-        size_t base = 11u + 10u * wr;
+    if (write_words == BURNER_GBA_INTEL_64B_TEMPLATE_WORDS) {
+        if (!burner_gba_intel_64b_template_matches(cmd, write_count_word)) {
+            burner_gba_intel_64b_template_build(cmd, write_count_word);
+        }
+        memcpy(seq, s_gba_intel_64b_template.seq, BURNER_GBA_INTEL_64B_TEMPLATE_SEQ_LEN);
+        burner_gba_patch_u24(&seq[1], command_word_address);
 
-        seq[base + 0u] = cmd->opt_addr;
-        seq[base + 1u] = (uint8_t)(word_address & 0xFFu);
-        seq[base + 2u] = (uint8_t)((word_address >> 8) & 0xFFu);
-        seq[base + 3u] = (uint8_t)((word_address >> 16) & 0xFFu);
-        seq[base + 4u] = cmd->opt_wr_setup;
-        seq[base + 5u] = cmd->opt_wr_data;
-        seq[base + 6u] = buf[wr * 2u];
-        seq[base + 7u] = buf[wr * 2u + 1u];
-        seq[base + 8u] = cmd->opt_wr_low;
-        seq[base + 9u] = cmd->opt_wr_setup;
+        for (wr = 0u; wr < BURNER_GBA_INTEL_64B_TEMPLATE_WORDS; ++wr) {
+            uint32_t word_address = starting_word_address + (uint32_t)wr;
+            size_t base = 11u + 10u * wr;
+
+            burner_gba_patch_u24(&seq[base + 1u], word_address);
+            seq[base + 6u] = buf[wr * 2u];
+            seq[base + 7u] = buf[wr * 2u + 1u];
+        }
+        burner_gba_patch_u24(&seq[13u + 10u * BURNER_GBA_INTEL_64B_TEMPLATE_WORDS], command_word_address);
+    } else {
+        addr0 = (uint8_t)(command_word_address & 0xFFu);
+        addr1 = (uint8_t)((command_word_address >> 8) & 0xFFu);
+        addr2 = (uint8_t)((command_word_address >> 16) & 0xFFu);
+
+        seq[0] = cmd->opt_addr;
+        seq[1] = addr0;
+        seq[2] = addr1;
+        seq[3] = addr2;
+        seq[4] = cmd->opt_wr_setup;
+        seq[5] = cmd->opt_wr_data;
+        seq[6] = (uint8_t)(write_count_word & 0xFFu);
+        seq[7] = (uint8_t)((write_count_word >> 8) & 0xFFu);
+        seq[8] = cmd->opt_wr_low;
+        seq[9] = cmd->opt_wr_setup;
+        seq[10] = cmd->opt_release;
+        /* Bacon CS0 has no address auto-increment; match ChisLink's per-halfword AGB_FLASH_WRITE(pa+i). */
+        for (wr = 0u; wr < write_words; ++wr) {
+            uint32_t word_address = starting_word_address + (uint32_t)wr;
+            size_t base = 11u + 10u * wr;
+
+            seq[base + 0u] = cmd->opt_addr;
+            seq[base + 1u] = (uint8_t)(word_address & 0xFFu);
+            seq[base + 2u] = (uint8_t)((word_address >> 8) & 0xFFu);
+            seq[base + 3u] = (uint8_t)((word_address >> 16) & 0xFFu);
+            seq[base + 4u] = cmd->opt_wr_setup;
+            seq[base + 5u] = cmd->opt_wr_data;
+            seq[base + 6u] = buf[wr * 2u];
+            seq[base + 7u] = buf[wr * 2u + 1u];
+            seq[base + 8u] = cmd->opt_wr_low;
+            seq[base + 9u] = cmd->opt_wr_setup;
+        }
+
+        seq[11u + 10u * write_words] = cmd->opt_release;
+        seq[12u + 10u * write_words] = cmd->opt_addr;
+        seq[13u + 10u * write_words] = addr0;
+        seq[14u + 10u * write_words] = addr1;
+        seq[15u + 10u * write_words] = addr2;
+        seq[16u + 10u * write_words] = cmd->opt_wr_setup;
+        seq[17u + 10u * write_words] = cmd->opt_wr_data;
+        seq[18u + 10u * write_words] = (uint8_t)(cmd->intel_d0 & 0xFFu);
+        seq[19u + 10u * write_words] = (uint8_t)((cmd->intel_d0 >> 8) & 0xFFu);
+        seq[20u + 10u * write_words] = cmd->opt_wr_low;
+        seq[21u + 10u * write_words] = cmd->opt_wr_setup;
+        seq[22u + 10u * write_words] = cmd->opt_release;
     }
-
-    seq[11u + 10u * write_words] = cmd->opt_release;
-    seq[12u + 10u * write_words] = cmd->opt_addr;
-    seq[13u + 10u * write_words] = addr0;
-    seq[14u + 10u * write_words] = addr1;
-    seq[15u + 10u * write_words] = addr2;
-    seq[16u + 10u * write_words] = cmd->opt_wr_setup;
-    seq[17u + 10u * write_words] = cmd->opt_wr_data;
-    seq[18u + 10u * write_words] = (uint8_t)(cmd->intel_d0 & 0xFFu);
-    seq[19u + 10u * write_words] = (uint8_t)((cmd->intel_d0 >> 8) & 0xFFu);
-    seq[20u + 10u * write_words] = cmd->opt_wr_low;
-    seq[21u + 10u * write_words] = cmd->opt_wr_setup;
-    seq[22u + 10u * write_words] = cmd->opt_release;
     build_us = burner_gba_diag_now_us() - t0;
 
     t0 = burner_gba_diag_now_us();
