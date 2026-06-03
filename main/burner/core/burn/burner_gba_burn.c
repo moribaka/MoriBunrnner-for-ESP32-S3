@@ -448,6 +448,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     }
     burner_gba_chis_diag_begin(job);
     intel_active = burner_gba_nor_is_intel_active();
+    burner_gba_chis_diag_set_intel(intel_active);
     if (intel_active && job->write_path == BURNER_WRITE_PATH_PSRAM) {
         psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
         psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);

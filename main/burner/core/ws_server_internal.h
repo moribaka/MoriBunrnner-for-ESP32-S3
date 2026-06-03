@@ -1140,6 +1140,13 @@ esp_err_t burner_gbx_find_agb_profile_for_probe(
     size_t *match_len_out,
     int32_t *score_out,
     bool *ambiguous_out);
+esp_err_t burner_gbx_find_agb_profile_for_method_id(
+    const burner_gbx_cmd_list_t *method,
+    const uint8_t *id,
+    size_t id_len,
+    burner_gbx_profile_t *profile_out,
+    size_t *match_len_out,
+    bool *ambiguous_out);
 esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out);
 bool burner_gbc_gbx_is_active(void);
 esp_err_t burner_gbc_gbx_probe_locked(

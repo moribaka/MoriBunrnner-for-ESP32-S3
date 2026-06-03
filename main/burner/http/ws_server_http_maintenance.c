@@ -1020,24 +1020,6 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     burner_bacon_restore_3v3_power();
     burner_spi_lock_give();
 
-    if (err == ESP_OK && cart_mode == BURNER_CART_MODE_GBA) {
-        esp_err_t analysis_err = burner_probe_gba_rom_analysis(
-            device_size,
-            &gba_save_type,
-            &gba_save_size,
-            &gba_save_detected,
-            &gba_patch_kind,
-            &gba_patch_detected);
-
-        if (analysis_err != ESP_OK) {
-            gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
-            gba_save_size = 0u;
-            gba_save_detected = false;
-            gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
-            gba_patch_detected = false;
-        }
-    }
-
     if (err != ESP_OK) {
         ESP_LOGE(BURNER_TAG, "cart id read failed: %s", esp_err_to_name(err));
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cart id read failed");

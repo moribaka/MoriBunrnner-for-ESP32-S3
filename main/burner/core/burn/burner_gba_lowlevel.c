@@ -34,6 +34,7 @@ static bool s_gba_active_intel_e9_entry = false;
 
 typedef struct {
     bool active;
+    bool intel_active;
     uint64_t job_start_us;
     uint32_t total_bytes;
     uint32_t stage_count;
@@ -44,6 +45,7 @@ typedef struct {
     uint32_t bank_switch_calls;
     uint32_t erase_calls;
     uint32_t programmed_bytes;
+    uint32_t program_once_bytes;
     uint64_t erase_us;
     uint64_t prefetch_wait_us;
     uint64_t tf_read_us;
@@ -60,6 +62,11 @@ typedef struct {
     uint64_t bank_switch_us;
     uint64_t finalize_us;
     uint64_t post_verify_us;
+    uint64_t stage_erase_us;
+    uint64_t stage_prefetch_wait_us;
+    uint64_t stage_tf_read_us;
+    uint64_t stage_program_total_us;
+    uint64_t stage_program_once_reset_us;
 } burner_gba_chis_diag_t;
 
 static burner_gba_chis_diag_t s_gba_chis_diag = {0};
@@ -89,10 +96,23 @@ static void burner_gba_chis_diag_begin(const burner_task_param_t *job)
     s_gba_chis_diag.total_bytes = (job != NULL) ? job->total_bytes : 0u;
 }
 
+static void burner_gba_chis_diag_set_intel(bool intel_active)
+{
+    s_gba_chis_diag.intel_active = intel_active;
+    if (intel_active) {
+        s_gba_chis_diag.active = true;
+    }
+}
+
 static void burner_gba_chis_diag_stage_begin(void)
 {
     if (s_gba_chis_diag.active) {
         s_gba_chis_diag.stage_count++;
+        s_gba_chis_diag.stage_erase_us = 0u;
+        s_gba_chis_diag.stage_prefetch_wait_us = 0u;
+        s_gba_chis_diag.stage_tf_read_us = 0u;
+        s_gba_chis_diag.stage_program_total_us = 0u;
+        s_gba_chis_diag.stage_program_once_reset_us = 0u;
     }
 }
 
@@ -100,6 +120,7 @@ static void burner_gba_chis_diag_add_erase(uint64_t elapsed_us)
 {
     if (s_gba_chis_diag.active) {
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.erase_us, elapsed_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.stage_erase_us, elapsed_us);
     }
 }
 
@@ -107,6 +128,7 @@ static void burner_gba_chis_diag_add_prefetch_wait(uint64_t elapsed_us)
 {
     if (s_gba_chis_diag.active) {
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.prefetch_wait_us, elapsed_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.stage_prefetch_wait_us, elapsed_us);
     }
 }
 
@@ -114,6 +136,7 @@ static void burner_gba_chis_diag_add_tf_read(uint64_t elapsed_us)
 {
     if (s_gba_chis_diag.active) {
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.tf_read_us, elapsed_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.stage_tf_read_us, elapsed_us);
     }
 }
 
@@ -127,6 +150,7 @@ static void burner_gba_chis_diag_add_program_call(size_t bytes, uint64_t elapsed
             s_gba_chis_diag.programmed_bytes += (uint32_t)bytes;
         }
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_total_us, elapsed_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.stage_program_total_us, elapsed_us);
     }
 }
 
@@ -138,6 +162,7 @@ static void burner_gba_chis_diag_add_program_lowlevel(uint64_t elapsed_us)
 }
 
 static void burner_gba_chis_diag_add_program_once(
+    size_t bytes,
     uint64_t total_us,
     uint64_t build_us,
     uint64_t spi_us,
@@ -147,12 +172,18 @@ static void burner_gba_chis_diag_add_program_once(
 {
     if (s_gba_chis_diag.active) {
         s_gba_chis_diag.program_once_calls++;
+        if ((uint64_t)s_gba_chis_diag.program_once_bytes + (uint64_t)bytes > (uint64_t)UINT32_MAX) {
+            s_gba_chis_diag.program_once_bytes = UINT32_MAX;
+        } else {
+            s_gba_chis_diag.program_once_bytes += (uint32_t)bytes;
+        }
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_total_us, total_us);
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_build_us, build_us);
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_spi_us, spi_us);
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_wait_entry_us, entry_wait_us);
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_wait_done_us, done_wait_us);
         burner_gba_chis_diag_add_u64(&s_gba_chis_diag.program_once_reset_us, reset_us);
+        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.stage_program_once_reset_us, reset_us);
     }
 }
 
@@ -208,36 +239,50 @@ static uint32_t burner_gba_chis_diag_us_to_ms(uint64_t us)
 
 static void burner_gba_chis_diag_log_stage(uint32_t addr, size_t bytes, uint32_t processed_before, uint32_t processed_after)
 {
+    const char *label;
+
     if (!s_gba_chis_diag.active) {
         return;
     }
+    label = s_gba_chis_diag.intel_active ? "Intel" : "CHIS";
     ESP_LOGI(
         BURNER_TAG,
-        "GBA CHIS diag stage #%u addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "->%" PRIu32
-        " erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32 "ms program=%" PRIu32 "ms",
+        "GBA %s diag stage #%u addr=0x%08" PRIX32 " bytes=%u processed=%" PRIu32 "->%" PRIu32
+        " erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32
+        "ms program=%" PRIu32 "ms reset=%" PRIu32 "ms",
+        label,
         (unsigned)s_gba_chis_diag.stage_count,
         addr,
         (unsigned)bytes,
         processed_before,
         processed_after,
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.erase_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.tf_read_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_total_us));
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_erase_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_prefetch_wait_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_tf_read_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_program_total_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.stage_program_once_reset_us));
 }
 
 static void burner_gba_chis_diag_log_summary(esp_err_t err)
 {
     uint64_t elapsed_us;
+    uint32_t avg_once_bytes = 0u;
+    const char *label;
 
     if (!s_gba_chis_diag.active) {
         return;
     }
     elapsed_us = burner_gba_diag_now_us() - s_gba_chis_diag.job_start_us;
+    label = s_gba_chis_diag.intel_active ? "Intel" : "CHIS";
+    if (s_gba_chis_diag.program_once_calls != 0u) {
+        avg_once_bytes = s_gba_chis_diag.program_once_bytes / s_gba_chis_diag.program_once_calls;
+    }
     ESP_LOGI(
         BURNER_TAG,
-        "GBA CHIS diag summary: err=%s total=%" PRIu32 "ms bytes=%" PRIu32 "/%" PRIu32
-        " stages=%u program_calls=%u once=%u erase_calls=%u wait_ready=%u reset=%u bank_switch=%u",
+        "GBA %s diag summary: err=%s total=%" PRIu32 "ms bytes=%" PRIu32 "/%" PRIu32
+        " stages=%u program_calls=%u once=%u avg_once_bytes=%" PRIu32
+        " erase_calls=%u wait_ready=%u reset=%u bank_switch=%u",
+        label,
         esp_err_to_name(err),
         burner_gba_chis_diag_us_to_ms(elapsed_us),
         s_gba_chis_diag.programmed_bytes,
@@ -245,14 +290,16 @@ static void burner_gba_chis_diag_log_summary(esp_err_t err)
         (unsigned)s_gba_chis_diag.stage_count,
         (unsigned)s_gba_chis_diag.program_calls,
         (unsigned)s_gba_chis_diag.program_once_calls,
+        avg_once_bytes,
         (unsigned)s_gba_chis_diag.erase_calls,
         (unsigned)s_gba_chis_diag.wait_ready_calls,
         (unsigned)s_gba_chis_diag.reset_calls,
         (unsigned)s_gba_chis_diag.bank_switch_calls);
     ESP_LOGI(
         BURNER_TAG,
-        "GBA CHIS diag time: erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32
+        "GBA %s diag time: erase=%" PRIu32 "ms prefetch_wait=%" PRIu32 "ms tf_read=%" PRIu32
         "ms program=%" PRIu32 "ms lowlevel=%" PRIu32 "ms finalize=%" PRIu32 "ms post_verify=%" PRIu32 "ms",
+        label,
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.erase_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.tf_read_us),
@@ -262,9 +309,10 @@ static void burner_gba_chis_diag_log_summary(esp_err_t err)
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.post_verify_us));
     ESP_LOGI(
         BURNER_TAG,
-        "GBA CHIS diag lowlevel: once_total=%" PRIu32 "ms build=%" PRIu32 "ms spi=%" PRIu32
+        "GBA %s diag lowlevel: once_total=%" PRIu32 "ms build=%" PRIu32 "ms spi=%" PRIu32
         "ms wait_entry=%" PRIu32 "ms wait_done=%" PRIu32 "ms once_reset=%" PRIu32 "ms wait_ready_total=%" PRIu32
         "ms reset_total=%" PRIu32 "ms bank_switch=%" PRIu32 "ms",
+        label,
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_total_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_build_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_spi_us),
@@ -1441,7 +1489,7 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
     }
 
     t0 = burner_gba_diag_now_us();
-    err = burner_bacon_gba_intel_wait_ready(command_address, 0x0070u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
+    err = burner_bacon_gba_intel_wait_ready(command_address, 0x0000u, BURNER_ROM_POLL_TIMEOUT_MS, &status);
     done_wait_us = burner_gba_diag_now_us() - t0;
     if (err != ESP_OK) {
         ESP_LOGW(
@@ -1457,9 +1505,10 @@ static esp_err_t burner_bacon_gba_intel_buffered_program_once(
         return ESP_ERR_INVALID_RESPONSE;
     }
     t0 = burner_gba_diag_now_us();
-    err = burner_bacon_gba_intel_reset();
+    err = burner_bacon_gba_command_write_u16(command_word_address, 0x00FFu);
     reset_us = burner_gba_diag_now_us() - t0;
     burner_gba_chis_diag_add_program_once(
+        write_len,
         burner_gba_diag_now_us() - once_start_us,
         build_us,
         spi_us,

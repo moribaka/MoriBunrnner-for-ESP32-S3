@@ -410,6 +410,7 @@ static esp_err_t burner_bacon_gba_rom_program(
                 return err;
             }
             burner_gba_chis_diag_add_program_once(
+                write_len,
                 burner_gba_diag_now_us() - once_start_us,
                 build_us,
                 spi_us,
