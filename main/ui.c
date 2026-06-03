@@ -4224,9 +4224,6 @@ static void ui_open_page_locked(ui_model_t *model, ui_page_t page)
     }
     parent = model->page;
     ui_push_current_page_locked(model);
-    if (parent == UI_PAGE_TASK_RESULT && page != UI_PAGE_TASK_RESULT) {
-        ui_clear_task_result_runtime_locked(model);
-    }
     model->page = page;
     model->parent_page = parent;
     model->selected = (page == UI_PAGE_ROOT) ? s_root_selected : 0;
