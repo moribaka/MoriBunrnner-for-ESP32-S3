@@ -16,7 +16,7 @@
 
 #define LVGL_TASK_STACK_SIZE 8192
 #define LVGL_TASK_PRIORITY 4
-#define LVGL_DRAW_BUF_LINES 40
+#define LVGL_DRAW_BUF_LINES 20
 #define LVGL_TASK_FRAME_MS 16
 #define LVGL_IDLE_DIM_TIMEOUT_MS (60U * 1000U)
 #define LVGL_TASK_CORE_ID 0
@@ -173,10 +173,8 @@ esp_err_t lvgl_port_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    s_draw_buf2 = lvgl_alloc_draw_buffer(draw_buf_size, "draw_buf2");
-    if (s_draw_buf2 == NULL) {
-        ESP_LOGW(LVGL_TAG, "alloc draw buf2 failed, fallback to single buffer");
-    }
+    s_draw_buf2 = NULL;
+    ESP_LOGI(LVGL_TAG, "using single LVGL draw buffer (%u lines)", (unsigned int)LVGL_DRAW_BUF_LINES);
 
     lv_init();
 

@@ -852,6 +852,35 @@ void burner_status_reset(void)
     snprintf(s_status.message, sizeof(s_status.message), "%s", "idle");
 }
 
+void burner_status_clear_task_result(void)
+{
+    if (s_status_lock != NULL) {
+        xSemaphoreTake(s_status_lock, portMAX_DELAY);
+        s_status.state = BURNER_STATE_IDLE;
+        s_status.progress = 0;
+        s_status.total_bytes = 0;
+        s_status.processed_bytes = 0;
+        burner_status_phase_reset_locked();
+        burner_status_speed_reset_locked();
+        burner_cancel_reset_locked();
+        s_status.rom_name[0] = '\0';
+        s_status.rom_path[0] = '\0';
+        snprintf(s_status.message, sizeof(s_status.message), "%s", "idle");
+        xSemaphoreGive(s_status_lock);
+    } else {
+        s_status.state = BURNER_STATE_IDLE;
+        s_status.progress = 0;
+        s_status.total_bytes = 0;
+        s_status.processed_bytes = 0;
+        burner_status_phase_reset_locked();
+        burner_status_speed_reset_locked();
+        burner_cancel_reset_locked();
+        s_status.rom_name[0] = '\0';
+        s_status.rom_path[0] = '\0';
+        snprintf(s_status.message, sizeof(s_status.message), "%s", "idle");
+    }
+}
+
 int burner_calc_progress_percent_u64(uint64_t processed, uint64_t total)
 {
     uint64_t progress = 0u;

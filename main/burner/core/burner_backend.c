@@ -475,7 +475,7 @@ static int burner_build_core_config_json(char *resp, size_t resp_len)
         resp_len,
         "{\"ok\":true,\"erase\":\"%s\",\"tf\":\"%s\",\"psram\":\"%s\","
         "\"power_settle_ms\":%" PRIu32 ",\"power_settle_options\":[100,200,400,800,1000],"
-        "\"write_path\":\"%s\",\"pipeline_erase\":\"%s\",\"psram_mb\":\"%s\","
+        "\"write_path\":\"%s\",\"recipe_mode\":\"%s\",\"pipeline_erase\":\"%s\",\"psram_mb\":\"%s\","
         "\"mbc5_chunk_kb\":%" PRIu32 ",\"dump_chunk_kb\":%" PRIu32 ","
         "\"gbc_voltage\":\"%s\",\"gba_fixed_erase_window\":%s,"
         "\"options\":[\"auto\",\"cpu0\",\"cpu1\"]}",
@@ -484,6 +484,7 @@ static int burner_build_core_config_json(char *resp, size_t resp_len)
         burner_core_affinity_to_str(s_burn_core_cfg.psram_core),
         s_bacon_power_settle_ms,
         burner_write_path_to_str(s_burn_write_path_default),
+        burner_recipe_mode_to_str(s_burn_recipe_mode_default),
         burner_erase_mode_to_str(s_burn_erase_always != 0u),
         burner_psram_window_mb_to_text(s_burn_psram_window_mb, psram_text, sizeof(psram_text)),
         s_burn_mbc5_chunk_kb,
@@ -511,6 +512,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     char psram_arg[16] = {0};
     char power_settle_arg[16] = {0};
     char write_path_arg[16] = {0};
+    char recipe_mode_arg[16] = {0};
     char erase_mode_arg[16] = {0};
     char pipeline_erase_arg[16] = {0};
     char psram_mb_arg[16] = {0};
@@ -523,6 +525,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     burner_core_affinity_t psram_val = s_burn_core_cfg.psram_core;
     uint32_t power_settle_val = s_bacon_power_settle_ms;
     burner_write_path_t write_path_val = s_burn_write_path_default;
+    burner_recipe_mode_t recipe_mode_val = s_burn_recipe_mode_default;
     bool erase_mode_val = (s_burn_erase_always != 0u);
     uint32_t psram_mb_val = s_burn_psram_window_mb;
     uint32_t mbc5_chunk_kb_val = s_burn_mbc5_chunk_kb;
@@ -534,6 +537,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     bool update_psram = false;
     bool update_power_settle = false;
     bool update_write_path = false;
+    bool update_recipe_mode = false;
     bool update_erase_mode = false;
     bool update_psram_mb = false;
     bool update_mbc5_chunk_kb = false;
@@ -548,6 +552,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
         !burner_get_query_arg(req, "psram", psram_arg, sizeof(psram_arg), false) ||
         !burner_get_query_arg(req, "power_settle_ms", power_settle_arg, sizeof(power_settle_arg), false) ||
         !burner_get_query_arg(req, "write_path", write_path_arg, sizeof(write_path_arg), false) ||
+        !burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false) ||
         !burner_get_query_arg(req, "erase_mode", erase_mode_arg, sizeof(erase_mode_arg), false) ||
         !burner_get_query_arg(req, "pipeline_erase", pipeline_erase_arg, sizeof(pipeline_erase_arg), false) ||
         !burner_get_query_arg(req, "psram_mb", psram_mb_arg, sizeof(psram_mb_arg), false) ||
@@ -591,6 +596,12 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
             return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "write_path must be direct/psram/pipeline");
         }
         update_write_path = true;
+    }
+    if (recipe_mode_arg[0] != '\0') {
+        if (!burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode_val)) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis or gbx");
+        }
+        update_recipe_mode = true;
     }
     if (erase_mode_arg[0] != '\0') {
         if (!burner_parse_erase_mode_text(erase_mode_arg, &erase_mode_val)) {
@@ -643,7 +654,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
         update_gba_fixed_erase_window = true;
     }
     if (!update_erase && !update_tf && !update_psram && !update_power_settle &&
-        !update_write_path && !update_erase_mode && !update_psram_mb &&
+        !update_write_path && !update_recipe_mode && !update_erase_mode && !update_psram_mb &&
         !update_mbc5_chunk_kb && !update_dump_chunk_kb && !update_gbc_voltage &&
         !update_gba_fixed_erase_window) {
         return httpd_resp_send_err(
@@ -670,6 +681,9 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     }
     if (update_write_path) {
         s_burn_write_path_default = write_path_val;
+    }
+    if (update_recipe_mode) {
+        s_burn_recipe_mode_default = recipe_mode_val;
     }
     if (update_erase_mode) {
         s_burn_erase_always = erase_mode_val ? 1u : 0u;

@@ -953,6 +953,21 @@ esp_err_t burner_gbx_visit_profiles_by_type(
     const char *type,
     burner_gbx_profile_visitor_t visitor,
     void *user);
+esp_err_t burner_gbx_find_agb_profile_for_probe(
+    const burner_gbx_cmd_list_t *method,
+    const uint8_t *id,
+    size_t id_len,
+    burner_nor_cmdset_t cmdset,
+    bool d0d1_known,
+    bool d0d1_swapped,
+    uint32_t flash_size,
+    uint32_t sector_size,
+    const burner_nor_geometry_t *geometry,
+    bool cfi_ok,
+    burner_gbx_profile_t *profile_out,
+    size_t *match_len_out,
+    int32_t *score_out,
+    bool *ambiguous_out);
 esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out);
 bool burner_gbc_gbx_is_active(void);
 esp_err_t burner_gbc_gbx_probe_locked(
@@ -969,6 +984,21 @@ esp_err_t burner_gbc_gbx_program_block(const uint8_t *data, size_t len, uint32_t
 esp_err_t burner_gbc_gbx_erase_sector(uint32_t flash_addr, uint32_t timeout_ms);
 esp_err_t burner_gbc_gbx_chip_erase_once(void);
 bool burner_gba_gbx_is_active(void);
+void burner_gba_gbx_cache_probe_result(
+    const uint8_t id[8],
+    uint32_t device_size,
+    uint32_t sector_size,
+    uint16_t buffer_write_bytes,
+    bool cfi_ok,
+    bool gbx_profile_matched);
+void burner_gba_gbx_clear_cached_probe(void);
+bool burner_gba_gbx_take_cached_probe(
+    uint8_t id_out[8],
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out,
+    bool *gbx_profile_matched_out);
 esp_err_t burner_gba_gbx_probe_locked(
     uint8_t id_out[8],
     burner_gbx_profile_t *profile_out,

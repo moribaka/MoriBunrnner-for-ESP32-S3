@@ -3,6 +3,8 @@
 #include "ws_server_http_maintenance.h"
 #include "power_manager.h"
 
+#define BURNER_POWER_STATUS_RESP_LEN 5200U
+
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req)
 {
     power_chip_type_t chip_type = power_manager_chip_type();
@@ -73,8 +75,19 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
     bool tca_input_ok = false;
     bool tca_output_ok = false;
     bool tca_config_ok = false;
-    char resp[5200];
+    char *resp = NULL;
     int n;
+    esp_err_t send_err;
+
+    web_ws_mark_activity();
+
+    resp = (char *)heap_caps_malloc(BURNER_POWER_STATUS_RESP_LEN, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (resp == NULL) {
+        resp = (char *)heap_caps_malloc(BURNER_POWER_STATUS_RESP_LEN, MALLOC_CAP_8BIT);
+    }
+    if (resp == NULL) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no memory");
+    }
 
     if (power.chip_type == POWER_CHIP_AXP209) {
         chip_type = "axp209";
@@ -159,7 +172,7 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
 
     n = snprintf(
         resp,
-        sizeof(resp),
+        BURNER_POWER_STATUS_RESP_LEN,
         "{\"ok\":true,"
         "\"note\":\"No dedicated current sensor. Values are telemetry/estimation only.\","
         "\"uptime_ms\":%" PRIu64 ",\"free_heap\":%" PRIu32 ",\"min_free_heap\":%" PRIu32 ","
@@ -301,12 +314,15 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         tca_output,
         burner_json_bool(tca_config_ok),
         tca_config);
-    if (n < 0 || n >= (int)sizeof(resp)) {
+    if (n < 0 || n >= (int)BURNER_POWER_STATUS_RESP_LEN) {
+        heap_caps_free(resp);
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
     }
 
     httpd_resp_set_type(req, "application/json");
-    return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    send_err = httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    heap_caps_free(resp);
+    return send_err;
 }
 
 static volatile uint32_t s_cpu_tick_total[portNUM_PROCESSORS];
@@ -470,6 +486,8 @@ esp_err_t burner_device_info_handler(httpd_req_t *req)
     double partition_size_mib = 0.0;
     char resp[896];
 
+    web_ws_mark_activity();
+
     esp_chip_info(&chip_info);
     if (burner_cpu_monitor_update(&cpu_usage_percent)) {
         snprintf(cpu_usage_text, sizeof(cpu_usage_text), "%u%%", (unsigned int)cpu_usage_percent);
@@ -596,6 +614,8 @@ esp_err_t burner_storage_status_handler(httpd_req_t *req)
         tf_total_bytes,
         tf_used_bytes,
         tf_free_bytes);
+
+    web_ws_mark_activity();
 
     if (n < 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
