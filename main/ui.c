@@ -14,6 +14,7 @@
 
 #include "esp_app_desc.h"
 #include "burner/db/burner_nor_db.h"
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -450,6 +451,7 @@ static uint32_t s_last_button_queue_full_log_ms = 0;
 static burner_status_t *s_task_result_status = NULL;
 static bool s_task_result_capture_armed = false;
 static bool s_task_result_active_seen = false;
+static bool s_model_defaults_inited = false;
 
 static lv_obj_t *s_canvas = NULL;
 static uint16_t *s_canvas_buf = NULL;
@@ -472,19 +474,24 @@ static void ui_calc_burn_snapshot_fields(
     uint32_t *erase_total_out);
 static void ui_present_active_burn_task_locked(ui_model_t *model, const burner_status_t *status, ui_page_t return_page);
 
-static ui_model_t s_model = {
-    .page = UI_PAGE_ROOT,
-    .parent_page = UI_PAGE_ROOT,
-    .selected = 0,
-    .scroll = 0,
-    .file_path = "",
-    .wifi_state = UI_WIFI_STATE_UNKNOWN,
-    .ip_text = "--",
-    .status_text = "system initializing",
-    .time_text = "--:--",
-    .fps_text = "FPS --",
-    .dirty = true,
-};
+static EXT_RAM_BSS_ATTR ui_model_t s_model;
+
+static void ui_reset_model_defaults(ui_model_t *model)
+{
+    if (model == NULL) {
+        return;
+    }
+
+    memset(model, 0, sizeof(*model));
+    model->page = UI_PAGE_ROOT;
+    model->parent_page = UI_PAGE_ROOT;
+    model->wifi_state = UI_WIFI_STATE_UNKNOWN;
+    snprintf(model->ip_text, sizeof(model->ip_text), "%s", "--");
+    snprintf(model->status_text, sizeof(model->status_text), "%s", "system initializing");
+    snprintf(model->time_text, sizeof(model->time_text), "%s", "--:--");
+    snprintf(model->fps_text, sizeof(model->fps_text), "%s", "FPS --");
+    model->dirty = true;
+}
 
 static burner_status_t *ui_task_result_status_buffer(void)
 {
@@ -719,6 +726,10 @@ static bool ui_take_model_lock(void)
     if (xSemaphoreTake(s_model_lock, portMAX_DELAY) != pdTRUE) {
         ESP_LOGE(UI_TAG, "take UI model mutex failed");
         return false;
+    }
+    if (!s_model_defaults_inited) {
+        ui_reset_model_defaults(&s_model);
+        s_model_defaults_inited = true;
     }
     return true;
 }
@@ -6351,7 +6362,7 @@ static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *tit
 
     switch (index) {
         case 0:
-            snprintf(title, title_len, "%s", ui_tr("Battery"));
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电池电量" : "Battery level");
             if (model != NULL && model->battery_valid) {
                 snprintf(hint, hint_len, "%u%%", (unsigned)model->battery_percent);
             } else if (power_valid && power->battery_present) {
@@ -6363,47 +6374,47 @@ static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *tit
             }
             break;
         case 1:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电池压" : "BATV");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电池电压" : "Battery voltage");
             ui_format_power_voltage(power_valid ? power->battery_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 2:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "外部压" : "ACIN");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "外部输入电压" : "ACIN voltage");
             ui_format_power_voltage(power_valid ? power->acin_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 3:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "USB压" : "VBUS");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "USB输入电压" : "VBUS voltage");
             ui_format_power_voltage(power_valid ? power->vbus_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 4:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "系统压" : "IPS");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "系统输出电压" : "IPSOUT voltage");
             ui_format_power_voltage(power_valid ? power->ipsout_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 5:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "充电流" : "ICHG");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "充电电流" : "Charge current");
             ui_format_power_current(power_valid ? power->battery_charge_current_ma_x10 : 0U, adc_supported, hint, hint_len);
             break;
         case 6:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "放电流" : "IDIS");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "放电电流" : "Discharge current");
             ui_format_power_current(power_valid ? power->battery_discharge_current_ma_x10 : 0U, adc_supported, hint, hint_len);
             break;
         case 7:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "方向" : "Dir");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电流方向" : "Current direction");
             snprintf(hint, hint_len, "%s", power_valid ? ui_power_direction_label(power->current_direction) : "--");
             break;
         case 8:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "模式" : "Mode");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "充电模式" : "Charge mode");
             snprintf(hint, hint_len, "%s", power_valid ? ui_power_mode_label(power->charge_mode) : "--");
             break;
         case 9:
-            snprintf(title, title_len, "%s", ui_tr("State"));
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "当前状态" : "Current state");
             snprintf(hint, hint_len, "%s", power_valid ? ui_power_state_label(power->charge_state) : "--");
             break;
         case 10:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "温度" : "Temp");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "芯片温度" : "Chip temperature");
             ui_format_power_temp(power_valid ? power->internal_temp_deci_c : 0, adc_supported, hint, hint_len);
             break;
         default:
-            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电源IC" : "PMIC");
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电源芯片" : "Power chip");
             snprintf(hint, hint_len, "%s", power_valid ? power->chip_name : (power_manager_ready() ? power_manager_chip_name() : ui_tr("missing")));
             break;
     }
@@ -8342,7 +8353,7 @@ esp_err_t ui_init(void)
 
 void ui_process(void)
 {
-    static ui_model_t snapshot;
+    static EXT_RAM_BSS_ATTR ui_model_t snapshot;
     bool should_render;
 
     if (!s_ui_inited) {
