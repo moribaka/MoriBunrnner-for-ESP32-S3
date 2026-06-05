@@ -29,6 +29,7 @@
 #include "lcd_display.h"
 #include "lvgl_port.h"
 #include "lvgl.h"
+#include "music_player.h"
 #include "power_manager.h"
 #include "usb_msc_tf.h"
 #include "wifi_manager.h"
@@ -99,7 +100,7 @@
 #define UI_FPS_TEXT_MAX_LEN 12
 #define UI_TITLE_TEXT_MAX_LEN 32
 
-#define UI_ROOT_ITEM_COUNT 6
+#define UI_ROOT_ITEM_COUNT 7
 #define UI_TF_ITEM_COUNT 7
 #define UI_WIFI_ITEM_COUNT 5
 #define UI_POWER_ITEM_COUNT 12
@@ -149,12 +150,19 @@
 #define UI_BUTTONS_PER_FRAME 8
 #define UI_BUTTON_REPEAT_START_FRAMES 16U
 #define UI_BUTTON_REPEAT_INTERVAL_FRAMES 3U
-#define UI_BUTTON_COUNT ((uint8_t)UI_BUTTON_MENU + 1U)
+#define UI_BUTTON_COUNT ((uint8_t)UI_BUTTON_VOL_DOWN + 1U)
 #define UI_CLOCK_REFRESH_MS 1000U
 #define UI_FPS_REFRESH_MS 1000U
 #define UI_BATTERY_REFRESH_MS 5000U
 #define UI_LIVE_REFRESH_MS 250U
 #define UI_FILE_PSRAM_WINDOW_MB 4U
+#define UI_MUSIC_SEEK_BAR_X 18
+#define UI_MUSIC_SEEK_BAR_W (UI_CANVAS_W - 36)
+#define UI_MUSIC_SEEK_BAR_Y 86
+#define UI_MUSIC_INFO_Y 46
+#define UI_MUSIC_META_Y 112
+#define UI_MUSIC_CTRL_Y 146
+#define UI_MUSIC_HINT2_Y 178
 #define UI_TILE_CAMERA_SPEED 92.0f
 #define UI_TILE_BAR_SPEED 88.0f
 #define UI_TILE_FORE_SPEED 90.0f
@@ -186,6 +194,8 @@ typedef enum {
     UI_PAGE_ROOT = 0,
     UI_PAGE_SYSTEM,
     UI_PAGE_TF,
+    UI_PAGE_MUSIC_FILES,
+    UI_PAGE_MUSIC_PLAYER,
     UI_PAGE_FILES,
     UI_PAGE_FILE_ACTIONS,
     UI_PAGE_WIFI,
@@ -201,6 +211,7 @@ typedef enum {
 typedef enum {
     UI_ACTION_OPEN_SYSTEM = 0,
     UI_ACTION_OPEN_TF,
+    UI_ACTION_OPEN_MUSIC,
     UI_ACTION_OPEN_WIFI,
     UI_ACTION_OPEN_POWER,
     UI_ACTION_OPEN_BURNER,
@@ -212,6 +223,7 @@ typedef enum {
     UI_FILE_KIND_ROM_GBA,
     UI_FILE_KIND_ROM_MBC5,
     UI_FILE_KIND_SAVE,
+    UI_FILE_KIND_MP3,
 } ui_file_kind_t;
 
 typedef enum {
@@ -219,6 +231,7 @@ typedef enum {
     UI_FILE_FILTER_ROM_GBA,
     UI_FILE_FILTER_ROM_MBC5,
     UI_FILE_FILTER_SAVE,
+    UI_FILE_FILTER_MP3,
 } ui_file_filter_t;
 
 typedef enum {
@@ -344,6 +357,11 @@ typedef struct {
 } ui_model_t;
 
 typedef struct {
+    bool valid;
+    ui_file_entry_t current;
+} ui_music_context_t;
+
+typedef struct {
     ui_button_t button;
     bool pressed;
 } ui_button_event_t;
@@ -452,6 +470,9 @@ static burner_status_t *s_task_result_status = NULL;
 static bool s_task_result_capture_armed = false;
 static bool s_task_result_active_seen = false;
 static bool s_model_defaults_inited = false;
+static ui_music_context_t s_music_ctx = {0};
+static music_player_snapshot_t s_music_snapshot_cache = {0};
+static bool s_music_snapshot_cached = false;
 
 static lv_obj_t *s_canvas = NULL;
 static uint16_t *s_canvas_buf = NULL;
@@ -560,6 +581,7 @@ static void ui_capture_task_result_locked(ui_model_t *model, const burner_status
 static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
     {.title = "System", .hint = "web overview", .symbol = "SYS", .action = UI_ACTION_OPEN_SYSTEM, .accent = UI_COLOR_WHITE},
     {.title = "TF", .hint = "files and USB", .symbol = "TF", .action = UI_ACTION_OPEN_TF, .accent = UI_COLOR_WHITE},
+    {.title = "Music", .hint = "mp3 player", .symbol = "MUS", .action = UI_ACTION_OPEN_MUSIC, .accent = UI_COLOR_WHITE},
     {.title = "Wi-Fi", .hint = "network setup", .symbol = "WIFI", .action = UI_ACTION_OPEN_WIFI, .accent = UI_COLOR_WHITE},
     {.title = "Power", .hint = "battery telemetry", .symbol = "PWR", .action = UI_ACTION_OPEN_POWER, .accent = UI_COLOR_WHITE},
     {.title = "Burner", .hint = "cart operations", .symbol = "BURN", .action = UI_ACTION_OPEN_BURNER, .accent = UI_COLOR_WHITE},
@@ -578,6 +600,7 @@ static void ui_focus_burn_rom_op_locked(ui_model_t *model, ui_burn_rom_op_t op);
 static void ui_burn_rom_open_mapper_menu_locked(ui_model_t *model);
 static void ui_persist_burn_settings_locked(ui_model_t *model);
 static const char *ui_selected_gb_mapper_label(void);
+static void ui_push_current_page_locked(const ui_model_t *model);
 
 static bool ui_lang_is_zh(void)
 {
@@ -599,6 +622,8 @@ static const char *ui_root_item_title(const ui_menu_item_t *item)
             return ui_tr("System");
         case UI_ACTION_OPEN_TF:
             return "TF";
+        case UI_ACTION_OPEN_MUSIC:
+            return ui_tr("Music");
         case UI_ACTION_OPEN_WIFI:
             return "Wi-Fi";
         case UI_ACTION_OPEN_POWER:
@@ -622,6 +647,8 @@ static const char *ui_root_item_hint(const ui_menu_item_t *item)
             return ui_tr("web overview");
         case UI_ACTION_OPEN_TF:
             return ui_tr("files and USB");
+        case UI_ACTION_OPEN_MUSIC:
+            return ui_tr("mp3 player");
         case UI_ACTION_OPEN_WIFI:
             return ui_tr("network setup");
         case UI_ACTION_OPEN_POWER:
@@ -1971,7 +1998,10 @@ static bool ui_anim_active_for_page(const ui_model_t *model)
         return ui_anim_value_active(s_anim.tile_bar_w, s_anim.tile_bar_target_w) ||
                ui_anim_value_active(s_anim.tile_fore_y, s_anim.tile_fore_target_y);
     }
-    if (model->page == UI_PAGE_FILES &&
+    if (model->page == UI_PAGE_MUSIC_PLAYER) {
+        return false;
+    }
+    if ((model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) &&
         model->file_selected >= model->file_scroll &&
         model->file_selected < model->file_scroll + UI_ROW_COUNT &&
         ui_file_entry_for_visible_row(model, (uint16_t)(model->file_selected - model->file_scroll), &entry)) {
@@ -1991,7 +2021,7 @@ static uint16_t ui_current_selected(const ui_model_t *model)
     if (model == NULL) {
         return 0;
     }
-    return (model->page == UI_PAGE_FILES) ? model->file_selected : model->selected;
+    return (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) ? model->file_selected : model->selected;
 }
 
 static uint16_t ui_current_scroll(const ui_model_t *model)
@@ -1999,7 +2029,7 @@ static uint16_t ui_current_scroll(const ui_model_t *model)
     if (model == NULL) {
         return 0;
     }
-    return (model->page == UI_PAGE_FILES) ? model->file_scroll : model->scroll;
+    return (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) ? model->file_scroll : model->scroll;
 }
 
 static uint16_t ui_burn_rom_item_count(void)
@@ -2397,6 +2427,9 @@ static ui_file_kind_t ui_file_kind_from_name(const char *name)
     if (strcasecmp(ext, "sav") == 0 || strcasecmp(ext, "srm") == 0) {
         return UI_FILE_KIND_SAVE;
     }
+    if (strcasecmp(ext, "mp3") == 0) {
+        return UI_FILE_KIND_MP3;
+    }
     return UI_FILE_KIND_UNSUPPORTED;
 }
 
@@ -2411,6 +2444,8 @@ static bool ui_file_kind_matches_filter(ui_file_kind_t kind, ui_file_filter_t fi
             return kind == UI_FILE_KIND_ROM_MBC5;
         case UI_FILE_FILTER_SAVE:
             return kind == UI_FILE_KIND_SAVE;
+        case UI_FILE_FILTER_MP3:
+            return kind == UI_FILE_KIND_MP3;
         default:
             return false;
     }
@@ -2431,6 +2466,8 @@ static uint8_t ui_file_sort_rank(const ui_file_entry_t *entry)
             return 2U;
         case UI_FILE_KIND_SAVE:
             return 3U;
+        case UI_FILE_KIND_MP3:
+            return 4U;
         case UI_FILE_KIND_UNSUPPORTED:
         default:
             return 4U;
@@ -2466,6 +2503,9 @@ static uint8_t ui_file_action_count_for_kind(ui_file_kind_t kind)
     }
     if (kind == UI_FILE_KIND_SAVE) {
         return 2U;
+    }
+    if (kind == UI_FILE_KIND_MP3) {
+        return 1U;
     }
     return 0U;
 }
@@ -2524,6 +2564,8 @@ static const char *ui_file_kind_label(ui_file_kind_t kind)
             return "GB/GBC ROM";
         case UI_FILE_KIND_SAVE:
             return ui_tr("Save file");
+        case UI_FILE_KIND_MP3:
+            return "MP3";
         case UI_FILE_KIND_UNSUPPORTED:
         default:
             return ui_tr("File");
@@ -2569,6 +2611,10 @@ static const char *ui_page_title(ui_page_t page)
             return ui_tr("System");
         case UI_PAGE_TF:
             return "TF";
+        case UI_PAGE_MUSIC_FILES:
+            return ui_tr("Music");
+        case UI_PAGE_MUSIC_PLAYER:
+            return ui_tr("Now Playing");
         case UI_PAGE_FILES:
             return ui_tr("Files");
         case UI_PAGE_FILE_ACTIONS:
@@ -2941,7 +2987,6 @@ static void ui_open_files_locked(ui_model_t *model, const char *path, bool reset
     if (model == NULL) {
         return;
     }
-    model->page = UI_PAGE_FILES;
     if (path != NULL) {
         snprintf(model->file_path, sizeof(model->file_path), "%s", path);
     }
@@ -2963,6 +3008,7 @@ static void ui_open_files_with_filter_locked(
         return;
     }
     model->file_filter = filter;
+    model->page = (filter == UI_FILE_FILTER_MP3) ? UI_PAGE_MUSIC_FILES : UI_PAGE_FILES;
     ui_open_files_locked(model, path, reset_selection);
 }
 
@@ -2987,6 +3033,118 @@ static void ui_open_file_action_page_locked(ui_model_t *model, const ui_file_ent
     model->selected = 0;
     model->scroll = 0;
     ui_set_status_locked(model, ui_file_kind_label(model->action_kind));
+}
+
+static void ui_music_set_current_locked(const ui_file_entry_t *entry)
+{
+    if (entry == NULL) {
+        s_music_ctx.valid = false;
+        memset(&s_music_ctx.current, 0, sizeof(s_music_ctx.current));
+        return;
+    }
+    s_music_ctx.valid = true;
+    s_music_ctx.current = *entry;
+}
+
+static bool ui_music_find_track_locked(const ui_model_t *model, int delta, ui_file_entry_t *entry_out)
+{
+    ui_model_t *mutable_model = (ui_model_t *)model;
+    uint16_t saved_selected;
+    uint16_t saved_scroll;
+    int total;
+    int selected;
+
+    if (mutable_model == NULL || entry_out == NULL || mutable_model->file_total == 0U || delta == 0) {
+        return false;
+    }
+    saved_selected = mutable_model->file_selected;
+    saved_scroll = mutable_model->file_scroll;
+    total = (int)mutable_model->file_total;
+    selected = (int)mutable_model->file_selected;
+
+    for (int tries = 0; tries < total; ++tries) {
+        ui_file_entry_t entry = {0};
+
+        selected = (selected + delta) % total;
+        if (selected < 0) {
+            selected += total;
+        }
+        mutable_model->file_selected = (uint16_t)selected;
+        mutable_model->file_scroll =
+            ui_scroll_for_selected(mutable_model->file_selected, mutable_model->file_scroll, mutable_model->file_total);
+        ui_file_ensure_window_locked(mutable_model, false);
+        if (ui_current_file_locked(mutable_model, &entry) &&
+            !entry.is_dir &&
+            ui_file_kind_from_name(entry.name) == UI_FILE_KIND_MP3) {
+            *entry_out = entry;
+            return true;
+        }
+    }
+
+    mutable_model->file_selected = saved_selected;
+    mutable_model->file_scroll = saved_scroll;
+    ui_file_ensure_window_locked(mutable_model, false);
+    return false;
+}
+
+static void ui_open_music_player_locked(ui_model_t *model, const ui_file_entry_t *entry)
+{
+    esp_err_t err;
+
+    if (model == NULL || entry == NULL) {
+        return;
+    }
+    if (entry->is_dir) {
+        ui_open_files_with_filter_locked(model, entry->path, true, UI_FILE_FILTER_MP3);
+        model->parent_page = UI_PAGE_MUSIC_FILES;
+        return;
+    }
+    if (ui_file_kind_from_name(entry->name) != UI_FILE_KIND_MP3) {
+        ui_set_status_locked(model, ui_tr("unsupported file"));
+        return;
+    }
+    if (card == NULL) {
+        ui_set_status_locked(model, ui_tr("TF card not ready"));
+        return;
+    }
+    if (usb_msc_tf_in_use_by_host()) {
+        ui_set_status_locked(model, ui_tr("TF busy by USB host"));
+        return;
+    }
+
+    err = music_player_play(entry->path, entry->size);
+    if (err != ESP_OK) {
+        ui_set_status_locked(model, ui_tr("playback start failed"));
+        return;
+    }
+
+    ui_music_set_current_locked(entry);
+    if (model->page != UI_PAGE_MUSIC_PLAYER) {
+        ui_push_current_page_locked(model);
+    }
+    model->page = UI_PAGE_MUSIC_PLAYER;
+    model->parent_page = UI_PAGE_MUSIC_FILES;
+    model->selected = 0;
+    model->scroll = 0;
+    ui_set_status_locked(model, entry->name);
+    ui_mark_chrome_dirty(model);
+    ui_mark_content_dirty(model);
+}
+
+static void ui_music_play_adjacent_locked(ui_model_t *model, int delta)
+{
+    ui_file_entry_t next = {0};
+
+    if (model == NULL || !s_music_ctx.valid) {
+        return;
+    }
+    if (!ui_music_find_track_locked(model, delta, &next)) {
+        return;
+    }
+    model->file_selected = next.ordinal;
+    model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, model->file_total);
+    ui_file_ensure_window_locked(model, false);
+    ui_open_music_player_locked(model, &next);
 }
 
 static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_entry_t *entry)
@@ -4229,6 +4387,10 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
             return UI_SYSTEM_ITEM_COUNT;
         case UI_PAGE_TF:
             return UI_TF_ITEM_COUNT;
+        case UI_PAGE_MUSIC_FILES:
+            return model->file_total;
+        case UI_PAGE_MUSIC_PLAYER:
+            return 0;
         case UI_PAGE_FILES:
             return model->file_total;
         case UI_PAGE_FILE_ACTIONS:
@@ -4297,7 +4459,10 @@ static void ui_open_page_locked(ui_model_t *model, ui_page_t page)
         parent != UI_PAGE_BURNER) {
         model->file_filter = UI_FILE_FILTER_NONE;
     }
-    if (page == UI_PAGE_FILES) {
+    if (page == UI_PAGE_MUSIC_FILES) {
+        model->file_filter = UI_FILE_FILTER_MP3;
+    }
+    if (page == UI_PAGE_FILES || page == UI_PAGE_MUSIC_FILES) {
         ui_open_files_locked(model, model->file_path, false);
         model->parent_page = parent;
     } else {
@@ -4347,6 +4512,10 @@ static ui_page_t ui_task_return_parent_page(ui_page_t page)
     switch (page) {
         case UI_PAGE_ROOT:
             return UI_PAGE_ROOT;
+        case UI_PAGE_MUSIC_FILES:
+            return UI_PAGE_ROOT;
+        case UI_PAGE_MUSIC_PLAYER:
+            return UI_PAGE_MUSIC_FILES;
         case UI_PAGE_BURNER:
             return UI_PAGE_ROOT;
         case UI_PAGE_BURN_ROM:
@@ -4520,7 +4689,7 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
     if (model == NULL) {
         return;
     }
-    if (model->page == UI_PAGE_FILES) {
+    if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
         ui_file_move_locked(model, delta);
         return;
     }
@@ -4642,9 +4811,20 @@ static void ui_back_locked(ui_model_t *model)
         model->dirty = true;
         return;
     }
+    if (model->page == UI_PAGE_MUSIC_PLAYER) {
+        (void)music_player_stop();
+    }
     if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
         if (ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
             ui_open_files_locked(model, parent, true);
+            return;
+        }
+    }
+    if (model->page == UI_PAGE_MUSIC_FILES && model->file_path[0] != '\0') {
+        if (ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
+            model->page = UI_PAGE_MUSIC_FILES;
+            ui_open_files_with_filter_locked(model, parent, true, UI_FILE_FILTER_MP3);
+            model->parent_page = UI_PAGE_MUSIC_FILES;
             return;
         }
     }
@@ -4662,6 +4842,10 @@ static void ui_back_locked(ui_model_t *model)
         s_burn_rom_verify_prompt_until_ms = 0;
         ui_drop_nav_target_locked(model->page);
         model->dirty = true;
+        return;
+    }
+    if (model->page == UI_PAGE_MUSIC_FILES && model->parent_page == UI_PAGE_MUSIC_FILES) {
+        ui_open_root_locked(model);
         return;
     }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_CUSTOM) {
@@ -5147,6 +5331,13 @@ static void ui_select_locked(
                     case UI_ACTION_OPEN_TF:
                         ui_open_page_locked(model, UI_PAGE_TF);
                         break;
+                    case UI_ACTION_OPEN_MUSIC:
+                        model->file_path[0] = '\0';
+                        model->file_selected = 0;
+                        model->file_scroll = 0;
+                        ui_open_page_locked(model, UI_PAGE_MUSIC_FILES);
+                        ui_set_status_locked(model, ui_tr("open files"));
+                        break;
                     case UI_ACTION_OPEN_WIFI:
                         ui_open_page_locked(model, UI_PAGE_WIFI);
                         break;
@@ -5200,6 +5391,21 @@ static void ui_select_locked(
             } else {
                 ui_set_status_locked(model, ui_tr("use web page for this TF action"));
             }
+            break;
+        case UI_PAGE_MUSIC_FILES:
+            if (!ui_current_file_locked(model, &entry)) {
+                ui_set_status_locked(model, ui_tr("no file selected"));
+                break;
+            }
+            if (entry.is_dir) {
+                ui_open_files_with_filter_locked(model, entry.path, true, UI_FILE_FILTER_MP3);
+                model->parent_page = UI_PAGE_MUSIC_FILES;
+            } else {
+                ui_open_music_player_locked(model, &entry);
+            }
+            break;
+        case UI_PAGE_MUSIC_PLAYER:
+            (void)music_player_toggle_pause();
             break;
         case UI_PAGE_FILES:
             if (!ui_current_file_locked(model, &entry)) {
@@ -5612,7 +5818,7 @@ static void ui_refresh_current_locked(ui_model_t *model)
     if (model == NULL) {
         return;
     }
-    if (model->page == UI_PAGE_FILES) {
+    if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
         ui_scan_file_window_locked(model);
     } else if (model->page == UI_PAGE_ROOT) {
         model->dirty = true;
@@ -5657,7 +5863,7 @@ static void ui_handle_button_action(ui_button_t button)
     ui_work_type_t work_type = UI_WORK_WIFI_CONNECT_SAVED;
     bool start_work = false;
 
-    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_VOL_DOWN) {
         return;
     }
     if (!ui_take_model_lock()) {
@@ -5683,6 +5889,55 @@ static void ui_handle_button_action(ui_button_t button)
             case UI_BUTTON_SELECT:
             case UI_BUTTON_PANEL_TOGGLE:
             case UI_BUTTON_MENU:
+            default:
+                break;
+        }
+        xSemaphoreGive(s_model_lock);
+        return;
+    }
+
+    if (s_model.page == UI_PAGE_MUSIC_PLAYER) {
+        switch (button) {
+            case UI_BUTTON_LEFT:
+                ui_music_play_adjacent_locked(&s_model, -1);
+                break;
+            case UI_BUTTON_RIGHT:
+                ui_music_play_adjacent_locked(&s_model, 1);
+                break;
+            case UI_BUTTON_SELECT:
+            case UI_BUTTON_PANEL_TOGGLE:
+                (void)music_player_toggle_pause();
+                break;
+            case UI_BUTTON_BACK:
+                ui_back_locked(&s_model);
+                break;
+            case UI_BUTTON_MENU:
+                ui_refresh_current_locked(&s_model);
+                break;
+            case UI_BUTTON_VOL_UP: {
+                music_player_snapshot_t snap = {0};
+                uint8_t volume;
+
+                music_player_get_snapshot(&snap);
+                volume = snap.volume_percent;
+                volume = (uint8_t)((volume >= 95U) ? 100U : (volume + 5U));
+                (void)music_player_set_volume(volume);
+                ui_set_status_locked(&s_model, ui_tr("volume up"));
+                break;
+            }
+            case UI_BUTTON_VOL_DOWN: {
+                music_player_snapshot_t snap = {0};
+                uint8_t volume;
+
+                music_player_get_snapshot(&snap);
+                volume = snap.volume_percent;
+                volume = (uint8_t)((volume <= 5U) ? 0U : (volume - 5U));
+                (void)music_player_set_volume(volume);
+                ui_set_status_locked(&s_model, ui_tr("volume down"));
+                break;
+            }
+            case UI_BUTTON_UP:
+            case UI_BUTTON_DOWN:
             default:
                 break;
         }
@@ -5727,6 +5982,12 @@ static void ui_handle_button_action(ui_button_t button)
                 ui_refresh_current_locked(&s_model);
             }
             break;
+        case UI_BUTTON_VOL_UP:
+            ui_menu_move_locked(&s_model, -1);
+            break;
+        case UI_BUTTON_VOL_DOWN:
+            ui_menu_move_locked(&s_model, 1);
+            break;
         default:
             break;
     }
@@ -5745,7 +6006,7 @@ static void ui_handle_button_event(ui_button_t button, bool pressed)
 {
     ui_button_state_t *state = NULL;
 
-    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_VOL_DOWN) {
         return;
     }
     state = &s_button_states[(uint8_t)button];
@@ -5767,7 +6028,7 @@ static void ui_clear_stuck_button_state(ui_button_t button)
 {
     ui_button_state_t *state = NULL;
 
-    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_VOL_DOWN) {
         return;
     }
     state = &s_button_states[(uint8_t)button];
@@ -6151,12 +6412,24 @@ static void ui_issue_pending_task_cancel(void)
 static void ui_refresh_sources(void)
 {
     uint32_t now_ms = esp_log_timestamp();
+    music_player_snapshot_t snapshot = {0};
 
     ui_sync_burn_settings_from_runtime();
     ui_update_clock_if_needed(now_ms);
     ui_update_fps_if_needed(now_ms);
     ui_update_power_if_needed(now_ms);
     ui_update_burn_snapshot_if_needed(now_ms);
+    music_player_get_snapshot(&snapshot);
+    if (!s_music_snapshot_cached || memcmp(&s_music_snapshot_cache, &snapshot, sizeof(snapshot)) != 0) {
+        s_music_snapshot_cache = snapshot;
+        s_music_snapshot_cached = true;
+        if (ui_take_model_lock()) {
+            if (s_model.page == UI_PAGE_MUSIC_PLAYER) {
+                ui_mark_content_dirty(&s_model);
+            }
+            xSemaphoreGive(s_model_lock);
+        }
+    }
 }
 
 static void ui_fill_action_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len, const char **symbol, uint32_t *accent)
@@ -6167,6 +6440,72 @@ static void ui_fill_action_row(const ui_model_t *model, uint16_t index, char *ti
     snprintf(hint, hint_len, "%s", ui_file_kind_label(model->action_kind));
     *symbol = (action == UI_FILE_ACTION_VERIFY_ROM || action == UI_FILE_ACTION_VERIFY_SAVE) ? LV_SYMBOL_OK : LV_SYMBOL_UPLOAD;
     *accent = 0x4CC9F0;
+}
+
+static void ui_fill_music_player_row(
+    const ui_model_t *model,
+    uint16_t index,
+    char *title,
+    size_t title_len,
+    char *hint,
+    size_t hint_len)
+{
+    music_player_snapshot_t snap = {0};
+    uint32_t percent = 0U;
+    char percent_text[12] = {0};
+
+    (void)model;
+    (void)index;
+    music_player_get_snapshot(&snap);
+    if (snap.file_size != 0U) {
+        percent = (uint32_t)(((uint64_t)snap.position * 100ULL) / (uint64_t)snap.file_size);
+        if (percent > 100U) {
+            percent = 100U;
+        }
+    }
+    snprintf(percent_text, sizeof(percent_text), "%lu%%", (unsigned long)percent);
+    switch (index) {
+        case 0:
+            snprintf(title, title_len, "%s", ui_tr("Track"));
+            snprintf(hint, hint_len, "%s", snap.name[0] != '\0' ? snap.name : "--");
+            break;
+        case 1:
+            snprintf(title, title_len, "%s", ui_tr("State"));
+            switch (snap.state) {
+                case MUSIC_PLAYER_STATE_LOADING:
+                    snprintf(hint, hint_len, "%s", ui_tr("loading"));
+                    break;
+                case MUSIC_PLAYER_STATE_PLAYING:
+                    snprintf(hint, hint_len, "%s", ui_tr("playing"));
+                    break;
+                case MUSIC_PLAYER_STATE_PAUSED:
+                    snprintf(hint, hint_len, "%s", ui_tr("paused"));
+                    break;
+                case MUSIC_PLAYER_STATE_FINISHED:
+                    snprintf(hint, hint_len, "%s", ui_tr("done"));
+                    break;
+                case MUSIC_PLAYER_STATE_ERROR:
+                    snprintf(hint, hint_len, "%s", snap.message[0] != '\0' ? snap.message : ui_tr("error"));
+                    break;
+                case MUSIC_PLAYER_STATE_IDLE:
+                default:
+                    snprintf(hint, hint_len, "%s", ui_tr("idle"));
+                    break;
+            }
+            break;
+        case 2:
+            snprintf(title, title_len, "%s", ui_tr("Progress"));
+            snprintf(hint, hint_len, "%s", percent_text);
+            break;
+        case 3:
+            snprintf(title, title_len, "%s", ui_tr("Volume"));
+            snprintf(hint, hint_len, "%u%%", snap.volume_percent);
+            break;
+        default:
+            title[0] = '\0';
+            hint[0] = '\0';
+            break;
+    }
 }
 
 static void ui_fill_action_detail_row(const ui_model_t *model, uint16_t detail_index, char *title, size_t title_len, char *hint, size_t hint_len)
@@ -7288,6 +7627,9 @@ static void ui_px_fill_row(
         case UI_PAGE_TF:
             ui_fill_tf_row(model, index, title, title_len, hint, hint_len);
             break;
+        case UI_PAGE_MUSIC_PLAYER:
+            ui_fill_music_player_row(model, index, title, title_len, hint, hint_len);
+            break;
         case UI_PAGE_FILES:
             ui_fill_file_row(model, row, title, title_len, hint, hint_len, &symbol, &accent);
             break;
@@ -7613,6 +7955,93 @@ static void ui_px_draw_burner_cart_info(const ui_model_t *model)
     }
 }
 
+static void ui_px_draw_music_player(const ui_model_t *model)
+{
+    music_player_snapshot_t snap = {0};
+    char header[UI_ROW_TEXT_MAX_LEN] = {0};
+    char meta[UI_ROW_TEXT_MAX_LEN] = {0};
+    char progress_text[24] = {0};
+    uint32_t percent = 0U;
+    int32_t fill_w = 0;
+
+    (void)model;
+    music_player_get_snapshot(&snap);
+    if (snap.file_size != 0U) {
+        percent = (uint32_t)(((uint64_t)snap.position * 100ULL) / (uint64_t)snap.file_size);
+        if (percent > 100U) {
+            percent = 100U;
+        }
+    }
+    fill_w = (int32_t)(((uint32_t)UI_MUSIC_SEEK_BAR_W * percent) / 100U);
+
+    snprintf(
+        header,
+        sizeof(header),
+        "%.*s",
+        (int)(sizeof(header) - 1U),
+        snap.name[0] != '\0' ? snap.name : ui_tr("no file selected"));
+    snprintf(meta, sizeof(meta), "%luHz %uch %ubit  vol %u%%",
+             (unsigned long)snap.sample_rate,
+             (unsigned)snap.channels,
+             (unsigned)snap.bits_per_sample,
+             (unsigned)snap.volume_percent);
+    snprintf(progress_text, sizeof(progress_text), "%lu%%", (unsigned long)percent);
+
+    ui_px_text_clipped(12, UI_MUSIC_INFO_Y, UI_CANVAS_W - 24, header, true);
+    ui_px_text_clipped(12, UI_MUSIC_INFO_Y + 18, UI_CANVAS_W - 24, meta, true);
+    ui_px_frame(UI_MUSIC_SEEK_BAR_X, UI_MUSIC_SEEK_BAR_Y, UI_MUSIC_SEEK_BAR_W, 10, true);
+    if (fill_w > 0) {
+        ui_px_box(UI_MUSIC_SEEK_BAR_X + 1, UI_MUSIC_SEEK_BAR_Y + 1, fill_w - (fill_w > 1 ? 1 : 0), 8, true);
+    }
+    ui_px_text((UI_CANVAS_W - ui_px_text_width(progress_text)) / 2, UI_MUSIC_META_Y, progress_text, true);
+
+    switch (snap.state) {
+        case MUSIC_PLAYER_STATE_LOADING:
+            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("loading"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("loading"), true);
+            break;
+        case MUSIC_PLAYER_STATE_PAUSED:
+            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("paused"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("paused"), true);
+            break;
+        case MUSIC_PLAYER_STATE_ERROR:
+            ui_px_text_clipped(12, UI_MUSIC_CTRL_Y, UI_CANVAS_W - 24, snap.message[0] != '\0' ? snap.message : ui_tr("error"), true);
+            break;
+        case MUSIC_PLAYER_STATE_FINISHED:
+            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("done"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("done"), true);
+            break;
+        case MUSIC_PLAYER_STATE_PLAYING:
+            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("playing"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("playing"), true);
+            break;
+        case MUSIC_PLAYER_STATE_IDLE:
+        default:
+            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("idle"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("idle"), true);
+            break;
+    }
+
+    ui_px_text_clipped(18, UI_MUSIC_HINT2_Y, UI_CANVAS_W - 36, ui_tr("A pause/resume  L/R prev/next"), true);
+    ui_px_text_clipped(18, UI_MUSIC_HINT2_Y + 16, UI_CANVAS_W - 36, ui_tr("VOL +/- volume  B back"), true);
+}
+
+static void ui_px_apply_music_player(const ui_model_t *model)
+{
+    char header[UI_ROW_TEXT_MAX_LEN] = {0};
+
+    if (model == NULL) {
+        return;
+    }
+    snprintf(header, sizeof(header), "%s", ui_page_title(model->page));
+    ui_px_text(4, UI_LIST_HEADER_TEXT_Y, header, true);
+    ui_px_text_clipped(UI_CANVAS_W - 118, UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
+    ui_px_draw_battery_overlay(model, UI_LIST_HEADER_TEXT_Y);
+    ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - 2, true);
+    for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
+        ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
+    }
+    ui_px_draw_music_player(model);
+    if (model->status_text[0] != '\0') {
+        ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
+    }
+}
+
 static uint16_t ui_burn_rom_visible_rows(void)
 {
     int32_t rows = (UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H) / UI_LIST_LINE_H;
@@ -7918,7 +8347,7 @@ static void ui_px_apply_chrome_dynamic(const ui_model_t *model)
     }
     ui_px_clear_rect(0, 0, UI_CANVAS_W, UI_LIST_HEADER_H);
     snprintf(header, sizeof(header), "%s", ui_page_title(model->page));
-    if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
+    if ((model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) && model->file_path[0] != '\0') {
         snprintf(header, sizeof(header), "TF/");
         strncat(header, model->file_path, sizeof(header) - strlen(header) - 1U);
     } else if (model->page == UI_PAGE_ROOT) {
@@ -7952,7 +8381,7 @@ static void ui_px_apply_list(const ui_model_t *model)
     char header[UI_ROW_TEXT_MAX_LEN] = {0};
 
     snprintf(header, sizeof(header), "%s", ui_page_title(model->page));
-    if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
+    if ((model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) && model->file_path[0] != '\0') {
         snprintf(header, sizeof(header), "TF/");
         strncat(header, model->file_path, sizeof(header) - strlen(header) - 1U);
     }
@@ -8013,7 +8442,7 @@ static void ui_px_apply_list(const ui_model_t *model)
                 continue;
             }
         }
-        if (model->page == UI_PAGE_FILES) {
+        if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
             ui_px_draw_file_row(model, row);
             continue;
         }
@@ -8033,6 +8462,10 @@ static void ui_px_apply_list(const ui_model_t *model)
                 ui_px_text_clipped(hint_x, y + 4, hint_w, hint, true);
             }
         }
+    }
+
+    if (model->page == UI_PAGE_MUSIC_PLAYER) {
+        ui_px_draw_music_player(model);
     }
 
     ui_px_draw_action_details(model);
@@ -8273,7 +8706,11 @@ static void ui_px_render(const ui_model_t *model)
         return;
     }
     if (!full_redraw) {
-        if (!model->dirty && !model->motion_dirty && !model->content_dirty && model->chrome_dirty) {
+        if (model->page == UI_PAGE_MUSIC_PLAYER) {
+            ui_px_clear();
+            ui_px_apply_music_player(model);
+            ui_px_invalidate_full();
+        } else if (!model->dirty && !model->motion_dirty && !model->content_dirty && model->chrome_dirty) {
             ui_px_apply_chrome_dynamic(model);
         } else if (model->page == UI_PAGE_ROOT) {
             ui_px_apply_tile_dynamic(model);
@@ -8296,10 +8733,12 @@ static void ui_px_render(const ui_model_t *model)
         ui_px_apply_burner_modes(model);
     } else if (model->page == UI_PAGE_BURN_ROM) {
         ui_px_apply_burn_rom_split(model);
+    } else if (model->page == UI_PAGE_MUSIC_PLAYER) {
+        ui_px_apply_music_player(model);
     } else {
         ui_px_apply_list(model);
     }
-    if (model->page != UI_PAGE_ROOT && model->page != UI_PAGE_BURNER) {
+    if (model->page != UI_PAGE_ROOT && model->page != UI_PAGE_BURNER && model->page != UI_PAGE_MUSIC_PLAYER) {
         s_anim.list_prev_selector_y = (int32_t)s_anim.list_selector_y;
         s_anim.list_prev_selector_w = (int32_t)s_anim.list_selector_w;
         s_anim.list_prev_bar_h = (int32_t)s_anim.list_bar_h;
@@ -8415,7 +8854,7 @@ void ui_post_button(ui_button_t button, bool pressed)
         .pressed = pressed,
     };
 
-    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_MENU) {
+    if (button < UI_BUTTON_LEFT || button > UI_BUTTON_VOL_DOWN) {
         return;
     }
     if (pressed) {
