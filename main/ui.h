@@ -22,6 +22,8 @@ typedef enum {
     UI_BUTTON_PANEL_TOGGLE,
     UI_BUTTON_BACK,
     UI_BUTTON_MENU,
+    UI_BUTTON_VOL_UP,
+    UI_BUTTON_VOL_DOWN,
 } ui_button_t;
 
 #define UI_LANGUAGE_EN 0U

@@ -2352,13 +2352,13 @@ static const char *tca9555_pin_name(uint16_t pin_mask)
         case TCA9555_IO0_7:
             return "BTN_A";
         case TCA9555_IO1_0:
-            return "BTN_JOY";
-        case TCA9555_IO1_1:
             return "BTN_VOL_UP";
-        case TCA9555_IO1_2:
+        case TCA9555_IO1_1:
             return "BTN_MENU";
-        case TCA9555_IO1_3:
+        case TCA9555_IO1_2:
             return "BTN_VOL_DOWN";
+        case TCA9555_IO1_3:
+            return "IO1_3";
         case TCA9555_IO1_4:
             return "IO1_4";
         case TCA9555_IO1_5:
@@ -2386,7 +2386,6 @@ static bool tca9555_is_known_button(uint16_t pin_mask)
         case TCA9555_IO1_0:
         case TCA9555_IO1_1:
         case TCA9555_IO1_2:
-        case TCA9555_IO1_3:
             return true;
         default:
             return false;
@@ -2404,11 +2403,9 @@ static bool tca9555_button_to_ui_button(uint16_t pin_mask, ui_button_t *button)
             *button = UI_BUTTON_LEFT;
             return true;
         case TCA9555_IO0_1:
-        case TCA9555_IO1_3:
             *button = UI_BUTTON_DOWN;
             return true;
         case TCA9555_IO0_2:
-        case TCA9555_IO1_1:
             *button = UI_BUTTON_UP;
             return true;
         case TCA9555_IO0_3:
@@ -2419,14 +2416,19 @@ static bool tca9555_button_to_ui_button(uint16_t pin_mask, ui_button_t *button)
             return true;
         case TCA9555_IO0_5:
         case TCA9555_IO0_7:
-        case TCA9555_IO1_0:
             *button = UI_BUTTON_SELECT;
             return true;
         case TCA9555_IO0_6:
             *button = UI_BUTTON_BACK;
             return true;
-        case TCA9555_IO1_2:
+        case TCA9555_IO1_0:
+            *button = UI_BUTTON_VOL_UP;
+            return true;
+        case TCA9555_IO1_1:
             *button = UI_BUTTON_MENU;
+            return true;
+        case TCA9555_IO1_2:
+            *button = UI_BUTTON_VOL_DOWN;
             return true;
         default:
             return false;
