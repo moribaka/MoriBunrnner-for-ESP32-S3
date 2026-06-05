@@ -1,3 +1,7 @@
+/* GBA GBX command path helpers and probe cache. */
+
+#include "esp_attr.h"
+
 typedef struct {
     uint32_t sector_addr;
     uint32_t program_addr;
@@ -39,7 +43,7 @@ typedef struct {
 #define BURNER_GBA_GBX_CACHED_PROBE_ID_LEN 8u
 #define BURNER_GBA_GBX_CACHED_PROBE_MAX_AGE_US (10ULL * 60ULL * 1000ULL * 1000ULL)
 
-static burner_gba_gbx_cached_probe_t s_gba_gbx_cached_probe = {0};
+static EXT_RAM_BSS_ATTR burner_gba_gbx_cached_probe_t s_gba_gbx_cached_probe;
 
 void burner_gba_gbx_cache_probe_result(
     const uint8_t id[8],

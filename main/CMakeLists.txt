@@ -11,3 +11,11 @@ idf_component_get_property(esp_lcd_lib esp_lcd COMPONENT_LIB)
 if(TARGET ${esp_lcd_lib})
     target_compile_options(${esp_lcd_lib} PRIVATE -Os)
 endif()
+
+# Keep LVGL's built-in heap in PSRAM instead of consuming internal DRAM.
+idf_component_get_property(lvgl_lib "lvgl-9.4.0" COMPONENT_LIB)
+if(TARGET ${lvgl_lib})
+    target_compile_definitions(
+        ${lvgl_lib}
+        PRIVATE "CONFIG_LV_ATTRIBUTE_LARGE_RAM_ARRAY=__attribute__((section(\".ext_ram.bss\")))")
+endif()
