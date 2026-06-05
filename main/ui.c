@@ -101,7 +101,7 @@
 #define UI_ROOT_ITEM_COUNT 6
 #define UI_TF_ITEM_COUNT 7
 #define UI_WIFI_ITEM_COUNT 5
-#define UI_POWER_ITEM_COUNT 6
+#define UI_POWER_ITEM_COUNT 12
 #define UI_SYSTEM_ITEM_COUNT 8
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
@@ -334,6 +334,8 @@ typedef struct {
     uint8_t battery_percent;
     bool battery_valid;
     bool battery_charging;
+    bool power_valid;
+    power_manager_telemetry_t power_telemetry;
     bool dirty;
     bool motion_dirty;
     bool content_dirty;
@@ -5852,12 +5854,139 @@ static void ui_update_fps_if_needed(uint32_t now_ms)
     xSemaphoreGive(s_model_lock);
 }
 
-static void ui_update_battery_if_needed(uint32_t now_ms)
+static bool ui_power_adc_supported(const ui_model_t *model)
+{
+    return model != NULL && model->power_valid && model->power_telemetry.chip_type == POWER_CHIP_AXP209;
+}
+
+static void ui_format_power_voltage(uint32_t millivolts, bool supported, char *out, size_t out_len)
+{
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (!supported) {
+        snprintf(out, out_len, "--");
+        return;
+    }
+    snprintf(out, out_len, "%" PRIu32 "mV", millivolts);
+}
+
+static void ui_format_power_current(uint32_t milliamps_x10, bool supported, char *out, size_t out_len)
+{
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (!supported) {
+        snprintf(out, out_len, "--");
+        return;
+    }
+    if ((milliamps_x10 % 10U) == 0U) {
+        snprintf(out, out_len, "%" PRIu32 "mA", milliamps_x10 / 10U);
+        return;
+    }
+    snprintf(out, out_len, "%" PRIu32 ".%" PRIu32 "mA", milliamps_x10 / 10U, milliamps_x10 % 10U);
+}
+
+static void ui_format_power_temp(int32_t deci_celsius, bool supported, char *out, size_t out_len)
+{
+    uint32_t abs_value;
+
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (!supported) {
+        snprintf(out, out_len, "--");
+        return;
+    }
+
+    abs_value = (deci_celsius < 0) ? (uint32_t)(-deci_celsius) : (uint32_t)deci_celsius;
+    snprintf(
+        out,
+        out_len,
+        "%s%" PRIu32 ".%" PRIu32 "C",
+        (deci_celsius < 0) ? "-" : "",
+        abs_value / 10U,
+        abs_value % 10U);
+}
+
+static const char *ui_power_state_label(const char *state)
+{
+    if (state == NULL || state[0] == '\0' || strcmp(state, "unknown") == 0) {
+        return "--";
+    }
+    if (strcmp(state, "charging") == 0) {
+        return ui_lang_is_zh() ? "充电中" : "charging";
+    }
+    if (strcmp(state, "discharging") == 0) {
+        return ui_lang_is_zh() ? "放电中" : "dischg";
+    }
+    if (strcmp(state, "charge_full") == 0) {
+        return ui_lang_is_zh() ? "已满" : "full";
+    }
+    if (strcmp(state, "discharging_light_load") == 0) {
+        return ui_lang_is_zh() ? "轻载" : "light";
+    }
+    if (strcmp(state, "no_battery_external_power") == 0) {
+        return ui_lang_is_zh() ? "外部供电" : "ext only";
+    }
+    return state;
+}
+
+static const char *ui_power_direction_label(const char *direction)
+{
+    if (direction == NULL || direction[0] == '\0' || strcmp(direction, "unknown") == 0) {
+        return "--";
+    }
+    if (strcmp(direction, "charge") == 0) {
+        return ui_lang_is_zh() ? "充电" : "chg";
+    }
+    if (strcmp(direction, "discharge") == 0) {
+        return ui_lang_is_zh() ? "放电" : "dis";
+    }
+    if (strcmp(direction, "external") == 0) {
+        return ui_lang_is_zh() ? "外供" : "ext";
+    }
+    return direction;
+}
+
+static const char *ui_power_mode_label(const char *mode)
+{
+    if (mode == NULL || mode[0] == '\0' || strcmp(mode, "unknown") == 0) {
+        return "--";
+    }
+    if (strcmp(mode, "charging") == 0) {
+        return ui_lang_is_zh() ? "充电" : "charging";
+    }
+    if (strcmp(mode, "charging_limited") == 0) {
+        return ui_lang_is_zh() ? "限流充电" : "chg lim";
+    }
+    if (strcmp(mode, "charge_disabled") == 0) {
+        return ui_lang_is_zh() ? "已禁用" : "disabled";
+    }
+    if (strcmp(mode, "charge_ready") == 0) {
+        return ui_lang_is_zh() ? "待充电" : "ready";
+    }
+    if (strcmp(mode, "battery_only") == 0) {
+        return ui_lang_is_zh() ? "电池供电" : "battery";
+    }
+    if (strcmp(mode, "external_only") == 0) {
+        return ui_lang_is_zh() ? "外部供电" : "ext only";
+    }
+    if (strcmp(mode, "no_battery") == 0) {
+        return ui_lang_is_zh() ? "无电池" : "no batt";
+    }
+    return mode;
+}
+
+static void ui_update_power_if_needed(uint32_t now_ms)
 {
     uint8_t percent = 0;
     bool valid = false;
     bool charging = false;
+    bool power_valid = false;
     power_manager_telemetry_t telemetry = {0};
+    bool battery_changed;
+    bool power_changed;
 
     if (s_last_battery_refresh_ms != 0U && (now_ms - s_last_battery_refresh_ms) < UI_BATTERY_REFRESH_MS) {
         return;
@@ -5865,6 +5994,7 @@ static void ui_update_battery_if_needed(uint32_t now_ms)
     s_last_battery_refresh_ms = now_ms;
 
     if (power_manager_get_telemetry(&telemetry) == ESP_OK) {
+        power_valid = true;
         percent = telemetry.battery_percent;
         valid = telemetry.battery_percent_valid;
         charging = telemetry.charging;
@@ -5873,12 +6003,19 @@ static void ui_update_battery_if_needed(uint32_t now_ms)
     if (!ui_take_model_lock()) {
         return;
     }
-    if (s_model.battery_valid != valid || s_model.battery_percent != percent ||
-        s_model.battery_charging != charging) {
+    battery_changed = (s_model.battery_valid != valid || s_model.battery_percent != percent ||
+        s_model.battery_charging != charging);
+    power_changed = (s_model.power_valid != power_valid ||
+        memcmp(&s_model.power_telemetry, &telemetry, sizeof(telemetry)) != 0);
+    if (battery_changed || power_changed) {
         s_model.battery_valid = valid;
         s_model.battery_percent = percent;
         s_model.battery_charging = charging;
-        ui_mark_chrome_dirty(&s_model);
+        s_model.power_valid = power_valid;
+        s_model.power_telemetry = telemetry;
+        if (battery_changed) {
+            ui_mark_chrome_dirty(&s_model);
+        }
         ui_mark_content_dirty(&s_model);
     }
     xSemaphoreGive(s_model_lock);
@@ -6007,7 +6144,7 @@ static void ui_refresh_sources(void)
     ui_sync_burn_settings_from_runtime();
     ui_update_clock_if_needed(now_ms);
     ui_update_fps_if_needed(now_ms);
-    ui_update_battery_if_needed(now_ms);
+    ui_update_power_if_needed(now_ms);
     ui_update_burn_snapshot_if_needed(now_ms);
 }
 
@@ -6208,39 +6345,66 @@ static void ui_fill_tf_row(const ui_model_t *model, uint16_t index, char *title,
 
 static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
-    char size_text[32] = {0};
-    char uptime_text[24] = {0};
+    bool power_valid = (model != NULL && model->power_valid);
+    bool adc_supported = ui_power_adc_supported(model);
+    const power_manager_telemetry_t *power = power_valid ? &model->power_telemetry : NULL;
 
     switch (index) {
         case 0:
             snprintf(title, title_len, "%s", ui_tr("Battery"));
-            if (model->battery_valid) {
+            if (model != NULL && model->battery_valid) {
                 snprintf(hint, hint_len, "%u%%", (unsigned)model->battery_percent);
+            } else if (power_valid && power->battery_present) {
+                snprintf(hint, hint_len, "--");
+            } else if (power_valid) {
+                snprintf(hint, hint_len, "%s", ui_lang_is_zh() ? "无电池" : "no batt");
             } else {
                 snprintf(hint, hint_len, "--");
             }
             break;
         case 1:
-            snprintf(title, title_len, "%s", ui_tr("Charging"));
-            snprintf(hint, hint_len, "%s", model->battery_charging ? ui_tr("yes") : ui_tr("no"));
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电池压" : "BATV");
+            ui_format_power_voltage(power_valid ? power->battery_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 2:
-            snprintf(title, title_len, "%s", ui_tr("Uptime"));
-            ui_format_uptime((uint64_t)(esp_timer_get_time() / 1000LL), uptime_text, sizeof(uptime_text));
-            snprintf(hint, hint_len, "%s", uptime_text);
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "外部压" : "ACIN");
+            ui_format_power_voltage(power_valid ? power->acin_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 3:
-            snprintf(title, title_len, "%s", ui_tr("Heap"));
-            ui_format_u64_size((uint64_t)esp_get_free_heap_size(), size_text, sizeof(size_text));
-            snprintf(hint, hint_len, "%s", size_text);
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "USB压" : "VBUS");
+            ui_format_power_voltage(power_valid ? power->vbus_voltage_mv : 0U, adc_supported, hint, hint_len);
             break;
         case 4:
-            snprintf(title, title_len, "Power");
-            snprintf(hint, hint_len, "%s", power_manager_ready() ? power_manager_chip_name() : ui_tr("missing"));
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "系统压" : "IPS");
+            ui_format_power_voltage(power_valid ? power->ipsout_voltage_mv : 0U, adc_supported, hint, hint_len);
+            break;
+        case 5:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "充电流" : "ICHG");
+            ui_format_power_current(power_valid ? power->battery_charge_current_ma_x10 : 0U, adc_supported, hint, hint_len);
+            break;
+        case 6:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "放电流" : "IDIS");
+            ui_format_power_current(power_valid ? power->battery_discharge_current_ma_x10 : 0U, adc_supported, hint, hint_len);
+            break;
+        case 7:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "方向" : "Dir");
+            snprintf(hint, hint_len, "%s", power_valid ? ui_power_direction_label(power->current_direction) : "--");
+            break;
+        case 8:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "模式" : "Mode");
+            snprintf(hint, hint_len, "%s", power_valid ? ui_power_mode_label(power->charge_mode) : "--");
+            break;
+        case 9:
+            snprintf(title, title_len, "%s", ui_tr("State"));
+            snprintf(hint, hint_len, "%s", power_valid ? ui_power_state_label(power->charge_state) : "--");
+            break;
+        case 10:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "温度" : "Temp");
+            ui_format_power_temp(power_valid ? power->internal_temp_deci_c : 0, adc_supported, hint, hint_len);
             break;
         default:
-            snprintf(title, title_len, "TCA9555");
-            snprintf(hint, hint_len, "%s", tca9555_ready() ? ui_tr("ready") : ui_tr("missing"));
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电源IC" : "PMIC");
+            snprintf(hint, hint_len, "%s", power_valid ? power->chip_name : (power_manager_ready() ? power_manager_chip_name() : ui_tr("missing")));
             break;
     }
 }
@@ -6860,7 +7024,7 @@ static void ui_fill_settings_row(const ui_model_t *model, uint16_t index, char *
             snprintf(hint, hint_len, "%s", ui_tr("current language"));
             break;
         case 8:
-            snprintf(title, title_len, "%s", ui_tr("Firmware OTA"));
+            snprintf(title, title_len, "%s", ui_tr("Firmware Full Upgrade"));
             snprintf(hint, hint_len, "%s", ui_tr("web action"));
             break;
         default:

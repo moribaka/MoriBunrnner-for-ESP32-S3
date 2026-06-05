@@ -19,7 +19,6 @@
 #include "esp_chip_info.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "esp_ota_ops.h"
 #include "esp_app_desc.h"
 #include "esp_attr.h"
 #include "esp_psram.h"
@@ -111,7 +110,6 @@
 #define WEB_FILE_PATH_LEN_MAX 320
 #define WEB_MAIN_UPLOAD_MAX_SIZE (512 * 1024)
 #define WEB_FILE_UPLOAD_MAX_SIZE (1024 * 1024)
-#define FW_UPLOAD_CHUNK_SIZE 4096
 #define WIFI_JSON_BODY_MAX 512
 #define POWER_JSON_BODY_MAX 160
 #define WIFI_SCAN_AP_MAX 24
@@ -636,6 +634,9 @@ typedef struct {
     char device_title[WEB_LANG_TEXT_MAX];
     char btn_refresh_device[WEB_LANG_TEXT_MAX];
     char device_loading[WEB_LANG_TEXT_MAX];
+    char power_title[WEB_LANG_TEXT_MAX];
+    char btn_refresh_power[WEB_LANG_TEXT_MAX];
+    char power_loading[WEB_LANG_TEXT_MAX];
     char msg_select_main[WEB_LANG_TEXT_MAX];
     char msg_select_deploy_zip[WEB_LANG_TEXT_MAX];
     char msg_select_firmware[WEB_LANG_TEXT_MAX];
@@ -650,6 +651,7 @@ typedef struct {
     char msg_storage_status_error_prefix[WEB_LANG_TEXT_MAX];
     char msg_set_mode_error_prefix[WEB_LANG_TEXT_MAX];
     char msg_device_info_error_prefix[WEB_LANG_TEXT_MAX];
+    char msg_power_status_error_prefix[WEB_LANG_TEXT_MAX];
     char msg_applying[WEB_LANG_TEXT_MAX];
     char language_title[WEB_LANG_TEXT_MAX];
     char language_tip[WEB_LANG_TEXT_MAX];
@@ -1168,11 +1170,6 @@ const char s_base_settings_html[] =
     "<div class='card'>"
     "<h3 id='txt_fw_title'>...</h3>"
     "<p id='txt_fw_tip' class='tip'>...</p>"
-    "<div class='row'>"
-    "<input id='fw_file' type='file' accept='.bin,application/octet-stream' style='flex:1;min-width:240px'>"
-    "<button id='btn_fw_upload' class='primary'>...</button>"
-    "</div>"
-    "<pre id='fw_upload'>...</pre>"
     "</div>"
     "<div class='card'>"
     "<h3 id='txt_language_title'>...</h3>"
@@ -1199,20 +1196,25 @@ const char s_base_settings_html[] =
     "<div class='row'><button id='btn_dev'>...</button></div>"
     "<pre id='dev'>...</pre>"
     "</div>"
+    "<div class='card'>"
+    "<h3 id='txt_power_title'>...</h3>"
+    "<div class='row'><button id='btn_power'>...</button></div>"
+    "<pre id='power'>...</pre>"
+    "</div>"
     "<script>"
     "const storageEl=document.getElementById('storage');"
     "const devEl=document.getElementById('dev');"
+    "const powerEl=document.getElementById('power');"
     "const mainUploadEl=document.getElementById('main_upload');"
     "const deployZipStatusEl=document.getElementById('deploy_zip_status');"
-    "const fwUploadEl=document.getElementById('fw_upload');"
     "const langStatusEl=document.getElementById('lang_status');"
     "const langSelectEl=document.getElementById('lang_select');"
     "const lang={};"
     "let mainUploadState='idle';"
     "let deployZipState='idle';"
-    "let fwUploadState='idle';"
     "let storageState='loading';"
     "let deviceState='loading';"
+    "let powerState='loading';"
     "let langState='idle';"
     "function tr(key){"
     "const v=lang[key];"
@@ -1225,9 +1227,9 @@ const char s_base_settings_html[] =
     "function refreshIdleTexts(){"
     "if(mainUploadState==='idle'){mainUploadEl.textContent=tr('upload_idle');}"
     "if(deployZipState==='idle'){deployZipStatusEl.textContent=tr('upload_idle')||'Idle';}"
-    "if(fwUploadState==='idle'){fwUploadEl.textContent=tr('firmware_idle');}"
     "if(storageState==='loading'){storageEl.textContent=tr('storage_loading');}"
     "if(deviceState==='loading'){devEl.textContent=tr('device_loading');}"
+    "if(powerState==='loading'){powerEl.textContent=tr('power_loading');}"
     "if(langState==='idle'){langStatusEl.textContent=tr('language_idle');}"
     "}"
     "function applyLang(){"
@@ -1248,7 +1250,6 @@ const char s_base_settings_html[] =
     "setTextByKey('btn_deploy_zip','btn_system_deploy');"
     "setTextByKey('txt_fw_title','firmware_title');"
     "setTextByKey('txt_fw_tip','firmware_tip');"
-    "setTextByKey('btn_fw_upload','btn_upload_firmware');"
     "setTextByKey('txt_language_title','language_title');"
     "setTextByKey('txt_language_tip','language_tip');"
     "setTextByKey('btn_lang_load','btn_read_lang_list');"
@@ -1260,6 +1261,8 @@ const char s_base_settings_html[] =
     "setTextByKey('btn_refresh','btn_refresh_storage');"
     "setTextByKey('txt_device_title','device_title');"
     "setTextByKey('btn_dev','btn_refresh_device');"
+    "setTextByKey('txt_power_title','power_title');"
+    "setTextByKey('btn_power','btn_refresh_power');"
     "refreshIdleTexts();"
     "}"
     "function formatBytes(value){"
@@ -1272,23 +1275,87 @@ const char s_base_settings_html[] =
     "const digits=(idx===0||v>=100)?0:(v>=10?1:2);"
     "return v.toFixed(digits)+' '+units[idx]+' ('+Math.round(n)+' bytes)';"
     "}"
-    "function boolText(v){return v?'yes':'no';}"
+    "function boolText(v){return v?'yes / 是':'no / 否';}"
+    "function powerStateText(v){"
+    "if(!v||v==='unknown'){return '-';}"
+    "if(v==='charging'){return 'charging / 充电中';}"
+    "if(v==='discharging'){return 'discharging / 放电中';}"
+    "if(v==='charge_full'){return 'full / 已满';}"
+    "if(v==='discharging_light_load'){return 'light load / 轻载放电';}"
+    "if(v==='no_battery_external_power'){return 'external only / 外部供电';}"
+    "return v;"
+    "}"
+    "function powerDirectionText(v){"
+    "if(!v||v==='unknown'){return '-';}"
+    "if(v==='charge'){return 'charge / 充电';}"
+    "if(v==='discharge'){return 'discharge / 放电';}"
+    "if(v==='external'){return 'external / 外供';}"
+    "return v;"
+    "}"
+    "function powerModeText(v){"
+    "if(!v||v==='unknown'){return '-';}"
+    "if(v==='charging'){return 'charging / 充电';}"
+    "if(v==='charging_limited'){return 'charging limited / 限流充电';}"
+    "if(v==='charge_disabled'){return 'disabled / 已禁用';}"
+    "if(v==='charge_ready'){return 'ready / 待充电';}"
+    "if(v==='battery_only'){return 'battery only / 电池供电';}"
+    "if(v==='external_only'){return 'external only / 外部供电';}"
+    "if(v==='no_battery'){return 'no battery / 无电池';}"
+    "return v;"
+    "}"
     "function setStorageText(obj){"
     "storageState='custom';"
     "if(!obj||typeof obj!=='object'){storageEl.textContent=String(obj);return;}"
     "const lines=[];"
-    "lines.push('TF ready: '+boolText(!!obj.tf_ready));"
-    "lines.push('USB MSC ready: '+boolText(!!obj.usb_msc_ready));"
-    "lines.push('USB passthrough enabled: '+boolText(!!obj.usb_passthrough_enabled));"
-    "lines.push('TF busy: '+boolText(!!obj.tf_busy));"
+    "lines.push('TF ready / TF就绪: '+boolText(!!obj.tf_ready));"
+    "lines.push('USB MSC ready / USB直通就绪: '+boolText(!!obj.usb_msc_ready));"
+    "lines.push('USB passthrough / USB直通启用: '+boolText(!!obj.usb_passthrough_enabled));"
+    "lines.push('TF busy / TF占用: '+boolText(!!obj.tf_busy));"
     "if(obj.tf_capacity_ok){"
-    "lines.push('TF total: '+formatBytes(obj.tf_total_bytes));"
-    "lines.push('TF used: '+formatBytes(obj.tf_used_bytes));"
-    "lines.push('TF free: '+formatBytes(obj.tf_free_bytes));"
+    "lines.push('TF total / TF总量: '+formatBytes(obj.tf_total_bytes));"
+    "lines.push('TF used / TF已用: '+formatBytes(obj.tf_used_bytes));"
+    "lines.push('TF free / TF剩余: '+formatBytes(obj.tf_free_bytes));"
     "}else{"
-    "lines.push('TF capacity: unavailable');"
+    "lines.push('TF capacity / TF容量: unavailable / 不可用');"
     "}"
     "storageEl.textContent=lines.join('\\n');"
+    "}"
+    "function formatPowerVoltage(value){"
+    "const n=Number(value);"
+    "return Number.isFinite(n)&&n>0?(Math.round(n)+' mV'):'-';"
+    "}"
+    "function formatPowerCurrent(value){"
+    "const n=Number(value);"
+    "if(!Number.isFinite(n)||n<=0){return '-';}"
+    "const ma=n/10;"
+    "return (Math.abs(ma-Math.round(ma))<0.05?Math.round(ma).toString():ma.toFixed(1))+' mA';"
+    "}"
+    "function formatPowerTemp(value,chipType){"
+    "const n=Number(value);"
+    "if(!Number.isFinite(n)){return '-';}"
+    "if(n===0&&chipType!=='axp209'){return '-';}"
+    "return (n/10).toFixed(1)+' C';"
+    "}"
+    "function setPowerText(obj){"
+    "powerState='custom';"
+    "if(!obj||typeof obj!=='object'||!obj.ok||!obj.power){powerEl.textContent=JSON.stringify(obj,null,2);return;}"
+    "const p=obj.power;"
+    "const lines=[];"
+    "lines.push('Chip / 芯片: '+(p.chip_name||'-')+' / '+(p.chip_type||'-'));"
+    "lines.push('Battery / 电池: '+formatPowerVoltage(p.battery_voltage_mv));"
+    "lines.push('ACIN / 外部输入: '+formatPowerVoltage(p.acin_voltage_mv));"
+    "lines.push('VBUS / USB 输入: '+formatPowerVoltage(p.vbus_voltage_mv));"
+    "lines.push('IPSOUT / 系统输出: '+formatPowerVoltage(p.ipsout_voltage_mv));"
+    "lines.push('Charge current / 充电电流: '+formatPowerCurrent(p.battery_charge_current_ma_x10));"
+    "lines.push('Discharge current / 放电电流: '+formatPowerCurrent(p.battery_discharge_current_ma_x10));"
+    "lines.push('Direction / 电流方向: '+powerDirectionText(p.current_direction));"
+    "lines.push('Charge mode / 充电模式: '+powerModeText(p.charge_mode));"
+    "lines.push('State / 当前状态: '+powerStateText(p.charge_state));"
+    "lines.push('Battery present / 电池存在: '+boolText(!!p.battery_present));"
+    "lines.push('VBUS present / 外部供电: '+boolText(!!p.vbus_present));"
+    "lines.push('Temp / 温度: '+formatPowerTemp(p.internal_temp_deci_c,p.chip_type));"
+    "if(p.battery_percent_valid){lines.push('Battery percent / 电量估算: '+String(p.battery_percent)+'%');}"
+    "powerEl.textContent=lines.join('\\n');"
     "}"
     "function setLangOptions(files,current){"
     "langSelectEl.innerHTML='';"
@@ -1357,6 +1424,10 @@ const char s_base_settings_html[] =
     "try{deviceState='custom';devEl.textContent=await requestText('/api/device/info');}"
     "catch(e){deviceState='custom';devEl.textContent=tr('msg_device_info_error_prefix')+String(e);}"
     "}"
+    "async function loadPowerStatus(){"
+    "try{setPowerText(await requestJson('/api/power/status'));}"
+    "catch(e){powerState='custom';powerEl.textContent=tr('msg_power_status_error_prefix')+String(e);}"
+    "}"
     "async function uploadMainHtml(){"
     "const fi=document.getElementById('main_file');"
     "const files=(fi&&fi.files)?Array.from(fi.files):[];"
@@ -1380,20 +1451,6 @@ const char s_base_settings_html[] =
     "mainUploadEl.textContent=tr('msg_upload_failed_prefix')+' '+ok+'/'+files.length+'\\n'+lines.join('\\n');"
     "}else{"
     "mainUploadEl.textContent=tr('msg_upload_success_prefix')+' '+ok+'/'+files.length+'\\n'+lines.join('\\n');"
-    "}"
-    "}"
-    "async function uploadFirmware(){"
-    "const fi=document.getElementById('fw_file');"
-    "const f=(fi&&fi.files&&fi.files[0])?fi.files[0]:null;"
-    "if(!f){fwUploadState='custom';fwUploadEl.textContent=tr('msg_select_firmware');return;}"
-    "fwUploadEl.textContent=tr('msg_uploading_firmware_prefix')+' '+f.name+' ...';"
-    "try{"
-    "const r=await requestJson('/api/fw/upgrade',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});"
-    "fwUploadState='custom';"
-    "fwUploadEl.textContent=tr('msg_firmware_success_prefix')+'\\n'+JSON.stringify(r,null,2);"
-    "}catch(e){"
-    "fwUploadState='custom';"
-    "fwUploadEl.textContent=tr('msg_upload_failed_prefix')+': '+String(e);"
     "}"
     "}"
     "async function uploadSystemDeployZip(){"
@@ -1431,14 +1488,15 @@ const char s_base_settings_html[] =
     "document.getElementById('btn_enable').onclick=()=>setUsbMode(true);"
     "document.getElementById('btn_disable').onclick=()=>setUsbMode(false);"
     "document.getElementById('btn_dev').onclick=loadDeviceInfo;"
+    "document.getElementById('btn_power').onclick=loadPowerStatus;"
     "document.getElementById('btn_main_upload').onclick=uploadMainHtml;"
     "document.getElementById('btn_deploy_zip').onclick=uploadSystemDeployZip;"
-    "document.getElementById('btn_fw_upload').onclick=uploadFirmware;"
     "document.getElementById('btn_lang_load').onclick=loadLangList;"
     "document.getElementById('btn_lang_apply').onclick=applyLanguage;"
     "async function refreshOverview(){"
     "await refreshStorage();"
     "await loadDeviceInfo();"
+    "await loadPowerStatus();"
     "}"
     "async function initPage(){"
     "await loadLang();"
@@ -3106,11 +3164,11 @@ static void burner_lang_set_defaults(burner_lang_pack_t *lang)
         lang->btn_system_deploy,
         sizeof(lang->btn_system_deploy),
         "Deploy ZIP");
-    burner_lang_copy(lang->firmware_title, sizeof(lang->firmware_title), "Firmware Upgrade");
+    burner_lang_copy(lang->firmware_title, sizeof(lang->firmware_title), "Firmware Full Upgrade");
     burner_lang_copy(
         lang->firmware_tip,
         sizeof(lang->firmware_tip),
-        "Upload moriburnner.bin for OTA upgrade. Device will reboot automatically when successful. Do not upload .elf.");
+        "OTA upload has been removed. Please use the full-image firmware package for upgrade. Do not upload .elf.");
     burner_lang_copy(
         lang->btn_upload_firmware,
         sizeof(lang->btn_upload_firmware),
@@ -3141,6 +3199,12 @@ static void burner_lang_set_defaults(burner_lang_pack_t *lang)
         sizeof(lang->btn_refresh_device),
         "Refresh Device Info");
     burner_lang_copy(lang->device_loading, sizeof(lang->device_loading), "Loading...");
+    burner_lang_copy(lang->power_title, sizeof(lang->power_title), "Power Status");
+    burner_lang_copy(
+        lang->btn_refresh_power,
+        sizeof(lang->btn_refresh_power),
+        "Refresh Power Status");
+    burner_lang_copy(lang->power_loading, sizeof(lang->power_loading), "Loading...");
     burner_lang_copy(
         lang->msg_select_main,
         sizeof(lang->msg_select_main),
@@ -3194,6 +3258,10 @@ static void burner_lang_set_defaults(burner_lang_pack_t *lang)
         lang->msg_device_info_error_prefix,
         sizeof(lang->msg_device_info_error_prefix),
         "Device info error: ");
+    burner_lang_copy(
+        lang->msg_power_status_error_prefix,
+        sizeof(lang->msg_power_status_error_prefix),
+        "Power status error: ");
     burner_lang_copy(lang->msg_applying, sizeof(lang->msg_applying), "Applying...");
     burner_lang_copy(lang->language_title, sizeof(lang->language_title), "Language");
     burner_lang_copy(
@@ -3308,6 +3376,9 @@ static void burner_lang_apply_pair(burner_lang_pack_t *lang, const char *key, co
     BURNER_LANG_SET_FIELD("device_title", device_title);
     BURNER_LANG_SET_FIELD("btn_refresh_device", btn_refresh_device);
     BURNER_LANG_SET_FIELD("device_loading", device_loading);
+    BURNER_LANG_SET_FIELD("power_title", power_title);
+    BURNER_LANG_SET_FIELD("btn_refresh_power", btn_refresh_power);
+    BURNER_LANG_SET_FIELD("power_loading", power_loading);
     BURNER_LANG_SET_FIELD("msg_select_main", msg_select_main);
     BURNER_LANG_SET_FIELD("msg_select_deploy_zip", msg_select_deploy_zip);
     BURNER_LANG_SET_FIELD("msg_select_firmware", msg_select_firmware);
@@ -3322,6 +3393,7 @@ static void burner_lang_apply_pair(burner_lang_pack_t *lang, const char *key, co
     BURNER_LANG_SET_FIELD("msg_storage_status_error_prefix", msg_storage_status_error_prefix);
     BURNER_LANG_SET_FIELD("msg_set_mode_error_prefix", msg_set_mode_error_prefix);
     BURNER_LANG_SET_FIELD("msg_device_info_error_prefix", msg_device_info_error_prefix);
+    BURNER_LANG_SET_FIELD("msg_power_status_error_prefix", msg_power_status_error_prefix);
     BURNER_LANG_SET_FIELD("msg_applying", msg_applying);
     BURNER_LANG_SET_FIELD("language_title", language_title);
     BURNER_LANG_SET_FIELD("language_tip", language_tip);

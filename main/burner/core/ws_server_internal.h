@@ -21,7 +21,6 @@
 #include "esp_chip_info.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "esp_ota_ops.h"
 #include "esp_app_desc.h"
 #include "esp_psram.h"
 #include "esp_freertos_hooks.h"
@@ -110,7 +109,6 @@
 #define WEB_FILE_PATH_LEN_MAX 320
 #define WEB_MAIN_UPLOAD_MAX_SIZE (512 * 1024)
 #define WEB_FILE_UPLOAD_MAX_SIZE (1024 * 1024)
-#define FW_UPLOAD_CHUNK_SIZE 4096
 #define WIFI_JSON_BODY_MAX 512
 #define POWER_JSON_BODY_MAX 160
 #define WIFI_SCAN_AP_MAX 24
@@ -618,6 +616,9 @@ typedef struct {
     char device_title[WEB_LANG_TEXT_MAX];
     char btn_refresh_device[WEB_LANG_TEXT_MAX];
     char device_loading[WEB_LANG_TEXT_MAX];
+    char power_title[WEB_LANG_TEXT_MAX];
+    char btn_refresh_power[WEB_LANG_TEXT_MAX];
+    char power_loading[WEB_LANG_TEXT_MAX];
     char msg_select_main[WEB_LANG_TEXT_MAX];
     char msg_select_deploy_zip[WEB_LANG_TEXT_MAX];
     char msg_select_firmware[WEB_LANG_TEXT_MAX];
@@ -632,6 +633,7 @@ typedef struct {
     char msg_storage_status_error_prefix[WEB_LANG_TEXT_MAX];
     char msg_set_mode_error_prefix[WEB_LANG_TEXT_MAX];
     char msg_device_info_error_prefix[WEB_LANG_TEXT_MAX];
+    char msg_power_status_error_prefix[WEB_LANG_TEXT_MAX];
     char msg_applying[WEB_LANG_TEXT_MAX];
     char language_title[WEB_LANG_TEXT_MAX];
     char language_tip[WEB_LANG_TEXT_MAX];

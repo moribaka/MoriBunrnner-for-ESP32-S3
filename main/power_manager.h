@@ -30,11 +30,16 @@ typedef struct {
     bool battery_present;
     uint16_t charge_current_limit_ma;
     uint32_t battery_voltage_mv;
+    uint32_t acin_voltage_mv;
     uint32_t vbus_voltage_mv;
+    uint32_t battery_charge_current_ma_x10;
+    uint32_t battery_discharge_current_ma_x10;
     uint32_t ipsout_voltage_mv;
     int32_t internal_temp_deci_c;
     const char *chip_name;
     const char *charge_state;
+    const char *current_direction;
+    const char *charge_mode;
     ip5306_status_t ip5306_status;
     axp209_snapshot_t axp209_snapshot;
     axp209_status_flags_t axp209_flags;

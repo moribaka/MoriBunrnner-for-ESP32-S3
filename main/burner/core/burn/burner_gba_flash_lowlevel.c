@@ -11,6 +11,136 @@ static burner_gba_amd_runtime_profile_t s_gba_amd_buffer_template_profile = BURN
 static uint32_t s_gba_amd_buffer_template_unlock0 = 0u;
 static uint32_t s_gba_amd_buffer_template_unlock1 = 0u;
 
+static bool burner_gba_amd_status_matches_dq7(uint16_t status, uint16_t expected_data)
+{
+    return (status & 0x0080u) == (expected_data & 0x0080u);
+}
+
+static esp_err_t burner_bacon_gba_amd_wait_program_complete(
+    uint32_t last_word_addr,
+    uint16_t expected_data,
+    uint32_t timeout_ms,
+    uint16_t *status_out)
+{
+    int64_t deadline_us;
+    uint16_t status1 = 0u;
+    uint16_t status2 = 0u;
+    esp_err_t err;
+
+    if (timeout_ms == 0u) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
+    while (esp_timer_get_time() < deadline_us) {
+        err = burner_cancel_poll();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_rom_read_u16(last_word_addr, &status1);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if (burner_gba_amd_status_matches_dq7(status1, expected_data)) {
+            err = burner_bacon_rom_read_u16(last_word_addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if (burner_gba_amd_status_matches_dq7(status2, expected_data)) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+        }
+        if ((status1 & 0x0020u) != 0u) {
+            err = burner_bacon_rom_read_u16(last_word_addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if (burner_gba_amd_status_matches_dq7(status2, expected_data)) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+            if (status_out != NULL) {
+                *status_out = status2;
+            }
+            return ESP_ERR_TIMEOUT;
+        }
+        esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        burner_task_yield_if_due();
+    }
+
+    if (status_out != NULL) {
+        *status_out = status1;
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t burner_bacon_gba_amd_wait_erase_complete(
+    uint32_t sector_word_addr,
+    uint32_t timeout_ms,
+    uint16_t *status_out)
+{
+    int64_t deadline_us;
+    uint16_t status1 = 0u;
+    uint16_t status2 = 0u;
+    esp_err_t err;
+
+    if (timeout_ms == 0u) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
+    while (esp_timer_get_time() < deadline_us) {
+        err = burner_cancel_poll();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_rom_read_u16(sector_word_addr, &status1);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if ((status1 & 0x0080u) != 0u) {
+            err = burner_bacon_rom_read_u16(sector_word_addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if ((status2 & 0x0080u) != 0u) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+        }
+        if ((status1 & 0x0020u) != 0u) {
+            err = burner_bacon_rom_read_u16(sector_word_addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if ((status2 & 0x0080u) != 0u) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+            if (status_out != NULL) {
+                *status_out = status2;
+            }
+            return ESP_ERR_TIMEOUT;
+        }
+        esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        burner_task_yield_if_due();
+    }
+
+    if (status_out != NULL) {
+        *status_out = status1;
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
 static esp_err_t burner_gba_amd_buffer_template_get(
     const burner_gba_program_cmd_cache_t *cmd,
     size_t write_words,
@@ -234,6 +364,10 @@ static esp_err_t burner_bacon_gba_rom_program(
             if (err != ESP_OK) {
                 return err;
             }
+            err = burner_bacon_gba_reset_to_read_mode();
+            if (err != ESP_OK) {
+                return err;
+            }
 
             i += 2u;
         } else {
@@ -256,6 +390,7 @@ static esp_err_t burner_bacon_gba_rom_program(
             uint64_t build_us = 0u;
             uint64_t spi_us = 0u;
             uint64_t done_wait_us = 0u;
+            uint64_t reset_us = 0u;
             uint64_t t0;
 
             if (write_len > buffer_write_bytes) {
@@ -398,11 +533,19 @@ static esp_err_t burner_bacon_gba_rom_program(
             last_word = (uint16_t)((uint16_t)buf[i + write_len - 2u] |
                                    ((uint16_t)buf[i + write_len - 1u] << 8));
             t0 = burner_gba_diag_now_us();
-            err = burner_bacon_wait_u16(
-                starting_address + (uint32_t)write_len - 2u,
+            err = burner_bacon_gba_amd_wait_program_complete(
+                starting_word_address + (uint32_t)write_words - 1u,
                 last_word,
-                BURNER_ROM_POLL_TIMEOUT_MS);
+                BURNER_ROM_POLL_TIMEOUT_MS,
+                NULL);
             done_wait_us = burner_gba_diag_now_us() - t0;
+            if (err != ESP_OK) {
+                (void)burner_bacon_gba_reset_to_read_mode();
+                return err;
+            }
+            t0 = burner_gba_diag_now_us();
+            err = burner_bacon_gba_reset_to_read_mode();
+            reset_us = burner_gba_diag_now_us() - t0;
             if (err != ESP_OK) {
                 return err;
             }
@@ -413,7 +556,7 @@ static esp_err_t burner_bacon_gba_rom_program(
                 spi_us,
                 0u,
                 done_wait_us,
-                0u);
+                reset_us);
 
             i += write_len;
             burner_task_yield_if_due();
@@ -683,21 +826,42 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
 static esp_err_t burner_bacon_gba_reset_aso_diag(void)
 {
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
 
-    err = burner_bacon_gba_command_write_u16(0x000u, 0x0090u);
+    err = burner_bacon_rom_write_u16(0x000u, cmd->amd_90);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(0x000u, 0x0000u);
+    err = burner_bacon_rom_write_u16(0x000u, 0x0000u);
     if (err != ESP_OK) {
         return err;
     }
     return burner_bacon_gba_reset_to_read_mode();
 }
 
+static esp_err_t burner_bacon_gba_ppb_enter_aso(const burner_gba_program_cmd_cache_t *cmd, uint16_t ppb_command)
+{
+    esp_err_t err;
+
+    if (cmd == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_aa);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_rom_write_u16(cmd->unlock1_addr, cmd->amd_55);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return burner_bacon_rom_write_u16(cmd->unlock0_addr, ppb_command);
+}
+
 static esp_err_t burner_bacon_gba_diag_read_ppb_lock_status(uint16_t *lock_status_out)
 {
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
 
     if (lock_status_out == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -707,15 +871,7 @@ static esp_err_t burner_bacon_gba_diag_read_ppb_lock_status(uint16_t *lock_statu
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0050u);
+    err = burner_bacon_gba_ppb_enter_aso(cmd, cmd->amd_50);
     if (err != ESP_OK) {
         return err;
     }
@@ -730,6 +886,7 @@ static esp_err_t burner_bacon_gba_diag_read_ppb_lock_status(uint16_t *lock_statu
 static esp_err_t burner_bacon_gba_diag_read_sector_ppb(uint32_t sector_addr, uint16_t *ppb_out)
 {
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
 
     if (ppb_out == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -739,15 +896,7 @@ static esp_err_t burner_bacon_gba_diag_read_sector_ppb(uint32_t sector_addr, uin
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00C0u);
+    err = burner_bacon_gba_ppb_enter_aso(cmd, cmd->amd_c0);
     if (err != ESP_OK) {
         return err;
     }
@@ -887,25 +1036,17 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     }
 
     deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
-    while (esp_timer_get_time() < deadline_us) {
-        err = burner_cancel_poll();
+    err = burner_bacon_gba_amd_wait_erase_complete(sa_word, burner_erase_remaining_timeout_ms(deadline_us), &read_back);
+    if (err == ESP_OK) {
+        err = burner_bacon_gba_reset_to_read_mode();
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_rom_read_u16(sa_word, &read_back);
-        if (err != ESP_OK) {
-            return err;
-        }
-        if (read_back == 0xFFFFu) {
-            return ESP_OK;
-        }
-        vTaskDelay(pdMS_TO_TICKS(20));
+        return ESP_OK;
     }
 
-    if (cmd->amd_profile == BURNER_GBA_AMD_RUNTIME_STANDARD) {
-        ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
-        sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(local_addr, &sector_ppb);
-    }
+    ppb_lock_err = burner_bacon_gba_diag_read_ppb_lock_status(&ppb_lock_status);
+    sector_ppb_err = burner_bacon_gba_diag_read_sector_ppb(local_addr, &sector_ppb);
     ESP_LOGW(
         BURNER_TAG,
         "GBA erase timeout flash=0x%08" PRIX32 " bank=%" PRIu32 " sa_word=0x%06" PRIX32
@@ -927,7 +1068,7 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
             "GBA erase timeout hint: sector appears PPB-protected, unlock PPB before burn");
     }
     (void)burner_bacon_gba_reset_to_read_mode();
-    return ESP_ERR_TIMEOUT;
+    return err;
 }
 
 static esp_err_t burner_gba_region_is_blank_sampled(
@@ -1006,6 +1147,7 @@ static esp_err_t burner_bacon_gba_erase_range(
     uint32_t erase_bytes;
     uint32_t timeout_ms;
     int64_t erase_deadline_us;
+    bool sample_blank;
     esp_err_t err = ESP_OK;
 
     (void)sector_size;
@@ -1034,6 +1176,7 @@ static esp_err_t burner_bacon_gba_erase_range(
     }
     timeout_ms = burner_erase_timeout_ms_for_bytes(erase_bytes);
     erase_deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
+    sample_blank = sample_blank_sectors && !erase_always;
     ESP_LOGI(
         BURNER_TAG,
         "GBA erase timeout budget: bytes=%" PRIu32 " timeout=%" PRIu32 "ms",
@@ -1061,7 +1204,7 @@ static esp_err_t burner_bacon_gba_erase_range(
             err = (err == ESP_OK) ? ESP_ERR_INVALID_SIZE : err;
             goto erase_range_out;
         }
-        if (sample_blank_sectors && !erase_always) {
+        if (sample_blank) {
             bool blank = false;
 
             err = burner_gba_sector_is_blank(
@@ -1115,7 +1258,7 @@ static esp_err_t burner_bacon_gba_erase_range(
     }
 
 erase_range_out:
-    if (err == ESP_OK && sample_blank_sectors && !erase_always &&
+    if (err == ESP_OK && sample_blank &&
         (erased > 0u || skipped_blank > 0u)) {
         ESP_LOGI(
             BURNER_TAG,
@@ -1206,22 +1349,12 @@ static esp_err_t burner_bacon_gba_chip_erase_once(void)
     }
 
     deadline_us = esp_timer_get_time() + ((int64_t)BURNER_ROM_CHIP_ERASE_TIMEOUT_MS * 1000);
-    while (esp_timer_get_time() < deadline_us) {
-        err = burner_cancel_poll();
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_bacon_rom_read_u16(0u, &read_back);
-        if (err != ESP_OK) {
-            return err;
-        }
-        if (read_back == 0xFFFFu) {
-            return ESP_OK;
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    err = burner_bacon_gba_amd_wait_erase_complete(0u, burner_erase_remaining_timeout_ms(deadline_us), &read_back);
+    if (err != ESP_OK) {
+        (void)burner_bacon_gba_reset_to_read_mode();
+        return err;
     }
-
-    return ESP_ERR_TIMEOUT;
+    return burner_bacon_gba_reset_to_read_mode();
 }
 
 static esp_err_t burner_bacon_gba_chip_erase(void)

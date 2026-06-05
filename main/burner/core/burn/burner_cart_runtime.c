@@ -254,12 +254,13 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
 static esp_err_t burner_bacon_gba_reset_aso_locked(void)
 {
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
 
-    err = burner_bacon_gba_command_write_u16(0x000u, 0x0090u);
+    err = burner_bacon_rom_write_u16(0x000u, cmd->amd_90);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(0x000u, 0x0000u);
+    err = burner_bacon_rom_write_u16(0x000u, 0x0000u);
     if (err != ESP_OK) {
         return err;
     }
@@ -284,23 +285,37 @@ static esp_err_t burner_bacon_mbc5_reset_aso_locked(void)
     return burner_bacon_gbc_write(0x0000u, &cmd_f0, 1u);
 }
 
+static esp_err_t burner_bacon_gba_ppb_enter_aso_locked(
+    const burner_gba_program_cmd_cache_t *cmd,
+    uint16_t ppb_command)
+{
+    esp_err_t err;
+
+    if (cmd == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_bacon_rom_write_u16(cmd->unlock0_addr, cmd->amd_aa);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = burner_bacon_rom_write_u16(cmd->unlock1_addr, cmd->amd_55);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return burner_bacon_rom_write_u16(cmd->unlock0_addr, ppb_command);
+}
+
 static esp_err_t burner_bacon_gba_get_ppb_lock_status_locked(uint16_t *lock_status_out)
 {
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
 
     if (lock_status_out == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x0050u);
+    err = burner_bacon_gba_ppb_enter_aso_locked(cmd, cmd->amd_50);
     if (err != ESP_OK) {
         return err;
     }
@@ -354,6 +369,7 @@ static esp_err_t burner_bacon_gba_scan_ppb_locked(
     uint32_t sector_count;
     uint32_t sector_idx;
     uint16_t ppb = 0u;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
     esp_err_t err;
 
     if (needs_unlock_count_out == NULL || sector_size == 0u) {
@@ -379,15 +395,7 @@ static esp_err_t burner_bacon_gba_scan_ppb_locked(
             }
         }
 
-        err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00C0u);
+        err = burner_bacon_gba_ppb_enter_aso_locked(cmd, cmd->amd_c0);
         if (err != ESP_OK) {
             return err;
         }
@@ -479,24 +487,17 @@ static esp_err_t burner_bacon_mbc5_scan_ppb_locked(
 static esp_err_t burner_bacon_gba_all_ppb_erase_locked(void)
 {
     esp_err_t err;
+    const burner_gba_program_cmd_cache_t *cmd = burner_gba_program_cmd_cache_get();
 
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00AAu);
+    err = burner_bacon_gba_ppb_enter_aso_locked(cmd, cmd->amd_c0);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr1(), 0x0055u);
+    err = burner_bacon_rom_write_u16(0x000u, cmd->amd_80);
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_bacon_gba_command_write_u16(burner_gba_unlock_addr0(), 0x00C0u);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(0x000u, 0x0080u);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = burner_bacon_gba_command_write_u16(0x000u, 0x0030u);
+    err = burner_bacon_rom_write_u16(0x000u, cmd->amd_30);
     if (err != ESP_OK) {
         return err;
     }
@@ -555,6 +556,8 @@ esp_err_t burner_cart_unlock_ppb_locked(
     report->cart_mode = cart_mode;
 
     if (cart_mode == BURNER_CART_MODE_GBA) {
+        const char *amd_runtime_source = "none";
+
         err = burner_bacon_gba_prepare_power();
         if (err != ESP_OK) {
             return err;
@@ -569,10 +572,18 @@ esp_err_t burner_cart_unlock_ppb_locked(
         if (err != ESP_OK) {
             return err;
         }
+        amd_runtime_source = burner_gba_apply_amd_runtime_from_probe_or_id(report->gba_id, true);
         report->gba_d0d1_known = s_cart_ctx.d0d1_known;
         report->gba_d0d1_swapped = s_cart_ctx.d0d1_swapped;
         if (report->device_size == 0u || report->sector_size == 0u) {
             return ESP_ERR_INVALID_SIZE;
+        }
+        if (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_AMD) {
+            ESP_LOGI(
+                BURNER_TAG,
+                "GBA PPB runtime commands: %s source=%s",
+                burner_gba_amd_runtime_profile_name(s_gba_amd_runtime_profile),
+                amd_runtime_source);
         }
 
         report->sector_count = burner_erase_sector_count_from_bytes(report->device_size, report->sector_size);

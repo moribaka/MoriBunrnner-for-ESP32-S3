@@ -164,10 +164,10 @@ static const char s_default_lang_zh_ini[] =
     "system_deploy_title=系统部署 ZIP\n"
     "system_deploy_tip=上传迁移 ZIP，将其中内容部署到 /sdcard/.setting 和 /sdcard/.web。\n"
     "btn_system_deploy=部署 ZIP\n"
-    "firmware_title=固件升级\n"
-    "firmware_tip=上传 moriburnner.bin 进行 OTA 升级，成功后设备会自动重启，不要上传 .elf。\n"
-    "btn_upload_firmware=上传固件\n"
-    "firmware_idle=空闲\n"
+    "firmware_title=固件全量升级\n"
+    "firmware_tip=固件 OTA 已移除。请使用全量包刷机，不要上传 .elf。\n"
+    "btn_upload_firmware=使用全量包刷机\n"
+    "firmware_idle=请使用全量包刷机\n"
     "upload_idle=空闲\n"
     "usb_title=TF USB 直通\n"
     "usb_tip=启用后：PC 可把 TF 当 U 盘；禁用后：ESP 可访问 TF/Web API。启用时 TF API 会返回 503 以保证安全。\n"
@@ -178,20 +178,24 @@ static const char s_default_lang_zh_ini[] =
     "device_title=设备信息\n"
     "btn_refresh_device=刷新设备信息\n"
     "device_loading=加载中...\n"
+    "power_title=电源状态\n"
+    "btn_refresh_power=刷新电源状态\n"
+    "power_loading=加载中...\n"
     "msg_select_main=请至少选择一个文件\n"
     "msg_select_deploy_zip=请选择一个 ZIP 文件\n"
-    "msg_select_firmware=请选择一个 .bin 固件文件\n"
+    "msg_select_firmware=请使用全量包刷机\n"
     "msg_deploying_prefix=正在部署\n"
     "msg_deploy_success_prefix=部署成功\n"
     "msg_deploy_failed_prefix=部署失败\n"
-    "msg_uploading_firmware_prefix=正在上传固件\n"
-    "msg_firmware_success_prefix=固件上传成功，即将重启\n"
+    "msg_uploading_firmware_prefix=固件 OTA 已移除\n"
+    "msg_firmware_success_prefix=请改用全量包刷机\n"
     "msg_uploading_prefix=正在上传\n"
     "msg_upload_success_prefix=上传成功\n"
     "msg_upload_failed_prefix=上传失败\n"
     "msg_storage_status_error_prefix=存储状态错误：\n"
     "msg_set_mode_error_prefix=设置模式错误：\n"
     "msg_device_info_error_prefix=设备信息错误：\n"
+    "msg_power_status_error_prefix=电源状态错误：\n"
     "msg_applying=正在应用...\n"
     "language_title=语言\n"
     "language_tip=读取语言 INI 列表，选择后点击应用。\n"
@@ -225,10 +229,10 @@ static const char s_default_lang_en_ini[] =
     "system_deploy_title=System Deploy ZIP\n"
     "system_deploy_tip=Upload a migration ZIP to deploy its contents into /sdcard/.setting and /sdcard/.web.\n"
     "btn_system_deploy=Deploy ZIP\n"
-    "firmware_title=Firmware Upgrade\n"
-    "firmware_tip=Upload moriburnner.bin for OTA upgrade. Device will reboot automatically when successful. Do not upload .elf.\n"
-    "btn_upload_firmware=Upload Firmware\n"
-    "firmware_idle=Idle\n"
+    "firmware_title=Firmware Full Upgrade\n"
+    "firmware_tip=OTA upload has been removed. Please use the full-image firmware package for upgrade. Do not upload .elf.\n"
+    "btn_upload_firmware=Use Full Image Firmware\n"
+    "firmware_idle=Use the full-image firmware package\n"
     "upload_idle=Idle\n"
     "usb_title=TF USB Pass-Through\n"
     "usb_tip=Enable: PC accesses TF as USB disk. Disable: ESP accesses TF/Web APIs. TF APIs return 503 when enabled.\n"
@@ -239,20 +243,24 @@ static const char s_default_lang_en_ini[] =
     "device_title=Device Info\n"
     "btn_refresh_device=Refresh Device Info\n"
     "device_loading=Loading...\n"
+    "power_title=Power Status\n"
+    "btn_refresh_power=Refresh Power Status\n"
+    "power_loading=Loading...\n"
     "msg_select_main=Please select one or more files\n"
     "msg_select_deploy_zip=Please select a ZIP file\n"
-    "msg_select_firmware=Please select a .bin firmware file\n"
+    "msg_select_firmware=Please use the full-image firmware package\n"
     "msg_deploying_prefix=Deploying\n"
     "msg_deploy_success_prefix=Deploy success\n"
     "msg_deploy_failed_prefix=Deploy failed\n"
-    "msg_uploading_firmware_prefix=Uploading firmware\n"
-    "msg_firmware_success_prefix=Firmware upload success, rebooting\n"
+    "msg_uploading_firmware_prefix=Firmware OTA has been removed\n"
+    "msg_firmware_success_prefix=Please use the full-image firmware package\n"
     "msg_uploading_prefix=Uploading\n"
     "msg_upload_success_prefix=Upload success\n"
     "msg_upload_failed_prefix=Upload failed\n"
     "msg_storage_status_error_prefix=Storage status error: \n"
     "msg_set_mode_error_prefix=Set mode error: \n"
     "msg_device_info_error_prefix=Device info error: \n"
+    "msg_power_status_error_prefix=Power status error: \n"
     "msg_applying=Applying...\n";
 
 static const char s_default_ip5306_ini[] =
@@ -329,16 +337,16 @@ typedef struct {
 } mori_ini_kv_line_t;
 
 static const mori_ini_kv_line_t s_lang_zh_upgrade_items[] = {
-    {"firmware_title", "firmware_title=固件升级\n"},
+    {"firmware_title", "firmware_title=固件全量升级\n"},
     {
         "firmware_tip",
-        "firmware_tip=上传 moriburnner.bin 进行 OTA 升级，成功后设备会自动重启，不要上传 .elf。\n",
+        "firmware_tip=固件 OTA 已移除。请使用全量包刷机，不要上传 .elf。\n",
     },
-    {"btn_upload_firmware", "btn_upload_firmware=上传固件\n"},
-    {"firmware_idle", "firmware_idle=空闲\n"},
-    {"msg_select_firmware", "msg_select_firmware=请选择一个 .bin 固件文件\n"},
-    {"msg_uploading_firmware_prefix", "msg_uploading_firmware_prefix=正在上传固件\n"},
-    {"msg_firmware_success_prefix", "msg_firmware_success_prefix=固件上传成功，即将重启\n"},
+    {"btn_upload_firmware", "btn_upload_firmware=使用全量包刷机\n"},
+    {"firmware_idle", "firmware_idle=请使用全量包刷机\n"},
+    {"msg_select_firmware", "msg_select_firmware=请使用全量包刷机\n"},
+    {"msg_uploading_firmware_prefix", "msg_uploading_firmware_prefix=固件 OTA 已移除\n"},
+    {"msg_firmware_success_prefix", "msg_firmware_success_prefix=请改用全量包刷机\n"},
     {"language_title", "language_title=语言\n"},
     {"language_tip", "language_tip=读取语言 INI 列表，选择后点击应用。\n"},
     {"btn_read_lang_list", "btn_read_lang_list=读取 INI 列表\n"},
@@ -369,18 +377,18 @@ static const mori_ini_kv_line_t s_lang_zh_upgrade_items[] = {
     {"msg_invalid_json_prefix", "msg_invalid_json_prefix=JSON 解析失败：\n"},
 };
 static const mori_ini_kv_line_t s_lang_en_upgrade_items[] = {
-    {"firmware_title", "firmware_title=Firmware Upgrade\n"},
+    {"firmware_title", "firmware_title=Firmware Full Upgrade\n"},
     {
         "firmware_tip",
-        "firmware_tip=Upload moriburnner.bin for OTA upgrade. Device will reboot automatically when successful. Do not upload .elf.\n",
+        "firmware_tip=OTA upload has been removed. Please use the full-image firmware package for upgrade. Do not upload .elf.\n",
     },
-    {"btn_upload_firmware", "btn_upload_firmware=Upload Firmware\n"},
-    {"firmware_idle", "firmware_idle=Idle\n"},
-    {"msg_select_firmware", "msg_select_firmware=Please select a .bin firmware file\n"},
-    {"msg_uploading_firmware_prefix", "msg_uploading_firmware_prefix=Uploading firmware\n"},
+    {"btn_upload_firmware", "btn_upload_firmware=Use Full Image Firmware\n"},
+    {"firmware_idle", "firmware_idle=Use the full-image firmware package\n"},
+    {"msg_select_firmware", "msg_select_firmware=Please use the full-image firmware package\n"},
+    {"msg_uploading_firmware_prefix", "msg_uploading_firmware_prefix=Firmware OTA has been removed\n"},
     {
         "msg_firmware_success_prefix",
-        "msg_firmware_success_prefix=Firmware upload success, rebooting\n",
+        "msg_firmware_success_prefix=Please use the full-image firmware package\n",
     },
 };
 
@@ -432,6 +440,10 @@ static const mori_ini_kv_line_t s_lang_common_upgrade_items[] = {
     {"msg_upload_item_fail", "msg_upload_item_fail=[FAIL]\n"},
     {"msg_http_error_prefix", "msg_http_error_prefix=HTTP error: \n"},
     {"msg_invalid_json_prefix", "msg_invalid_json_prefix=Invalid JSON: \n"},
+    {"power_title", "power_title=Power Status\n"},
+    {"btn_refresh_power", "btn_refresh_power=Refresh Power Status\n"},
+    {"power_loading", "power_loading=Loading...\n"},
+    {"msg_power_status_error_prefix", "msg_power_status_error_prefix=Power status error: \n"},
 };
 
 static const mori_ini_kv_line_t s_lang_zh_core_upgrade_items[] = {
@@ -472,6 +484,9 @@ static const mori_ini_kv_line_t s_lang_zh_core_upgrade_items[] = {
     {"device_title", "device_title=设备信息\n"},
     {"btn_refresh_device", "btn_refresh_device=刷新设备信息\n"},
     {"device_loading", "device_loading=加载中...\n"},
+    {"power_title", "power_title=电源状态\n"},
+    {"btn_refresh_power", "btn_refresh_power=刷新电源状态\n"},
+    {"power_loading", "power_loading=加载中...\n"},
     {"msg_select_main", "msg_select_main=请至少选择一个文件\n"},
     {"msg_select_deploy_zip", "msg_select_deploy_zip=请选择一个 ZIP 文件\n"},
     {"msg_deploying_prefix", "msg_deploying_prefix=正在部署\n"},
@@ -483,6 +498,7 @@ static const mori_ini_kv_line_t s_lang_zh_core_upgrade_items[] = {
     {"msg_storage_status_error_prefix", "msg_storage_status_error_prefix=存储状态错误：\n"},
     {"msg_set_mode_error_prefix", "msg_set_mode_error_prefix=设置模式错误：\n"},
     {"msg_device_info_error_prefix", "msg_device_info_error_prefix=设备信息错误：\n"},
+    {"msg_power_status_error_prefix", "msg_power_status_error_prefix=电源状态错误：\n"},
     {"msg_applying", "msg_applying=正在应用...\n"},
 };
 

@@ -52,7 +52,7 @@ const ui_text_entry_t g_ui_text_zh[] = {
     {"File:", "文件:"},
     {"Files", "文件"},
     {"Flash1M Repro SRAM patched", "已打Flash1M Repro的SRAM补丁"},
-    {"Firmware OTA", "固件OTA"},
+    {"Firmware Full Upgrade", "固件全量升级"},
     {"Forget profile", "忘记Wi-Fi"},
     {"GBA save path does not use FRAM latency", "GBA存档流程不使用FRAM延迟"},
     {"GBC voltage: 3V3", "GBC电压: 3V3"},
