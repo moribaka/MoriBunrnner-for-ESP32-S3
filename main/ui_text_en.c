@@ -54,7 +54,7 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"File:", "File:"},
     {"Files", "Files"},
     {"Flash1M Repro SRAM patched", "Flash1M Repro SRAM patched"},
-    {"Firmware OTA", "Firmware OTA"},
+    {"Firmware Full Upgrade", "Firmware Full Upgrade"},
     {"Forget profile", "Forget profile"},
     {"GBA save path does not use FRAM latency", "GBA save path does not use FRAM latency"},
     {"GBC voltage: 3V3", "GBC voltage: 3V3"},

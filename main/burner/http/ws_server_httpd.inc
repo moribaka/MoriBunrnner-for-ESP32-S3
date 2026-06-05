@@ -290,12 +290,6 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_web_upload_handler,
         .user_ctx = NULL,
     };
-    httpd_uri_t fw_upgrade_uri = {
-        .uri = "/api/fw/upgrade",
-        .method = HTTP_POST,
-        .handler = burner_fw_upgrade_handler,
-        .user_ctx = NULL,
-    };
     httpd_uri_t mcu_probe_uri = {
         .uri = "/api/mcu/probe",
         .method = HTTP_GET,
@@ -597,11 +591,6 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &web_upload_uri);
-    if (err != ESP_OK) {
-        web_ws_stop();
-        return err;
-    }
-    err = httpd_register_uri_handler(s_httpd, &fw_upgrade_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;

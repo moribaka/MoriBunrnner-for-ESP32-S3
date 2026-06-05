@@ -3,7 +3,7 @@
 #include "ws_server_http_maintenance.h"
 #include "power_manager.h"
 
-#define BURNER_POWER_STATUS_RESP_LEN 5200U
+#define BURNER_POWER_STATUS_RESP_LEN 6000U
 
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req)
 {
@@ -174,13 +174,16 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         resp,
         BURNER_POWER_STATUS_RESP_LEN,
         "{\"ok\":true,"
-        "\"note\":\"No dedicated current sensor. Values are telemetry/estimation only.\","
+        "\"note\":\"Power values come from PMIC telemetry when available; unsupported items remain 0.\","
         "\"uptime_ms\":%" PRIu64 ",\"free_heap\":%" PRIu32 ",\"min_free_heap\":%" PRIu32 ","
         "\"power\":{\"ready\":%s,\"chip_type\":\"%s\",\"chip_name\":\"%s\","
         "\"battery_percent_valid\":%s,\"battery_percent\":%u,"
         "\"charging\":%s,\"charge_full\":%s,\"vbus_present\":%s,\"battery_present\":%s,"
-        "\"charge_current_limit_ma\":%u,\"battery_voltage_mv\":%" PRIu32 ",\"vbus_voltage_mv\":%" PRIu32
-        ",\"ipsout_voltage_mv\":%" PRIu32 ",\"internal_temp_deci_c\":%" PRIi32 ",\"charge_state\":\"%s\"},"
+        "\"charge_current_limit_ma\":%u,\"battery_voltage_mv\":%" PRIu32 ",\"acin_voltage_mv\":%" PRIu32
+        ",\"vbus_voltage_mv\":%" PRIu32 ",\"battery_charge_current_ma_x10\":%" PRIu32
+        ",\"battery_discharge_current_ma_x10\":%" PRIu32 ",\"ipsout_voltage_mv\":%" PRIu32
+        ",\"internal_temp_deci_c\":%" PRIi32 ",\"charge_state\":\"%s\",\"current_direction\":\"%s\""
+        ",\"charge_mode\":\"%s\"},"
         "\"axp209\":{\"ready\":%s,\"addr\":\"0x%02X\","
         "\"snapshot_ok\":%s,\"charge_control_ok\":%s,"
         "\"power_status\":\"0x%02X\",\"charge_status\":\"0x%02X\","
@@ -234,10 +237,15 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         burner_json_bool(power.battery_present),
         power.charge_current_limit_ma,
         power.battery_voltage_mv,
+        power.acin_voltage_mv,
         power.vbus_voltage_mv,
+        power.battery_charge_current_ma_x10,
+        power.battery_discharge_current_ma_x10,
         power.ipsout_voltage_mv,
         power.internal_temp_deci_c,
         power.charge_state != NULL ? power.charge_state : "unknown",
+        power.current_direction != NULL ? power.current_direction : "unknown",
+        power.charge_mode != NULL ? power.charge_mode : "unknown",
         burner_json_bool(axp209_ready()),
         axp209_address(),
         burner_json_bool(power.axp209_snapshot_ok),
@@ -475,15 +483,11 @@ static bool burner_storage_get_tf_capacity(uint64_t *out_total_bytes,
 esp_err_t burner_device_info_handler(httpd_req_t *req)
 {
     const esp_app_desc_t *app_desc = esp_app_get_description();
-    const esp_partition_t *running_partition = esp_ota_get_running_partition();
     esp_chip_info_t chip_info;
     uint32_t free_heap = esp_get_free_heap_size();
     uint32_t min_heap = esp_get_minimum_free_heap_size();
     uint8_t cpu_usage_percent = 0;
-    char cpu_usage_text[32] = "sampling...";
-    const char *partition_label = "unknown";
-    uint32_t partition_size = 0;
-    double partition_size_mib = 0.0;
+    char cpu_usage_text[32] = "sampling / 采样中";
     char resp[896];
 
     web_ws_mark_activity();
@@ -492,26 +496,19 @@ esp_err_t burner_device_info_handler(httpd_req_t *req)
     if (burner_cpu_monitor_update(&cpu_usage_percent)) {
         snprintf(cpu_usage_text, sizeof(cpu_usage_text), "%u%%", (unsigned int)cpu_usage_percent);
     }
-    if (running_partition != NULL) {
-        partition_label = running_partition->label[0] ? running_partition->label : "unnamed";
-        partition_size = running_partition->size;
-        partition_size_mib = (double)running_partition->size / (1024.0 * 1024.0);
-    }
     snprintf(
         resp,
         sizeof(resp),
-        "Project name: %s\n"
-        "App version: %s\n"
-        "Build time: %s %s\n"
-        "IDF version: %s\n"
-        "Chip cores: %d\n"
-        "Chip revision: v%d.%d\n"
-        "Features: %s%s%s\n"
-        "Current free heap: %" PRIu32 " bytes\n"
-        "Minimum free heap: %" PRIu32 " bytes\n"
-        "CPU usage: %s\n"
-        "Running partition: %s\n"
-        "Running partition size: %" PRIu32 " bytes (%.2f MiB)\n",
+        "Project name / 项目名: %s\n"
+        "App version / 固件版本: %s\n"
+        "Build time / 构建时间: %s %s\n"
+        "IDF version / IDF版本: %s\n"
+        "Chip cores / 核心数: %d\n"
+        "Chip revision / 芯片修订: v%d.%d\n"
+        "Features / 特性: %s%s%s\n"
+        "Current free heap / 当前空闲内存: %" PRIu32 " bytes\n"
+        "Minimum free heap / 最小空闲内存: %" PRIu32 " bytes\n"
+        "CPU usage / CPU占用: %s\n",
         app_desc ? app_desc->project_name : "unknown",
         app_desc ? app_desc->version : "unknown",
         app_desc ? app_desc->date : "unknown",
@@ -525,10 +522,7 @@ esp_err_t burner_device_info_handler(httpd_req_t *req)
         (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
         free_heap,
         min_heap,
-        cpu_usage_text,
-        partition_label,
-        partition_size,
-        partition_size_mib);
+        cpu_usage_text);
 
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
     return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
@@ -702,6 +696,9 @@ esp_err_t burner_lang_handler(httpd_req_t *req)
         {"device_title", NULL},
         {"btn_refresh_device", NULL},
         {"device_loading", NULL},
+        {"power_title", NULL},
+        {"btn_refresh_power", NULL},
+        {"power_loading", NULL},
         {"msg_select_main", NULL},
         {"msg_select_deploy_zip", NULL},
         {"msg_select_firmware", NULL},
@@ -716,6 +713,7 @@ esp_err_t burner_lang_handler(httpd_req_t *req)
         {"msg_storage_status_error_prefix", NULL},
         {"msg_set_mode_error_prefix", NULL},
         {"msg_device_info_error_prefix", NULL},
+        {"msg_power_status_error_prefix", NULL},
         {"msg_applying", NULL},
         {"language_title", NULL},
         {"language_tip", NULL},
@@ -790,6 +788,9 @@ esp_err_t burner_lang_handler(httpd_req_t *req)
         BURNER_LANG_PUSH_VALUE(lang->device_title);
         BURNER_LANG_PUSH_VALUE(lang->btn_refresh_device);
         BURNER_LANG_PUSH_VALUE(lang->device_loading);
+        BURNER_LANG_PUSH_VALUE(lang->power_title);
+        BURNER_LANG_PUSH_VALUE(lang->btn_refresh_power);
+        BURNER_LANG_PUSH_VALUE(lang->power_loading);
         BURNER_LANG_PUSH_VALUE(lang->msg_select_main);
         BURNER_LANG_PUSH_VALUE(lang->msg_select_deploy_zip);
         BURNER_LANG_PUSH_VALUE(lang->msg_select_firmware);
@@ -804,6 +805,7 @@ esp_err_t burner_lang_handler(httpd_req_t *req)
         BURNER_LANG_PUSH_VALUE(lang->msg_storage_status_error_prefix);
         BURNER_LANG_PUSH_VALUE(lang->msg_set_mode_error_prefix);
         BURNER_LANG_PUSH_VALUE(lang->msg_device_info_error_prefix);
+        BURNER_LANG_PUSH_VALUE(lang->msg_power_status_error_prefix);
         BURNER_LANG_PUSH_VALUE(lang->msg_applying);
         BURNER_LANG_PUSH_VALUE(lang->language_title);
         BURNER_LANG_PUSH_VALUE(lang->language_tip);

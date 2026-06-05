@@ -33,6 +33,40 @@ static uint8_t power_manager_estimate_battery_percent_from_mv(uint32_t battery_m
     return (uint8_t)(((battery_mv - 3300u) * 100u) / 900u);
 }
 
+static const char *power_manager_axp209_current_direction(const power_manager_telemetry_t *telemetry)
+{
+    if (telemetry == NULL) {
+        return "unknown";
+    }
+    if (!telemetry->battery_present) {
+        return telemetry->vbus_present ? "external" : "unknown";
+    }
+    if (telemetry->axp209_flags.battery_charging || telemetry->axp209_flags.charging) {
+        return "charge";
+    }
+    return "discharge";
+}
+
+static const char *power_manager_axp209_charge_mode(const power_manager_telemetry_t *telemetry)
+{
+    if (telemetry == NULL) {
+        return "unknown";
+    }
+    if (!telemetry->battery_present) {
+        return telemetry->vbus_present ? "external_only" : "no_battery";
+    }
+    if (telemetry->charging) {
+        return telemetry->axp209_flags.charge_current_limited ? "charging_limited" : "charging";
+    }
+    if (telemetry->axp209_charge_control_ok && !telemetry->axp209_charge_control.enabled) {
+        return "charge_disabled";
+    }
+    if (telemetry->vbus_present) {
+        return "charge_ready";
+    }
+    return "battery_only";
+}
+
 esp_err_t power_manager_cpu_freq_init(void)
 {
 #if CONFIG_PM_ENABLE
@@ -215,6 +249,8 @@ esp_err_t power_manager_get_telemetry(power_manager_telemetry_t *telemetry)
     telemetry->ready = s_power_ready;
     telemetry->chip_name = power_manager_chip_name();
     telemetry->charge_state = "unknown";
+    telemetry->current_direction = "unknown";
+    telemetry->charge_mode = "unknown";
 
     if (!s_power_ready) {
         return ESP_ERR_INVALID_STATE;
@@ -235,6 +271,8 @@ esp_err_t power_manager_get_telemetry(power_manager_telemetry_t *telemetry)
                 telemetry->charge_state =
                     telemetry->ip5306_status.light_load ? "discharging_light_load" : "discharging";
             }
+            telemetry->current_direction = telemetry->charging ? "charge" : "discharge";
+            telemetry->charge_mode = telemetry->charge_state;
         }
         return ESP_OK;
     }
@@ -250,7 +288,11 @@ esp_err_t power_manager_get_telemetry(power_manager_telemetry_t *telemetry)
             telemetry->axp209_snapshot.charge_status,
             &telemetry->axp209_flags);
         telemetry->battery_voltage_mv = telemetry->axp209_snapshot.battery_voltage_mv;
+        telemetry->acin_voltage_mv = telemetry->axp209_snapshot.acin_voltage_mv;
         telemetry->vbus_voltage_mv = telemetry->axp209_snapshot.vbus_voltage_mv;
+        telemetry->battery_charge_current_ma_x10 = telemetry->axp209_snapshot.battery_charge_current_ma_x10;
+        telemetry->battery_discharge_current_ma_x10 =
+            telemetry->axp209_snapshot.battery_discharge_current_ma_x10;
         telemetry->ipsout_voltage_mv = telemetry->axp209_snapshot.ipsout_voltage_mv;
         telemetry->internal_temp_deci_c = telemetry->axp209_snapshot.internal_temp_deci_c;
         telemetry->charging = telemetry->axp209_flags.charging;
@@ -259,7 +301,11 @@ esp_err_t power_manager_get_telemetry(power_manager_telemetry_t *telemetry)
         telemetry->battery_present = telemetry->axp209_flags.battery_present;
         telemetry->battery_percent = power_manager_estimate_battery_percent_from_mv(telemetry->battery_voltage_mv);
         telemetry->battery_percent_valid = telemetry->battery_present;
-        telemetry->charge_state = telemetry->charging ? "charging" : "discharging";
+        if (!telemetry->battery_present && telemetry->vbus_present) {
+            telemetry->charge_state = "no_battery_external_power";
+        } else {
+            telemetry->charge_state = telemetry->charging ? "charging" : "discharging";
+        }
 
         err = axp209_read_charge_control(&telemetry->axp209_charge_control);
         if (err == ESP_OK) {
@@ -271,6 +317,8 @@ esp_err_t power_manager_get_telemetry(power_manager_telemetry_t *telemetry)
         } else {
             telemetry->charge_current_limit_ma = 500u;
         }
+        telemetry->current_direction = power_manager_axp209_current_direction(telemetry);
+        telemetry->charge_mode = power_manager_axp209_charge_mode(telemetry);
         return ESP_OK;
     }
 
