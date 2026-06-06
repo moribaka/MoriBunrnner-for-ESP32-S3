@@ -4,14 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 #include "driver/i2s_common.h"
 #include "driver/i2s_std.h"
-#include "esp_audio_dec.h"
+#include "esp_audio_simple_dec.h"
+#include "esp_audio_simple_dec_default.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "esp_mp3_dec.h"
 #include "file_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -24,8 +25,7 @@
 #define MUSIC_PLAYER_TASK_PRIORITY 4
 #define MUSIC_PLAYER_QUEUE_LEN 8
 #define MUSIC_PLAYER_CMD_WAIT_MS 50
-#define MUSIC_PLAYER_DEFAULT_VOLUME 85
-#define MUSIC_PLAYER_VOLUME_STEP 5
+#define MUSIC_PLAYER_DEFAULT_VOLUME 60
 #define MUSIC_PLAYER_INPUT_BUF_SIZE 8192
 #define MUSIC_PLAYER_INPUT_LOW_WATER 2048
 #define MUSIC_PLAYER_DECODE_BUF_SIZE 8192
@@ -64,6 +64,7 @@ static bool s_i2s_ready = false;
 static bool s_i2s_enabled = false;
 static uint32_t s_i2s_sample_rate = 0;
 static bool s_music_inited = false;
+static bool s_decoder_registry_ready = false;
 static music_player_snapshot_t s_snapshot = {
     .state = MUSIC_PLAYER_STATE_IDLE,
     .volume_percent = MUSIC_PLAYER_DEFAULT_VOLUME,
@@ -142,6 +143,33 @@ static void music_player_set_volume_locked(uint8_t volume_percent)
 static uint8_t music_player_get_volume_locked(void)
 {
     return s_snapshot.volume_percent;
+}
+
+static esp_audio_simple_dec_type_t music_player_decoder_type_from_path(const char *path)
+{
+    const char *ext = NULL;
+
+    if (path == NULL) {
+        return ESP_AUDIO_SIMPLE_DEC_TYPE_NONE;
+    }
+    ext = strrchr(path, '.');
+    if (ext == NULL || ext[1] == '\0') {
+        return ESP_AUDIO_SIMPLE_DEC_TYPE_NONE;
+    }
+    ext++;
+    if (strcasecmp(ext, "aac") == 0) {
+        return ESP_AUDIO_SIMPLE_DEC_TYPE_AAC;
+    }
+    if (strcasecmp(ext, "mp3") == 0) {
+        return ESP_AUDIO_SIMPLE_DEC_TYPE_MP3;
+    }
+    if (strcasecmp(ext, "flac") == 0) {
+        return ESP_AUDIO_SIMPLE_DEC_TYPE_FLAC;
+    }
+    if (strcasecmp(ext, "wav") == 0) {
+        return ESP_AUDIO_SIMPLE_DEC_TYPE_WAV;
+    }
+    return ESP_AUDIO_SIMPLE_DEC_TYPE_NONE;
 }
 
 static esp_err_t music_player_i2s_ensure_ready(void)
@@ -446,13 +474,13 @@ static esp_err_t music_player_wait_while_paused(const char *path, music_player_r
     return ESP_OK;
 }
 
-static void music_player_cleanup_track(FILE *fp, void *decoder)
+static void music_player_cleanup_track(FILE *fp, esp_audio_simple_dec_handle_t decoder)
 {
     if (fp != NULL) {
         fclose(fp);
     }
     if (decoder != NULL) {
-        (void)esp_mp3_dec_close(decoder);
+        esp_audio_simple_dec_close(decoder);
     }
     music_player_i2s_disable();
 }
@@ -467,21 +495,77 @@ static void music_player_track_finished(const char *path, uint32_t file_size, ui
     music_player_set_snapshot(MUSIC_PLAYER_STATE_FINISHED, path, file_size, position, 0U, 0U, 0U, NULL);
 }
 
-static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, music_player_cmd_t *next_track_out, bool *has_next_track)
+static esp_err_t music_player_write_pcm_to_i2s(
+    const uint8_t *src,
+    size_t src_size,
+    uint8_t bits_per_sample,
+    uint8_t channels,
+    uint8_t volume_percent,
+    uint8_t *i2s_buf,
+    size_t i2s_buf_size)
+{
+    size_t bytes_per_sample = (size_t)((bits_per_sample + 7U) / 8U);
+    size_t frame_bytes = bytes_per_sample * channels;
+    size_t src_offset = 0U;
+
+    if (src == NULL || i2s_buf == NULL || src_size == 0U || frame_bytes == 0U) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    while (src_offset + frame_bytes <= src_size) {
+        size_t converted_size;
+        size_t consumed_frames;
+        size_t consumed_bytes;
+        size_t wrote_bytes = 0U;
+
+        converted_size = music_player_convert_frame_to_stereo16(
+            src + src_offset,
+            src_size - src_offset,
+            bits_per_sample,
+            channels,
+            volume_percent,
+            i2s_buf,
+            i2s_buf_size);
+        if (converted_size == 0U) {
+            return ESP_FAIL;
+        }
+
+        if (i2s_channel_write(s_i2s_tx, i2s_buf, converted_size, &wrote_bytes, MUSIC_PLAYER_WRITE_TIMEOUT_MS) !=
+                ESP_OK ||
+            wrote_bytes != converted_size) {
+            return ESP_FAIL;
+        }
+
+        consumed_frames = converted_size / (sizeof(int16_t) * 2U);
+        consumed_bytes = consumed_frames * frame_bytes;
+        if (consumed_bytes == 0U) {
+            return ESP_FAIL;
+        }
+        src_offset += consumed_bytes;
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t music_player_run_track(
+    const music_player_cmd_t *play_cmd,
+    music_player_cmd_t *next_track_out,
+    bool *has_next_track)
 {
     char full_path[MUSIC_PLAYER_PATH_MAX + 32] = {0};
     FILE *fp = NULL;
-    void *decoder = NULL;
+    esp_audio_simple_dec_handle_t decoder = NULL;
+    esp_audio_simple_dec_type_t decoder_type = ESP_AUDIO_SIMPLE_DEC_TYPE_NONE;
     uint8_t *input_buf = NULL;
     uint8_t *decode_buf = NULL;
     uint8_t *i2s_buf = NULL;
     size_t decode_buf_size = MUSIC_PLAYER_DECODE_BUF_SIZE;
-    size_t input_len = 0;
-    size_t read_total = 0;
+    size_t input_len = 0U;
+    size_t read_total = 0U;
     bool eof = false;
     bool output_ready = false;
-    uint32_t file_size = 0;
-    uint32_t position = 0;
+    uint32_t file_size = 0U;
+    uint32_t position = 0U;
     int error_budget = MUSIC_PLAYER_ERROR_BUDGET;
     music_player_runtime_cmd_t runtime = {0};
     esp_err_t final_err = ESP_OK;
@@ -493,8 +577,22 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
         return ESP_ERR_INVALID_ARG;
     }
 
+    decoder_type = music_player_decoder_type_from_path(play_cmd->path);
+    if (decoder_type == ESP_AUDIO_SIMPLE_DEC_TYPE_NONE) {
+        music_player_track_error(play_cmd->path, 0U, 0U, "unsupported file");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
     runtime.volume_percent = play_cmd->volume_percent;
-    music_player_set_snapshot(MUSIC_PLAYER_STATE_LOADING, play_cmd->path, play_cmd->file_size, 0U, 0U, 0U, 0U, NULL);
+    music_player_set_snapshot(
+        MUSIC_PLAYER_STATE_LOADING,
+        play_cmd->path,
+        play_cmd->file_size,
+        0U,
+        0U,
+        0U,
+        0U,
+        NULL);
 
     if (!music_player_build_full_path(play_cmd->path, full_path, sizeof(full_path))) {
         music_player_track_error(play_cmd->path, 0U, 0U, "path too long");
@@ -526,6 +624,7 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
         file_size = play_cmd->file_size;
     } else {
         struct stat st;
+
         if (stat(full_path, &st) == 0 && st.st_size > 0 && (uint64_t)st.st_size <= UINT32_MAX) {
             file_size = (uint32_t)st.st_size;
         }
@@ -537,22 +636,36 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
         goto cleanup;
     }
 
-    if (esp_mp3_dec_open(NULL, 0U, &decoder) != ESP_AUDIO_ERR_OK || decoder == NULL) {
-        music_player_track_error(play_cmd->path, file_size, 0U, "mp3 decoder open failed");
-        final_err = ESP_FAIL;
+    if (esp_audio_simple_check_audio_type(decoder_type) != ESP_AUDIO_ERR_OK) {
+        music_player_track_error(play_cmd->path, file_size, 0U, "decoder unavailable");
+        final_err = ESP_ERR_NOT_SUPPORTED;
         goto cleanup;
     }
 
+    {
+        esp_audio_simple_dec_cfg_t dec_cfg = {
+            .dec_type = decoder_type,
+            .dec_cfg = NULL,
+            .cfg_size = 0,
+            .use_frame_dec = false,
+        };
+
+        if (esp_audio_simple_dec_open(&dec_cfg, &decoder) != ESP_AUDIO_ERR_OK || decoder == NULL) {
+            music_player_track_error(play_cmd->path, file_size, 0U, "decoder open failed");
+            final_err = ESP_FAIL;
+            goto cleanup;
+        }
+    }
+
     while (!runtime.stop_requested && !runtime.switch_track) {
-        esp_audio_dec_in_raw_t raw = {0};
-        esp_audio_dec_out_frame_t frame = {0};
-        esp_audio_dec_info_t dec_info = {0};
+        esp_audio_simple_dec_raw_t raw = {0};
+        esp_audio_simple_dec_out_t frame = {0};
+        esp_audio_simple_dec_info_t dec_info = {0};
         esp_audio_err_t dec_ret;
+        bool made_progress = false;
         uint32_t sample_rate;
         uint8_t bits_per_sample;
         uint8_t channels;
-        size_t wrote_bytes;
-        size_t out_bytes;
 
         music_player_poll_runtime_cmds(&runtime);
         if (runtime.volume_changed) {
@@ -586,23 +699,20 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
             }
         }
 
-        if (input_len == 0U && eof) {
-            music_player_track_finished(play_cmd->path, file_size, file_size);
-            break;
-        }
-
         raw.buffer = input_buf;
         raw.len = (uint32_t)input_len;
+        raw.eos = eof;
         raw.consumed = 0U;
         frame.buffer = decode_buf;
         frame.len = (uint32_t)decode_buf_size;
-        frame.decoded_size = 0U;
         frame.needed_size = 0U;
+        frame.decoded_size = 0U;
 
-        dec_ret = esp_mp3_dec_decode(decoder, &raw, &frame, &dec_info);
+        dec_ret = esp_audio_simple_dec_process(decoder, &raw, &frame);
         if (raw.consumed > 0U) {
             music_player_shift_input_buffer(input_buf, &input_len, raw.consumed);
             position = (uint32_t)(read_total - input_len);
+            made_progress = true;
         }
 
         if (dec_ret == ESP_AUDIO_ERR_BUFF_NOT_ENOUGH && frame.needed_size > decode_buf_size) {
@@ -622,8 +732,49 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
             continue;
         }
 
+        if (frame.decoded_size > 0U) {
+            if (esp_audio_simple_dec_get_info(decoder, &dec_info) != ESP_AUDIO_ERR_OK) {
+                memset(&dec_info, 0, sizeof(dec_info));
+            }
+            sample_rate = (dec_info.sample_rate != 0U) ? dec_info.sample_rate : 44100U;
+            bits_per_sample = (dec_info.bits_per_sample != 0U) ? dec_info.bits_per_sample : 16U;
+            channels = (dec_info.channel != 0U) ? dec_info.channel : 2U;
+
+            if (!output_ready || s_i2s_sample_rate != sample_rate) {
+                if (music_player_i2s_apply_rate(sample_rate) != ESP_OK) {
+                    music_player_track_error(play_cmd->path, file_size, position, "i2s start failed");
+                    final_err = ESP_FAIL;
+                    break;
+                }
+                output_ready = true;
+            }
+
+            if (music_player_write_pcm_to_i2s(
+                    frame.buffer,
+                    frame.decoded_size,
+                    bits_per_sample,
+                    channels,
+                    runtime.volume_percent,
+                    i2s_buf,
+                    MUSIC_PLAYER_I2S_BUF_SIZE) != ESP_OK) {
+                music_player_track_error(play_cmd->path, file_size, position, "audio output failed");
+                final_err = ESP_FAIL;
+                break;
+            }
+
+            music_player_update_progress(
+                play_cmd->path,
+                file_size,
+                position,
+                sample_rate,
+                channels,
+                bits_per_sample);
+            error_budget = MUSIC_PLAYER_ERROR_BUDGET;
+            made_progress = true;
+        }
+
         if (dec_ret == ESP_AUDIO_ERR_DATA_LACK) {
-            if (eof && input_len == 0U) {
+            if (eof && input_len == 0U && frame.decoded_size == 0U) {
                 music_player_track_finished(play_cmd->path, file_size, position);
                 break;
             }
@@ -631,7 +782,7 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
         }
 
         if (dec_ret != ESP_AUDIO_ERR_OK) {
-            if (eof && input_len == 0U) {
+            if (eof && input_len == 0U && frame.decoded_size == 0U) {
                 music_player_track_finished(play_cmd->path, file_size, position);
                 break;
             }
@@ -648,54 +799,25 @@ static esp_err_t music_player_run_track(const music_player_cmd_t *play_cmd, musi
             continue;
         }
 
-        if (frame.decoded_size == 0U) {
+        if (!made_progress) {
             if (eof && input_len == 0U) {
                 music_player_track_finished(play_cmd->path, file_size, position);
                 break;
             }
-            continue;
-        }
-
-        sample_rate = (dec_info.sample_rate != 0U) ? dec_info.sample_rate : 44100U;
-        bits_per_sample = (dec_info.bits_per_sample != 0U) ? dec_info.bits_per_sample : 16U;
-        channels = (dec_info.channel != 0U) ? dec_info.channel : 2U;
-
-        if (!output_ready || s_i2s_sample_rate != sample_rate) {
-            if (music_player_i2s_apply_rate(sample_rate) != ESP_OK) {
-                music_player_track_error(play_cmd->path, file_size, position, "i2s start failed");
+            if (!eof && input_len < MUSIC_PLAYER_INPUT_BUF_SIZE) {
+                continue;
+            }
+            if (input_len > 0U) {
+                music_player_shift_input_buffer(input_buf, &input_len, 1U);
+                position = (uint32_t)(read_total - input_len);
+            }
+            error_budget--;
+            if (error_budget <= 0) {
+                music_player_track_error(play_cmd->path, file_size, position, "decode stalled");
                 final_err = ESP_FAIL;
                 break;
             }
-            output_ready = true;
         }
-
-        out_bytes = music_player_convert_frame_to_stereo16(
-            frame.buffer,
-            frame.decoded_size,
-            bits_per_sample,
-            channels,
-            runtime.volume_percent,
-            i2s_buf,
-            MUSIC_PLAYER_I2S_BUF_SIZE);
-        if (out_bytes == 0U) {
-            continue;
-        }
-
-        if (i2s_channel_write(s_i2s_tx, i2s_buf, out_bytes, &wrote_bytes, MUSIC_PLAYER_WRITE_TIMEOUT_MS) != ESP_OK ||
-            wrote_bytes != out_bytes) {
-            music_player_track_error(play_cmd->path, file_size, position, "audio output failed");
-            final_err = ESP_FAIL;
-            break;
-        }
-
-        error_budget = MUSIC_PLAYER_ERROR_BUDGET;
-        music_player_update_progress(
-            play_cmd->path,
-            file_size,
-            position,
-            sample_rate,
-            channels,
-            bits_per_sample);
     }
 
 cleanup:
@@ -703,7 +825,15 @@ cleanup:
         *next_track_out = runtime.next_track;
         *has_next_track = true;
     } else if (runtime.stop_requested) {
-        music_player_set_snapshot(MUSIC_PLAYER_STATE_IDLE, play_cmd->path, file_size, position, 0U, 0U, 0U, NULL);
+        music_player_set_snapshot(
+            MUSIC_PLAYER_STATE_IDLE,
+            play_cmd->path,
+            file_size,
+            position,
+            0U,
+            0U,
+            0U,
+            NULL);
     }
     music_player_cleanup_track(fp, decoder);
     free(input_buf);
@@ -734,7 +864,15 @@ static void music_player_task(void *arg)
                 break;
             case MUSIC_PLAYER_CMD_TOGGLE_PAUSE:
             case MUSIC_PLAYER_CMD_STOP:
-                music_player_set_snapshot(MUSIC_PLAYER_STATE_IDLE, s_snapshot.path, s_snapshot.file_size, s_snapshot.position, 0U, 0U, 0U, NULL);
+                music_player_set_snapshot(
+                    MUSIC_PLAYER_STATE_IDLE,
+                    s_snapshot.path,
+                    s_snapshot.file_size,
+                    s_snapshot.position,
+                    0U,
+                    0U,
+                    0U,
+                    NULL);
                 music_player_i2s_disable();
                 break;
             case MUSIC_PLAYER_CMD_PLAY:
@@ -753,8 +891,24 @@ static void music_player_task(void *arg)
 
 esp_err_t music_player_init(void)
 {
+    esp_audio_err_t audio_err;
+
     if (s_music_inited) {
         return ESP_OK;
+    }
+
+    if (!s_decoder_registry_ready) {
+        audio_err = esp_audio_dec_register_default();
+        if (audio_err != ESP_AUDIO_ERR_OK) {
+            ESP_LOGE(MUSIC_PLAYER_TAG, "esp_audio_dec_register_default failed: %d", (int)audio_err);
+            return ESP_FAIL;
+        }
+        audio_err = esp_audio_simple_dec_register_default();
+        if (audio_err != ESP_AUDIO_ERR_OK) {
+            ESP_LOGE(MUSIC_PLAYER_TAG, "esp_audio_simple_dec_register_default failed: %d", (int)audio_err);
+            return ESP_FAIL;
+        }
+        s_decoder_registry_ready = true;
     }
 
     s_music_lock = xSemaphoreCreateMutex();

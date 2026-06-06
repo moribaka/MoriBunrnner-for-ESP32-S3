@@ -50,6 +50,9 @@
 #define UI_CANVAS_PIXELS (UI_CANVAS_W * UI_CANVAS_H)
 #define UI_COLOR_BLACK 0x0000U
 #define UI_COLOR_WHITE 0xFFFFU
+#define UI_COLOR_GRAY_L3 0x39E7U
+#define UI_COLOR_GRAY_L2 0x7BEFU
+#define UI_COLOR_GRAY_L1 0xBDF7U
 
 #define UI_TILE_ICON_AUTO_SIZE (UI_CANVAS_H / 4)
 #define UI_TILE_ICON_SIZE ((UI_TILE_ICON_AUTO_SIZE < 44) ? 44 : ((UI_TILE_ICON_AUTO_SIZE > 62) ? 62 : UI_TILE_ICON_AUTO_SIZE))
@@ -155,14 +158,33 @@
 #define UI_FPS_REFRESH_MS 1000U
 #define UI_BATTERY_REFRESH_MS 5000U
 #define UI_LIVE_REFRESH_MS 250U
+#define UI_MUSIC_VISUAL_REFRESH_MS 16U
 #define UI_FILE_PSRAM_WINDOW_MB 4U
-#define UI_MUSIC_SEEK_BAR_X 18
-#define UI_MUSIC_SEEK_BAR_W (UI_CANVAS_W - 36)
-#define UI_MUSIC_SEEK_BAR_Y 86
-#define UI_MUSIC_INFO_Y 46
-#define UI_MUSIC_META_Y 112
-#define UI_MUSIC_CTRL_Y 146
-#define UI_MUSIC_HINT2_Y 178
+#define UI_MUSIC_DIR "music"
+#define UI_MUSIC_DRAWER_W 160
+#define UI_MUSIC_DRAWER_X_CLOSED (-UI_MUSIC_DRAWER_W)
+#define UI_MUSIC_DRAWER_Y UI_LIST_HEADER_H
+#define UI_MUSIC_DRAWER_H (UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H)
+#define UI_MUSIC_DRAWER_VISIBLE_ROWS ((UI_MUSIC_DRAWER_H - 18) / UI_LIST_LINE_H)
+#define UI_MUSIC_SPECTRUM_X 8
+#define UI_MUSIC_SPECTRUM_Y 34
+#define UI_MUSIC_SPECTRUM_W (UI_CANVAS_W - 16)
+#define UI_MUSIC_SPECTRUM_H 92
+#define UI_MUSIC_SPECTRUM_CELL 12
+#define UI_MUSIC_SPECTRUM_GAP 4
+#define UI_MUSIC_SPECTRUM_COLS 32
+#define UI_MUSIC_SPECTRUM_ROWS 6
+#define UI_MUSIC_SPECTRUM_ROW_STEP (UI_MUSIC_SPECTRUM_CELL + 2)
+#define UI_MUSIC_SPECTRUM_CAP_H 3
+#define UI_MUSIC_INFO_Y 134
+#define UI_MUSIC_SEEK_BAR_X 26
+#define UI_MUSIC_SEEK_BAR_W (UI_CANVAS_W - 52)
+#define UI_MUSIC_SEEK_BAR_Y 154
+#define UI_MUSIC_META_Y 168
+#define UI_MUSIC_CTRL_Y 180
+#define UI_MUSIC_CTRL_SIDE_SIZE 28
+#define UI_MUSIC_CTRL_MAIN_SIZE 36
+#define UI_MUSIC_HINT2_Y 214
 #define UI_TILE_CAMERA_SPEED 92.0f
 #define UI_TILE_BAR_SPEED 88.0f
 #define UI_TILE_FORE_SPEED 90.0f
@@ -223,7 +245,7 @@ typedef enum {
     UI_FILE_KIND_ROM_GBA,
     UI_FILE_KIND_ROM_MBC5,
     UI_FILE_KIND_SAVE,
-    UI_FILE_KIND_MP3,
+    UI_FILE_KIND_AUDIO,
 } ui_file_kind_t;
 
 typedef enum {
@@ -231,8 +253,11 @@ typedef enum {
     UI_FILE_FILTER_ROM_GBA,
     UI_FILE_FILTER_ROM_MBC5,
     UI_FILE_FILTER_SAVE,
-    UI_FILE_FILTER_MP3,
+    UI_FILE_FILTER_AUDIO,
 } ui_file_filter_t;
+
+#define UI_FILE_KIND_MP3 UI_FILE_KIND_AUDIO
+#define UI_FILE_FILTER_MP3 UI_FILE_FILTER_AUDIO
 
 typedef enum {
     UI_FILE_ACTION_BURN_PSRAM = 0,
@@ -354,11 +379,15 @@ typedef struct {
     bool motion_dirty;
     bool content_dirty;
     bool chrome_dirty;
+    bool music_player_dirty;
+    bool music_progress_dirty;
+    bool music_spectrum_dirty;
 } ui_model_t;
 
 typedef struct {
     bool valid;
     ui_file_entry_t current;
+    bool drawer_open;
 } ui_music_context_t;
 
 typedef struct {
@@ -438,6 +467,8 @@ typedef struct {
     int32_t list_prev_selector_w;
     int32_t list_prev_bar_h;
     int32_t list_prev_bar_x;
+    float music_drawer_x;
+    float music_drawer_target_x;
 } ui_anim_state_t;
 
 static SemaphoreHandle_t s_model_lock = NULL;
@@ -473,6 +504,16 @@ static bool s_model_defaults_inited = false;
 static ui_music_context_t s_music_ctx = {0};
 static music_player_snapshot_t s_music_snapshot_cache = {0};
 static bool s_music_snapshot_cached = false;
+static uint32_t s_last_music_visual_refresh_ms = 0;
+static uint8_t s_music_spectrum_level[UI_MUSIC_SPECTRUM_COLS] = {0};
+static uint8_t s_music_spectrum_peak[UI_MUSIC_SPECTRUM_COLS] = {0};
+static float s_music_spectrum_peak_px[UI_MUSIC_SPECTRUM_COLS] = {0};
+static float s_music_spectrum_peak_velocity[UI_MUSIC_SPECTRUM_COLS] = {0};
+static uint8_t s_music_spectrum_bar_glow_1[UI_MUSIC_SPECTRUM_COLS] = {0};
+static uint8_t s_music_spectrum_bar_glow_2[UI_MUSIC_SPECTRUM_COLS] = {0};
+static uint8_t s_music_spectrum_bar_glow_3[UI_MUSIC_SPECTRUM_COLS] = {0};
+static float s_music_spectrum_cap_glow_1_px[UI_MUSIC_SPECTRUM_COLS] = {0};
+static float s_music_spectrum_cap_glow_2_px[UI_MUSIC_SPECTRUM_COLS] = {0};
 
 static lv_obj_t *s_canvas = NULL;
 static uint16_t *s_canvas_buf = NULL;
@@ -581,7 +622,7 @@ static void ui_capture_task_result_locked(ui_model_t *model, const burner_status
 static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
     {.title = "System", .hint = "web overview", .symbol = "SYS", .action = UI_ACTION_OPEN_SYSTEM, .accent = UI_COLOR_WHITE},
     {.title = "TF", .hint = "files and USB", .symbol = "TF", .action = UI_ACTION_OPEN_TF, .accent = UI_COLOR_WHITE},
-    {.title = "Music", .hint = "mp3 player", .symbol = "MUS", .action = UI_ACTION_OPEN_MUSIC, .accent = UI_COLOR_WHITE},
+    {.title = "Music", .hint = "audio player", .symbol = "MUS", .action = UI_ACTION_OPEN_MUSIC, .accent = UI_COLOR_WHITE},
     {.title = "Wi-Fi", .hint = "network setup", .symbol = "WIFI", .action = UI_ACTION_OPEN_WIFI, .accent = UI_COLOR_WHITE},
     {.title = "Power", .hint = "battery telemetry", .symbol = "PWR", .action = UI_ACTION_OPEN_POWER, .accent = UI_COLOR_WHITE},
     {.title = "Burner", .hint = "cart operations", .symbol = "BURN", .action = UI_ACTION_OPEN_BURNER, .accent = UI_COLOR_WHITE},
@@ -591,6 +632,7 @@ static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
 static bool ui_take_model_lock(void);
 static bool ui_file_entry_for_visible_row(const ui_model_t *model, uint16_t row, ui_file_entry_t *entry_out);
 static int32_t ui_file_name_col_w(void);
+static uint16_t ui_file_visible_rows_for_page(const ui_model_t *model);
 static uint16_t ui_scroll_for_selected_rows(uint16_t selected, uint16_t scroll, uint16_t count, uint16_t visible_rows);
 static uint16_t ui_burn_rom_visible_rows(void);
 static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index);
@@ -601,6 +643,8 @@ static void ui_burn_rom_open_mapper_menu_locked(ui_model_t *model);
 static void ui_persist_burn_settings_locked(ui_model_t *model);
 static const char *ui_selected_gb_mapper_label(void);
 static void ui_push_current_page_locked(const ui_model_t *model);
+static void ui_open_music_player_locked(ui_model_t *model, const ui_file_entry_t *entry);
+static void ui_music_set_drawer_open_locked(ui_model_t *model, bool open);
 
 static bool ui_lang_is_zh(void)
 {
@@ -648,7 +692,7 @@ static const char *ui_root_item_hint(const ui_menu_item_t *item)
         case UI_ACTION_OPEN_TF:
             return ui_tr("files and USB");
         case UI_ACTION_OPEN_MUSIC:
-            return ui_tr("mp3 player");
+            return ui_tr("audio player");
         case UI_ACTION_OPEN_WIFI:
             return ui_tr("network setup");
         case UI_ACTION_OPEN_POWER:
@@ -701,6 +745,8 @@ static ui_anim_state_t s_anim = {
     .tile_fore_target_y = 0.0f,
     .list_bar_x = (float)UI_CANVAS_W,
     .list_bar_target_x = (float)(UI_CANVAS_W - UI_LIST_BAR_W),
+    .music_drawer_x = (float)UI_MUSIC_DRAWER_X_CLOSED,
+    .music_drawer_target_x = (float)UI_MUSIC_DRAWER_X_CLOSED,
     .marquee_selected = UINT16_MAX,
     .burner_prev_selected = UINT16_MAX,
     .page = UI_PAGE_ROOT,
@@ -739,6 +785,16 @@ static bool ui_burner_operation_active(void);
 static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row);
 static const char *ui_probe_chip_name(const burner_status_t *status);
 static const char *ui_probe_type_label(const burner_status_t *status, burner_cart_mode_t mode);
+static void ui_px_draw_music_file_row(
+    const ui_model_t *model,
+    const music_player_snapshot_t *snap,
+    uint16_t row,
+    int32_t x,
+    int32_t y,
+    int32_t w);
+static void ui_px_draw_music_button_prev(int32_t x, int32_t y, int32_t size);
+static void ui_px_draw_music_button_next(int32_t x, int32_t y, int32_t size);
+static void ui_px_draw_music_button_play_pause(int32_t x, int32_t y, int32_t size, bool pause_icon);
 
 static bool ui_take_model_lock(void)
 {
@@ -908,6 +964,14 @@ static void ui_px_set(int32_t x, int32_t y, bool on)
     s_canvas_buf[(uint32_t)y * UI_CANVAS_W + (uint32_t)x] = on ? UI_COLOR_WHITE : UI_COLOR_BLACK;
 }
 
+static void ui_px_set_color(int32_t x, int32_t y, uint16_t color)
+{
+    if (s_canvas_buf == NULL || x < 0 || y < 0 || x >= UI_CANVAS_W || y >= UI_CANVAS_H) {
+        return;
+    }
+    s_canvas_buf[(uint32_t)y * UI_CANVAS_W + (uint32_t)x] = color;
+}
+
 static void ui_px_toggle(int32_t x, int32_t y)
 {
     uint16_t *px = NULL;
@@ -926,6 +990,13 @@ static void ui_px_hline(int32_t x, int32_t y, int32_t w, bool on)
     }
 }
 
+static void ui_px_hline_color(int32_t x, int32_t y, int32_t w, uint16_t color)
+{
+    for (int32_t i = 0; i < w; ++i) {
+        ui_px_set_color(x + i, y, color);
+    }
+}
+
 static void ui_px_vline(int32_t x, int32_t y, int32_t h, bool on)
 {
     for (int32_t i = 0; i < h; ++i) {
@@ -937,6 +1008,13 @@ static void ui_px_box(int32_t x, int32_t y, int32_t w, int32_t h, bool on)
 {
     for (int32_t yy = 0; yy < h; ++yy) {
         ui_px_hline(x, y + yy, w, on);
+    }
+}
+
+static void ui_px_box_color(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t color)
+{
+    for (int32_t yy = 0; yy < h; ++yy) {
+        ui_px_hline_color(x, y + yy, w, color);
     }
 }
 
@@ -1985,6 +2063,7 @@ static bool ui_anim_active_for_page(const ui_model_t *model)
 {
     ui_file_entry_t entry = {0};
     int32_t name_w;
+    uint16_t visible_rows;
 
     if (model == NULL) {
         return false;
@@ -1999,11 +2078,12 @@ static bool ui_anim_active_for_page(const ui_model_t *model)
                ui_anim_value_active(s_anim.tile_fore_y, s_anim.tile_fore_target_y);
     }
     if (model->page == UI_PAGE_MUSIC_PLAYER) {
-        return false;
+        return ui_anim_value_active(s_anim.music_drawer_x, s_anim.music_drawer_target_x);
     }
+    visible_rows = ui_file_visible_rows_for_page(model);
     if ((model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) &&
         model->file_selected >= model->file_scroll &&
-        model->file_selected < model->file_scroll + UI_ROW_COUNT &&
+        model->file_selected < model->file_scroll + visible_rows &&
         ui_file_entry_for_visible_row(model, (uint16_t)(model->file_selected - model->file_scroll), &entry)) {
         name_w = ui_px_text_width(entry.name);
         if (name_w > ui_file_name_col_w()) {
@@ -2021,7 +2101,9 @@ static uint16_t ui_current_selected(const ui_model_t *model)
     if (model == NULL) {
         return 0;
     }
-    return (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) ? model->file_selected : model->selected;
+    return (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES || model->page == UI_PAGE_MUSIC_PLAYER) ?
+               model->file_selected :
+               model->selected;
 }
 
 static uint16_t ui_current_scroll(const ui_model_t *model)
@@ -2029,7 +2111,9 @@ static uint16_t ui_current_scroll(const ui_model_t *model)
     if (model == NULL) {
         return 0;
     }
-    return (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) ? model->file_scroll : model->scroll;
+    return (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES || model->page == UI_PAGE_MUSIC_PLAYER) ?
+               model->file_scroll :
+               model->scroll;
 }
 
 static uint16_t ui_burn_rom_item_count(void)
@@ -2165,6 +2249,23 @@ static void ui_clamp_burn_rom_selection_locked(ui_model_t *model)
 static uint16_t ui_scroll_for_selected(uint16_t selected, uint16_t scroll, uint16_t count)
 {
     return ui_scroll_for_selected_rows(selected, scroll, count, UI_ROW_COUNT);
+}
+
+static uint16_t ui_file_visible_rows_for_page(const ui_model_t *model)
+{
+    if (model != NULL && model->page == UI_PAGE_MUSIC_PLAYER) {
+        return (UI_MUSIC_DRAWER_VISIBLE_ROWS > 0) ? (uint16_t)UI_MUSIC_DRAWER_VISIBLE_ROWS : 1U;
+    }
+    return UI_ROW_COUNT;
+}
+
+static uint16_t ui_file_scroll_for_selected(
+    const ui_model_t *model,
+    uint16_t selected,
+    uint16_t scroll,
+    uint16_t count)
+{
+    return ui_scroll_for_selected_rows(selected, scroll, count, ui_file_visible_rows_for_page(model));
 }
 
 static uint16_t ui_scroll_for_selected_rows(uint16_t selected, uint16_t scroll, uint16_t count, uint16_t visible_rows)
@@ -2427,8 +2528,11 @@ static ui_file_kind_t ui_file_kind_from_name(const char *name)
     if (strcasecmp(ext, "sav") == 0 || strcasecmp(ext, "srm") == 0) {
         return UI_FILE_KIND_SAVE;
     }
-    if (strcasecmp(ext, "mp3") == 0) {
-        return UI_FILE_KIND_MP3;
+    if (strcasecmp(ext, "mp3") == 0 ||
+        strcasecmp(ext, "aac") == 0 ||
+        strcasecmp(ext, "flac") == 0 ||
+        strcasecmp(ext, "wav") == 0) {
+        return UI_FILE_KIND_AUDIO;
     }
     return UI_FILE_KIND_UNSUPPORTED;
 }
@@ -2444,8 +2548,8 @@ static bool ui_file_kind_matches_filter(ui_file_kind_t kind, ui_file_filter_t fi
             return kind == UI_FILE_KIND_ROM_MBC5;
         case UI_FILE_FILTER_SAVE:
             return kind == UI_FILE_KIND_SAVE;
-        case UI_FILE_FILTER_MP3:
-            return kind == UI_FILE_KIND_MP3;
+        case UI_FILE_FILTER_AUDIO:
+            return kind == UI_FILE_KIND_AUDIO;
         default:
             return false;
     }
@@ -2466,7 +2570,7 @@ static uint8_t ui_file_sort_rank(const ui_file_entry_t *entry)
             return 2U;
         case UI_FILE_KIND_SAVE:
             return 3U;
-        case UI_FILE_KIND_MP3:
+        case UI_FILE_KIND_AUDIO:
             return 4U;
         case UI_FILE_KIND_UNSUPPORTED:
         default:
@@ -2504,7 +2608,7 @@ static uint8_t ui_file_action_count_for_kind(ui_file_kind_t kind)
     if (kind == UI_FILE_KIND_SAVE) {
         return 2U;
     }
-    if (kind == UI_FILE_KIND_MP3) {
+    if (kind == UI_FILE_KIND_AUDIO) {
         return 1U;
     }
     return 0U;
@@ -2564,8 +2668,8 @@ static const char *ui_file_kind_label(ui_file_kind_t kind)
             return "GB/GBC ROM";
         case UI_FILE_KIND_SAVE:
             return ui_tr("Save file");
-        case UI_FILE_KIND_MP3:
-            return "MP3";
+        case UI_FILE_KIND_AUDIO:
+            return "Audio";
         case UI_FILE_KIND_UNSUPPORTED:
         default:
             return ui_tr("File");
@@ -2835,6 +2939,9 @@ static void ui_scan_file_window_locked(ui_model_t *model)
         }
         if (model->file_filter != UI_FILE_FILTER_NONE) {
             if (entries[total].is_dir) {
+                if (model->file_filter == UI_FILE_FILTER_AUDIO) {
+                    continue;
+                }
                 if (ui_file_dir_is_system_name(dirent->d_name)) {
                     continue;
                 }
@@ -2857,7 +2964,7 @@ static void ui_scan_file_window_locked(ui_model_t *model)
         model->file_selected = 0;
         model->file_scroll = 0;
     } else {
-        model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, total);
+        model->file_scroll = ui_file_scroll_for_selected(model, model->file_selected, model->file_scroll, total);
     }
     visible_begin = model->file_scroll;
     if (total > UI_FILE_WINDOW_COUNT && visible_begin + UI_FILE_WINDOW_COUNT > total) {
@@ -2920,6 +3027,7 @@ static bool ui_file_entry_for_visible_row(const ui_model_t *model, uint16_t row,
 static bool ui_file_visible_window_loaded_locked(const ui_model_t *model)
 {
     uint16_t visible_end;
+    uint16_t visible_rows;
 
     if (model == NULL) {
         return false;
@@ -2927,7 +3035,8 @@ static bool ui_file_visible_window_loaded_locked(const ui_model_t *model)
     if (model->file_total == 0U) {
         return true;
     }
-    visible_end = model->file_scroll + UI_ROW_COUNT;
+    visible_rows = ui_file_visible_rows_for_page(model);
+    visible_end = model->file_scroll + visible_rows;
     if (visible_end > model->file_total) {
         visible_end = model->file_total;
     }
@@ -2946,7 +3055,8 @@ static void ui_file_ensure_window_locked(ui_model_t *model, bool force_scan)
         ui_scan_file_window_locked(model);
         if (model->file_total > 0U && cached_selected < model->file_total) {
             model->file_selected = cached_selected;
-            model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, model->file_total);
+            model->file_scroll =
+                ui_file_scroll_for_selected(model, model->file_selected, model->file_scroll, model->file_total);
         }
         model->dirty = true;
     }
@@ -2971,7 +3081,8 @@ static void ui_file_move_locked(ui_model_t *model, int delta)
         model->file_selected = (uint16_t)selected;
         old_scroll = model->file_scroll;
         old_window_start = model->file_window_start;
-        model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, model->file_total);
+        model->file_scroll =
+            ui_file_scroll_for_selected(model, model->file_selected, model->file_scroll, model->file_total);
         ui_file_ensure_window_locked(model, false);
         if (model->file_scroll == old_scroll && model->file_window_start == old_window_start &&
             ui_file_visible_window_loaded_locked(model)) {
@@ -3012,6 +3123,25 @@ static void ui_open_files_with_filter_locked(
     ui_open_files_locked(model, path, reset_selection);
 }
 
+static void ui_open_music_library_locked(ui_model_t *model, bool reset_selection)
+{
+    if (model == NULL) {
+        return;
+    }
+    if (model->page != UI_PAGE_MUSIC_PLAYER) {
+        ui_push_current_page_locked(model);
+    }
+    model->page = UI_PAGE_MUSIC_PLAYER;
+    model->parent_page = UI_PAGE_ROOT;
+    model->selected = 0;
+    model->scroll = 0;
+    model->file_filter = UI_FILE_FILTER_AUDIO;
+    ui_music_set_drawer_open_locked(model, false);
+    ui_open_files_locked(model, UI_MUSIC_DIR, reset_selection);
+    ui_mark_chrome_dirty(model);
+    ui_mark_content_dirty(model);
+}
+
 static ui_file_filter_t ui_burner_rom_file_filter(void)
 {
     return (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_FILE_FILTER_ROM_GBA : UI_FILE_FILTER_ROM_MBC5;
@@ -3046,6 +3176,547 @@ static void ui_music_set_current_locked(const ui_file_entry_t *entry)
     s_music_ctx.current = *entry;
 }
 
+static void ui_music_set_drawer_open_locked(ui_model_t *model, bool open)
+{
+    float target_x = open ? 0.0f : (float)UI_MUSIC_DRAWER_X_CLOSED;
+
+    s_music_ctx.drawer_open = open;
+    s_anim.music_drawer_target_x = target_x;
+    if (model != NULL) {
+        ui_mark_motion_dirty(model);
+        ui_mark_content_dirty(model);
+    }
+}
+
+static void ui_music_toggle_drawer_locked(ui_model_t *model)
+{
+    ui_music_set_drawer_open_locked(model, !s_music_ctx.drawer_open);
+}
+
+static int32_t ui_music_loop_marquee_offset(int32_t text_w, int32_t view_w, uint32_t phase)
+{
+    uint32_t tick;
+    uint32_t cycle_steps;
+    uint32_t step;
+    int32_t overflow;
+
+    if (text_w <= view_w) {
+        return 0;
+    }
+    overflow = text_w - view_w;
+    cycle_steps = (uint32_t)overflow + (uint32_t)(UI_FILE_MARQUEE_END_PAUSE_STEPS * 2);
+    if (cycle_steps == 0U) {
+        return 0;
+    }
+    tick = (esp_log_timestamp() / UI_FILE_MARQUEE_STEP_MS) + phase;
+    step = tick % cycle_steps;
+    if (step < UI_FILE_MARQUEE_END_PAUSE_STEPS) {
+        return 0;
+    }
+    step -= UI_FILE_MARQUEE_END_PAUSE_STEPS;
+    if (step >= (uint32_t)overflow) {
+        return overflow;
+    }
+    return (int32_t)step;
+}
+
+static bool ui_music_visual_active(const music_player_snapshot_t *snap)
+{
+    if (snap == NULL) {
+        return false;
+    }
+    return snap->state == MUSIC_PLAYER_STATE_LOADING ||
+           snap->state == MUSIC_PLAYER_STATE_PLAYING;
+}
+
+static int32_t ui_music_spectrum_height_px(uint8_t level)
+{
+    if (level == 0U) {
+        return 0;
+    }
+    return UI_MUSIC_SPECTRUM_CELL + ((int32_t)level - 1) * UI_MUSIC_SPECTRUM_ROW_STEP;
+}
+
+static int32_t ui_music_spectrum_cap_y_from_px(float peak_px)
+{
+    int32_t cap_y = (int32_t)peak_px;
+
+    if (cap_y < UI_MUSIC_SPECTRUM_Y) {
+        cap_y = UI_MUSIC_SPECTRUM_Y;
+    }
+    if (cap_y > (UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - UI_MUSIC_SPECTRUM_CAP_H)) {
+        cap_y = UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - UI_MUSIC_SPECTRUM_CAP_H;
+    }
+    return cap_y;
+}
+
+static int32_t ui_music_drawer_visible_w(int32_t drawer_x)
+{
+    if (drawer_x <= UI_MUSIC_DRAWER_X_CLOSED) {
+        return 0;
+    }
+    if (drawer_x >= 0) {
+        return UI_MUSIC_DRAWER_W;
+    }
+    return drawer_x + UI_MUSIC_DRAWER_W;
+}
+
+static bool ui_music_snapshot_player_changed(
+    const music_player_snapshot_t *prev,
+    const music_player_snapshot_t *next)
+{
+    if (prev == NULL || next == NULL) {
+        return true;
+    }
+    return prev->state != next->state ||
+           prev->file_size != next->file_size ||
+           strcmp(prev->path, next->path) != 0 ||
+           strcmp(prev->name, next->name) != 0;
+}
+
+static bool ui_music_snapshot_progress_changed(
+    const music_player_snapshot_t *prev,
+    const music_player_snapshot_t *next)
+{
+    if (prev == NULL || next == NULL) {
+        return true;
+    }
+    return prev->position != next->position || prev->file_size != next->file_size;
+}
+
+static void ui_music_player_view_state(
+    const ui_model_t *model,
+    music_player_snapshot_t *snap_out,
+    char *header,
+    size_t header_len,
+    bool *pause_icon_out,
+    uint32_t *percent_out)
+{
+    music_player_snapshot_t snap = {0};
+    ui_file_entry_t selected_entry = {0};
+    uint32_t percent = 0U;
+    bool pause_icon = false;
+
+    if (header != NULL && header_len > 0U) {
+        header[0] = '\0';
+    }
+    if (snap_out == NULL || header == NULL || header_len == 0U || pause_icon_out == NULL || percent_out == NULL) {
+        return;
+    }
+
+    music_player_get_snapshot(&snap);
+    if (snap.file_size != 0U) {
+        percent = (uint32_t)(((uint64_t)snap.position * 100ULL) / (uint64_t)snap.file_size);
+        if (percent > 100U) {
+            percent = 100U;
+        }
+    }
+
+    if (snap.name[0] != '\0') {
+        snprintf(header, header_len, "%.*s", (int)(header_len - 1U), snap.name);
+    } else if (model != NULL && ui_current_file_locked(model, &selected_entry)) {
+        snprintf(header, header_len, "%.*s", (int)(header_len - 1U), selected_entry.name);
+    } else {
+        snprintf(header, header_len, "%s", ui_tr("no file selected"));
+    }
+
+    switch (snap.state) {
+        case MUSIC_PLAYER_STATE_PLAYING:
+            pause_icon = true;
+            break;
+        case MUSIC_PLAYER_STATE_LOADING:
+        case MUSIC_PLAYER_STATE_PAUSED:
+        case MUSIC_PLAYER_STATE_ERROR:
+        case MUSIC_PLAYER_STATE_FINISHED:
+        case MUSIC_PLAYER_STATE_IDLE:
+        default:
+            pause_icon = false;
+            break;
+    }
+
+    *snap_out = snap;
+    *pause_icon_out = pause_icon;
+    *percent_out = percent;
+}
+
+static bool ui_music_step_visuals(const music_player_snapshot_t *snap)
+{
+    uint32_t tick = esp_log_timestamp() / UI_MUSIC_VISUAL_REFRESH_MS;
+    bool active = ui_music_visual_active(snap);
+    const float gravity_px = active ? 0.85f : 1.25f;
+    bool changed = false;
+
+    for (uint32_t i = 0; i < UI_MUSIC_SPECTRUM_COLS; ++i) {
+        uint8_t target = 0U;
+        uint8_t level = s_music_spectrum_level[i];
+        uint8_t peak = s_music_spectrum_peak[i];
+        float peak_px = s_music_spectrum_peak_px[i];
+        float peak_velocity = s_music_spectrum_peak_velocity[i];
+        uint8_t bar_glow_1 = s_music_spectrum_bar_glow_1[i];
+        uint8_t bar_glow_2 = s_music_spectrum_bar_glow_2[i];
+        uint8_t bar_glow_3 = s_music_spectrum_bar_glow_3[i];
+        float cap_glow_1_px = s_music_spectrum_cap_glow_1_px[i];
+        float cap_glow_2_px = s_music_spectrum_cap_glow_2_px[i];
+        uint8_t prev_level = level;
+        uint8_t prev_peak = peak;
+        float prev_peak_px = peak_px;
+        float prev_peak_velocity = peak_velocity;
+        uint8_t prev_bar_glow_1 = bar_glow_1;
+        uint8_t prev_bar_glow_2 = bar_glow_2;
+        uint8_t prev_bar_glow_3 = bar_glow_3;
+        float prev_cap_glow_1_px = cap_glow_1_px;
+        float prev_cap_glow_2_px = cap_glow_2_px;
+        int32_t spectrum_floor_y = UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - 1;
+        int32_t bar_h_target_px;
+        float bar_cap_target_px;
+        float min_cap_px = (float)UI_MUSIC_SPECTRUM_Y;
+        float max_cap_px = (float)(UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - UI_MUSIC_SPECTRUM_CAP_H);
+
+        if (snap != NULL && (snap->state == MUSIC_PLAYER_STATE_LOADING || snap->state == MUSIC_PLAYER_STATE_PLAYING)) {
+            uint32_t phase = (tick + (i * 2U) + (snap->position / 3072U)) % 7U;
+            uint32_t pulse = ((tick * 5U) + (i * 11U) + (snap->position / 1536U)) % UI_MUSIC_SPECTRUM_ROWS;
+
+            if (phase == 0U || phase == 1U) {
+                target = (uint8_t)(1U + pulse);
+            } else if (phase == 2U && pulse >= 3U) {
+                target = (uint8_t)(pulse - 1U);
+            }
+        } else if (snap != NULL && snap->state == MUSIC_PLAYER_STATE_PAUSED) {
+            target = 0U;
+        }
+
+        if (!active) {
+            target = 0U;
+        }
+        if (target > UI_MUSIC_SPECTRUM_ROWS) {
+            target = UI_MUSIC_SPECTRUM_ROWS;
+        }
+        if (target > level) {
+            level = target;
+        } else if (level > target) {
+            uint8_t drop = active ? 2U : UI_MUSIC_SPECTRUM_ROWS;
+
+            level = (level > (uint8_t)(target + drop)) ? (uint8_t)(level - drop) : target;
+        }
+        bar_h_target_px = ui_music_spectrum_height_px(level);
+        if (bar_h_target_px > 0) {
+            bar_cap_target_px = (float)(spectrum_floor_y - bar_h_target_px - 4 + 1);
+        } else {
+            bar_cap_target_px = max_cap_px;
+        }
+        if (bar_cap_target_px < min_cap_px) {
+            bar_cap_target_px = min_cap_px;
+        }
+        if (bar_cap_target_px > max_cap_px) {
+            bar_cap_target_px = max_cap_px;
+        }
+        if (cap_glow_1_px <= 0.0f) {
+            cap_glow_1_px = max_cap_px;
+        }
+        if (cap_glow_2_px <= 0.0f) {
+            cap_glow_2_px = max_cap_px;
+        }
+
+        if (level >= peak || peak_px <= 0.0f || bar_cap_target_px < peak_px) {
+            peak = level;
+            peak_px = bar_cap_target_px;
+            peak_velocity = 0.0f;
+        } else {
+            peak_velocity += gravity_px;
+            if (peak_velocity > 7.5f) {
+                peak_velocity = 7.5f;
+            }
+            peak_px += peak_velocity;
+            if (peak_px > max_cap_px) {
+                peak_px = max_cap_px;
+                peak_velocity = 0.0f;
+                peak = 0U;
+            } else if (peak_px < min_cap_px) {
+                peak_px = min_cap_px;
+            }
+            peak = (uint8_t)((UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - (int32_t)peak_px + (UI_MUSIC_SPECTRUM_ROW_STEP / 2)) /
+                             UI_MUSIC_SPECTRUM_ROW_STEP);
+            if (peak > UI_MUSIC_SPECTRUM_ROWS) {
+                peak = UI_MUSIC_SPECTRUM_ROWS;
+            }
+        }
+        if (peak > UI_MUSIC_SPECTRUM_ROWS) {
+            peak = UI_MUSIC_SPECTRUM_ROWS;
+        }
+        if (level >= bar_glow_1) {
+            bar_glow_1 = level;
+        } else if (bar_glow_1 > 0U) {
+            bar_glow_1--;
+        }
+        if (bar_glow_1 >= bar_glow_2) {
+            bar_glow_2 = bar_glow_1;
+        } else if (bar_glow_2 > 0U && (((tick + i) & 0x01U) == 0U)) {
+            bar_glow_2--;
+        }
+        if (bar_glow_2 >= bar_glow_3) {
+            bar_glow_3 = bar_glow_2;
+        } else if (bar_glow_3 > 0U && (((tick + i + 1U) % 3U) == 0U)) {
+            bar_glow_3--;
+        }
+        if (peak > 0U) {
+            if (cap_glow_1_px <= 0.0f || peak_px < cap_glow_1_px) {
+                cap_glow_1_px = peak_px;
+            } else {
+                cap_glow_1_px += 2.6f;
+                if (cap_glow_1_px > max_cap_px) {
+                    cap_glow_1_px = max_cap_px;
+                }
+            }
+        } else {
+            cap_glow_1_px += 3.0f;
+            if (cap_glow_1_px > max_cap_px) {
+                cap_glow_1_px = max_cap_px;
+            }
+        }
+        if (cap_glow_2_px <= 0.0f || cap_glow_1_px < cap_glow_2_px) {
+            cap_glow_2_px = cap_glow_1_px;
+        } else {
+            cap_glow_2_px += 4.2f;
+            if (cap_glow_2_px > max_cap_px) {
+                cap_glow_2_px = max_cap_px;
+            }
+        }
+        s_music_spectrum_level[i] = level;
+        s_music_spectrum_peak[i] = peak;
+        s_music_spectrum_peak_px[i] = peak_px;
+        s_music_spectrum_peak_velocity[i] = peak_velocity;
+        s_music_spectrum_bar_glow_1[i] = bar_glow_1;
+        s_music_spectrum_bar_glow_2[i] = bar_glow_2;
+        s_music_spectrum_bar_glow_3[i] = bar_glow_3;
+        s_music_spectrum_cap_glow_1_px[i] = cap_glow_1_px;
+        s_music_spectrum_cap_glow_2_px[i] = cap_glow_2_px;
+        if (prev_level != level ||
+            prev_peak != peak ||
+            prev_peak_px != peak_px ||
+            prev_peak_velocity != peak_velocity ||
+            prev_bar_glow_1 != bar_glow_1 ||
+            prev_bar_glow_2 != bar_glow_2 ||
+            prev_bar_glow_3 != bar_glow_3 ||
+            prev_cap_glow_1_px != cap_glow_1_px ||
+            prev_cap_glow_2_px != cap_glow_2_px) {
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+static void ui_px_draw_music_spectrum(void)
+{
+    int32_t spectrum_floor_y = UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - 1;
+
+    for (int32_t col = 0; col < UI_MUSIC_SPECTRUM_COLS; ++col) {
+        int32_t slot_x0 = UI_MUSIC_SPECTRUM_X + (col * UI_MUSIC_SPECTRUM_W) / UI_MUSIC_SPECTRUM_COLS;
+        int32_t slot_x1 = UI_MUSIC_SPECTRUM_X + ((col + 1) * UI_MUSIC_SPECTRUM_W) / UI_MUSIC_SPECTRUM_COLS;
+        int32_t slot_w = slot_x1 - slot_x0;
+        int32_t bar_w = slot_w - 4;
+        int32_t cap_w = slot_w - 2;
+        int32_t bar_x;
+        int32_t cap_x;
+        uint8_t level = s_music_spectrum_level[col];
+        uint8_t peak = s_music_spectrum_peak[col];
+        uint8_t bar_glow_1 = s_music_spectrum_bar_glow_1[col];
+        uint8_t bar_glow_2 = s_music_spectrum_bar_glow_2[col];
+        uint8_t bar_glow_3 = s_music_spectrum_bar_glow_3[col];
+        float peak_px = s_music_spectrum_peak_px[col];
+        float cap_glow_1_px = s_music_spectrum_cap_glow_1_px[col];
+        float cap_glow_2_px = s_music_spectrum_cap_glow_2_px[col];
+        float max_cap_px = (float)(UI_MUSIC_SPECTRUM_Y + UI_MUSIC_SPECTRUM_H - UI_MUSIC_SPECTRUM_CAP_H);
+
+        if (bar_w < 3) {
+            bar_w = 3;
+        }
+        if (cap_w < 5) {
+            cap_w = 5;
+        }
+        if (bar_w > slot_w) {
+            bar_w = slot_w;
+        }
+        if (cap_w > slot_w) {
+            cap_w = slot_w;
+        }
+        bar_x = slot_x0 + ((slot_w - bar_w) / 2);
+        cap_x = slot_x0 + ((slot_w - cap_w) / 2);
+
+        if (bar_glow_3 > 0U) {
+            int32_t glow_h = ui_music_spectrum_height_px(bar_glow_3);
+
+            ui_px_box_color(bar_x, spectrum_floor_y - glow_h + 1, bar_w, glow_h, UI_COLOR_GRAY_L3);
+        }
+        if (bar_glow_2 > 0U) {
+            int32_t glow_h = ui_music_spectrum_height_px(bar_glow_2);
+
+            ui_px_box_color(bar_x, spectrum_floor_y - glow_h + 1, bar_w, glow_h, UI_COLOR_GRAY_L2);
+        }
+        if (bar_glow_1 > 0U) {
+            int32_t glow_h = ui_music_spectrum_height_px(bar_glow_1);
+
+            ui_px_box_color(bar_x, spectrum_floor_y - glow_h + 1, bar_w, glow_h, UI_COLOR_GRAY_L1);
+        }
+
+        if (level > 0U) {
+            int32_t bar_h = ui_music_spectrum_height_px(level);
+
+            ui_px_box(bar_x, spectrum_floor_y - bar_h + 1, bar_w, bar_h, true);
+        }
+        if (cap_glow_2_px < (max_cap_px - 0.5f)) {
+            int32_t cap_y = ui_music_spectrum_cap_y_from_px(cap_glow_2_px);
+
+            ui_px_box_color(cap_x, cap_y, cap_w, UI_MUSIC_SPECTRUM_CAP_H, UI_COLOR_GRAY_L3);
+        }
+        if (cap_glow_1_px < (max_cap_px - 0.5f)) {
+            int32_t cap_y = ui_music_spectrum_cap_y_from_px(cap_glow_1_px);
+
+            ui_px_box_color(cap_x, cap_y, cap_w, UI_MUSIC_SPECTRUM_CAP_H, UI_COLOR_GRAY_L2);
+        }
+        if (peak > 0U || peak_px < (max_cap_px - 0.5f)) {
+            int32_t cap_y = ui_music_spectrum_cap_y_from_px(peak_px);
+
+            ui_px_box(cap_x, cap_y, cap_w, UI_MUSIC_SPECTRUM_CAP_H, true);
+        }
+    }
+}
+
+static void ui_px_draw_music_header_line(const char *header)
+{
+    int32_t header_view_w = UI_CANVAS_W - 40;
+    int32_t header_w;
+    int32_t header_offset;
+
+    if (header == NULL) {
+        return;
+    }
+    header_w = ui_px_text_width(header);
+    header_offset = ui_music_loop_marquee_offset(header_w, header_view_w, 0U);
+    ui_px_text_clipped_offset(20, UI_MUSIC_INFO_Y, header_view_w, header, header_offset, true);
+}
+
+static void ui_px_draw_music_seek_bar(uint32_t percent)
+{
+    int32_t fill_w = (int32_t)(((uint32_t)UI_MUSIC_SEEK_BAR_W * percent) / 100U);
+
+    ui_px_frame(UI_MUSIC_SEEK_BAR_X, UI_MUSIC_SEEK_BAR_Y, UI_MUSIC_SEEK_BAR_W, 10, true);
+    if (fill_w > 0) {
+        ui_px_box(UI_MUSIC_SEEK_BAR_X + 1, UI_MUSIC_SEEK_BAR_Y + 1, fill_w - (fill_w > 1 ? 1 : 0), 8, true);
+    }
+}
+
+static void ui_px_draw_music_controls(bool pause_icon)
+{
+    int32_t main_btn_x = (UI_CANVAS_W - UI_MUSIC_CTRL_MAIN_SIZE) / 2;
+    int32_t main_btn_y = UI_MUSIC_CTRL_Y;
+    int32_t side_btn_y = UI_MUSIC_CTRL_Y + ((UI_MUSIC_CTRL_MAIN_SIZE - UI_MUSIC_CTRL_SIDE_SIZE) / 2);
+    int32_t left_btn_x = main_btn_x - 18 - UI_MUSIC_CTRL_SIDE_SIZE;
+    int32_t right_btn_x = main_btn_x + UI_MUSIC_CTRL_MAIN_SIZE + 18;
+
+    ui_px_draw_music_button_prev(left_btn_x, side_btn_y, UI_MUSIC_CTRL_SIDE_SIZE);
+    ui_px_draw_music_button_play_pause(main_btn_x, main_btn_y, UI_MUSIC_CTRL_MAIN_SIZE, pause_icon);
+    ui_px_draw_music_button_next(right_btn_x, side_btn_y, UI_MUSIC_CTRL_SIDE_SIZE);
+}
+
+static void ui_px_draw_music_drawer(const ui_model_t *model, const music_player_snapshot_t *snap)
+{
+    if (model == NULL || snap == NULL) {
+        return;
+    }
+
+    ui_anim_move(&s_anim.music_drawer_x, s_anim.music_drawer_target_x, UI_LIST_BAR_SPEED);
+    if ((int32_t)s_anim.music_drawer_x > UI_MUSIC_DRAWER_X_CLOSED) {
+        int32_t drawer_x = (int32_t)s_anim.music_drawer_x;
+        int32_t drawer_y = UI_MUSIC_DRAWER_Y;
+        int32_t drawer_w = UI_MUSIC_DRAWER_W;
+        int32_t drawer_h = UI_MUSIC_DRAWER_H;
+        int32_t list_y = drawer_y + 18;
+        int32_t list_h = drawer_h - 22;
+
+        ui_px_frame(drawer_x, drawer_y, drawer_w, drawer_h, true);
+        ui_px_text_clipped(drawer_x + 8, drawer_y + 4, drawer_w - 16, ui_tr("Music"), true);
+        ui_px_hline(drawer_x + 1, drawer_y + 16, drawer_w - 2, true);
+        if (model->file_total == 0U) {
+            ui_px_text_clipped(drawer_x + 8, list_y + 8, drawer_w - 16, ui_tr("no matching files"), true);
+        } else {
+            int32_t selector_y = list_y + (int32_t)(model->file_selected - model->file_scroll) * UI_LIST_LINE_H;
+            int32_t list_bar_h = (int32_t)(((uint32_t)(model->file_selected + 1U) * (uint32_t)list_h) / model->file_total);
+
+            if (list_bar_h < 1) {
+                list_bar_h = 1;
+            } else if (list_bar_h > list_h - 2) {
+                list_bar_h = list_h - 2;
+            }
+            for (uint16_t row = 0; row < (uint16_t)UI_MUSIC_DRAWER_VISIBLE_ROWS; ++row) {
+                ui_px_draw_music_file_row(model, snap, row, drawer_x + 4, list_y, drawer_w - 12);
+            }
+            if (model->file_selected >= model->file_scroll &&
+                model->file_selected < model->file_scroll + UI_MUSIC_DRAWER_VISIBLE_ROWS) {
+                ui_px_invert_rect(drawer_x + 2, selector_y, drawer_w - 8, UI_LIST_LINE_H - 1);
+            }
+            ui_px_vline(drawer_x + drawer_w - 4, list_y, list_h, true);
+            ui_px_box(drawer_x + drawer_w - 6, list_y, 4, list_bar_h, true);
+        }
+    }
+}
+
+static bool ui_music_selected_matches_snapshot_locked(
+    const ui_model_t *model,
+    const music_player_snapshot_t *snap,
+    ui_file_entry_t *entry_out)
+{
+    ui_file_entry_t entry = {0};
+
+    if (model == NULL || snap == NULL) {
+        return false;
+    }
+    if (!ui_current_file_locked(model, &entry)) {
+        return false;
+    }
+    if (entry_out != NULL) {
+        *entry_out = entry;
+    }
+    return entry.path[0] != '\0' &&
+           snap->path[0] != '\0' &&
+           strcmp(entry.path, snap->path) == 0;
+}
+
+static bool ui_music_play_selected_locked(ui_model_t *model)
+{
+    ui_file_entry_t entry = {0};
+    music_player_snapshot_t snap = {0};
+    bool same_track = false;
+
+    if (model == NULL) {
+        return false;
+    }
+    music_player_get_snapshot(&snap);
+    same_track = ui_music_selected_matches_snapshot_locked(model, &snap, &entry);
+    if (!same_track && !ui_current_file_locked(model, &entry)) {
+        ui_set_status_locked(model, ui_tr("no file selected"));
+        return false;
+    }
+    if (entry.is_dir || ui_file_kind_from_name(entry.name) != UI_FILE_KIND_AUDIO) {
+        ui_set_status_locked(model, ui_tr("unsupported file"));
+        return false;
+    }
+    if (same_track &&
+        (snap.state == MUSIC_PLAYER_STATE_PLAYING || snap.state == MUSIC_PLAYER_STATE_PAUSED)) {
+        if (music_player_toggle_pause() != ESP_OK) {
+            ui_set_status_locked(model, ui_tr("playback start failed"));
+            return false;
+        }
+        ui_music_set_current_locked(&entry);
+        ui_set_status_locked(
+            model,
+            (snap.state == MUSIC_PLAYER_STATE_PLAYING) ? ui_tr("paused") : ui_tr("playing"));
+        ui_mark_content_dirty(model);
+        return true;
+    }
+    ui_open_music_player_locked(model, &entry);
+    return true;
+}
+
 static bool ui_music_find_track_locked(const ui_model_t *model, int delta, ui_file_entry_t *entry_out)
 {
     ui_model_t *mutable_model = (ui_model_t *)model;
@@ -3070,12 +3741,15 @@ static bool ui_music_find_track_locked(const ui_model_t *model, int delta, ui_fi
             selected += total;
         }
         mutable_model->file_selected = (uint16_t)selected;
-        mutable_model->file_scroll =
-            ui_scroll_for_selected(mutable_model->file_selected, mutable_model->file_scroll, mutable_model->file_total);
+        mutable_model->file_scroll = ui_file_scroll_for_selected(
+            mutable_model,
+            mutable_model->file_selected,
+            mutable_model->file_scroll,
+            mutable_model->file_total);
         ui_file_ensure_window_locked(mutable_model, false);
         if (ui_current_file_locked(mutable_model, &entry) &&
             !entry.is_dir &&
-            ui_file_kind_from_name(entry.name) == UI_FILE_KIND_MP3) {
+            ui_file_kind_from_name(entry.name) == UI_FILE_KIND_AUDIO) {
             *entry_out = entry;
             return true;
         }
@@ -3094,12 +3768,7 @@ static void ui_open_music_player_locked(ui_model_t *model, const ui_file_entry_t
     if (model == NULL || entry == NULL) {
         return;
     }
-    if (entry->is_dir) {
-        ui_open_files_with_filter_locked(model, entry->path, true, UI_FILE_FILTER_MP3);
-        model->parent_page = UI_PAGE_MUSIC_FILES;
-        return;
-    }
-    if (ui_file_kind_from_name(entry->name) != UI_FILE_KIND_MP3) {
+    if (entry->is_dir || ui_file_kind_from_name(entry->name) != UI_FILE_KIND_AUDIO) {
         ui_set_status_locked(model, ui_tr("unsupported file"));
         return;
     }
@@ -3119,11 +3788,9 @@ static void ui_open_music_player_locked(ui_model_t *model, const ui_file_entry_t
     }
 
     ui_music_set_current_locked(entry);
-    if (model->page != UI_PAGE_MUSIC_PLAYER) {
-        ui_push_current_page_locked(model);
-    }
+    ui_music_set_drawer_open_locked(model, false);
     model->page = UI_PAGE_MUSIC_PLAYER;
-    model->parent_page = UI_PAGE_MUSIC_FILES;
+    model->parent_page = UI_PAGE_ROOT;
     model->selected = 0;
     model->scroll = 0;
     ui_set_status_locked(model, entry->name);
@@ -3135,14 +3802,15 @@ static void ui_music_play_adjacent_locked(ui_model_t *model, int delta)
 {
     ui_file_entry_t next = {0};
 
-    if (model == NULL || !s_music_ctx.valid) {
+    if (model == NULL || model->file_total == 0U) {
         return;
     }
     if (!ui_music_find_track_locked(model, delta, &next)) {
         return;
     }
     model->file_selected = next.ordinal;
-    model->file_scroll = ui_scroll_for_selected(model->file_selected, model->file_scroll, model->file_total);
+    model->file_scroll =
+        ui_file_scroll_for_selected(model, model->file_selected, model->file_scroll, model->file_total);
     ui_file_ensure_window_locked(model, false);
     ui_open_music_player_locked(model, &next);
 }
@@ -4460,7 +5128,7 @@ static void ui_open_page_locked(ui_model_t *model, ui_page_t page)
         model->file_filter = UI_FILE_FILTER_NONE;
     }
     if (page == UI_PAGE_MUSIC_FILES) {
-        model->file_filter = UI_FILE_FILTER_MP3;
+        model->file_filter = UI_FILE_FILTER_AUDIO;
     }
     if (page == UI_PAGE_FILES || page == UI_PAGE_MUSIC_FILES) {
         ui_open_files_locked(model, model->file_path, false);
@@ -4483,6 +5151,7 @@ static void ui_open_root_locked(ui_model_t *model)
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
     s_burn_rom_write_prompt_until_ms = 0;
     s_burn_rom_verify_prompt_until_ms = 0;
+    ui_music_set_drawer_open_locked(model, false);
     ui_clear_task_result_runtime_locked(model);
     s_nav_depth = 0;
     ui_set_status_locked(model, ui_tr("ready"));
@@ -4515,7 +5184,7 @@ static ui_page_t ui_task_return_parent_page(ui_page_t page)
         case UI_PAGE_MUSIC_FILES:
             return UI_PAGE_ROOT;
         case UI_PAGE_MUSIC_PLAYER:
-            return UI_PAGE_MUSIC_FILES;
+            return UI_PAGE_ROOT;
         case UI_PAGE_BURNER:
             return UI_PAGE_ROOT;
         case UI_PAGE_BURN_ROM:
@@ -4813,6 +5482,8 @@ static void ui_back_locked(ui_model_t *model)
     }
     if (model->page == UI_PAGE_MUSIC_PLAYER) {
         (void)music_player_stop();
+        ui_open_root_locked(model);
+        return;
     }
     if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
         if (ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
@@ -4947,7 +5618,7 @@ static void ui_back_locked(ui_model_t *model)
         model->parent_page = s_nav_stack[s_nav_depth].parent;
         model->selected = (model->page == UI_PAGE_ROOT) ? s_root_selected : 0;
         model->scroll = 0;
-        if (model->page == UI_PAGE_FILES) {
+        if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
             ui_scan_file_window_locked(model);
         }
         model->dirty = true;
@@ -5332,11 +6003,7 @@ static void ui_select_locked(
                         ui_open_page_locked(model, UI_PAGE_TF);
                         break;
                     case UI_ACTION_OPEN_MUSIC:
-                        model->file_path[0] = '\0';
-                        model->file_selected = 0;
-                        model->file_scroll = 0;
-                        ui_open_page_locked(model, UI_PAGE_MUSIC_FILES);
-                        ui_set_status_locked(model, ui_tr("open files"));
+                        ui_open_music_library_locked(model, true);
                         break;
                     case UI_ACTION_OPEN_WIFI:
                         ui_open_page_locked(model, UI_PAGE_WIFI);
@@ -5397,15 +6064,10 @@ static void ui_select_locked(
                 ui_set_status_locked(model, ui_tr("no file selected"));
                 break;
             }
-            if (entry.is_dir) {
-                ui_open_files_with_filter_locked(model, entry.path, true, UI_FILE_FILTER_MP3);
-                model->parent_page = UI_PAGE_MUSIC_FILES;
-            } else {
-                ui_open_music_player_locked(model, &entry);
-            }
+            ui_open_music_player_locked(model, &entry);
             break;
         case UI_PAGE_MUSIC_PLAYER:
-            (void)music_player_toggle_pause();
+            (void)ui_music_play_selected_locked(model);
             break;
         case UI_PAGE_FILES:
             if (!ui_current_file_locked(model, &entry)) {
@@ -5818,7 +6480,7 @@ static void ui_refresh_current_locked(ui_model_t *model)
     if (model == NULL) {
         return;
     }
-    if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
+    if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES || model->page == UI_PAGE_MUSIC_PLAYER) {
         ui_scan_file_window_locked(model);
     } else if (model->page == UI_PAGE_ROOT) {
         model->dirty = true;
@@ -5898,6 +6560,16 @@ static void ui_handle_button_action(ui_button_t button)
 
     if (s_model.page == UI_PAGE_MUSIC_PLAYER) {
         switch (button) {
+            case UI_BUTTON_UP:
+                if (s_music_ctx.drawer_open) {
+                    ui_file_move_locked(&s_model, -1);
+                }
+                break;
+            case UI_BUTTON_DOWN:
+                if (s_music_ctx.drawer_open) {
+                    ui_file_move_locked(&s_model, 1);
+                }
+                break;
             case UI_BUTTON_LEFT:
                 ui_music_play_adjacent_locked(&s_model, -1);
                 break;
@@ -5905,6 +6577,8 @@ static void ui_handle_button_action(ui_button_t button)
                 ui_music_play_adjacent_locked(&s_model, 1);
                 break;
             case UI_BUTTON_SELECT:
+                (void)ui_music_play_selected_locked(&s_model);
+                break;
             case UI_BUTTON_PANEL_TOGGLE:
                 (void)music_player_toggle_pause();
                 break;
@@ -5912,7 +6586,7 @@ static void ui_handle_button_action(ui_button_t button)
                 ui_back_locked(&s_model);
                 break;
             case UI_BUTTON_MENU:
-                ui_refresh_current_locked(&s_model);
+                ui_music_toggle_drawer_locked(&s_model);
                 break;
             case UI_BUTTON_VOL_UP: {
                 music_player_snapshot_t snap = {0};
@@ -5936,8 +6610,6 @@ static void ui_handle_button_action(ui_button_t button)
                 ui_set_status_locked(&s_model, ui_tr("volume down"));
                 break;
             }
-            case UI_BUTTON_UP:
-            case UI_BUTTON_DOWN:
             default:
                 break;
         }
@@ -6413,6 +7085,10 @@ static void ui_refresh_sources(void)
 {
     uint32_t now_ms = esp_log_timestamp();
     music_player_snapshot_t snapshot = {0};
+    bool music_visual_tick = false;
+    bool music_visual_changed = false;
+    bool music_player_changed = false;
+    bool music_progress_changed = false;
 
     ui_sync_burn_settings_from_runtime();
     ui_update_clock_if_needed(now_ms);
@@ -6420,15 +7096,38 @@ static void ui_refresh_sources(void)
     ui_update_power_if_needed(now_ms);
     ui_update_burn_snapshot_if_needed(now_ms);
     music_player_get_snapshot(&snapshot);
-    if (!s_music_snapshot_cached || memcmp(&s_music_snapshot_cache, &snapshot, sizeof(snapshot)) != 0) {
+    if (s_last_music_visual_refresh_ms == 0U ||
+        (now_ms - s_last_music_visual_refresh_ms) >= UI_MUSIC_VISUAL_REFRESH_MS) {
+        s_last_music_visual_refresh_ms = now_ms;
+        music_visual_changed = ui_music_step_visuals(&snapshot);
+        music_visual_tick = true;
+    }
+    if (!s_music_snapshot_cached) {
+        music_player_changed = true;
+        music_progress_changed = true;
+    } else {
+        music_player_changed = ui_music_snapshot_player_changed(&s_music_snapshot_cache, &snapshot);
+        music_progress_changed = ui_music_snapshot_progress_changed(&s_music_snapshot_cache, &snapshot);
+    }
+    if (!s_music_snapshot_cached || music_player_changed || music_progress_changed) {
         s_music_snapshot_cache = snapshot;
         s_music_snapshot_cached = true;
         if (ui_take_model_lock()) {
             if (s_model.page == UI_PAGE_MUSIC_PLAYER) {
-                ui_mark_content_dirty(&s_model);
+                if (music_player_changed) {
+                    s_model.music_player_dirty = true;
+                }
+                if (music_progress_changed) {
+                    s_model.music_progress_dirty = true;
+                }
             }
             xSemaphoreGive(s_model_lock);
         }
+    } else if (music_visual_tick && music_visual_changed && ui_take_model_lock()) {
+        if (s_model.page == UI_PAGE_MUSIC_PLAYER) {
+            s_model.music_spectrum_dirty = true;
+        }
+        xSemaphoreGive(s_model_lock);
     }
 }
 
@@ -7403,6 +8102,16 @@ static void ui_px_icon(uint16_t index, int32_t x, int32_t y, bool selected)
             ui_px_hline(UI_ICON_X(8), UI_ICON_Y(6), UI_ICON_W(8), true);
             ui_px_vline(UI_ICON_X(6), UI_ICON_Y(7), UI_ICON_W(3), true);
             break;
+        case UI_ACTION_OPEN_MUSIC:
+            ui_px_vline(UI_ICON_X(11), UI_ICON_Y(7), UI_ICON_W(13), true);
+            ui_px_vline(UI_ICON_X(19), UI_ICON_Y(5), UI_ICON_W(11), true);
+            ui_px_hline(UI_ICON_X(11), UI_ICON_Y(7), UI_ICON_W(8), true);
+            ui_px_hline(UI_ICON_X(11), UI_ICON_Y(10), UI_ICON_W(8), true);
+            ui_px_box(UI_ICON_X(7), UI_ICON_Y(20), UI_ICON_W(5), UI_ICON_W(5), true);
+            ui_px_box(UI_ICON_X(15), UI_ICON_Y(18), UI_ICON_W(5), UI_ICON_W(5), true);
+            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(23), UI_ICON_W(2), false);
+            ui_px_hline(UI_ICON_X(18), UI_ICON_Y(21), UI_ICON_W(2), false);
+            break;
         case UI_ACTION_OPEN_BURNER:
             ui_px_hline(UI_ICON_X(14), UI_ICON_Y(5), UI_ICON_W(1), true);
             ui_px_hline(UI_ICON_X(12), UI_ICON_Y(6), UI_ICON_W(5), true);
@@ -7631,6 +8340,7 @@ static void ui_px_fill_row(
             ui_fill_music_player_row(model, index, title, title_len, hint, hint_len);
             break;
         case UI_PAGE_FILES:
+        case UI_PAGE_MUSIC_FILES:
             ui_fill_file_row(model, row, title, title_len, hint, hint_len, &symbol, &accent);
             break;
         case UI_PAGE_FILE_ACTIONS:
@@ -7851,6 +8561,83 @@ static void ui_px_draw_file_row(const ui_model_t *model, uint16_t row)
     ui_px_text_clipped(size_x + UI_FILE_SIZE_COL_W - size_w, y + 4, size_w, size_text, true);
 }
 
+static void ui_px_draw_music_file_row(
+    const ui_model_t *model,
+    const music_player_snapshot_t *snap,
+    uint16_t row,
+    int32_t x,
+    int32_t y,
+    int32_t w)
+{
+    ui_file_entry_t entry = {0};
+    uint16_t selected = ui_current_selected(model);
+    uint16_t ordinal;
+    int32_t row_y;
+    int32_t text_x;
+    int32_t text_w;
+    int32_t name_text_w;
+    int32_t offset = 0;
+    bool is_current = false;
+
+    if (!ui_file_entry_for_visible_row(model, row, &entry)) {
+        return;
+    }
+
+    ordinal = model->file_scroll + row;
+    row_y = y + (int32_t)row * UI_LIST_LINE_H;
+    text_x = x + 10;
+    text_w = w - 16;
+    if (text_w < 12) {
+        text_w = 12;
+    }
+    if (snap != NULL && snap->path[0] != '\0' && strcmp(entry.path, snap->path) == 0) {
+        is_current = true;
+    }
+    if (is_current) {
+        if (snap != NULL && snap->state == MUSIC_PLAYER_STATE_PAUSED) {
+            ui_px_frame(x + 3, row_y + 4, 6, 8, true);
+        } else {
+            ui_px_box(x + 4, row_y + 5, 4, 6, true);
+        }
+    }
+    name_text_w = ui_px_text_width(entry.name);
+    if (ordinal == selected) {
+        offset = ui_music_loop_marquee_offset(name_text_w, text_w, (uint32_t)row * 5U);
+    }
+    ui_px_text_clipped_offset(text_x, row_y + 4, text_w, entry.name, offset, true);
+}
+
+static void ui_px_draw_music_button_prev(int32_t x, int32_t y, int32_t size)
+{
+    ui_px_frame(x, y, size, size, true);
+    ui_px_box(x + 7, y + 7, 3, size - 14, true);
+    for (int32_t i = 0; i < 5; ++i) {
+        ui_px_box(x + 12 + i * 2, y + (size / 2) - 2 - i, 2, 4 + i * 2, true);
+    }
+}
+
+static void ui_px_draw_music_button_next(int32_t x, int32_t y, int32_t size)
+{
+    ui_px_frame(x, y, size, size, true);
+    ui_px_box(x + size - 10, y + 7, 3, size - 14, true);
+    for (int32_t i = 0; i < 5; ++i) {
+        ui_px_box(x + size - 14 - i * 2, y + (size / 2) - 2 - i, 2, 4 + i * 2, true);
+    }
+}
+
+static void ui_px_draw_music_button_play_pause(int32_t x, int32_t y, int32_t size, bool pause_icon)
+{
+    ui_px_frame(x, y, size, size, true);
+    if (pause_icon) {
+        ui_px_box(x + 10, y + 8, 4, size - 16, true);
+        ui_px_box(x + size - 14, y + 8, 4, size - 16, true);
+        return;
+    }
+    for (int32_t i = 0; i < 8; ++i) {
+        ui_px_box(x + 11 + i * 2, y + (size / 2) - 2 - i, 2, 4 + i * 2, true);
+    }
+}
+
 static void ui_px_draw_action_details(const ui_model_t *model)
 {
     uint16_t action_count;
@@ -7959,66 +8746,18 @@ static void ui_px_draw_music_player(const ui_model_t *model)
 {
     music_player_snapshot_t snap = {0};
     char header[UI_ROW_TEXT_MAX_LEN] = {0};
-    char meta[UI_ROW_TEXT_MAX_LEN] = {0};
-    char progress_text[24] = {0};
+    bool pause_icon = false;
     uint32_t percent = 0U;
-    int32_t fill_w = 0;
 
-    (void)model;
-    music_player_get_snapshot(&snap);
-    if (snap.file_size != 0U) {
-        percent = (uint32_t)(((uint64_t)snap.position * 100ULL) / (uint64_t)snap.file_size);
-        if (percent > 100U) {
-            percent = 100U;
-        }
+    if (model == NULL) {
+        return;
     }
-    fill_w = (int32_t)(((uint32_t)UI_MUSIC_SEEK_BAR_W * percent) / 100U);
-
-    snprintf(
-        header,
-        sizeof(header),
-        "%.*s",
-        (int)(sizeof(header) - 1U),
-        snap.name[0] != '\0' ? snap.name : ui_tr("no file selected"));
-    snprintf(meta, sizeof(meta), "%luHz %uch %ubit  vol %u%%",
-             (unsigned long)snap.sample_rate,
-             (unsigned)snap.channels,
-             (unsigned)snap.bits_per_sample,
-             (unsigned)snap.volume_percent);
-    snprintf(progress_text, sizeof(progress_text), "%lu%%", (unsigned long)percent);
-
-    ui_px_text_clipped(12, UI_MUSIC_INFO_Y, UI_CANVAS_W - 24, header, true);
-    ui_px_text_clipped(12, UI_MUSIC_INFO_Y + 18, UI_CANVAS_W - 24, meta, true);
-    ui_px_frame(UI_MUSIC_SEEK_BAR_X, UI_MUSIC_SEEK_BAR_Y, UI_MUSIC_SEEK_BAR_W, 10, true);
-    if (fill_w > 0) {
-        ui_px_box(UI_MUSIC_SEEK_BAR_X + 1, UI_MUSIC_SEEK_BAR_Y + 1, fill_w - (fill_w > 1 ? 1 : 0), 8, true);
-    }
-    ui_px_text((UI_CANVAS_W - ui_px_text_width(progress_text)) / 2, UI_MUSIC_META_Y, progress_text, true);
-
-    switch (snap.state) {
-        case MUSIC_PLAYER_STATE_LOADING:
-            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("loading"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("loading"), true);
-            break;
-        case MUSIC_PLAYER_STATE_PAUSED:
-            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("paused"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("paused"), true);
-            break;
-        case MUSIC_PLAYER_STATE_ERROR:
-            ui_px_text_clipped(12, UI_MUSIC_CTRL_Y, UI_CANVAS_W - 24, snap.message[0] != '\0' ? snap.message : ui_tr("error"), true);
-            break;
-        case MUSIC_PLAYER_STATE_FINISHED:
-            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("done"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("done"), true);
-            break;
-        case MUSIC_PLAYER_STATE_PLAYING:
-            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("playing"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("playing"), true);
-            break;
-        case MUSIC_PLAYER_STATE_IDLE:
-        default:
-            ui_px_text((UI_CANVAS_W - ui_px_text_width(ui_tr("idle"))) / 2, UI_MUSIC_CTRL_Y, ui_tr("idle"), true);
-            break;
-    }
-
-    ui_px_text_clipped(18, UI_MUSIC_HINT2_Y, UI_CANVAS_W - 36, ui_tr("A pause/resume  L/R prev/next"), true);
-    ui_px_text_clipped(18, UI_MUSIC_HINT2_Y + 16, UI_CANVAS_W - 36, ui_tr("VOL +/- volume  B back"), true);
+    ui_music_player_view_state(model, &snap, header, sizeof(header), &pause_icon, &percent);
+    ui_px_draw_music_spectrum();
+    ui_px_draw_music_header_line(header);
+    ui_px_draw_music_seek_bar(percent);
+    ui_px_draw_music_controls(pause_icon);
+    ui_px_draw_music_drawer(model, &snap);
 }
 
 static void ui_px_apply_music_player(const ui_model_t *model)
@@ -8039,6 +8778,93 @@ static void ui_px_apply_music_player(const ui_model_t *model)
     ui_px_draw_music_player(model);
     if (model->status_text[0] != '\0') {
         ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
+    }
+}
+
+static void ui_px_apply_music_player_dynamic(const ui_model_t *model)
+{
+    bool redraw_chrome;
+    bool redraw_player;
+    bool redraw_progress;
+    bool redraw_spectrum;
+    bool redraw_drawer;
+    int32_t spectrum_x = UI_MUSIC_SPECTRUM_X - 2;
+    int32_t spectrum_y = UI_MUSIC_SPECTRUM_Y - 2;
+    int32_t spectrum_w = UI_MUSIC_SPECTRUM_W + 4;
+    int32_t spectrum_h = UI_MUSIC_SPECTRUM_H + 6;
+    int32_t seek_x = UI_MUSIC_SEEK_BAR_X - 1;
+    int32_t seek_y = UI_MUSIC_SEEK_BAR_Y - 1;
+    int32_t seek_w = UI_MUSIC_SEEK_BAR_W + 2;
+    int32_t seek_h = 12;
+    int32_t info_y = UI_MUSIC_INFO_Y - 2;
+    int32_t info_h = (UI_CANVAS_H - UI_HINT_H) - info_y;
+    music_player_snapshot_t snap = {0};
+    char track_header[UI_ROW_TEXT_MAX_LEN] = {0};
+    bool pause_icon = false;
+    uint32_t percent = 0U;
+
+    if (model == NULL) {
+        return;
+    }
+    redraw_chrome = model->chrome_dirty;
+    redraw_player = model->music_player_dirty;
+    redraw_progress = model->music_progress_dirty || redraw_player;
+    redraw_spectrum = model->music_spectrum_dirty || redraw_player;
+    redraw_drawer = model->content_dirty ||
+                    model->motion_dirty ||
+                    ui_anim_value_active(s_anim.music_drawer_x, s_anim.music_drawer_target_x) ||
+                    (ui_music_drawer_visible_w((int32_t)s_anim.music_drawer_x) > 0 &&
+                     (redraw_player || redraw_progress || redraw_spectrum));
+
+    if (redraw_chrome) {
+        ui_px_clear_rect(0, 0, UI_CANVAS_W, UI_LIST_HEADER_H);
+        ui_px_clear_rect(0, UI_CANVAS_H - UI_HINT_H - 3, UI_CANVAS_W, UI_HINT_H + 3);
+        {
+            char header[UI_ROW_TEXT_MAX_LEN] = {0};
+
+            snprintf(header, sizeof(header), "%s", ui_page_title(model->page));
+            ui_px_text(4, UI_LIST_HEADER_TEXT_Y, header, true);
+            ui_px_text_clipped(UI_CANVAS_W - 118, UI_LIST_HEADER_TEXT_Y, 58, model->time_text, true);
+            ui_px_draw_battery_overlay(model, UI_LIST_HEADER_TEXT_Y);
+            ui_px_hline(0, UI_LIST_HEADER_H - 5, UI_CANVAS_W - 2, true);
+            for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
+                ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
+            }
+            if (model->status_text[0] != '\0') {
+                ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
+            }
+        }
+        ui_px_invalidate_rect(0, 0, UI_CANVAS_W, UI_LIST_HEADER_H);
+        ui_px_invalidate_rect(0, UI_CANVAS_H - UI_HINT_H - 3, UI_CANVAS_W, UI_HINT_H + 3);
+    }
+
+    if (!redraw_player && !redraw_progress && !redraw_spectrum && !redraw_drawer) {
+        return;
+    }
+    if (redraw_player || redraw_progress || redraw_drawer) {
+        ui_music_player_view_state(model, &snap, track_header, sizeof(track_header), &pause_icon, &percent);
+    }
+
+    if (redraw_spectrum) {
+        ui_px_clear_rect(spectrum_x, spectrum_y, spectrum_w, spectrum_h);
+        ui_px_draw_music_spectrum();
+        ui_px_invalidate_rect(spectrum_x, spectrum_y, spectrum_w, spectrum_h);
+    }
+    if (redraw_player) {
+        ui_px_clear_rect(0, info_y, UI_CANVAS_W, info_h);
+        ui_px_draw_music_header_line(track_header);
+        ui_px_draw_music_controls(pause_icon);
+        ui_px_invalidate_rect(0, info_y, UI_CANVAS_W, info_h);
+    }
+    if (redraw_progress) {
+        ui_px_clear_rect(seek_x, seek_y, seek_w, seek_h);
+        ui_px_draw_music_seek_bar(percent);
+        ui_px_invalidate_rect(seek_x, seek_y, seek_w, seek_h);
+    }
+    if (redraw_drawer) {
+        ui_px_clear_rect(0, UI_MUSIC_DRAWER_Y, UI_MUSIC_DRAWER_W, UI_MUSIC_DRAWER_H);
+        ui_px_draw_music_drawer(model, &snap);
+        ui_px_invalidate_rect(0, UI_MUSIC_DRAWER_Y, UI_MUSIC_DRAWER_W, UI_MUSIC_DRAWER_H);
     }
 }
 
@@ -8534,7 +9360,7 @@ static void ui_px_draw_visible_row(const ui_model_t *model, uint16_t row)
             return;
         }
     }
-    if (model->page == UI_PAGE_FILES) {
+    if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
         ui_px_draw_file_row(model, row);
         return;
     }
@@ -8702,14 +9528,13 @@ static void ui_px_render(const ui_model_t *model)
     }
     full_redraw = full_redraw || model->dirty || s_anim.page_changed;
     if (!full_redraw && !model->dirty && !model->motion_dirty && !model->content_dirty &&
-        !model->chrome_dirty && !ui_anim_active_for_page(model)) {
+        !model->chrome_dirty && !model->music_player_dirty && !model->music_progress_dirty &&
+        !model->music_spectrum_dirty && !ui_anim_active_for_page(model)) {
         return;
     }
     if (!full_redraw) {
         if (model->page == UI_PAGE_MUSIC_PLAYER) {
-            ui_px_clear();
-            ui_px_apply_music_player(model);
-            ui_px_invalidate_full();
+            ui_px_apply_music_player_dynamic(model);
         } else if (!model->dirty && !model->motion_dirty && !model->content_dirty && model->chrome_dirty) {
             ui_px_apply_chrome_dynamic(model);
         } else if (model->page == UI_PAGE_ROOT) {
@@ -8809,15 +9634,22 @@ void ui_process(void)
     ui_update_burn_rom_prompt_locked(&s_model);
     snapshot = s_model;
     should_render = s_model.dirty || s_model.motion_dirty || s_model.content_dirty || s_model.chrome_dirty ||
+                    s_model.music_player_dirty || s_model.music_progress_dirty || s_model.music_spectrum_dirty ||
                     ui_anim_active_for_page(&s_model) || s_anim.page != s_model.page ||
                     s_anim.page_changed;
     snapshot.motion_dirty = s_model.motion_dirty;
     snapshot.content_dirty = s_model.content_dirty;
     snapshot.chrome_dirty = s_model.chrome_dirty;
+    snapshot.music_player_dirty = s_model.music_player_dirty;
+    snapshot.music_progress_dirty = s_model.music_progress_dirty;
+    snapshot.music_spectrum_dirty = s_model.music_spectrum_dirty;
     s_model.dirty = false;
     s_model.motion_dirty = false;
     s_model.content_dirty = false;
     s_model.chrome_dirty = false;
+    s_model.music_player_dirty = false;
+    s_model.music_progress_dirty = false;
+    s_model.music_spectrum_dirty = false;
     xSemaphoreGive(s_model_lock);
 
     if (should_render) {
