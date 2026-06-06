@@ -133,6 +133,12 @@ static bool burner_gbc_gbx_profile_write_supported(const burner_gbx_profile_t *p
     return true;
 }
 
+static bool burner_gbc_gbx_runtime_supported(const burner_gbx_profile_t *profile)
+{
+    return burner_gbc_gbx_profile_write_supported(profile) &&
+           (profile->single_write.count > 0u || profile->buffer_write.count > 0u);
+}
+
 static uint32_t burner_gbc_gbx_first_bank(void)
 {
     return s_cart_ctx.gbx.has_first_bank ? s_cart_ctx.gbx.first_bank : 0u;
@@ -851,21 +857,6 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
         &cfi_ok,
         &cmdset);
     if (err != ESP_OK) {
-        if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBC GBX strict profile match failed; falling back to CHIS/CFI probe");
-            burner_gbx_profile_clear(&s_cart_ctx.gbx);
-            return burner_bacon_mbc5_prepare_probe_info_locked(
-                id,
-                job->total_bytes,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok,
-                &cmdset,
-                NULL);
-        }
         return err;
     }
     if (job->total_bytes > device_size) {
@@ -876,6 +867,14 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
             device_size);
         return ESP_ERR_INVALID_SIZE;
     }
+    if (!burner_gbc_gbx_runtime_supported(&s_cart_ctx.gbx)) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBC GBX profile matched but runtime write commands are unavailable: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    s_cart_ctx.gbx.runtime_commands_enabled = true;
     s_cart_ctx.prepared = true;
     s_cart_ctx.current_bank = UINT16_MAX;
     s_cart_ctx.buffer_write_bytes = buffer_write_bytes;
@@ -1042,6 +1041,13 @@ esp_err_t burner_gbc_gbx_program_block(const uint8_t *data, size_t len, uint32_t
     if (!burner_gbc_gbx_is_active() || !s_cart_ctx.prepared) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (s_cart_ctx.gbx.single_write.count == 0u && s_cart_ctx.gbx.buffer_write.count == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBC GBX profile missing write commands: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     while (programmed < len) {
         uint32_t logical_addr = offset + (uint32_t)programmed;
@@ -1108,6 +1114,13 @@ esp_err_t burner_gbc_gbx_erase_sector(uint32_t flash_addr, uint32_t timeout_ms)
     if (!burner_gbc_gbx_is_active()) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (s_cart_ctx.gbx.sector_erase.count == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBC GBX profile missing sector erase commands: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
     err = burner_gbc_gbx_logical_to_cart_addr(flash_addr, &cart_addr, NULL);
     if (err != ESP_OK) {
         return err;
@@ -1129,6 +1142,13 @@ esp_err_t burner_gbc_gbx_chip_erase_once(void)
 
     if (!burner_gbc_gbx_is_active()) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (s_cart_ctx.gbx.chip_erase.count == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBC GBX profile missing chip erase commands: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
     }
     return burner_gbc_gbx_execute_plain_sequence(
         &s_cart_ctx.gbx.chip_erase,

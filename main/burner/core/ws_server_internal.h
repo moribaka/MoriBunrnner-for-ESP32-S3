@@ -357,6 +357,7 @@ typedef struct {
     bool d0d1_known;   /* D0/D1 detection completed */
     bool d0d1_swapped; /* D0/D1 data lines swapped */
     bool gba_likely_read_only; /* Probe looks like plain ROM, not writable NOR */
+    bool gba_chislink_active;
     bool probe_cfi_ok;
     burner_gbx_profile_t gbx;
 } burner_cart_ctx_t;
@@ -1166,6 +1167,7 @@ esp_err_t burner_gbc_gbx_program_block(const uint8_t *data, size_t len, uint32_t
 esp_err_t burner_gbc_gbx_erase_sector(uint32_t flash_addr, uint32_t timeout_ms);
 esp_err_t burner_gbc_gbx_chip_erase_once(void);
 bool burner_gba_gbx_is_active(void);
+bool burner_gba_chislink_is_active(void);
 void burner_gba_gbx_cache_probe_result(
     const uint8_t id[8],
     uint32_t device_size,

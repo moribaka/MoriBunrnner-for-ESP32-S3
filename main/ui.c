@@ -4420,27 +4420,6 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &cfi_ok,
                     &mbc5_cmdset);
                 gbx_profile_matched = (err == ESP_OK);
-                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
-                    ESP_LOGW(UI_TAG, "UI MBC5 GBX probe fallback to CHIS/CFI: %s", esp_err_to_name(err));
-                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
-                    gbx_fallback_used = true;
-                    err = burner_bacon_mbc5_get_cfi(
-                        &device_size,
-                        &sector_size,
-                        &buffer_write_bytes,
-                        &cfi_geometry,
-                        &mbc5_cmdset);
-                    if (err == ESP_OK) {
-                        cfi_ok = true;
-                        if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
-                            err = burner_bacon_mbc5_get_id(mbc5_id);
-                            if (err != ESP_OK) {
-                                memset(mbc5_id, 0, sizeof(mbc5_id));
-                                err = ESP_OK;
-                            }
-                        }
-                    }
-                }
             } else {
                 err = burner_bacon_mbc5_get_cfi(
                     &device_size,
@@ -4472,12 +4451,6 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &buffer_write_bytes,
                     &cfi_ok);
                 gbx_profile_matched = (err == ESP_OK);
-                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
-                    ESP_LOGW(UI_TAG, "UI GBA GBX probe fallback to CHIS/CFI: %s", esp_err_to_name(err));
-                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
-                    gbx_fallback_used = true;
-                    err = ESP_OK;
-                }
             } else if (s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
                 err = burner_chislink_gba_probe_locked(
                     gba_id,
@@ -4510,14 +4483,6 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             buffer_write_bytes,
             cfi_ok,
             true);
-    } else if (cart_mode == BURNER_CART_MODE_GBA && s_recipe_mode == BURNER_RECIPE_MODE_GBX && gbx_fallback_used) {
-        burner_gba_gbx_cache_probe_result(
-            gba_id,
-            device_size,
-            sector_size,
-            buffer_write_bytes,
-            cfi_ok,
-            false);
     } else {
         burner_gba_gbx_clear_cached_probe();
     }

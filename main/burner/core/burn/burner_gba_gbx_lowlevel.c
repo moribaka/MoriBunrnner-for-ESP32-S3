@@ -74,6 +74,20 @@ bool burner_gba_gbx_is_active(void)
     return s_cart_ctx.gbx.active && s_cart_ctx.gbx.runtime_commands_enabled;
 }
 
+static bool burner_gba_gbx_runtime_supported(const burner_gbx_profile_t *profile)
+{
+    if (profile == NULL) {
+        return false;
+    }
+    if (profile->type[0] != '\0' && strcasecmp(profile->type, "AGB") != 0) {
+        return false;
+    }
+    if (profile->has_flash_bank_select_type && profile->flash_bank_select_type > 1u) {
+        return false;
+    }
+    return profile->single_write.count > 0u || profile->buffer_write.count > 0u;
+}
+
 void burner_gba_gbx_cache_probe_result(
     const uint8_t id[8],
     uint32_t device_size,
@@ -1198,6 +1212,16 @@ esp_err_t burner_gba_gbx_program_block(
     if (data == NULL || len == 0u || (offset & 0x1u) != 0u || (len & 0x1u) != 0u) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (!burner_gba_gbx_is_active() || !s_cart_ctx.prepared) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (s_cart_ctx.gbx.single_write.count == 0u && s_cart_ctx.gbx.buffer_write.count == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBA GBX profile missing write commands: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     while (programmed < len) {
         uint32_t rom_addr = offset + (uint32_t)programmed;
@@ -1294,6 +1318,13 @@ esp_err_t burner_gba_gbx_erase_sector(uint32_t flash_addr, bool is_multi_card, u
     if (!burner_gba_gbx_is_active()) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (s_cart_ctx.gbx.sector_erase.count == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBA GBX profile missing sector erase commands: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     return burner_gba_gbx_execute_plain_sequence(
         &s_cart_ctx.gbx.sector_erase,
@@ -1312,6 +1343,13 @@ esp_err_t burner_gba_gbx_chip_erase_once(void)
 
     if (!burner_gba_gbx_is_active()) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (s_cart_ctx.gbx.chip_erase.count == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBA GBX profile missing chip erase commands: file=%s",
+            s_cart_ctx.gbx.file_name[0] != '\0' ? s_cart_ctx.gbx.file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
     return burner_gba_gbx_execute_plain_sequence(
@@ -1390,9 +1428,14 @@ esp_err_t burner_gba_gbx_prepare_profile(
             profile->command_set_name);
     }
 
-    /* AGB GBX stays analysis-only: keep matched metadata, but use the CHIS
-       runtime for erase/program/finalize because that path is already tuned. */
-    profile->runtime_commands_enabled = false;
+    if (!burner_gba_gbx_runtime_supported(profile)) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBX profile matched but GBA runtime write commands are unavailable: file=%s",
+            profile->file_name[0] != '\0' ? profile->file_name : "unknown");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    profile->runtime_commands_enabled = true;
     *program_buffer_write_bytes = burner_gba_gbx_program_buffer_bytes(profile, *buffer_write_bytes);
 
     ESP_LOGI(

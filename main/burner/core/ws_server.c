@@ -368,6 +368,7 @@ typedef struct {
     bool d0d1_known;   /* D0/D1 detection completed */
     bool d0d1_swapped; /* D0/D1 data lines swapped */
     bool gba_likely_read_only; /* Probe looks like plain ROM, not writable NOR */
+    bool gba_chislink_active;
     bool probe_cfi_ok;
     burner_gbx_profile_t gbx;
 } burner_cart_ctx_t;
@@ -765,6 +766,7 @@ burner_cart_ctx_t s_cart_ctx = {
     .gba_cmd_addr_mode = BURNER_GBA_CMD_ADDR_WORD,
     .gba_cmd_data_lane = BURNER_GBA_CMD_DATA_LOW,
     .gba_likely_read_only = false,
+    .gba_chislink_active = false,
     .probe_cfi_ok = false,
 };
 static burner_gba_sector_erase_ctx_t s_gba_sector_erase_ctx = {0};

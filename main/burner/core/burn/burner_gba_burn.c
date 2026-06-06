@@ -309,6 +309,9 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
 
 static size_t burner_gba_program_chunk_limit_bytes(void)
 {
+    if (burner_gba_chislink_is_active()) {
+        return 32768u;
+    }
     if (!burner_gba_gbx_is_active() && burner_gba_nor_is_intel_active()) {
         return 32768u;
     }
