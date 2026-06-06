@@ -801,26 +801,6 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                     &cfi_ok,
                     &mbc5_cmdset);
                 gbx_profile_matched = (err == ESP_OK);
-                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
-                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
-                    gbx_fallback_used = true;
-                    err = burner_bacon_mbc5_get_cfi(
-                        &device_size,
-                        &sector_size,
-                        &buffer_write_bytes,
-                        NULL,
-                        &mbc5_cmdset);
-                    if (err == ESP_OK) {
-                        cfi_ok = true;
-                        if (mbc5_cmdset == BURNER_NOR_CMDSET_AMD) {
-                            err = burner_bacon_mbc5_get_id(mbc5_id);
-                            if (err != ESP_OK) {
-                                memset(mbc5_id, 0, sizeof(mbc5_id));
-                                err = ESP_OK;
-                            }
-                        }
-                    }
-                }
             } else {
                 err = burner_bacon_mbc5_prepare_probe_info_locked(
                     mbc5_id,
@@ -845,11 +825,6 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                     &buffer_write_bytes,
                     &cfi_ok);
                 gbx_profile_matched = (err == ESP_OK);
-                if (err == ESP_ERR_NOT_FOUND || err == ESP_ERR_INVALID_VERSION) {
-                    burner_gbx_profile_clear(&s_cart_ctx.gbx);
-                    gbx_fallback_used = true;
-                    err = ESP_OK;
-                }
             } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
                 err = burner_chislink_gba_probe_locked(
                     gba_id,

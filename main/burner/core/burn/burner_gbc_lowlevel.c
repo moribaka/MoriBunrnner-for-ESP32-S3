@@ -18,6 +18,7 @@ void burner_reset_cart_probe_state(void)
     s_cart_ctx.d0d1_known = false;
     s_cart_ctx.d0d1_swapped = false;
     s_cart_ctx.gba_likely_read_only = false;
+    s_cart_ctx.gba_chislink_active = false;
     burner_gbx_profile_clear(&s_cart_ctx.gbx);
 }
 

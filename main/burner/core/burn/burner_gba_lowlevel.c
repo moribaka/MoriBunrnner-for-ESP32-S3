@@ -22,6 +22,7 @@ static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_val
 static esp_err_t burner_bacon_gba_command_write_u16(uint32_t word_addr, uint16_t value);
 static esp_err_t burner_bacon_gba_reset_to_read_mode(void);
 static bool burner_gba_nor_is_intel_active(void);
+bool burner_gba_chislink_is_active(void);
 static bool burner_gba_chis_intel_uses_strict_chislink_flow(void);
 static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank);
 static uint32_t burner_erase_timeout_ms_for_bytes(uint32_t bytes);
@@ -1193,9 +1194,14 @@ static const burner_gba_program_cmd_cache_t *burner_gba_program_cmd_cache_get(vo
 
 static bool burner_gba_chis_intel_uses_strict_chislink_flow(void)
 {
-    return !burner_gba_gbx_is_active() &&
+    return burner_gba_chislink_is_active() &&
            s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL &&
            s_cart_ctx.probe_cfi_ok;
+}
+
+bool burner_gba_chislink_is_active(void)
+{
+    return s_cart_ctx.gba_chislink_active && !burner_gba_gbx_is_active();
 }
 
 static void burner_gba_sector_erase_ctx_reset(void)
@@ -4657,6 +4663,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     if (requested_top64 == 0u || requested_top64 > ((uint64_t)UINT32_MAX + 1u)) {
         return ESP_ERR_INVALID_SIZE;
     }
+    s_cart_ctx.gba_chislink_active = false;
 
     if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
         if (burner_gba_gbx_take_cached_probe(
@@ -4668,7 +4675,9 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
                 &gbx_profile_matched)) {
             err = ESP_OK;
             cached_probe_used = true;
-            probe_runtime_usable = !gbx_profile_matched;
+            if (!gbx_profile_matched) {
+                err = ESP_ERR_NOT_FOUND;
+            }
         } else {
             err = burner_gba_gbx_probe_locked(
                 id,
@@ -4680,18 +4689,6 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         }
         if (err == ESP_OK && !cached_probe_used) {
             gbx_profile_matched = s_cart_ctx.gbx.active;
-        } else if (err == ESP_ERR_NOT_FOUND) {
-            ESP_LOGW(
-                BURNER_TAG,
-                "GBA GBX strict profile match failed; falling back to CHIS/CFI probe");
-            burner_gbx_profile_clear(&s_cart_ctx.gbx);
-            err = burner_bacon_gba_probe_locked(
-                id,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok);
-            probe_runtime_usable = true;
         }
     } else if (job->recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
         err = burner_chislink_gba_probe_locked(
@@ -4701,6 +4698,9 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             &buffer_write_bytes,
             &cfi_ok);
         probe_runtime_usable = true;
+        if (err == ESP_OK) {
+            s_cart_ctx.gba_chislink_active = true;
+        }
     } else {
         err = burner_bacon_gba_probe_locked(
             id,
@@ -4718,7 +4718,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_UNKNOWN) {
         s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_AMD;
     }
-    if (job->recipe_mode != BURNER_RECIPE_MODE_GBX || gbx_profile_matched) {
+    if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
         err = burner_gba_gbx_prepare_profile(
             job,
             id,
@@ -4785,7 +4785,9 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     }
     if (!burner_gba_gbx_is_active()) {
         chislink_intel_compat =
-            (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL) && cfi_ok;
+            burner_gba_chislink_is_active() &&
+            (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL) &&
+            cfi_ok;
         program_buffer_write_bytes = burner_gba_program_buffer_write_bytes(buffer_write_bytes, s_cart_ctx.gba_cmdset);
         if ((nor_flags & BURNER_NOR_FLAG_DISABLE_BUFFER_PROGRAM) != 0u) {
             const char *special_chip_name = burner_gba_chip_name(id);
@@ -4935,7 +4937,8 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
         s_cart_ctx.d0d1_known,
         s_cart_ctx.d0d1_swapped,
         chip_name,
-        "");
+        burner_gba_gbx_is_active() ? "GBX" :
+                                     (burner_gba_chislink_is_active() ? "CHISLINK" : ""));
 
     return ESP_OK;
 }
