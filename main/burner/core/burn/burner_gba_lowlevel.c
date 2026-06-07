@@ -2516,7 +2516,68 @@ static esp_err_t burner_gba_detect_d0d1_swap(
         goto reset_out;
     }
 
-    ESP_LOGW(BURNER_TAG, "D0/D1 swap detection: CFI 'QRY' not detected [010]=%04X [011]=%04X [012]=%04X", q, r, y);
+    ESP_LOGW(
+        BURNER_TAG,
+        "D0/D1 swap detection: CFI 'QRY' not detected with normal entry"
+        " [010]=%04X [011]=%04X [012]=%04X; retrying with swapped entry",
+        q,
+        r,
+        y);
+
+    /* Retry with D0/D1-swapped CFI entry.
+     * A physically-swapped chip won't recognise the normal 0x0098 command.
+     * Temporarily pretend swap is active so that
+     * burner_bacon_gba_command_write_u16() swaps the CFI enter command itself. */
+    (void)burner_bacon_gba_reset_to_read_mode();
+    {
+        const bool prev_swapped = s_cart_ctx.d0d1_swapped;
+
+        s_cart_ctx.d0d1_swapped = true;
+        err = burner_bacon_gba_command_write_u16(burner_gba_cfi_enter_addr(), 0x0098u);
+        s_cart_ctx.d0d1_swapped = prev_swapped;
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(BURNER_TAG, "D0/D1 swap detection: swapped CFI entry write failed: %s", esp_err_to_name(err));
+        goto reset_out;
+    }
+
+    err = burner_bacon_rom_read_u16(0x010u, &q);
+    if (err != ESP_OK) {
+        goto reset_out;
+    }
+    err = burner_bacon_rom_read_u16(0x011u, &r);
+    if (err != ESP_OK) {
+        goto reset_out;
+    }
+    err = burner_bacon_rom_read_u16(0x012u, &y);
+    if (err != ESP_OK) {
+        goto reset_out;
+    }
+
+    if (burner_gba_detect_qry_words(q, r, y, is_swapped_out, &high_byte_lane)) {
+        if (lane_out != NULL) {
+            *lane_out = high_byte_lane ? BURNER_GBA_CMD_DATA_HIGH : BURNER_GBA_CMD_DATA_LOW;
+        }
+        ESP_LOGI(
+            BURNER_TAG,
+            "D0/D1 swap detection: CFI 'QRY' detected via swapped entry (%s, %s-byte lane)"
+            " [010]=%04X [011]=%04X [012]=%04X",
+            *is_swapped_out ? "SWAPPED" : "normal",
+            high_byte_lane ? "high" : "low",
+            q,
+            r,
+            y);
+        err = ESP_OK;
+        goto reset_out;
+    }
+
+    ESP_LOGW(
+        BURNER_TAG,
+        "D0/D1 swap detection: CFI 'QRY' not detected with swapped entry either"
+        " [010]=%04X [011]=%04X [012]=%04X",
+        q,
+        r,
+        y);
     err = ESP_ERR_NOT_FOUND;
 
 reset_out:
@@ -4666,29 +4727,40 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     s_cart_ctx.gba_chislink_active = false;
 
     if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
-        if (burner_gba_gbx_take_cached_probe(
+        if (job->gbx_profile_file[0] != '\0') {
+            err = burner_gba_gbx_prepare_manual_profile(
+                job->gbx_profile_file,
                 id,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok,
-                &gbx_profile_matched)) {
-            err = ESP_OK;
-            cached_probe_used = true;
-            if (!gbx_profile_matched) {
-                err = ESP_ERR_NOT_FOUND;
-            }
-        } else {
-            err = burner_gba_gbx_probe_locked(
-                id,
-                NULL,
                 &device_size,
                 &sector_size,
                 &buffer_write_bytes,
                 &cfi_ok);
-        }
-        if (err == ESP_OK && !cached_probe_used) {
-            gbx_profile_matched = s_cart_ctx.gbx.active;
+            gbx_profile_matched = (err == ESP_OK);
+        } else {
+            if (burner_gba_gbx_take_cached_probe(
+                    id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok,
+                    &gbx_profile_matched)) {
+                err = ESP_OK;
+                cached_probe_used = true;
+                if (!gbx_profile_matched) {
+                    err = ESP_ERR_NOT_FOUND;
+                }
+            } else {
+                err = burner_gba_gbx_probe_locked(
+                    id,
+                    NULL,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+            }
+            if (err == ESP_OK && !cached_probe_used) {
+                gbx_profile_matched = s_cart_ctx.gbx.active;
+            }
         }
     } else if (job->recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
         err = burner_chislink_gba_probe_locked(

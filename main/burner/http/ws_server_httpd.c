@@ -146,6 +146,12 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_gbx_cache_rebuild_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t gbx_profiles_uri = {
+        .uri = "/api/gbx/profiles",
+        .method = HTTP_GET,
+        .handler = burner_gbx_profiles_handler,
+        .user_ctx = NULL,
+    };
     httpd_uri_t tf_list_uri = {
         .uri = "/api/tf/list",
         .method = HTTP_GET,
@@ -337,7 +343,7 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
     burner_status_reset();
     xSemaphoreGive(s_status_lock);
 
-    config.max_uri_handlers = 60;
+    config.max_uri_handlers = 61;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
     config.core_id = WEB_HTTPD_CORE_ID;
     config.task_priority = WEB_HTTPD_TASK_PRIORITY;
@@ -467,6 +473,11 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &gbx_cache_rebuild_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &gbx_profiles_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;

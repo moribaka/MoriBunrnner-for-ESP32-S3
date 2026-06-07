@@ -237,6 +237,7 @@ esp_err_t burner_start_task_ex(
     burner_job_mode_t mode,
     burner_cart_mode_t cart_mode,
     burner_write_path_t write_path,
+    burner_recipe_mode_t recipe_mode,
     bool erase_always,
     bool gba_force_multi,
     bool gba_force_no_cfi,
@@ -248,6 +249,7 @@ esp_err_t burner_start_task_ex(
     uint32_t addr_begin,
     uint32_t total_bytes,
     burner_gba_save_type_t gba_save_type,
+    const char *gbx_profile_file,
     bool ram_fram,
     uint8_t ram_latency)
 {
@@ -285,7 +287,7 @@ esp_err_t burner_start_task_ex(
     job->mode = mode;
     job->cart_mode = cart_mode;
     job->write_path = write_path;
-    job->recipe_mode = s_burn_recipe_mode_default;
+    job->recipe_mode = recipe_mode;
     job->erase_always = erase_always;
     job->mbc5_program_chunk_bytes = burner_clamp_mbc5_program_chunk_bytes(mbc5_program_chunk_bytes);
     job->read_chunk_bytes = burner_dump_chunk_kb_to_bytes(
@@ -301,6 +303,11 @@ esp_err_t burner_start_task_ex(
     job->addr_begin = addr_begin;
     job->total_bytes = total_bytes;
     job->gba_save_type = gba_save_type;
+    snprintf(
+        job->gbx_profile_file,
+        sizeof(job->gbx_profile_file),
+        "%s",
+        (gbx_profile_file != NULL) ? gbx_profile_file : "");
     job->ram_fram = ram_fram;
     job->ram_latency = ram_latency;
     job->gba_force_multi = gba_force_multi;
@@ -372,6 +379,7 @@ esp_err_t burner_start_task(
         mode,
         BURNER_CART_MODE_MBC5,
         BURNER_WRITE_PATH_PSRAM,
+        s_burn_recipe_mode_default,
         false,
         false,
         false,
@@ -383,6 +391,7 @@ esp_err_t burner_start_task(
         addr_begin,
         total_bytes,
         gba_save_type,
+        "",
         ram_fram,
         ram_latency);
 }
@@ -433,6 +442,7 @@ esp_err_t burner_start_gba_save_dump_new(
         BURNER_JOB_READ_GBA_SAVE_NEW,
         BURNER_CART_MODE_GBA,
         BURNER_WRITE_PATH_DIRECT,
+        s_burn_recipe_mode_default,
         false,
         false,
         false,
@@ -444,6 +454,7 @@ esp_err_t burner_start_gba_save_dump_new(
         0u,
         save_size,
         save_type,
+        "",
         false,
         0u);
 }

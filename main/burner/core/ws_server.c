@@ -587,6 +587,7 @@ typedef struct burner_task_param {
     bool ram_fram;
     uint8_t ram_latency;
     burner_gba_save_type_t gba_save_type;
+    char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
     bool gba_force_multi;
     bool gba_force_no_cfi;
     bool task_with_caps;
@@ -981,10 +982,22 @@ esp_err_t burner_gbx_find_agb_profile_for_method_id(
     size_t *match_len_out,
     bool *ambiguous_out);
 esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_profile_t *profile_out);
+esp_err_t burner_gbx_load_profile_by_file_name(
+    const char *type,
+    const char *file_name,
+    burner_gbx_profile_t *profile_out);
 bool burner_gbc_gbx_is_active(void);
 esp_err_t burner_gbc_gbx_probe_locked(
     uint8_t id_out[4],
     burner_gbx_profile_t *profile_out,
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out,
+    burner_nor_cmdset_t *cmdset_out);
+esp_err_t burner_gbc_gbx_prepare_manual_profile(
+    const char *file_name,
+    uint8_t id_out[4],
     uint32_t *device_size,
     uint32_t *sector_size,
     uint16_t *buffer_write_bytes,
@@ -1014,6 +1027,13 @@ bool burner_gba_gbx_take_cached_probe(
 esp_err_t burner_gba_gbx_probe_locked(
     uint8_t id_out[8],
     burner_gbx_profile_t *profile_out,
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out);
+esp_err_t burner_gba_gbx_prepare_manual_profile(
+    const char *file_name,
+    uint8_t id_out[8],
     uint32_t *device_size,
     uint32_t *sector_size,
     uint16_t *buffer_write_bytes,

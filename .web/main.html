@@ -2193,6 +2193,15 @@
             recipeMode: 'chis',
             romFile: null,
             saveFile: null,
+            gbxProfiles: [],
+            gbxProfilesMode: '',
+            gbxProfilesLoading: false,
+            manualConfigVisible: false,
+            manualConfigEnabled: false,
+            manualGbxProfile: '',
+            manualRomSizeMiB: 32,
+            manualRamType: 'sram',
+            manualConfigSeedKey: '',
             selectedTfRomPath: '',
             selectedTfSavePath: '',
             activeBurnOperation: null,
@@ -2215,6 +2224,18 @@
         };
 
         const ROM_DUMP_CHUNK_OPTIONS_KB = Object.freeze([32, 64, 128, 256]);
+        const MANUAL_ROM_SIZE_OPTIONS_MIB = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128]);
+
+        function normalizeRecipeModeValue(value) {
+            const normalized = String(value || '').toLowerCase();
+            if (normalized === 'gbx') {
+                return 'gbx';
+            }
+            if (normalized === 'chislink') {
+                return 'chislink';
+            }
+            return 'chis';
+        }
 
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -2715,6 +2736,7 @@
                                 <label class="setting-label">识别配方</label>
                                 <select class="input" id="recipeModeSelect" onchange="setRecipeMode(this.value)">
                                     <option value="chis">CHIS 自动探测</option>
+                                    <option value="chislink">CHISLINK 严格探测</option>
                                     <option value="gbx">GBX 配置优先</option>
                                 </select>
                                 <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
@@ -2814,7 +2836,7 @@
                             <div style="display: flex; gap: 16px; flex-wrap: wrap;">
                                 <div class="setting-item" style="flex: 1; min-width: 150px;">
                                     <label class="setting-label">ROM 大小 (MiB)</label>
-                                    <select class="input" id="romSize">
+                                    <select class="input" id="romSize" onchange="setManualRomSizeMiB(this.value)">
                                         <option value="1">1</option>
                                         <option value="2">2</option>
                                         <option value="4">4</option>
@@ -2874,7 +2896,7 @@
                                 </div>
                                 <div class="setting-item" style="flex: 1; min-width: 150px;" id="ramTypeSection">
                                     <label class="setting-label">存档类型</label>
-                                    <select class="input" id="ramType">
+                                    <select class="input" id="ramType" onchange="setManualRamType(this.value)">
                                         <option value="sram">SRAM</option>
                                         <option value="fram">FRAM</option>
                                     </select>
@@ -2901,6 +2923,8 @@
                         </div>
                     </div>
                 </div>
+
+                ${renderManualConfigCardHtml()}
 
                 <div class="card animate-in" id="burnStatusCard" style="display: none;">
                     <div class="card-header">
@@ -2975,26 +2999,42 @@
             setPsramWindowMb(state.psramWindowMb ?? 0);
             setMbc5ChunkKb(state.mbc5ChunkKb || 16);
             setDumpChunkKb(state.dumpChunkKb || 64);
+            setManualRomSizeMiB(state.manualRomSizeMiB || 32, false);
+            setManualRamType(state.manualRamType || (state.cartMode === 'mbc5' ? 'sram' : 'unknown'), false);
+            updateManualConfigUi();
             setupBurnerDragDrop();
             updateCartProbeInfo(state.cartProbeData || state.burnStatus, state.cartMode);
+            if (state.manualConfigVisible && getBurnRecipeModeValue() === 'gbx') {
+                loadGbxProfiles(state.cartMode, false);
+            }
             refreshBurnStatusSnapshot();
         }
 
         function setCartMode(mode) {
             state.cartMode = mode;
             updateCartModeUI();
+            setManualRamType(state.manualRamType || (mode === 'mbc5' ? 'sram' : 'unknown'), false);
+            updateManualConfigUi();
+            if (state.manualConfigVisible && getBurnRecipeModeValue() === 'gbx') {
+                loadGbxProfiles(mode, state.gbxProfilesMode !== mode);
+            }
             updateCartProbeInfo(state.cartProbeData || state.burnStatus, state.cartMode);
             addBurnLog('切换至 ' + (mode === 'gba' ? 'GBA' : 'MBC5') + ' 模式', 'info');
         }
 
         function setRecipeMode(mode, logChange = true) {
-            const normalized = String(mode || 'chis').toLowerCase() === 'gbx' ? 'gbx' : 'chis';
+            const normalized = normalizeRecipeModeValue(mode);
             const changed = state.recipeMode !== normalized;
             state.recipeMode = normalized;
 
             const select = document.getElementById('recipeModeSelect');
             if (select && select.value !== normalized) {
                 select.value = normalized;
+            }
+
+            updateManualConfigUi();
+            if (state.manualConfigVisible && normalized === 'gbx') {
+                loadGbxProfiles(state.cartMode, false);
             }
 
             if (changed && logChange) {
@@ -3197,6 +3237,439 @@
             return kb;
         }
 
+        function normalizeManualRomSizeMiB(value, fallback = 32) {
+            let sizeMiB = parseInt(value, 10);
+            const fallbackSize = parseInt(fallback, 10);
+
+            if (!Number.isFinite(sizeMiB) || sizeMiB <= 0) {
+                sizeMiB = Number.isFinite(fallbackSize) && fallbackSize > 0 ? fallbackSize : 32;
+            }
+            for (const option of MANUAL_ROM_SIZE_OPTIONS_MIB) {
+                if (sizeMiB <= option) {
+                    return option;
+                }
+            }
+            return MANUAL_ROM_SIZE_OPTIONS_MIB[MANUAL_ROM_SIZE_OPTIONS_MIB.length - 1];
+        }
+
+        function buildRomSizeOptionsHtml(selectedValue) {
+            const selected = normalizeManualRomSizeMiB(selectedValue, 32);
+            return MANUAL_ROM_SIZE_OPTIONS_MIB.map((value) =>
+                `<option value="${value}"${value === selected ? ' selected' : ''}>${value}</option>`
+            ).join('');
+        }
+
+        function normalizeManualRamType(value, modeOverride) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const normalized = String(value || '').toLowerCase();
+
+            if (mode === 'mbc5') {
+                return normalized === 'fram' ? 'fram' : 'sram';
+            }
+            if (['sram', 'eeprom', 'flash', 'batteryless'].includes(normalized)) {
+                return normalized;
+            }
+            return 'unknown';
+        }
+
+        function buildManualRamTypeOptionsHtml(modeOverride, selectedValue) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const selected = normalizeManualRamType(selectedValue, mode);
+            const options = mode === 'mbc5'
+                ? [
+                    { value: 'sram', label: 'SRAM' },
+                    { value: 'fram', label: 'FRAM' }
+                ]
+                : [
+                    { value: 'unknown', label: 'Auto / Unknown' },
+                    { value: 'sram', label: 'SRAM' },
+                    { value: 'eeprom', label: 'EEPROM' },
+                    { value: 'flash', label: 'FLASH' },
+                    { value: 'batteryless', label: 'BATTERYLESS' }
+                ];
+
+            return options.map((option) =>
+                `<option value="${option.value}"${option.value === selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`
+            ).join('');
+        }
+
+        function formatGbxProfileOptionLabel(profile) {
+            if (!profile || typeof profile !== 'object') {
+                return 'Unknown profile';
+            }
+
+            const name = String(profile.display_name || profile.file_name || 'unknown').trim();
+            const fileName = String(profile.file_name || '').trim();
+            const flashSize = Number(profile.flash_size || 0);
+            const sectorSize = Number(profile.sector_size || 0);
+            const meta = [];
+
+            if (flashSize > 0) {
+                meta.push(formatSize(flashSize));
+            }
+            if (sectorSize > 0) {
+                meta.push(formatSize(sectorSize));
+            }
+
+            let label = name;
+            if (fileName && fileName !== name) {
+                label += ` [${fileName}]`;
+            }
+            if (meta.length > 0) {
+                label += ` · ${meta.join(' / ')}`;
+            }
+            return label;
+        }
+
+        function buildManualGbxProfileOptionsHtml(modeOverride) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const list = state.gbxProfilesMode === mode && Array.isArray(state.gbxProfiles) ? state.gbxProfiles : [];
+            const selected = String(state.manualGbxProfile || '').trim();
+
+            if (state.gbxProfilesLoading) {
+                return '<option value="">加载中...</option>';
+            }
+
+            if (!list.length) {
+                return '<option value="">没有可用的 GBX 配置</option>';
+            }
+
+            const options = ['<option value="">请选择 GBX 配置</option>'];
+            list.forEach((profile) => {
+                const fileName = String(profile.file_name || '').trim();
+                if (!fileName) {
+                    return;
+                }
+                options.push(
+                    `<option value="${escapeHtml(fileName)}"${fileName === selected ? ' selected' : ''}>` +
+                    `${escapeHtml(formatGbxProfileOptionLabel(profile))}</option>`
+                );
+            });
+            return options.join('');
+        }
+
+        function manualRamTypeHintText(modeOverride) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            if (mode === 'mbc5') {
+                return '用于 GB/GBC 存档读写，保持和当前保存操作一致。';
+            }
+            return '当前显示 GBA 存档类型选项；GBA 手动 RAM override 还未接入写 ROM 后端。';
+        }
+
+        function manualGbxProfileHintText(modeOverride) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const list = state.gbxProfilesMode === mode && Array.isArray(state.gbxProfiles) ? state.gbxProfiles : [];
+
+            if (normalizeRecipeModeValue(state.recipeMode) !== 'gbx') {
+                return '手动 GBX 配置仅在“识别配方 = GBX 配置优先”时生效。';
+            }
+            if (state.gbxProfilesLoading) {
+                return '正在加载当前模式可用的 GBX 配置...';
+            }
+            if (!list.length) {
+                return '当前模式没有可用的 GBX 配置，请先更新 GBX 缓存。';
+            }
+            if (!state.manualConfigEnabled) {
+                return '当前为自动模式，仍按 GBX 自动匹配；切到手动后可强制指定 profile。';
+            }
+            if (state.manualGbxProfile) {
+                return `当前手动指定: ${state.manualGbxProfile}`;
+            }
+            return '手动模式已开启，请从列表中选择一个 GBX 配置。';
+        }
+
+        function getBurnRecipeModeValue() {
+            return normalizeRecipeModeValue(state.recipeMode);
+        }
+
+        function getActiveManualGbxProfile() {
+            if (getBurnRecipeModeValue() !== 'gbx' || !state.manualConfigEnabled) {
+                return '';
+            }
+            return String(state.manualGbxProfile || '').trim();
+        }
+
+        function appendBurnRecipeQuery(url) {
+            let nextUrl = String(url || '');
+            const separator = nextUrl.includes('?') ? '&' : '?';
+            const profile = getActiveManualGbxProfile();
+
+            nextUrl += `${separator}recipe_mode=${encodeURIComponent(getBurnRecipeModeValue())}`;
+            if (profile) {
+                nextUrl += `&gbx_profile=${encodeURIComponent(profile)}`;
+            }
+            return nextUrl;
+        }
+
+        function requireManualProfileIfNeeded() {
+            if (
+                getBurnRecipeModeValue() === 'gbx' &&
+                state.manualConfigVisible &&
+                state.manualConfigEnabled &&
+                !String(state.manualGbxProfile || '').trim()
+            ) {
+                throw new Error('请先在“分析后手动配置”里选择一个 GBX 配置');
+            }
+        }
+
+        function setManualRomSizeMiB(value, logChange = true) {
+            const nextValue = normalizeManualRomSizeMiB(value, state.manualRomSizeMiB || 32);
+            const prevValue = normalizeManualRomSizeMiB(state.manualRomSizeMiB || 32, 32);
+            const changed = prevValue !== nextValue;
+
+            state.manualRomSizeMiB = nextValue;
+
+            ['romSize', 'manualRomSizeSelect'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && el.value !== String(nextValue)) {
+                    el.value = String(nextValue);
+                }
+            });
+
+            if (changed && logChange) {
+                addBurnLog(`ROM 大小已设为 ${nextValue} MiB`, 'info');
+            }
+        }
+
+        function setManualRamType(value, logChange = true) {
+            const mode = String(state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const nextValue = normalizeManualRamType(value, mode);
+            const prevValue = normalizeManualRamType(state.manualRamType || '', mode);
+            const changed = prevValue !== nextValue;
+
+            state.manualRamType = nextValue;
+
+            const manualSelect = document.getElementById('manualRamTypeSelect');
+            if (manualSelect && manualSelect.value !== nextValue) {
+                manualSelect.value = nextValue;
+            }
+
+            if (mode === 'mbc5') {
+                const ramTypeSelect = document.getElementById('ramType');
+                if (ramTypeSelect && ramTypeSelect.value !== nextValue) {
+                    ramTypeSelect.value = nextValue;
+                }
+            }
+
+            if (changed && logChange) {
+                addBurnLog(`RAM 类型已设为 ${String(nextValue).toUpperCase()}`, 'info');
+            }
+        }
+
+        function setManualConfigMode(value, logChange = true) {
+            const enabled = String(value || '').toLowerCase() === 'manual';
+            const changed = state.manualConfigEnabled !== enabled;
+
+            state.manualConfigEnabled = enabled;
+            updateManualConfigUi();
+
+            if (enabled && getBurnRecipeModeValue() === 'gbx' && state.gbxProfilesMode !== (state.cartMode || 'gba')) {
+                loadGbxProfiles(state.cartMode || 'gba', true);
+            }
+
+            if (changed && logChange) {
+                addBurnLog(enabled ? '手动配置已开启' : '手动配置已切回自动', 'info');
+            }
+        }
+
+        function setManualGbxProfile(value, logChange = true) {
+            const nextValue = String(value || '').trim();
+            const changed = String(state.manualGbxProfile || '') !== nextValue;
+
+            state.manualGbxProfile = nextValue;
+            updateManualConfigUi();
+
+            if (changed && logChange) {
+                addBurnLog(
+                    nextValue ? `手动 GBX 配置已选中: ${nextValue}` : '手动 GBX 配置已清空',
+                    'info');
+            }
+        }
+
+        function renderManualConfigCardHtml() {
+            const mode = String(state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const profileDisabled =
+                !state.manualConfigEnabled ||
+                getBurnRecipeModeValue() !== 'gbx' ||
+                state.gbxProfilesLoading ||
+                !(state.gbxProfilesMode === mode && state.gbxProfiles.length > 0);
+
+            return `
+                <div class="card animate-in" id="manualConfigCard" style="${state.manualConfigVisible ? '' : 'display: none;'}">
+                    <div class="card-header">
+                        <h3 class="card-title">⚙️ 分析后手动配置</h3>
+                    </div>
+                    <div style="padding: 16px;">
+                        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                            <div class="setting-item" style="flex: 1; min-width: 180px;">
+                                <label class="setting-label">配置模式</label>
+                                <select class="input" id="manualConfigModeSelect" onchange="setManualConfigMode(this.value)">
+                                    <option value="auto"${state.manualConfigEnabled ? '' : ' selected'}>自动</option>
+                                    <option value="manual"${state.manualConfigEnabled ? ' selected' : ''}>手动</option>
+                                </select>
+                                <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    先按分析结果走自动；切到手动后可以强制指定 GBX 配置。
+                                </div>
+                            </div>
+                            <div class="setting-item" style="flex: 2; min-width: 340px;">
+                                <label class="setting-label">GBX 配置列表</label>
+                                <select class="input" id="manualGbxProfileSelect" onchange="setManualGbxProfile(this.value)"${profileDisabled ? ' disabled' : ''}>
+                                    ${buildManualGbxProfileOptionsHtml(mode)}
+                                </select>
+                                <div id="manualGbxProfileHint" style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    ${escapeHtml(manualGbxProfileHintText(mode))}
+                                </div>
+                            </div>
+                            <div class="setting-item" style="flex: 1; min-width: 160px;">
+                                <label class="setting-label">ROM 大小 (MiB)</label>
+                                <select class="input" id="manualRomSizeSelect" onchange="setManualRomSizeMiB(this.value)">
+                                    ${buildRomSizeOptionsHtml(state.manualRomSizeMiB || 32)}
+                                </select>
+                                <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    已按分析结果回填，也可以手动改。
+                                </div>
+                            </div>
+                            <div class="setting-item" style="flex: 1; min-width: 180px;">
+                                <label class="setting-label">RAM 类型</label>
+                                <select class="input" id="manualRamTypeSelect" onchange="setManualRamType(this.value)">
+                                    ${buildManualRamTypeOptionsHtml(mode, state.manualRamType)}
+                                </select>
+                                <div id="manualRamTypeHint" style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    ${escapeHtml(manualRamTypeHintText(mode))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateManualConfigUi() {
+            const card = document.getElementById('manualConfigCard');
+            if (card) {
+                card.style.display = state.manualConfigVisible ? 'block' : 'none';
+            }
+            if (!state.manualConfigVisible) {
+                return;
+            }
+
+            const mode = String(state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const configModeSelect = document.getElementById('manualConfigModeSelect');
+            const profileSelect = document.getElementById('manualGbxProfileSelect');
+            const profileHint = document.getElementById('manualGbxProfileHint');
+            const manualRamTypeSelect = document.getElementById('manualRamTypeSelect');
+            const manualRamTypeHint = document.getElementById('manualRamTypeHint');
+
+            if (configModeSelect) {
+                configModeSelect.value = state.manualConfigEnabled ? 'manual' : 'auto';
+            }
+            if (profileSelect) {
+                profileSelect.innerHTML = buildManualGbxProfileOptionsHtml(mode);
+                profileSelect.disabled =
+                    !state.manualConfigEnabled ||
+                    getBurnRecipeModeValue() !== 'gbx' ||
+                    state.gbxProfilesLoading ||
+                    !(state.gbxProfilesMode === mode && state.gbxProfiles.length > 0);
+                if (state.manualGbxProfile && profileSelect.value !== state.manualGbxProfile) {
+                    profileSelect.value = state.manualGbxProfile;
+                }
+            }
+            if (profileHint) {
+                profileHint.textContent = manualGbxProfileHintText(mode);
+            }
+            if (manualRamTypeSelect) {
+                manualRamTypeSelect.innerHTML = buildManualRamTypeOptionsHtml(mode, state.manualRamType);
+                manualRamTypeSelect.value = normalizeManualRamType(state.manualRamType, mode);
+            }
+            if (manualRamTypeHint) {
+                manualRamTypeHint.textContent = manualRamTypeHintText(mode);
+            }
+
+            setManualRomSizeMiB(state.manualRomSizeMiB || 32, false);
+            setManualRamType(state.manualRamType || (mode === 'mbc5' ? 'sram' : 'unknown'), false);
+        }
+
+        async function loadGbxProfiles(modeOverride, force = false) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+
+            if (!force && state.gbxProfilesMode === mode && Array.isArray(state.gbxProfiles) && state.gbxProfiles.length > 0) {
+                updateManualConfigUi();
+                return state.gbxProfiles;
+            }
+
+            state.gbxProfilesLoading = true;
+            updateManualConfigUi();
+
+            try {
+                const response = await apiCall(`/api/gbx/profiles?mode=${encodeURIComponent(mode)}`);
+                const data = await readApiPayload(response);
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.message || ('HTTP ' + response.status));
+                }
+
+                state.gbxProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+                state.gbxProfilesMode = mode;
+                if (!state.gbxProfiles.some((profile) => String(profile.file_name || '') === String(state.manualGbxProfile || ''))) {
+                    state.manualGbxProfile = '';
+                }
+            } catch (error) {
+                state.gbxProfiles = [];
+                state.gbxProfilesMode = mode;
+                if (state.manualConfigVisible) {
+                    addBurnLog('GBX 配置列表加载失败: ' + error.message, 'warning');
+                }
+            } finally {
+                state.gbxProfilesLoading = false;
+                updateManualConfigUi();
+            }
+
+            return state.gbxProfiles;
+        }
+
+        function applyProbeManualDefaults(probe) {
+            if (!probe || probe._normalizedProbe !== true || !probe.valid) {
+                return;
+            }
+
+            const seedKey = [
+                probe.mode || '',
+                probe.id || '',
+                probe.chip || '',
+                probe.recipeMode || ''
+            ].join('|');
+            const isNewSeed = state.manualConfigSeedKey !== seedKey;
+            const mode = probe.mode === 'mbc5' ? 'mbc5' : 'gba';
+
+            state.manualConfigVisible = true;
+            state.manualConfigSeedKey = seedKey;
+
+            if (isNewSeed) {
+                state.manualConfigEnabled = false;
+                state.manualGbxProfile = '';
+                addBurnLog('分析完成，已开放手动配置选项', 'info');
+            }
+
+            if (Number(probe.deviceSize || 0) > 0) {
+                const sizeMiB = Math.ceil(Number(probe.deviceSize || 0) / (1024 * 1024));
+                setManualRomSizeMiB(sizeMiB, false);
+            } else if (!state.manualRomSizeMiB) {
+                setManualRomSizeMiB(32, false);
+            }
+
+            if (mode === 'mbc5') {
+                setManualRamType(
+                    ['sram', 'fram'].includes(String(state.manualRamType || '').toLowerCase()) ? state.manualRamType : 'sram',
+                    false);
+            } else {
+                setManualRamType(probe.gbaSaveDetected ? probe.gbaSaveType : 'unknown', false);
+            }
+
+            updateManualConfigUi();
+            if (getBurnRecipeModeValue() === 'gbx') {
+                loadGbxProfiles(mode, isNewSeed);
+            }
+        }
+
         function parseApiBoolean(value, fallback = false) {
             if (typeof value === 'boolean') {
                 return value;
@@ -3275,13 +3748,22 @@
         }
 
         function formatRecipeModeLabel(mode) {
-            return String(mode || '').toLowerCase() === 'gbx' ? 'GBX' : 'CHIS';
+            switch (normalizeRecipeModeValue(mode)) {
+                case 'gbx':
+                    return 'GBX';
+                case 'chislink':
+                    return 'CHISLINK';
+                default:
+                    return 'CHIS';
+            }
         }
 
         function formatProbeSourceLabel(source) {
             switch (String(source || '').toLowerCase()) {
                 case 'gbx':
                     return 'GBX';
+                case 'chislink':
+                    return 'CHISLINK';
                 case 'chis_fallback':
                     return 'CHIS fallback';
                 case 'chis':
@@ -3320,7 +3802,7 @@
                     mapper: String(data.probe_mapper || '').trim(),
                     family: String(data.probe_family || '').trim(),
                     cmdset: String(data.probe_cmdset || '').trim(),
-                    recipeMode: String(data.recipe_mode || state.recipeMode || 'chis').toLowerCase(),
+                    recipeMode: normalizeRecipeModeValue(data.recipe_mode || state.recipeMode || 'chis'),
                     source: String(data.probe_source || '').trim(),
                     cmdMode: '',
                     cmdDataLane: '',
@@ -3361,7 +3843,7 @@
                 mapper: String(data.mapper || '').trim(),
                 family: String(data.nor_family || '').trim(),
                 cmdset: String(data.nor_cmdset || '').trim(),
-                recipeMode: String(data.recipe_mode || state.recipeMode || 'chis').toLowerCase(),
+                recipeMode: normalizeRecipeModeValue(data.recipe_mode || state.recipeMode || 'chis'),
                 source: String(data.probe_source || '').trim(),
                 cmdMode: String(data.cmd_mode || '').trim(),
                 cmdDataLane: String(data.cmd_data_lane || '').trim(),
@@ -3502,6 +3984,11 @@
             }
 
             infoEl.innerHTML = formatCartProbeData(state.cartProbeData, modeOverride);
+            if (state.cartProbeData && state.cartProbeData._normalizedProbe === true) {
+                applyProbeManualDefaults(state.cartProbeData);
+            } else {
+                updateManualConfigUi();
+            }
         }
 
         async function rebuildGbxCache() {
@@ -3548,6 +4035,7 @@
                 if (mbc5Section) mbc5Section.style.display = 'block';
             }
             updateWritePathControls(state.cartMode);
+            updateManualConfigUi();
         }
 
         function setupBurnerDragDrop() {
@@ -3581,7 +4069,7 @@
             }
             
             const sizeMiB = file.size / (1024 * 1024);
-            document.getElementById('romSize').value = Math.ceil(sizeMiB);
+            setManualRomSizeMiB(Math.ceil(sizeMiB), false);
             
             const ext = file.name.split('.').pop().toLowerCase();
             if (ext === 'gba') {
@@ -3956,11 +4444,12 @@
         async function readCartRomTitleInfo(mode) {
             const config = getCartRomTitleReadConfig(mode);
             const response = await apiCall(
-                '/api/cart/id_debug?mode=' +
-                encodeURIComponent(mode) +
-                '&recipe_mode=' + encodeURIComponent(String(state.recipeMode || 'chis')) +
-                '&sample_addr=' + encodeURIComponent(String(config.sampleAddr)) +
-                '&sample_len=' + encodeURIComponent(String(config.sampleLen)));
+                appendBurnRecipeQuery(
+                    '/api/cart/id_debug?mode=' +
+                    encodeURIComponent(mode) +
+                    '&sample_addr=' + encodeURIComponent(String(config.sampleAddr)) +
+                    '&sample_len=' + encodeURIComponent(String(config.sampleLen))
+                ));
             const data = await response.json();
             if (!response.ok || !data.ok) {
                 throw new Error(data.message || ('HTTP ' + response.status));
@@ -4004,10 +4493,12 @@
             showBurnStatus('读取ID', '读取中...');
 
             try {
+                requireManualProfileIfNeeded();
                 const response = await apiCall(
-                    '/api/cart/id?mode=' +
-                    encodeURIComponent(mode) +
-                    '&recipe_mode=' + encodeURIComponent(String(state.recipeMode || 'chis')));
+                    appendBurnRecipeQuery(
+                        '/api/cart/id?mode=' +
+                        encodeURIComponent(mode)
+                    ));
                 const data = await response.json();
                 if (!response.ok || !data.ok) {
                     throw new Error(data.message || ('HTTP ' + response.status));
@@ -4036,11 +4527,13 @@
             showBurnStatus('调试读 ID', '读取中...');
 
             try {
+                requireManualProfileIfNeeded();
                 const response = await apiCall(
-                    '/api/cart/id_debug?mode=' +
-                    encodeURIComponent(mode) +
-                    '&recipe_mode=' + encodeURIComponent(String(state.recipeMode || 'chis')) +
-                    '&sample_addr=0&sample_len=32');
+                    appendBurnRecipeQuery(
+                        '/api/cart/id_debug?mode=' +
+                        encodeURIComponent(mode) +
+                        '&sample_addr=0&sample_len=32'
+                    ));
                 const data = await response.json();
                 if (!response.ok || !data.ok) {
                     throw new Error(data.message || ('HTTP ' + response.status));
@@ -4069,8 +4562,9 @@
             showBurnStatus('全片擦除', '任务启动中...');
 
             try {
+                requireManualProfileIfNeeded();
                 const { response, data } = await startTaskRequest(
-                    `/api/cart/erase?mode=${encodeURIComponent(mode)}`);
+                    appendBurnRecipeQuery(`/api/cart/erase?mode=${encodeURIComponent(mode)}`));
                 if (!response.ok || !data.ok) {
                     throw new Error(data.message || ('HTTP ' + response.status));
                 }
@@ -4103,6 +4597,7 @@
             showBurnStatus('写入ROM', '准备中...');
 
             try {
+                requireManualProfileIfNeeded();
                 if (state.romFile &&
                     (!tfRomName || getBaseName(tfRomName) === getBaseName(state.romFile.name))) {
                     addBurnLog('检测到本地 ROM，正在先上传到 TF...', 'info');
@@ -4131,7 +4626,7 @@
                 if (mode === 'mbc5') {
                     writeUrl += `&mbc5_chunk_kb=${encodeURIComponent(String(mbc5ChunkKb))}`;
                 }
-                const { response, data } = await startTaskRequest(writeUrl);
+                const { response, data } = await startTaskRequest(appendBurnRecipeQuery(writeUrl));
 
                 if (!response.ok || !data.ok) {
                     throw new Error(data.message || ('HTTP ' + response.status));
@@ -4214,6 +4709,7 @@
             showBurnStatus('校验ROM', '准备中...');
 
             try {
+                requireManualProfileIfNeeded();
                 if (state.romFile &&
                     (!tfRomName || getBaseName(tfRomName) === getBaseName(state.romFile.name))) {
                     addBurnLog('检测到本地 ROM，正在先上传到 TF...', 'info');
@@ -4232,7 +4728,7 @@
                 const verifyUrl =
                     `/api/verify?name=${encodeURIComponent(tfRomName)}` +
                     `&mode=${encodeURIComponent(mode)}&slot=${encodeURIComponent(slot)}`;
-                const { response, data } = await startTaskRequest(verifyUrl);
+                const { response, data } = await startTaskRequest(appendBurnRecipeQuery(verifyUrl));
                 if (!response.ok || !data.ok) {
                     throw new Error(data.message || ('HTTP ' + response.status));
                 }

@@ -9,6 +9,7 @@ esp_err_t burner_mcu_probe_handler(httpd_req_t *req);
 esp_err_t burner_cart_id_debug_handler(httpd_req_t *req);
 esp_err_t burner_cart_id_handler(httpd_req_t *req);
 esp_err_t burner_cart_unlock_ppb_handler(httpd_req_t *req);
+esp_err_t burner_gbx_profiles_handler(httpd_req_t *req);
 esp_err_t burner_gbx_cache_rebuild_handler(httpd_req_t *req);
 esp_err_t burner_status_handler(httpd_req_t *req);
 esp_err_t burner_cancel_handler(httpd_req_t *req);

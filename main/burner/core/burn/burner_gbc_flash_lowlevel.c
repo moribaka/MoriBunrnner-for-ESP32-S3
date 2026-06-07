@@ -698,6 +698,149 @@ static esp_err_t burner_gbc_gbx_apply_profile_geometry(
     return burner_nor_geometry_is_valid(&s_cart_ctx.geometry) ? ESP_OK : ESP_ERR_INVALID_SIZE;
 }
 
+static burner_gb_mapper_t burner_gbc_gbx_mapper_from_profile(const burner_gbx_profile_t *profile)
+{
+    if (profile != NULL &&
+        profile->mbc_name[0] != '\0' &&
+        strncasecmp(profile->mbc_name, "MBC3", 4u) == 0) {
+        return BURNER_GB_MAPPER_MBC3;
+    }
+    return BURNER_GB_MAPPER_MBC5;
+}
+
+static esp_err_t burner_gbc_gbx_apply_mapper_limit(
+    burner_gb_mapper_t mapper,
+    uint32_t *device_size,
+    uint32_t *sector_size)
+{
+    uint32_t device_limit = 0u;
+
+    if (device_size == NULL || sector_size == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    s_gb_mapper_kind = mapper;
+    device_limit = burner_gb_mapper_device_size_limit(mapper);
+    if (device_limit != 0u && *device_size > device_limit) {
+        *device_size = device_limit;
+        if (burner_nor_geometry_limit_prefix(&s_cart_ctx.geometry, *device_size) != ESP_OK) {
+            return ESP_ERR_INVALID_SIZE;
+        }
+        *sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
+    }
+
+    return (*device_size != 0u && *sector_size != 0u) ? ESP_OK : ESP_ERR_INVALID_SIZE;
+}
+
+esp_err_t burner_gbc_gbx_prepare_manual_profile(
+    const char *file_name,
+    uint8_t id_out[4],
+    uint32_t *device_size,
+    uint32_t *sector_size,
+    uint16_t *buffer_write_bytes,
+    bool *cfi_ok_out,
+    burner_nor_cmdset_t *cmdset_out)
+{
+    burner_gbx_profile_t manual_profile = {0};
+    uint8_t raw_id[BURNER_GBX_FLASH_ID_LEN_MAX] = {0};
+    size_t raw_id_len = 0u;
+    size_t match_len = 0u;
+    uint8_t match_index = 0u;
+    bool bank_match = false;
+    bool changed = false;
+    burner_gb_mapper_t mapper = BURNER_GB_MAPPER_MBC5;
+    esp_err_t err;
+
+    if (file_name == NULL || file_name[0] == '\0' || id_out == NULL || device_size == NULL ||
+        sector_size == NULL || buffer_write_bytes == NULL || cfi_ok_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(id_out, 0, 4u);
+    *device_size = 0u;
+    *sector_size = 0u;
+    *buffer_write_bytes = 0u;
+    *cfi_ok_out = false;
+    if (cmdset_out != NULL) {
+        *cmdset_out = BURNER_NOR_CMDSET_UNKNOWN;
+    }
+
+    burner_gbx_profile_clear(&s_cart_ctx.gbx);
+    burner_nor_geometry_clear(&s_cart_ctx.geometry);
+    s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    s_cart_ctx.current_bank = UINT16_MAX;
+    s_gb_mapper_kind = BURNER_GB_MAPPER_MBC5;
+
+    err = burner_gbx_load_profile_by_file_name("DMG", file_name, &manual_profile);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (manual_profile.read_identifier.count == 0u ||
+        !burner_gbc_gbx_runtime_supported(&manual_profile)) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    err = burner_gbc_gbx_read_id_with_profile(&manual_profile, raw_id, &raw_id_len, &changed);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    match_len = burner_gbx_profile_match_id_ex(
+        &manual_profile,
+        raw_id,
+        raw_id_len,
+        &match_index,
+        &bank_match);
+    if (!changed || match_len == 0u) {
+        ESP_LOGE(
+            BURNER_TAG,
+            "GBC GBX manual profile ID mismatch: file=%s changed=%u match_len=%u",
+            manual_profile.file_name,
+            changed ? 1u : 0u,
+            (unsigned)match_len);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    burner_gbx_profile_apply_match_name(&manual_profile, match_index, bank_match);
+    memcpy(id_out, raw_id, (raw_id_len < 4u) ? raw_id_len : 4u);
+
+    err = burner_gbc_gbx_apply_profile_geometry(
+        &manual_profile,
+        device_size,
+        sector_size,
+        buffer_write_bytes,
+        cfi_ok_out,
+        cmdset_out);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    mapper = burner_gbc_gbx_mapper_from_profile(&manual_profile);
+    err = burner_gbc_gbx_apply_mapper_limit(mapper, device_size, sector_size);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    s_cart_ctx.gbx = manual_profile;
+    s_cart_ctx.gba_cmdset = manual_profile.base_cmdset;
+
+    ESP_LOGI(
+        BURNER_TAG,
+        "GBC GBX manual profile prepared: file=%s chip=%s mapper=%s flash=%" PRIu32
+        " sector=%" PRIu32 " buf=%u id=%02X %02X %02X %02X",
+        s_cart_ctx.gbx.file_name,
+        s_cart_ctx.gbx.display_name[0] != '\0' ? s_cart_ctx.gbx.display_name : "unknown",
+        burner_gb_mapper_name(s_gb_mapper_kind),
+        *device_size,
+        *sector_size,
+        (unsigned)*buffer_write_bytes,
+        id_out[0],
+        id_out[1],
+        id_out[2],
+        id_out[3]);
+    return ESP_OK;
+}
+
 esp_err_t burner_gbc_gbx_probe_locked(
     uint8_t id_out[4],
     burner_gbx_profile_t *profile_out,
@@ -769,14 +912,22 @@ esp_err_t burner_gbc_gbx_probe_locked(
     if (err != ESP_OK) {
         goto cleanup;
     }
+    err = burner_gbc_gbx_apply_mapper_limit(
+        burner_gbc_gbx_mapper_from_profile(probe_ctx.profile),
+        device_size,
+        sector_size);
+    if (err != ESP_OK) {
+        goto cleanup;
+    }
     s_cart_ctx.gba_cmdset = probe_ctx.profile->base_cmdset;
 
     ESP_LOGI(
         BURNER_TAG,
-        "GBC GBX probe ok: file=%s chip=%s flash=%" PRIu32 " sector=%" PRIu32
+        "GBC GBX probe ok: file=%s chip=%s mapper=%s flash=%" PRIu32 " sector=%" PRIu32
         " buf=%u cmdset=%s id=%02X %02X %02X %02X",
         probe_ctx.profile->file_name,
         probe_ctx.profile->display_name[0] != '\0' ? probe_ctx.profile->display_name : "unknown",
+        burner_gb_mapper_name(s_gb_mapper_kind),
         *device_size,
         *sector_size,
         (unsigned)*buffer_write_bytes,
@@ -848,14 +999,25 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
         return ESP_ERR_INVALID_ARG;
     }
 
-    err = burner_gbc_gbx_probe_locked(
-        id,
-        NULL,
-        &device_size,
-        &sector_size,
-        &buffer_write_bytes,
-        &cfi_ok,
-        &cmdset);
+    if (job->gbx_profile_file[0] != '\0') {
+        err = burner_gbc_gbx_prepare_manual_profile(
+            job->gbx_profile_file,
+            id,
+            &device_size,
+            &sector_size,
+            &buffer_write_bytes,
+            &cfi_ok,
+            &cmdset);
+    } else {
+        err = burner_gbc_gbx_probe_locked(
+            id,
+            NULL,
+            &device_size,
+            &sector_size,
+            &buffer_write_bytes,
+            &cfi_ok,
+            &cmdset);
+    }
     if (err != ESP_OK) {
         return err;
     }
@@ -883,7 +1045,6 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
     s_cart_ctx.device_size = device_size;
     s_cart_ctx.probe_cfi_ok = cfi_ok;
     memcpy(s_cart_ctx.mbc5_id, id, sizeof(s_cart_ctx.mbc5_id));
-    s_gb_mapper_kind = BURNER_GB_MAPPER_MBC5;
 
     burner_nor_format_chip_name(
         chip_name,
@@ -919,7 +1080,7 @@ esp_err_t burner_gbc_gbx_prepare(const burner_task_param_t *job)
         false,
         false,
         chip_name,
-        "GBX");
+        burner_gb_mapper_name(s_gb_mapper_kind));
     return ESP_OK;
 }
 

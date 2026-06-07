@@ -2788,3 +2788,84 @@ esp_err_t burner_gbx_lookup_profile_from_id(const uint8_t gba_id[8], burner_gbx_
     }
     return err;
 }
+
+typedef struct {
+    const char *file_name;
+    burner_gbx_profile_t *profile_out;
+    bool found;
+} burner_gbx_load_profile_ctx_t;
+
+static esp_err_t burner_gbx_load_profile_by_file_name_visitor(
+    const burner_gbx_profile_t *profile,
+    void *user,
+    bool *stop_out)
+{
+    burner_gbx_load_profile_ctx_t *ctx = (burner_gbx_load_profile_ctx_t *)user;
+
+    if (profile == NULL || ctx == NULL || ctx->profile_out == NULL || stop_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *stop_out = false;
+    if (ctx->file_name == NULL || ctx->file_name[0] == '\0') {
+        return ESP_OK;
+    }
+    if (strcasecmp(profile->file_name, ctx->file_name) != 0) {
+        return ESP_OK;
+    }
+
+    *ctx->profile_out = *profile;
+    ctx->found = true;
+    *stop_out = true;
+    return ESP_OK;
+}
+
+esp_err_t burner_gbx_load_profile_by_file_name(
+    const char *type,
+    const char *file_name,
+    burner_gbx_profile_t *profile_out)
+{
+    esp_err_t err;
+
+    if (type == NULL || file_name == NULL || profile_out == NULL || file_name[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    burner_gbx_profile_clear(profile_out);
+
+    err = burner_gbx_cache_load();
+    if (err == ESP_OK) {
+        for (uint32_t i = 0u; i < s_gbx_cache_entry_count; ++i) {
+            const burner_gbx_cache_entry_t *entry = &s_gbx_cache_entries[i];
+
+            if (strcasecmp(entry->type, type) != 0) {
+                continue;
+            }
+            if (strcasecmp(entry->file_name, file_name) != 0) {
+                continue;
+            }
+            return burner_gbx_cache_load_full_profile(entry, profile_out);
+        }
+    } else if (err != ESP_ERR_NOT_FOUND && err != ESP_ERR_INVALID_VERSION) {
+        return err;
+    }
+
+    {
+        burner_gbx_load_profile_ctx_t ctx = {
+            .file_name = file_name,
+            .profile_out = profile_out,
+            .found = false,
+        };
+
+        err = burner_gbx_visit_profiles_by_type(type, burner_gbx_load_profile_by_file_name_visitor, &ctx);
+        if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+            return err;
+        }
+        if (!ctx.found) {
+            burner_gbx_profile_clear(profile_out);
+            return ESP_ERR_NOT_FOUND;
+        }
+    }
+
+    return ESP_OK;
+}
