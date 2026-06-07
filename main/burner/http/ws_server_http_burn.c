@@ -300,6 +300,8 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     char raw_name[TF_PATH_LEN_MAX] = {0};
     char slot_arg[16] = {0};
     char mode_arg[16] = {0};
+    char recipe_mode_arg[16] = {0};
+    char gbx_profile_arg[BURNER_GBX_PROFILE_NAME_LEN] = {0};
     char write_path_arg[16] = {0};
     char pipeline_erase_arg[16] = {0};
     char psram_mb_arg[16] = {0};
@@ -313,6 +315,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     bool gba_force_no_cfi = false;
     bool erase_always = (s_burn_erase_always != 0u);
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
+    burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
     burner_write_path_t write_path = s_burn_write_path_default;
     burner_task_start_result_t result = {0};
     esp_err_t err;
@@ -337,6 +340,12 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
     }
+    if (!burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid recipe_mode query");
+    }
+    if (!burner_get_query_arg(req, "gbx_profile", gbx_profile_arg, sizeof(gbx_profile_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid gbx_profile query");
+    }
     if (!burner_get_query_arg(req, "write_path", write_path_arg, sizeof(write_path_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid write_path query");
     }
@@ -354,6 +363,10 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     }
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+    if (recipe_mode_arg[0] != '\0' &&
+        !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
     }
     if (write_path_arg[0] != '\0' &&
         !burner_parse_write_path_text(write_path_arg, &write_path)) {
@@ -386,12 +399,14 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     err = burner_start_write_from_tf(
         raw_name,
         cart_mode,
+        recipe_mode,
         slot,
         write_path,
         erase_always,
         psram_mb,
         mbc5_chunk_kb,
         gba_force_no_cfi,
+        gbx_profile_arg,
         &result,
         error_msg,
         sizeof(error_msg));
@@ -546,6 +561,7 @@ esp_err_t burner_read_handler(httpd_req_t *req)
         BURNER_JOB_READ_ROM,
         cart_mode,
         read_path,
+        s_burn_recipe_mode_default,
         false,
         gba_force_multi,
         false,
@@ -557,6 +573,7 @@ esp_err_t burner_read_handler(httpd_req_t *req)
         addr_begin,
         effective_size,
         BURNER_GBA_SAVE_TYPE_SRAM,
+        "",
         false,
         0u);
     if (err != ESP_OK) {
@@ -725,12 +742,14 @@ static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const 
 esp_err_t burner_start_write_from_tf(
     const char *raw_name,
     burner_cart_mode_t cart_mode,
+    burner_recipe_mode_t recipe_mode,
     uint32_t slot,
     burner_write_path_t write_path,
     bool erase_always,
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
+    const char *gbx_profile_file,
     burner_task_start_result_t *result,
     char *error_msg,
     size_t error_msg_len)
@@ -853,6 +872,7 @@ esp_err_t burner_start_write_from_tf(
         BURNER_JOB_WRITE_ROM,
         cart_mode,
         write_path,
+        recipe_mode,
         erase_always,
         gba_force_multi,
         gba_force_no_cfi,
@@ -864,6 +884,7 @@ esp_err_t burner_start_write_from_tf(
         addr_begin,
         effective_size,
         BURNER_GBA_SAVE_TYPE_SRAM,
+        gbx_profile_file,
         false,
         0u);
     if (err != ESP_OK) {
@@ -894,7 +915,9 @@ esp_err_t burner_start_write_from_tf(
 esp_err_t burner_start_verify_from_tf(
     const char *raw_name,
     burner_cart_mode_t cart_mode,
+    burner_recipe_mode_t recipe_mode,
     uint32_t slot,
+    const char *gbx_profile_file,
     burner_task_start_result_t *result,
     char *error_msg,
     size_t error_msg_len)
@@ -954,6 +977,7 @@ esp_err_t burner_start_verify_from_tf(
         BURNER_JOB_VERIFY_ROM,
         cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        recipe_mode,
         false,
         gba_force_multi,
         false,
@@ -965,6 +989,7 @@ esp_err_t burner_start_verify_from_tf(
         addr_begin,
         effective_size,
         BURNER_GBA_SAVE_TYPE_SRAM,
+        gbx_profile_file,
         false,
         0u);
     if (err != ESP_OK) {
@@ -1111,10 +1136,13 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
     char raw_name[TF_PATH_LEN_MAX] = {0};
     char slot_arg[16] = {0};
     char mode_arg[16] = {0};
+    char recipe_mode_arg[16] = {0};
+    char gbx_profile_arg[BURNER_GBX_PROFILE_NAME_LEN] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
     char error_msg[160] = {0};
     uint32_t slot = 0;
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
+    burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
     burner_task_start_result_t result = {0};
     esp_err_t err;
     int n;
@@ -1138,8 +1166,18 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
     }
+    if (!burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid recipe_mode query");
+    }
+    if (!burner_get_query_arg(req, "gbx_profile", gbx_profile_arg, sizeof(gbx_profile_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid gbx_profile query");
+    }
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+    if (recipe_mode_arg[0] != '\0' &&
+        !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
     }
     if (slot_arg[0] != '\0' && !burner_parse_u32_text(slot_arg, &slot)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
@@ -1148,7 +1186,9 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
     err = burner_start_verify_from_tf(
         raw_name,
         cart_mode,
+        recipe_mode,
         slot,
+        gbx_profile_arg,
         &result,
         error_msg,
         sizeof(error_msg));
@@ -1443,7 +1483,10 @@ esp_err_t burner_ram_verify_handler(httpd_req_t *req)
 esp_err_t burner_cart_erase_handler(httpd_req_t *req)
 {
     char mode_arg[16] = {0};
+    char recipe_mode_arg[16] = {0};
+    char gbx_profile_arg[BURNER_GBX_PROFILE_NAME_LEN] = {0};
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
+    burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
     char resp[128] = {0};
     esp_err_t err;
     int n;
@@ -1451,8 +1494,18 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
     }
+    if (!burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid recipe_mode query");
+    }
+    if (!burner_get_query_arg(req, "gbx_profile", gbx_profile_arg, sizeof(gbx_profile_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid gbx_profile query");
+    }
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+    if (recipe_mode_arg[0] != '\0' &&
+        !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
     }
 
     if (cart_mode == BURNER_CART_MODE_GBA) {
@@ -1471,6 +1524,7 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
         BURNER_JOB_ERASE_ROM,
         cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        recipe_mode,
         false,
         false,
         false,
@@ -1482,6 +1536,7 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
         0u,
         1u,
         BURNER_GBA_SAVE_TYPE_SRAM,
+        gbx_profile_arg,
         false,
         0u);
     if (err != ESP_OK) {

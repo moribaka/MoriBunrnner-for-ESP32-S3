@@ -320,6 +320,7 @@ typedef struct {
     ui_file_kind_t kind;
     ui_file_action_t action;
     burner_cart_mode_t cart_mode;
+    burner_recipe_mode_t recipe_mode;
     uint32_t slot;
     burner_write_path_t write_path;
     bool erase_always;
@@ -328,6 +329,7 @@ typedef struct {
     bool gba_force_no_cfi;
     burner_gba_save_type_t gba_save_type;
     uint32_t gba_save_size;
+    char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
     bool ram_fram;
     uint8_t ram_latency;
     bool task_with_caps;
@@ -497,7 +499,8 @@ static uint32_t s_render_frames_this_second = 0;
 static uint32_t s_last_battery_refresh_ms = 0;
 static uint32_t s_last_live_refresh_ms = 0;
 static uint32_t s_last_button_queue_full_log_ms = 0;
-static burner_status_t *s_task_result_status = NULL;
+static DRAM_ATTR burner_status_t s_task_result_status = {0};
+static bool s_task_result_status_valid = false;
 static bool s_task_result_capture_armed = false;
 static bool s_task_result_active_seen = false;
 static bool s_model_defaults_inited = false;
@@ -557,20 +560,7 @@ static void ui_reset_model_defaults(ui_model_t *model)
 
 static burner_status_t *ui_task_result_status_buffer(void)
 {
-    if (s_task_result_status != NULL) {
-        return s_task_result_status;
-    }
-
-    s_task_result_status =
-        (burner_status_t *)heap_caps_calloc(1, sizeof(*s_task_result_status), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (s_task_result_status == NULL) {
-        s_task_result_status =
-            (burner_status_t *)heap_caps_calloc(1, sizeof(*s_task_result_status), MALLOC_CAP_8BIT);
-    }
-    if (s_task_result_status == NULL) {
-        ESP_LOGW(UI_TAG, "task result status cache allocation failed");
-    }
-    return s_task_result_status;
+    return &s_task_result_status;
 }
 
 static void ui_clear_task_result_locked(ui_model_t *model)
@@ -578,9 +568,8 @@ static void ui_clear_task_result_locked(ui_model_t *model)
     if (model != NULL) {
         model->task_result_status_valid = false;
     }
-    if (s_task_result_status != NULL) {
-        memset(s_task_result_status, 0, sizeof(*s_task_result_status));
-    }
+    memset(&s_task_result_status, 0, sizeof(s_task_result_status));
+    s_task_result_status_valid = false;
     s_task_result_capture_armed = false;
     s_task_result_active_seen = false;
 }
@@ -600,6 +589,12 @@ static void ui_clear_task_result_runtime_locked(ui_model_t *model)
     }
 }
 
+static void ui_begin_task_result_capture_locked(ui_model_t *model)
+{
+    ui_clear_task_result_locked(model);
+    s_task_result_capture_armed = true;
+}
+
 static void ui_capture_task_result_locked(ui_model_t *model, const burner_status_t *status)
 {
     burner_status_t *cache = NULL;
@@ -615,8 +610,19 @@ static void ui_capture_task_result_locked(ui_model_t *model, const burner_status
         return;
     }
     *cache = *status;
+    if (cache->processed_bytes == 0U) {
+        cache->processed_bytes = model->burn_processed;
+    }
+    if (cache->total_bytes == 0U) {
+        cache->total_bytes = model->burn_total;
+    }
+    if (cache->task_elapsed_us == 0ULL) {
+        cache->task_elapsed_us = model->burn_elapsed_us;
+    }
+    s_task_result_status_valid = true;
     model->task_result_status_valid = true;
     s_task_result_capture_armed = false;
+    s_task_result_active_seen = false;
 }
 
 static const ui_menu_item_t s_root_items[UI_ROOT_ITEM_COUNT] = {
@@ -3912,6 +3918,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     } else {
         request->cart_mode = ui_file_cart_mode_for_kind(model->action_kind);
     }
+    request->recipe_mode = s_recipe_mode;
     request->slot = 0;
     request->write_path = (action == UI_FILE_ACTION_BURN_PSRAM) ?
                               BURNER_WRITE_PATH_PSRAM :
@@ -3924,12 +3931,14 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->gba_force_no_cfi = false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = model->action_file.size;
+    request->gbx_profile_file[0] = '\0';
     request->ram_fram = false;
     request->ram_latency = 10U;
     request->return_page = UI_PAGE_ROOT;
 
     s_file_start_active = true;
     ui_task_cancel_confirm_reset_locked();
+    ui_begin_task_result_capture_locked(model);
     model->page = UI_PAGE_TASK_STATUS;
     model->parent_page = request->return_page;
     model->burn_progress = 0;
@@ -4039,12 +4048,14 @@ static void ui_start_file_action_task(void *param)
             err = burner_start_write_from_tf(
                 request->path,
                 request->cart_mode,
+                request->recipe_mode,
                 request->slot,
                 request->write_path,
                 request->erase_always,
                 request->psram_mb,
                 request->mbc5_chunk_kb,
                 request->gba_force_no_cfi,
+                request->gbx_profile_file,
                 &result,
                 error_msg,
                 sizeof(error_msg));
@@ -4053,7 +4064,9 @@ static void ui_start_file_action_task(void *param)
             err = burner_start_verify_from_tf(
                 request->path,
                 request->cart_mode,
+                request->recipe_mode,
                 request->slot,
+                request->gbx_profile_file,
                 &result,
                 error_msg,
                 sizeof(error_msg));
@@ -4233,6 +4246,7 @@ static esp_err_t ui_start_dump_rom_task(void)
         BURNER_JOB_READ_ROM,
         s_cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        s_recipe_mode,
         false,
         gba_force_multi,
         false,
@@ -4244,6 +4258,7 @@ static esp_err_t ui_start_dump_rom_task(void)
         addr_begin,
         effective_size,
         BURNER_GBA_SAVE_TYPE_SRAM,
+        "",
         false,
         0U);
     if (err == ESP_OK) {
@@ -4356,6 +4371,7 @@ static esp_err_t ui_start_chip_erase_task(void)
         BURNER_JOB_ERASE_ROM,
         s_cart_mode,
         BURNER_WRITE_PATH_DIRECT,
+        s_recipe_mode,
         false,
         false,
         false,
@@ -4367,6 +4383,7 @@ static esp_err_t ui_start_chip_erase_task(void)
         0U,
         1U,
         BURNER_GBA_SAVE_TYPE_SRAM,
+        "",
         false,
         0U);
 
@@ -4390,7 +4407,6 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     uint32_t gba_save_size = 0;
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
     bool gbx_profile_matched = false;
-    bool gbx_fallback_used = false;
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
     bool cfi_ok = false;
@@ -4508,7 +4524,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             false,
             false,
             chip_name,
-            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : "MBC5"));
+            gbx_profile_matched ? "GBX" : "MBC5");
         if (gbx_profile_matched) {
             snprintf(out, out_len, "%s GBX %s", ui_cart_mode_label(cart_mode), chip_name);
         } else {
@@ -4567,8 +4583,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_d0d1_swapped,
             chip_name,
             gbx_profile_matched ? "GBX" :
-                                  (gbx_fallback_used ? "CHIS" :
-                                                       ((s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : "")));
+                                  ((s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
         {
             bool detected = false;
             burner_spi_lock_take();
@@ -5262,6 +5277,10 @@ static void ui_present_active_burn_task_locked(ui_model_t *model, const burner_s
         &erase_total);
 
     ui_task_cancel_confirm_reset_locked();
+    ui_begin_task_result_capture_locked(model);
+    if (burner_status_is_operation_active_state(status->state)) {
+        s_task_result_active_seen = true;
+    }
     model->task_result_status_valid = false;
     model->page = UI_PAGE_TASK_STATUS;
     model->parent_page = return_page;
@@ -5662,6 +5681,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->kind = selected_kind;
     request->action = action;
     request->cart_mode = (model->page == UI_PAGE_BURN_ROM) ? s_cart_mode : ui_file_cart_mode_for_kind(selected_kind);
+    request->recipe_mode = s_recipe_mode;
     request->slot = s_cart_slot;
     request->write_path = ui_burn_action_for_write_path(s_write_path) == action ? s_write_path :
                            ((action == UI_FILE_ACTION_BURN_PSRAM) ?
@@ -5675,6 +5695,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->gba_force_no_cfi = false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = selected_file.size;
+    request->gbx_profile_file[0] = '\0';
     request->ram_fram = s_ram_fram;
     request->ram_latency = s_ram_latency;
     request->return_page =
@@ -5684,6 +5705,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
 
     s_file_start_active = true;
     ui_task_cancel_confirm_reset_locked();
+    ui_begin_task_result_capture_locked(model);
     model->page = UI_PAGE_TASK_STATUS;
     model->parent_page = request->return_page;
     model->burn_progress = 0;
@@ -6961,6 +6983,9 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     if (!ui_take_model_lock()) {
         return;
     }
+    if (s_task_result_capture_armed && burner_status_is_operation_active_state(status.state)) {
+        s_task_result_active_seen = true;
+    }
     if (!s_file_start_active &&
         burner_status_is_operation_active_state(status.state) &&
         (s_model.page == UI_PAGE_BURNER || s_model.page == UI_PAGE_BURN_ROM || s_model.page == UI_PAGE_BURN_SAVE)) {
@@ -7013,7 +7038,7 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
             s_task_cancel_exit_pending = false;
         }
     }
-    if (s_model.page == UI_PAGE_TASK_STATUS || s_model.page == UI_PAGE_TASK_RESULT) {
+    if (s_model.page == UI_PAGE_TASK_STATUS) {
         ui_mark_content_dirty(&s_model);
     }
     xSemaphoreGive(s_model_lock);
@@ -7896,12 +7921,12 @@ static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, cha
     char probe_text[96] = {0};
     uint64_t elapsed_us;
 
-    if (model != NULL && model->task_result_status_valid && cached_status != NULL) {
+    if (cached_status != NULL && (s_task_result_status_valid || (model != NULL && model->task_result_status_valid))) {
         status = *cached_status;
     } else {
         burner_status_snapshot(&status);
     }
-    elapsed_us = status.task_elapsed_us > 0ULL ? status.task_elapsed_us : model->burn_elapsed_us;
+    elapsed_us = status.task_elapsed_us > 0ULL ? status.task_elapsed_us : (model != NULL ? model->burn_elapsed_us : 0ULL);
 
     switch (index) {
         case 0:
@@ -7915,11 +7940,11 @@ static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, cha
         case 2:
             snprintf(title, title_len, "%s", ui_tr("Bytes"));
             ui_format_bytes_text(
-                status.processed_bytes > 0U ? status.processed_bytes : model->burn_processed,
+                status.processed_bytes > 0U ? status.processed_bytes : (model != NULL ? model->burn_processed : 0U),
                 size_a,
                 sizeof(size_a));
             ui_format_bytes_text(
-                status.total_bytes > 0U ? status.total_bytes : model->burn_total,
+                status.total_bytes > 0U ? status.total_bytes : (model != NULL ? model->burn_total : 0U),
                 size_b,
                 sizeof(size_b));
             snprintf(hint, hint_len, "%s/%s", size_a, size_b);
@@ -9748,7 +9773,7 @@ void ui_show_burn_task_status(uint32_t total_hint)
     }
 
     ui_task_cancel_confirm_reset_locked();
-    ui_clear_task_result_locked(&s_model);
+    ui_begin_task_result_capture_locked(&s_model);
     s_model.page = UI_PAGE_TASK_STATUS;
     s_model.parent_page = UI_PAGE_BURNER;
     s_model.selected = 0;

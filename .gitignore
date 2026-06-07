@@ -8,6 +8,7 @@
 # Release artifacts and local backups
 /dist/
 /backup/
+/release/
 
 # Local reference files not needed in the repo
 /*.pdf
@@ -24,6 +25,7 @@
 # Editor and local workspace
 /.vscode/
 /.clangd
+/.claude/
 
 # Temporary local files
 /.tmp-tools/

@@ -128,6 +128,12 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_cart_erase_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t gbx_profiles_uri = {
+        .uri = "/api/gbx/profiles",
+        .method = HTTP_GET,
+        .handler = burner_gbx_profiles_handler,
+        .user_ctx = NULL,
+    };
     httpd_uri_t tf_list_uri = {
         .uri = "/api/tf/list",
         .method = HTTP_GET,
@@ -341,7 +347,7 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         }
     }
 
-    config.max_uri_handlers = 56;
+    config.max_uri_handlers = 57;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
     // Browser WebSocket handshake headers can be longer than default.
     config.max_req_hdr_len = 4096;
@@ -456,6 +462,11 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &cart_erase_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &gbx_profiles_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;

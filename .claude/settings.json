@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cd \"H:\\\\dev\\\\ChisLinkPremium-main\" && ls -la)",
-      "Read(//h/dev/ChisLinkPremium-main/**)"
-    ]
-  }
-}

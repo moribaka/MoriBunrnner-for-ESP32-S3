@@ -110,6 +110,133 @@ static const char *burner_http_probe_family_name(const burner_status_t *status)
     return family->name;
 }
 
+static bool burner_http_gbx_profile_supported(
+    burner_cart_mode_t cart_mode,
+    const burner_gbx_profile_t *profile)
+{
+    if (profile == NULL) {
+        return false;
+    }
+
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        if (profile->type[0] != '\0' && strcasecmp(profile->type, "AGB") != 0) {
+            return false;
+        }
+        if (profile->has_flash_bank_select_type && profile->flash_bank_select_type > 1u) {
+            return false;
+        }
+        return profile->single_write.count > 0u || profile->buffer_write.count > 0u;
+    }
+
+    if (profile->type[0] != '\0' && strcasecmp(profile->type, "DMG") != 0) {
+        return false;
+    }
+    if (profile->write_pin[0] != '\0' && strcasecmp(profile->write_pin, "WR") != 0) {
+        return false;
+    }
+    if (profile->command_set_name[0] != '\0' && strcasecmp(profile->command_set_name, "AMD") != 0) {
+        return false;
+    }
+    if (profile->has_flash_bank_select_type && profile->flash_bank_select_type != 0u) {
+        return false;
+    }
+    return profile->single_write.count > 0u || profile->buffer_write.count > 0u;
+}
+
+static uint32_t burner_http_gbx_profile_sector_size(const burner_gbx_profile_t *profile)
+{
+    const burner_nor_geometry_t *geometry = NULL;
+
+    if (profile == NULL) {
+        return 0u;
+    }
+    if (profile->has_sector_geometry) {
+        geometry = &profile->sector_geometry;
+        if (geometry->uniform_sector_size != 0u) {
+            return geometry->uniform_sector_size;
+        }
+        if (geometry->region_count > 0u) {
+            return geometry->largest_sector_size;
+        }
+    }
+    return profile->has_sector_size ? profile->sector_size : 0u;
+}
+
+typedef struct {
+    httpd_req_t *req;
+    burner_cart_mode_t cart_mode;
+    bool first;
+} burner_http_gbx_profile_stream_ctx_t;
+
+static esp_err_t burner_http_gbx_profiles_visitor(
+    const burner_gbx_profile_t *profile,
+    void *user,
+    bool *stop_out)
+{
+    burner_http_gbx_profile_stream_ctx_t *ctx = (burner_http_gbx_profile_stream_ctx_t *)user;
+    char display_esc[BURNER_GBX_PROFILE_NAME_LEN * 2 + 8] = {0};
+    char file_esc[BURNER_GBX_PROFILE_NAME_LEN * 2 + 8] = {0};
+    char type_esc[BURNER_GBX_PROFILE_TYPE_LEN * 2 + 8] = {0};
+    char cmdset_esc[BURNER_GBX_PROFILE_CMDSET_LEN * 2 + 8] = {0};
+    char mbc_esc[BURNER_GBX_PROFILE_MBC_LEN * 2 + 8] = {0};
+    char line[768];
+    const char *display_name = NULL;
+    uint32_t flash_size = 0u;
+    uint32_t sector_size = 0u;
+    uint16_t buffer_size = 0u;
+    int n;
+
+    if (profile == NULL || ctx == NULL || ctx->req == NULL || stop_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *stop_out = false;
+    if (!burner_http_gbx_profile_supported(ctx->cart_mode, profile)) {
+        return ESP_OK;
+    }
+
+    display_name =
+        (profile->display_name[0] != '\0') ? profile->display_name :
+        (profile->file_name[0] != '\0') ? profile->file_name :
+        "unknown";
+    flash_size = profile->has_flash_size ? profile->flash_size : 0u;
+    sector_size = burner_http_gbx_profile_sector_size(profile);
+    buffer_size = profile->has_buffer_size ? profile->buffer_size : 0u;
+
+    if (!burner_json_escape(display_name, display_esc, sizeof(display_esc)) ||
+        !burner_json_escape(profile->file_name, file_esc, sizeof(file_esc)) ||
+        !burner_json_escape(profile->type, type_esc, sizeof(type_esc)) ||
+        !burner_json_escape(profile->command_set_name, cmdset_esc, sizeof(cmdset_esc)) ||
+        !burner_json_escape(profile->mbc_name, mbc_esc, sizeof(mbc_esc))) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    n = snprintf(
+        line,
+        sizeof(line),
+        "%s{\"file_name\":\"%s\",\"display_name\":\"%s\",\"type\":\"%s\","
+        "\"flash_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_size\":%u,"
+        "\"command_set\":\"%s\",\"mbc_name\":\"%s\"}",
+        ctx->first ? "" : ",",
+        file_esc,
+        display_esc,
+        type_esc,
+        flash_size,
+        sector_size,
+        (unsigned)buffer_size,
+        cmdset_esc,
+        mbc_esc);
+    if (n <= 0 || n >= (int)sizeof(line)) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (httpd_resp_sendstr_chunk(ctx->req, line) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    ctx->first = false;
+    return ESP_OK;
+}
+
 esp_err_t burner_web_main_upload_handler(httpd_req_t *req)
 {
     if (req == NULL) {
@@ -403,9 +530,15 @@ static esp_err_t burner_cart_debug_read_sample_locked(
 esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
 {
     char mode_arg[16] = {0};
+    char recipe_mode_arg[16] = {0};
+    char gbx_profile_arg[BURNER_GBX_PROFILE_NAME_LEN] = {0};
     char sample_addr_arg[24] = {0};
     char sample_len_arg[16] = {0};
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_GBA;
+    burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
+    burner_nor_cmdset_t probe_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
+    const burner_nor_family_t *probe_family = NULL;
     uint8_t gba_id[8] = {0};
     uint8_t mbc5_id[4] = {0};
     uint32_t device_size = 0;
@@ -418,12 +551,14 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     char id_hex[32];
     char chip_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
     char sample_hex[BURNER_CART_ID_DEBUG_SAMPLE_MAX * 3 + 4];
-    char resp[1024];
+    char resp[1408];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
     const char *gba_chip_label = NULL;
     const char *sample_error = "";
     const char *gb_mapper = "unknown";
+    const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
+    bool gbx_profile_matched = false;
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
     bool gba_likely_read_only = false;
@@ -443,8 +578,18 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
     }
+    if (!burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid recipe_mode query");
+    }
+    if (!burner_get_query_arg(req, "gbx_profile", gbx_profile_arg, sizeof(gbx_profile_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid gbx_profile query");
+    }
     if (mode_arg[0] != '\0' && !burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+    if (recipe_mode_arg[0] != '\0' &&
+        !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
     }
     if (!burner_get_query_arg(req, "sample_addr", sample_addr_arg, sizeof(sample_addr_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid sample_addr query");
@@ -481,29 +626,78 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     sample_hex[0] = '\0';
     burner_spi_lock_take();
     if (cart_mode == BURNER_CART_MODE_MBC5) {
-        burner_nor_cmdset_t mbc5_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
-
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_mbc5_prepare_probe_info_locked(
-                mbc5_id,
-                1u,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok,
-                &mbc5_cmdset,
-                &gb_mapper);
+            if (recipe_mode == BURNER_RECIPE_MODE_GBX) {
+                if (gbx_profile_arg[0] != '\0') {
+                    err = burner_gbc_gbx_prepare_manual_profile(
+                        gbx_profile_arg,
+                        mbc5_id,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok,
+                        &mbc5_cmdset);
+                } else {
+                    err = burner_gbc_gbx_probe_locked(
+                        mbc5_id,
+                        NULL,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok,
+                        &mbc5_cmdset);
+                }
+                gbx_profile_matched = (err == ESP_OK);
+            } else {
+                err = burner_bacon_mbc5_prepare_probe_info_locked(
+                    mbc5_id,
+                    1u,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok,
+                    &mbc5_cmdset,
+                    &gb_mapper);
+            }
         }
     } else {
         err = burner_bacon_gba_prepare_power();
         if (err == ESP_OK) {
-            err = burner_bacon_gba_probe_locked(
-                gba_id,
-                &device_size,
-                &sector_size,
-                &buffer_write_bytes,
-                &cfi_ok);
+            if (recipe_mode == BURNER_RECIPE_MODE_GBX) {
+                if (gbx_profile_arg[0] != '\0') {
+                    err = burner_gba_gbx_prepare_manual_profile(
+                        gbx_profile_arg,
+                        gba_id,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok);
+                } else {
+                    err = burner_gba_gbx_probe_locked(
+                        gba_id,
+                        NULL,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok);
+                }
+                gbx_profile_matched = (err == ESP_OK);
+            } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
+                err = burner_chislink_gba_probe_locked(
+                    gba_id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+            } else {
+                err = burner_bacon_gba_probe_locked(
+                    gba_id,
+                    &device_size,
+                    &sector_size,
+                    &buffer_write_bytes,
+                    &cfi_ok);
+            }
             if (err == ESP_OK) {
                 gba_cmd_mode = burner_gba_cmd_addr_mode_name(s_cart_ctx.gba_cmd_addr_mode);
                 gba_cmd_data_lane = burner_gba_cmd_data_lane_name(s_cart_ctx.gba_cmd_data_lane);
@@ -563,12 +757,21 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cart id debug read failed");
     }
 
+    probe_cmdset = burner_http_probe_cmdset_from_id(
+        cart_mode,
+        (cart_mode == BURNER_CART_MODE_GBA) ? gba_id : mbc5_id);
+    probe_family = burner_http_probe_family_from_id(
+        cart_mode,
+        (cart_mode == BURNER_CART_MODE_GBA) ? gba_id : mbc5_id);
+
     if (cart_mode == BURNER_CART_MODE_MBC5) {
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            burner_mbc5_chip_name(mbc5_id),
-            BURNER_NOR_CMDSET_UNKNOWN,
+            (gbx_profile_matched && gbx_profile->display_name[0] != '\0') ?
+                gbx_profile->display_name :
+                burner_mbc5_chip_name(mbc5_id),
+            mbc5_cmdset,
             device_size);
         burner_status_set_probe_info(
             BURNER_CART_MODE_MBC5,
@@ -583,7 +786,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             false,
             false,
             chip_name,
-            gb_mapper);
+            gbx_profile_matched ? "GBX" : gb_mapper);
         burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
         burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
         n = snprintf(
@@ -602,15 +805,20 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             resp,
             sizeof(resp),
             "{\"ok\":true,\"mode\":\"mbc5\",\"mapper\":\"%s\",\"power\":{\"v5\":%s,\"v3\":%s},"
-            "\"id\":\"%s\",\"chip\":\"%s\","
+            "\"id\":\"%s\",\"chip\":\"%s\",\"recipe_mode\":\"%s\",\"probe_source\":\"%s\","
+            "\"nor_family\":\"%s\",\"nor_cmdset\":\"%s\","
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
             "\"sample_ok\":%s,\"sample_addr\":%" PRIu32 ",\"sample_len\":%" PRIu32 ","
             "\"sample_hex\":\"%s\",\"sample_error\":\"%s\"}",
-            gb_mapper,
+            gbx_profile_matched ? "GBX" : gb_mapper,
             (s_mbc5_power_5v_enabled != 0u) ? "true" : "false",
             (s_mbc5_power_5v_enabled != 0u) ? "false" : "true",
             id_hex,
-            burner_mbc5_chip_name(mbc5_id),
+            chip_name,
+            burner_recipe_mode_to_str(recipe_mode),
+            gbx_profile_matched ? "gbx" : "chis",
+            (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
+            burner_nor_cmdset_name(probe_cmdset),
             cfi_ok ? "true" : "false",
             device_size,
             sector_size,
@@ -621,11 +829,15 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             sample_ok ? sample_hex : "",
             sample_ok ? "" : ((sample_error != NULL) ? sample_error : "sample read failed"));
     } else {
+        if (gbx_profile_matched && gbx_profile->d0d1_known) {
+            gba_d0d1_known = true;
+            gba_d0d1_swapped = gbx_profile->d0d1_swapped;
+        }
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            burner_gba_chip_name(gba_id),
-            s_cart_ctx.gba_cmdset,
+            gbx_profile_matched && gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name : burner_gba_chip_name(gba_id),
+            gbx_profile_matched && gbx_profile->base_cmdset != BURNER_NOR_CMDSET_UNKNOWN ? gbx_profile->base_cmdset : s_cart_ctx.gba_cmdset,
             device_size);
         if (gba_likely_read_only) {
             snprintf(chip_name, sizeof(chip_name), "%s", "Retail ROM / read-only");
@@ -647,7 +859,8 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            "");
+            gbx_profile_matched ? "GBX" :
+                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
         burner_status_set_gba_save_probe(gba_save_type, gba_save_size, gba_save_detected);
         burner_status_set_gba_sram_patch_probe(
             gba_patch_kind,
@@ -673,7 +886,9 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             resp,
             sizeof(resp),
             "{\"ok\":true,\"mode\":\"gba\",\"power\":{\"v5\":false,\"v3\":true},"
-            "\"id\":\"%s\",\"chip\":\"%s\",\"cmd_mode\":\"%s\",\"cmd_data_lane\":\"%s\","
+            "\"id\":\"%s\",\"chip\":\"%s\",\"recipe_mode\":\"%s\",\"probe_source\":\"%s\","
+            "\"nor_family\":\"%s\",\"nor_cmdset\":\"%s\","
+            "\"cmd_mode\":\"%s\",\"cmd_data_lane\":\"%s\","
             "\"id_looks_like_rom_header\":%s,"
             "\"likely_read_only_retail\":%s,"
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
@@ -684,6 +899,11 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             "\"sample_hex\":\"%s\",\"sample_error\":\"%s\"}",
             id_hex,
             gba_chip_label,
+            burner_recipe_mode_to_str(recipe_mode),
+            gbx_profile_matched ? "gbx" :
+                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"),
+            (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
+            burner_nor_cmdset_name(probe_cmdset),
             gba_cmd_mode,
             gba_cmd_data_lane,
             gba_id_looks_like_rom_header ? "true" : "false",
@@ -716,6 +936,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
 {
     char mode_arg[16] = {0};
     char recipe_mode_arg[16] = {0};
+    char gbx_profile_arg[BURNER_GBX_PROFILE_NAME_LEN] = {0};
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_GBA;
     burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
     burner_nor_cmdset_t probe_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
@@ -736,7 +957,6 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     const char *gb_mapper = "unknown";
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
     bool gbx_profile_matched = false;
-    bool gbx_fallback_used = false;
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
     bool gba_likely_read_only = false;
@@ -756,6 +976,9 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     }
     if (!burner_get_query_arg(req, "recipe_mode", recipe_mode_arg, sizeof(recipe_mode_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid recipe_mode query");
+    }
+    if (!burner_get_query_arg(req, "gbx_profile", gbx_profile_arg, sizeof(gbx_profile_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid gbx_profile query");
     }
     if (mode_arg[0] == '\0') {
         mode_arg[0] = 'g';
@@ -792,14 +1015,25 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
         err = burner_bacon_mbc5_prepare_power();
         if (err == ESP_OK) {
             if (recipe_mode == BURNER_RECIPE_MODE_GBX) {
-                err = burner_gbc_gbx_probe_locked(
-                    mbc5_id,
-                    NULL,
-                    &device_size,
-                    &sector_size,
-                    &buffer_write_bytes,
-                    &cfi_ok,
-                    &mbc5_cmdset);
+                if (gbx_profile_arg[0] != '\0') {
+                    err = burner_gbc_gbx_prepare_manual_profile(
+                        gbx_profile_arg,
+                        mbc5_id,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok,
+                        &mbc5_cmdset);
+                } else {
+                    err = burner_gbc_gbx_probe_locked(
+                        mbc5_id,
+                        NULL,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok,
+                        &mbc5_cmdset);
+                }
                 gbx_profile_matched = (err == ESP_OK);
             } else {
                 err = burner_bacon_mbc5_prepare_probe_info_locked(
@@ -817,13 +1051,23 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
         err = burner_bacon_gba_prepare_power();
         if (err == ESP_OK) {
             if (recipe_mode == BURNER_RECIPE_MODE_GBX) {
-                err = burner_gba_gbx_probe_locked(
-                    gba_id,
-                    NULL,
-                    &device_size,
-                    &sector_size,
-                    &buffer_write_bytes,
-                    &cfi_ok);
+                if (gbx_profile_arg[0] != '\0') {
+                    err = burner_gba_gbx_prepare_manual_profile(
+                        gbx_profile_arg,
+                        gba_id,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok);
+                } else {
+                    err = burner_gba_gbx_probe_locked(
+                        gba_id,
+                        NULL,
+                        &device_size,
+                        &sector_size,
+                        &buffer_write_bytes,
+                        &cfi_ok);
+                }
                 gbx_profile_matched = (err == ESP_OK);
             } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
                 err = burner_chislink_gba_probe_locked(
@@ -886,7 +1130,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             false,
             false,
             chip_name,
-            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : gb_mapper));
+            gbx_profile_matched ? "GBX" : gb_mapper);
         burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
         burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
         n = snprintf(
@@ -908,13 +1152,13 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             "\"id\":\"%s\",\"chip\":\"%s\",\"recipe_mode\":\"%s\",\"probe_source\":\"%s\","
             "\"nor_family\":\"%s\",\"nor_cmdset\":\"%s\","
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u}",
-            gbx_profile_matched ? "GBX" : (gbx_fallback_used ? "CHIS" : gb_mapper),
+            gbx_profile_matched ? "GBX" : gb_mapper,
             (s_mbc5_power_5v_enabled != 0u) ? "true" : "false",
             (s_mbc5_power_5v_enabled != 0u) ? "false" : "true",
             id_hex,
             chip_name,
             burner_recipe_mode_to_str(recipe_mode),
-            gbx_profile_matched ? "gbx" : (gbx_fallback_used ? "chis_fallback" : "chis"),
+            gbx_profile_matched ? "gbx" : "chis",
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),
             cfi_ok ? "true" : "false",
@@ -956,8 +1200,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_d0d1_swapped,
             chip_name,
             gbx_profile_matched ? "GBX" :
-                                  (gbx_fallback_used ? "CHIS" :
-                                                       ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : "")));
+                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
         {
             esp_err_t analysis_err = burner_probe_gba_rom_analysis(
                 save_probe_device_size,
@@ -1010,8 +1253,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_chip_label,
             burner_recipe_mode_to_str(recipe_mode),
             gbx_profile_matched ? "gbx" :
-                                  (gbx_fallback_used ? "chis_fallback" :
-                                                       ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis")),
+                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"),
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),
             gba_cmd_mode,
@@ -1242,5 +1484,59 @@ esp_err_t burner_gbx_cache_rebuild_handler(httpd_req_t *req)
     }
 
     return burner_send_json(req, resp);
+}
+
+esp_err_t burner_gbx_profiles_handler(httpd_req_t *req)
+{
+    char mode_arg[16] = {0};
+    burner_cart_mode_t cart_mode = BURNER_CART_MODE_GBA;
+    burner_http_gbx_profile_stream_ctx_t ctx = {
+        .req = req,
+        .cart_mode = BURNER_CART_MODE_GBA,
+        .first = true,
+    };
+    const char *type = "AGB";
+    esp_err_t err;
+    esp_err_t send_err;
+    char head[96];
+    int n;
+
+    if (!burner_get_query_arg(req, "mode", mode_arg, sizeof(mode_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid mode query");
+    }
+    if (mode_arg[0] != '\0' && !burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
+    }
+
+    ctx.cart_mode = cart_mode;
+    type = (cart_mode == BURNER_CART_MODE_GBA) ? "AGB" : "DMG";
+
+    n = snprintf(
+        head,
+        sizeof(head),
+        "{\"ok\":true,\"mode\":\"%s\",\"profiles\":[",
+        burner_http_cart_mode_name(cart_mode));
+    if (n <= 0 || n >= (int)sizeof(head)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    send_err = httpd_resp_sendstr_chunk(req, head);
+    if (send_err != ESP_OK) {
+        return send_err;
+    }
+
+    err = burner_gbx_visit_profiles_by_type(type, burner_http_gbx_profiles_visitor, &ctx);
+    if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+        (void)httpd_resp_sendstr_chunk(req, NULL);
+        return ESP_FAIL;
+    }
+
+    send_err = httpd_resp_sendstr_chunk(req, "]}");
+    if (send_err != ESP_OK) {
+        (void)httpd_resp_sendstr_chunk(req, NULL);
+        return send_err;
+    }
+    return httpd_resp_sendstr_chunk(req, NULL);
 }
 
