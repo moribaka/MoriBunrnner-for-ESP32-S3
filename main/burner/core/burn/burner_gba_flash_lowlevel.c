@@ -707,64 +707,6 @@ esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset,
     return ESP_OK;
 }
 
-#if 0
-/* Legacy GBA verify block reader kept only for reference. */
-static esp_err_t burner_bacon_gba_verify_read_block(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card)
-{
-    size_t copied = 0;
-    esp_err_t err;
-
-    if (out == NULL || len == 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    while (copied < len) {
-        err = burner_cancel_poll();
-        if (err != ESP_OK) {
-            return err;
-        }
-        uint32_t rom_addr = offset + (uint32_t)copied;
-        uint32_t bank = 0u;
-        uint32_t local_addr = rom_addr;
-        uint32_t bank_remain = UINT32_MAX - rom_addr;
-        size_t remain = len - copied;
-        size_t chunk;
-        size_t read_words;
-
-        burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &local_addr, &bank_remain);
-        chunk = (remain < bank_remain) ? remain : bank_remain;
-
-        if (is_multi_card) {
-            err = burner_gba_switch_bank_if_needed(bank);
-            if (err != ESP_OK) {
-                return err;
-            }
-        }
-
-        read_words = chunk / 2u;
-        if (read_words > 0u) {
-            err = burner_bacon_rom_verify_read_u16_batched(local_addr >> 1, out + copied, read_words);
-            if (err != ESP_OK) {
-                return err;
-            }
-        }
-
-        if ((chunk & 0x1u) != 0u) {
-            uint16_t word = 0;
-            err = burner_bacon_rom_read_u16((local_addr + (uint32_t)(read_words * 2u)) >> 1, &word);
-            if (err != ESP_OK) {
-                return err;
-            }
-            out[copied + read_words * 2u] = (uint8_t)(word & 0xFFu);
-        }
-
-        copied += chunk;
-    }
-
-    return ESP_OK;
-}
-#endif
-
 esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card)
 {
     size_t copied = 0;

@@ -106,6 +106,7 @@
 #define WEB_HTTPD_TASK_PRIORITY 4
 #define WEB_ROOT_DIR_REL ".web"
 #define WEB_MAIN_FILE_REL ".web/main.html"
+#define WEB_BUILTIN_MAIN_FILE_REL "main.html"
 #define WEB_FILE_PATH_LEN_MAX 320
 #define WEB_MAIN_UPLOAD_MAX_SIZE (512 * 1024)
 #define WEB_FILE_UPLOAD_MAX_SIZE (1024 * 1024)
@@ -539,6 +540,7 @@ typedef struct {
     char rom_name[BURNER_FILE_NAME_LEN];
     char rom_path[BURNER_FILE_PATH_LEN];
     char message[96];
+    bool chip_erase_ui_active;
     bool erase_phase_planned;
     bool erase_phase_active;
     bool cancel_requested;
@@ -950,6 +952,7 @@ void burner_status_set_gba_sram_patch_probe(
     bool scanned,
     bool detected);
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal);
+void burner_status_set_chip_erase_ui_active(bool active);
 void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size);
 void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size);
 void burner_status_advance_erase_phase(uint32_t sectors_done, uint32_t bytes_done);

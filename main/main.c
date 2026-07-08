@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +28,9 @@
 #include "ip5306.h"
 #include "lvgl_port.h"
 #include "mcu_debug.h"
+#include "music_player.h"
+#include "lcd_display.h"
+#include "mori_system_settings.h"
 #include "mori_i2c.h"
 #include "nvs_flash.h"
 #include "pin_map.h"
@@ -45,6 +49,9 @@
 #define WEB_START_TASK_CORE_ID 0
 #define MORI_I2C_BOOT_FREQ_HZ 100000U
 #define MORI_TCA9555_BOOT_INPUT_CFG 0xFFFFU
+#define MORI_TCA9555_AMP_SD_MASK TCA9555_IO1_4
+#define MORI_TCA9555_BOARD_OUTPUT_DEFAULT MORI_TCA9555_AMP_SD_MASK
+#define MORI_TCA9555_BOARD_CONFIG_DEFAULT ((uint16_t)(MORI_TCA9555_BOOT_INPUT_CFG & ~MORI_TCA9555_AMP_SD_MASK))
 #define MORI_TCA9555_IRQ_DEBOUNCE_MS 25U
 #define MORI_TCA9555_IRQ_LOG_RELEASE 0
 #define MORI_BOOT_KEY_TASK_STACK_SIZE 2048
@@ -57,7 +64,10 @@
 #define MORI_IDLE_MONITOR_TASK_PRIORITY 2
 #define MORI_IDLE_MONITOR_TASK_CORE_ID 0
 #define MORI_IDLE_MONITOR_POLL_MS 500U
-#define MORI_WIFI_IDLE_OFF_MS (60U * 1000U)
+#define MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN 0U
+#define MORI_SCREEN_IDLE_OFF_DEFAULT_MIN 1U
+#define MORI_WIFI_IDLE_OFF_DEFAULT_MIN 1U
+#define MORI_POWER_IDLE_TIMEOUT_MAX_MIN 1440U
 #define MORI_WIFI_RECONNECT_TASK_STACK_SIZE 4096
 #define MORI_WIFI_RECONNECT_TASK_PRIORITY 3
 #define MORI_WIFI_RECONNECT_TASK_CORE_ID 0
@@ -71,6 +81,7 @@
 #define MORI_WIFI_IMPORT_TXT_PATH MORI_SETTING_DIR_PATH "/wifi.txt"
 #define MORI_WIFI_SSID_BUF_LEN 33
 #define MORI_WIFI_PASS_BUF_LEN 65
+#define MORI_LANGUAGE_INI_NAME_MAX 64
 #define MORI_WIFI_CONNECT_CHECK_MS 200
 #define MORI_INI_LINE_MAX 192
 #define MORI_LOCAL_TZ "CST-8"
@@ -78,6 +89,8 @@
 #define MORI_NTP_DEFAULT_SERVER "ntp.aliyun.com"
 #define MORI_NTP_LEGACY_DEFAULT_SERVER "pool.ntp.org"
 #define MORI_NTP_SYNC_INTERVAL_MS (6U * 60U * 60U * 1000U)
+#define MORI_SYSTEM_BRIGHTNESS_DEFAULT 128U
+#define MORI_SYSTEM_VOLUME_DEFAULT 60U
 #define MORI_IP5306_FIXED_CHARGE_CURRENT_MA 450U
 #define MORI_IP5306_FIXED_CHG_DIG_BITS 0x04U
 
@@ -85,18 +98,98 @@ static volatile bool s_web_started = false;
 static volatile bool s_web_starting = false;
 static volatile bool s_wifi_idle_suspended = false;
 static volatile bool s_wifi_reconnect_running = false;
+static volatile uint16_t s_screen_idle_off_minutes = MORI_SCREEN_IDLE_OFF_DEFAULT_MIN;
+static volatile uint16_t s_wifi_idle_off_minutes = MORI_WIFI_IDLE_OFF_DEFAULT_MIN;
+static volatile uint32_t s_last_wifi_activity_ms = 0;
 static char s_ntp_active_server[MORI_NTP_SERVER_MAX] = "";
 static bool s_ntp_active = false;
 static TaskHandle_t s_boot_key_task = NULL;
 static TaskHandle_t s_idle_monitor_task = NULL;
 
 static void wifi_reconnect_task(void *arg);
+static void configure_runtime_log_levels(void);
+static void mark_wifi_activity(void);
+static void mori_load_power_idle_settings_from_system_ini(uint16_t *screen_minutes_out, uint16_t *wifi_minutes_out);
+static bool mori_parse_u32_text(const char *text, uint32_t *out);
+static uint8_t mori_clamp_ui_language_value(uint8_t language);
+static uint8_t mori_clamp_audio_volume(uint8_t volume_percent);
+static void mori_load_av_settings_from_system_ini(
+    uint8_t *brightness_out,
+    bool *brightness_found_out,
+    uint8_t *volume_out,
+    bool *volume_found_out);
+static esp_err_t mori_save_system_ini_fields(
+    const char *language_ini,
+    bool update_language_ini,
+    uint8_t ui_language,
+    bool update_ui_language,
+    uint16_t screen_minutes,
+    bool update_screen_minutes,
+    uint16_t wifi_minutes,
+    bool update_wifi_minutes,
+    uint8_t brightness,
+    bool update_brightness,
+    uint8_t volume_percent,
+    bool update_volume);
 
 static void mori_apply_timezone(void)
 {
     setenv("TZ", MORI_LOCAL_TZ, 1);
     tzset();
     ESP_LOGI("main", "timezone configured: %s", MORI_LOCAL_TZ);
+}
+
+static void configure_runtime_log_levels(void)
+{
+    esp_log_level_set("wifi", ESP_LOG_WARN);
+    esp_log_level_set("wifi_init", ESP_LOG_WARN);
+    esp_log_level_set("esp_netif_handlers", ESP_LOG_WARN);
+    esp_log_level_set("ESP_ES_PARSER", ESP_LOG_WARN);
+}
+
+static uint16_t mori_clamp_power_idle_minutes(uint16_t minutes)
+{
+    return (minutes > MORI_POWER_IDLE_TIMEOUT_MAX_MIN) ? MORI_POWER_IDLE_TIMEOUT_MAX_MIN : minutes;
+}
+
+bool mori_wifi_idle_disconnect_enabled(void)
+{
+    return s_wifi_idle_off_minutes != MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN;
+}
+
+void mori_set_wifi_idle_disconnect_enabled(bool enabled)
+{
+    mori_set_wifi_idle_off_minutes(enabled ? MORI_WIFI_IDLE_OFF_DEFAULT_MIN : MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN);
+}
+
+uint16_t mori_screen_idle_off_minutes(void)
+{
+    return s_screen_idle_off_minutes;
+}
+
+void mori_set_screen_idle_off_minutes(uint16_t minutes)
+{
+    minutes = mori_clamp_power_idle_minutes(minutes);
+    s_screen_idle_off_minutes = minutes;
+    lvgl_port_set_idle_dim_timeout_minutes(minutes);
+    if (minutes == MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN) {
+        lvgl_port_mark_activity();
+    }
+}
+
+uint16_t mori_wifi_idle_off_minutes(void)
+{
+    return s_wifi_idle_off_minutes;
+}
+
+void mori_set_wifi_idle_off_minutes(uint16_t minutes)
+{
+    minutes = mori_clamp_power_idle_minutes(minutes);
+    s_wifi_idle_off_minutes = minutes;
+    if (minutes == MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN) {
+        s_wifi_idle_suspended = false;
+        mark_wifi_activity();
+    }
 }
 
 static const char *main_reset_reason_str(esp_reset_reason_t reason)
@@ -145,16 +238,21 @@ static const char s_default_system_ini[] =
     "language_ini=lang_zh_cn.ini\n"
     "ui_language=1\n"
     "ntp_enable=1\n"
+    "screen_idle_off_minutes=1\n"
+    "wifi_idle_off_minutes=1\n"
+    "wifi_idle_disconnect=1\n"
+    "brightness=128\n"
+    "volume=60\n"
     "ntp_server=" MORI_NTP_DEFAULT_SERVER "\n";
 
 static const char s_default_lang_zh_ini[] =
     "# MORI Chinese language preset\n"
     "page_title=MORI 基础设置\n"
     "page_header=MORI 基础设置（固件内置）\n"
-    "page_tip=此页面不依赖 TF 业务网页，始终可用于调试和恢复。\n"
-    "business_title=业务网页（TF）\n"
+    "page_tip=此页面不依赖 TF，始终可用于调试和恢复。\n"
+    "business_title=主网页（内置）\n"
     "btn_open_business=打开业务网页\n"
-    "business_tip=业务页面来源：/sdcard/.web/main.html\n"
+    "business_tip=默认使用固件内置 /assets/main.html；TF 卡 /sdcard/.web/main.html 可覆盖。\n"
     "recovery_title=业务网页恢复\n"
     "recovery_tip=可一次上传多个文件到 /sdcard/.web/，用于救砖恢复（main.html/app.js/styles.css 等）。\n"
     "btn_upload_main=上传到 .web\n"
@@ -216,10 +314,10 @@ static const char s_default_lang_en_ini[] =
     "# MORI English language preset\n"
     "page_title=MORI Base Settings\n"
     "page_header=MORI Base Settings (Firmware Built-in)\n"
-    "page_tip=This page does not depend on TF business web and is always available for debug/recovery.\n"
-    "business_title=Business Web (TF)\n"
+    "page_tip=This page does not depend on TF and is always available for debug/recovery.\n"
+    "business_title=Business Web (Built-in)\n"
     "btn_open_business=Open Business Web\n"
-    "business_tip=Business page source: /sdcard/.web/main.html\n"
+    "business_tip=Default source is built-in /assets/main.html; /sdcard/.web/main.html can override it.\n"
     "recovery_title=Business Web Recovery\n"
     "recovery_tip=Upload one or more files to /sdcard/.web/ for recovery (main.html/app.js/styles.css, etc.).\n"
     "btn_upload_main=Upload to .web\n"
@@ -313,9 +411,10 @@ static const char s_default_tca9555_ini[] =
     "# TCA9555 register config\n"
     "# apply=1 to enable writing registers on boot.\n"
     "apply=0\n"
-    "# output=0x0000    ; OUTPUT_PORT1:PORT0\n"
+    "# board default: P1_4=AMP_SD# output high, others input.\n"
+    "# output=0x1000    ; OUTPUT_PORT1:PORT0\n"
     "# polarity=0x0000  ; POLARITY_PORT1:PORT0\n"
-    "# config=0xFFFF    ; CONFIG_PORT1:PORT0 (1=input,0=output)\n";
+    "# config=0xEFFF    ; CONFIG_PORT1:PORT0 (1=input,0=output)\n";
 
 static const char s_default_burn_config_ini[] =
     "# MORI burn config\n"
@@ -449,10 +548,10 @@ static const mori_ini_kv_line_t s_lang_common_upgrade_items[] = {
 static const mori_ini_kv_line_t s_lang_zh_core_upgrade_items[] = {
     {"page_title", "page_title=MORI 基础设置\n"},
     {"page_header", "page_header=MORI 基础设置（固件内置）\n"},
-    {"page_tip", "page_tip=此页面不依赖 TF 业务网页，始终可用于调试和恢复。\n"},
-    {"business_title", "business_title=业务网页（TF）\n"},
+    {"page_tip", "page_tip=此页面不依赖 TF，始终可用于调试和恢复。\n"},
+    {"business_title", "business_title=主网页（内置）\n"},
     {"btn_open_business", "btn_open_business=打开业务网页\n"},
-    {"business_tip", "business_tip=业务页面来源：/sdcard/.web/main.html\n"},
+    {"business_tip", "business_tip=默认使用固件内置 /assets/main.html；TF 卡 /sdcard/.web/main.html 可覆盖。\n"},
     {"recovery_title", "recovery_title=业务网页恢复\n"},
     {
         "recovery_tip",
@@ -505,6 +604,9 @@ static const mori_ini_kv_line_t s_lang_zh_core_upgrade_items[] = {
 static const mori_ini_kv_line_t s_system_upgrade_items[] = {
     {"ui_language", "ui_language=1\n"},
     {"ntp_enable", "ntp_enable=1\n"},
+    {"screen_idle_off_minutes", "screen_idle_off_minutes=1\n"},
+    {"brightness", "brightness=128\n"},
+    {"volume", "volume=60\n"},
     {"ntp_server", "ntp_server=" MORI_NTP_DEFAULT_SERVER "\n"},
 };
 
@@ -1131,6 +1233,41 @@ static bool mori_parse_u16_text(const char *text, uint16_t *out)
     return true;
 }
 
+static bool mori_parse_u32_text(const char *text, uint32_t *out)
+{
+    unsigned long val;
+    char *end = NULL;
+
+    if (text == NULL || out == NULL) {
+        return false;
+    }
+
+    errno = 0;
+    val = strtoul(text, &end, 0);
+    if (errno != 0 || end == text || val > UINT32_MAX) {
+        return false;
+    }
+    while (*end != '\0' && isspace((unsigned char)*end)) {
+        end++;
+    }
+    if (*end != '\0') {
+        return false;
+    }
+
+    *out = (uint32_t)val;
+    return true;
+}
+
+static uint8_t mori_clamp_ui_language_value(uint8_t language)
+{
+    return (language == UI_LANGUAGE_EN) ? UI_LANGUAGE_EN : UI_LANGUAGE_ZH;
+}
+
+static uint8_t mori_clamp_audio_volume(uint8_t volume_percent)
+{
+    return (volume_percent > 100U) ? 100U : volume_percent;
+}
+
 typedef struct {
     bool enable;
     char server[MORI_NTP_SERVER_MAX];
@@ -1582,7 +1719,27 @@ static void mori_upgrade_lang_ini_file(
     }
 }
 
-static uint8_t mori_load_ui_language_from_system_ini(bool *found_out)
+static void mori_upgrade_system_power_idle_settings(void)
+{
+    uint16_t screen_minutes = MORI_SCREEN_IDLE_OFF_DEFAULT_MIN;
+    uint16_t wifi_minutes = MORI_WIFI_IDLE_OFF_DEFAULT_MIN;
+
+    if (card == NULL) {
+        return;
+    }
+
+    mori_load_power_idle_settings_from_system_ini(&screen_minutes, &wifi_minutes);
+    if (!mori_ini_key_exists(MORI_SYSTEM_INI_PATH, "screen_idle_off_minutes") ||
+        !mori_ini_key_exists(MORI_SYSTEM_INI_PATH, "wifi_idle_off_minutes") ||
+        !mori_ini_key_exists(MORI_SYSTEM_INI_PATH, "wifi_idle_disconnect")) {
+        esp_err_t err = mori_save_power_idle_settings_to_system_ini(screen_minutes, wifi_minutes);
+        if (err != ESP_OK) {
+            ESP_LOGW("main", "upgrade power idle settings failed: %s", esp_err_to_name(err));
+        }
+    }
+}
+
+uint8_t mori_load_ui_language_from_system_ini(bool *found_out)
 {
     FILE *fp = NULL;
     char line[MORI_INI_LINE_MAX];
@@ -1637,11 +1794,496 @@ static uint8_t mori_load_ui_language_from_system_ini(bool *found_out)
     return language;
 }
 
+static void mori_load_power_idle_settings_from_system_ini(uint16_t *screen_minutes_out, uint16_t *wifi_minutes_out)
+{
+    FILE *fp = NULL;
+    char line[MORI_INI_LINE_MAX];
+    uint16_t screen_minutes = MORI_SCREEN_IDLE_OFF_DEFAULT_MIN;
+    uint16_t wifi_minutes = MORI_WIFI_IDLE_OFF_DEFAULT_MIN;
+    bool found_wifi_minutes = false;
+    bool legacy_wifi_enabled = true;
+    bool found_legacy_wifi = false;
+
+    if (card == NULL) {
+        if (screen_minutes_out != NULL) {
+            *screen_minutes_out = screen_minutes;
+        }
+        if (wifi_minutes_out != NULL) {
+            *wifi_minutes_out = wifi_minutes;
+        }
+        return;
+    }
+
+    fp = fopen(MORI_SYSTEM_INI_PATH, "rb");
+    if (fp == NULL) {
+        if (screen_minutes_out != NULL) {
+            *screen_minutes_out = screen_minutes;
+        }
+        if (wifi_minutes_out != NULL) {
+            *wifi_minutes_out = wifi_minutes;
+        }
+        return;
+    }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        size_t len = strlen(line);
+        bool line_truncated = (len > 0 && len == sizeof(line) - 1 && line[len - 1] != '\n');
+        char *key = NULL;
+        char *value = NULL;
+
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[--len] = '\0';
+        }
+
+        if (mori_ini_split_line(line, &key, &value)) {
+            uint16_t parsed_minutes = 0;
+
+            if (strcmp(key, "screen_idle_off_minutes") == 0 && mori_parse_u16_text(value, &parsed_minutes)) {
+                screen_minutes = mori_clamp_power_idle_minutes(parsed_minutes);
+            } else if (strcmp(key, "wifi_idle_off_minutes") == 0 && mori_parse_u16_text(value, &parsed_minutes)) {
+                wifi_minutes = mori_clamp_power_idle_minutes(parsed_minutes);
+                found_wifi_minutes = true;
+            } else if (strcmp(key, "wifi_idle_disconnect") == 0) {
+                if (mori_parse_bool_text(value, &legacy_wifi_enabled)) {
+                    found_legacy_wifi = true;
+                }
+            }
+        }
+
+        if (line_truncated) {
+            int ch = 0;
+            while ((ch = fgetc(fp)) != EOF && ch != '\n') {
+            }
+        }
+    }
+
+    fclose(fp);
+
+    if (!found_wifi_minutes && found_legacy_wifi && !legacy_wifi_enabled) {
+        wifi_minutes = MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN;
+    }
+    if (screen_minutes_out != NULL) {
+        *screen_minutes_out = screen_minutes;
+    }
+    if (wifi_minutes_out != NULL) {
+        *wifi_minutes_out = wifi_minutes;
+    }
+}
+
+esp_err_t mori_save_power_idle_settings_to_system_ini(uint16_t screen_minutes, uint16_t wifi_minutes)
+{
+    return mori_save_system_ini_fields(
+        NULL,
+        false,
+        UI_LANGUAGE_DEFAULT,
+        false,
+        screen_minutes,
+        true,
+        wifi_minutes,
+        true,
+        MORI_SYSTEM_BRIGHTNESS_DEFAULT,
+        false,
+        MORI_SYSTEM_VOLUME_DEFAULT,
+        false);
+}
+
+static void mori_load_av_settings_from_system_ini(
+    uint8_t *brightness_out,
+    bool *brightness_found_out,
+    uint8_t *volume_out,
+    bool *volume_found_out)
+{
+    FILE *fp = NULL;
+    char line[MORI_INI_LINE_MAX];
+    uint8_t brightness = MORI_SYSTEM_BRIGHTNESS_DEFAULT;
+    uint8_t volume = MORI_SYSTEM_VOLUME_DEFAULT;
+    bool brightness_found = false;
+    bool volume_found = false;
+
+    if (card == NULL) {
+        goto done;
+    }
+
+    fp = fopen(MORI_SYSTEM_INI_PATH, "rb");
+    if (fp == NULL) {
+        goto done;
+    }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        size_t len = strlen(line);
+        bool line_truncated = (len > 0 && len == sizeof(line) - 1 && line[len - 1] != '\n');
+        char *key = NULL;
+        char *value = NULL;
+
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[--len] = '\0';
+        }
+
+        if (mori_ini_split_line(line, &key, &value)) {
+            uint32_t parsed = 0U;
+
+            if (strcmp(key, "brightness") == 0 && mori_parse_u32_text(value, &parsed)) {
+                brightness = (uint8_t)((parsed > 255U) ? 255U : parsed);
+                brightness_found = true;
+            } else if (strcmp(key, "volume") == 0 && mori_parse_u32_text(value, &parsed)) {
+                volume = mori_clamp_audio_volume((uint8_t)((parsed > 100U) ? 100U : parsed));
+                volume_found = true;
+            }
+        }
+
+        if (line_truncated) {
+            int ch = 0;
+            while ((ch = fgetc(fp)) != EOF && ch != '\n') {
+            }
+        }
+    }
+
+    fclose(fp);
+
+done:
+    if (brightness_out != NULL) {
+        *brightness_out = brightness;
+    }
+    if (brightness_found_out != NULL) {
+        *brightness_found_out = brightness_found;
+    }
+    if (volume_out != NULL) {
+        *volume_out = volume;
+    }
+    if (volume_found_out != NULL) {
+        *volume_found_out = volume_found;
+    }
+}
+
+uint8_t mori_load_display_brightness_from_system_ini(bool *found_out)
+{
+    uint8_t brightness = MORI_SYSTEM_BRIGHTNESS_DEFAULT;
+
+    mori_load_av_settings_from_system_ini(&brightness, found_out, NULL, NULL);
+    return brightness;
+}
+
+uint8_t mori_load_audio_volume_from_system_ini(bool *found_out)
+{
+    uint8_t volume = MORI_SYSTEM_VOLUME_DEFAULT;
+
+    mori_load_av_settings_from_system_ini(NULL, NULL, &volume, found_out);
+    return volume;
+}
+
+esp_err_t mori_save_av_settings_to_system_ini(uint8_t brightness, uint8_t volume_percent)
+{
+    return mori_save_system_ini_fields(
+        NULL,
+        false,
+        UI_LANGUAGE_DEFAULT,
+        false,
+        MORI_SCREEN_IDLE_OFF_DEFAULT_MIN,
+        false,
+        MORI_WIFI_IDLE_OFF_DEFAULT_MIN,
+        false,
+        brightness,
+        true,
+        volume_percent,
+        true);
+}
+
+esp_err_t mori_save_language_settings_to_system_ini(const char *language_ini, uint8_t ui_language)
+{
+    if (language_ini == NULL || language_ini[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return mori_save_system_ini_fields(
+        language_ini,
+        true,
+        mori_clamp_ui_language_value(ui_language),
+        true,
+        MORI_SCREEN_IDLE_OFF_DEFAULT_MIN,
+        false,
+        MORI_WIFI_IDLE_OFF_DEFAULT_MIN,
+        false,
+        MORI_SYSTEM_BRIGHTNESS_DEFAULT,
+        false,
+        MORI_SYSTEM_VOLUME_DEFAULT,
+        false);
+}
+
+static bool mori_system_ini_append_text(char *out, size_t out_cap, size_t *out_len, const char *text, size_t text_len)
+{
+    if (out == NULL || out_len == NULL || text == NULL || *out_len + text_len >= out_cap) {
+        return false;
+    }
+    memcpy(out + *out_len, text, text_len);
+    *out_len += text_len;
+    out[*out_len] = '\0';
+    return true;
+}
+
+static bool mori_system_ini_appendf(char *out, size_t out_cap, size_t *out_len, const char *fmt, ...)
+{
+    va_list args;
+    int n;
+
+    if (out == NULL || out_len == NULL || fmt == NULL || *out_len >= out_cap) {
+        return false;
+    }
+
+    va_start(args, fmt);
+    n = vsnprintf(out + *out_len, out_cap - *out_len, fmt, args);
+    va_end(args);
+    if (n <= 0 || (size_t)n >= out_cap - *out_len) {
+        return false;
+    }
+
+    *out_len += (size_t)n;
+    return true;
+}
+
+static esp_err_t mori_save_system_ini_fields(
+    const char *language_ini,
+    bool update_language_ini,
+    uint8_t ui_language,
+    bool update_ui_language,
+    uint16_t screen_minutes,
+    bool update_screen_minutes,
+    uint16_t wifi_minutes,
+    bool update_wifi_minutes,
+    uint8_t brightness,
+    bool update_brightness,
+    uint8_t volume_percent,
+    bool update_volume)
+{
+    char *file = NULL;
+    size_t file_len = 0U;
+    char *out = NULL;
+    size_t out_cap = 0U;
+    size_t out_len = 0U;
+    bool found_language_ini = false;
+    bool found_ui_language = false;
+    bool found_screen = false;
+    bool found_wifi = false;
+    bool found_legacy_wifi = false;
+    bool found_brightness = false;
+    bool found_volume = false;
+
+    screen_minutes = mori_clamp_power_idle_minutes(screen_minutes);
+    wifi_minutes = mori_clamp_power_idle_minutes(wifi_minutes);
+    ui_language = mori_clamp_ui_language_value(ui_language);
+    volume_percent = mori_clamp_audio_volume(volume_percent);
+
+    if (card == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!text_file_read_small(MORI_SYSTEM_INI_PATH, &file, &file_len)) {
+        char content[512] = {0};
+        mori_ntp_cfg_t ntp = {0};
+        uint8_t language = update_ui_language ? ui_language : mori_load_ui_language_from_system_ini(NULL);
+        const char *ini_name = update_language_ini ?
+            language_ini :
+            (language == UI_LANGUAGE_EN ? MORI_SYSTEM_LANGUAGE_EN_INI : MORI_SYSTEM_LANGUAGE_ZH_INI);
+        uint16_t current_screen = MORI_SCREEN_IDLE_OFF_DEFAULT_MIN;
+        uint16_t current_wifi = MORI_WIFI_IDLE_OFF_DEFAULT_MIN;
+        uint8_t current_brightness = MORI_SYSTEM_BRIGHTNESS_DEFAULT;
+        uint8_t current_volume = MORI_SYSTEM_VOLUME_DEFAULT;
+
+        mori_load_ntp_cfg_from_system_ini(&ntp);
+        if (!update_screen_minutes || !update_wifi_minutes) {
+            mori_load_power_idle_settings_from_system_ini(&current_screen, &current_wifi);
+        }
+        if (!update_brightness || !update_volume) {
+            mori_load_av_settings_from_system_ini(&current_brightness, NULL, &current_volume, NULL);
+        }
+        snprintf(
+            content,
+            sizeof(content),
+            "# MORI system settings\n"
+            "language_version=1\n"
+            "language_ini=%s\n"
+            "ui_language=%u\n"
+            "ntp_enable=%u\n"
+            "screen_idle_off_minutes=%u\n"
+            "wifi_idle_off_minutes=%u\n"
+            "wifi_idle_disconnect=%u\n"
+            "brightness=%u\n"
+            "volume=%u\n"
+            "ntp_server=%s\n",
+            ini_name,
+            (unsigned)language,
+            ntp.enable ? 1U : 0U,
+            (unsigned)(update_screen_minutes ? screen_minutes : current_screen),
+            (unsigned)(update_wifi_minutes ? wifi_minutes : current_wifi),
+            (update_wifi_minutes ? wifi_minutes : current_wifi) != MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN ? 1U : 0U,
+            (unsigned)(update_brightness ? brightness : current_brightness),
+            (unsigned)(update_volume ? volume_percent : current_volume),
+            ntp.server);
+        return write_text_file_force(MORI_SYSTEM_INI_PATH, content);
+    }
+
+    out_cap = file_len + 512U;
+    out = (char *)calloc(1, out_cap);
+    if (out == NULL) {
+        free(file);
+        return ESP_ERR_NO_MEM;
+    }
+
+    for (size_t pos = 0; pos < file_len;) {
+        size_t line_start = pos;
+        size_t line_len = 0U;
+        size_t copy_len = 0U;
+        bool has_newline = false;
+        char line[MORI_INI_LINE_MAX];
+        char *key = NULL;
+        char *value = NULL;
+
+        while (pos < file_len && file[pos] != '\n') {
+            pos++;
+        }
+        line_len = pos - line_start;
+        if (pos < file_len && file[pos] == '\n') {
+            has_newline = true;
+            pos++;
+        }
+
+        copy_len = line_len;
+        while (copy_len > 0U && file[line_start + copy_len - 1U] == '\r') {
+            copy_len--;
+        }
+
+        if (copy_len < sizeof(line)) {
+            memcpy(line, file + line_start, copy_len);
+            line[copy_len] = '\0';
+            if (mori_ini_split_line(line, &key, &value)) {
+                bool handled = false;
+
+                (void)value;
+                if (update_language_ini && strcmp(key, "language_ini") == 0) {
+                    found_language_ini = true;
+                    handled = mori_system_ini_appendf(out, out_cap, &out_len, "language_ini=%s", language_ini);
+                } else if (update_ui_language && strcmp(key, "ui_language") == 0) {
+                    found_ui_language = true;
+                    handled = mori_system_ini_appendf(out, out_cap, &out_len, "ui_language=%u", (unsigned)ui_language);
+                } else if (update_screen_minutes && strcmp(key, "screen_idle_off_minutes") == 0) {
+                    found_screen = true;
+                    handled = mori_system_ini_appendf(out, out_cap, &out_len, "screen_idle_off_minutes=%u", (unsigned)screen_minutes);
+                } else if (update_wifi_minutes && strcmp(key, "wifi_idle_off_minutes") == 0) {
+                    found_wifi = true;
+                    handled = mori_system_ini_appendf(out, out_cap, &out_len, "wifi_idle_off_minutes=%u", (unsigned)wifi_minutes);
+                } else if (update_wifi_minutes && strcmp(key, "wifi_idle_disconnect") == 0) {
+                    found_legacy_wifi = true;
+                    handled = mori_system_ini_appendf(
+                        out,
+                        out_cap,
+                        &out_len,
+                        "wifi_idle_disconnect=%u",
+                        wifi_minutes != MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN ? 1U : 0U);
+                } else if (update_brightness && strcmp(key, "brightness") == 0) {
+                    found_brightness = true;
+                    handled = mori_system_ini_appendf(out, out_cap, &out_len, "brightness=%u", (unsigned)brightness);
+                } else if (update_volume && strcmp(key, "volume") == 0) {
+                    found_volume = true;
+                    handled = mori_system_ini_appendf(out, out_cap, &out_len, "volume=%u", (unsigned)volume_percent);
+                }
+                if (handled) {
+                    if (line_len > copy_len) {
+                        if (!mori_system_ini_append_text(out, out_cap, &out_len, "\r", 1U)) {
+                            free(out);
+                            free(file);
+                            return ESP_FAIL;
+                        }
+                    }
+                    if (has_newline &&
+                        !mori_system_ini_append_text(out, out_cap, &out_len, "\n", 1U)) {
+                        free(out);
+                        free(file);
+                        return ESP_FAIL;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        if (!mori_system_ini_append_text(out, out_cap, &out_len, file + line_start, line_len) ||
+            (has_newline && !mori_system_ini_append_text(out, out_cap, &out_len, "\n", 1U))) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+    }
+
+    if ((update_language_ini && !found_language_ini) ||
+        (update_ui_language && !found_ui_language) ||
+        (update_screen_minutes && !found_screen) ||
+        (update_wifi_minutes && (!found_wifi || !found_legacy_wifi)) ||
+        (update_brightness && !found_brightness) ||
+        (update_volume && !found_volume)) {
+        if (out_len > 0U && out[out_len - 1U] != '\n') {
+            if (!mori_system_ini_append_text(out, out_cap, &out_len, "\n", 1U)) {
+                free(out);
+                free(file);
+                return ESP_FAIL;
+            }
+        }
+        if (update_language_ini && !found_language_ini &&
+            !mori_system_ini_appendf(out, out_cap, &out_len, "language_ini=%s\n", language_ini)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+        if (update_ui_language && !found_ui_language &&
+            !mori_system_ini_appendf(out, out_cap, &out_len, "ui_language=%u\n", (unsigned)ui_language)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+        if (update_screen_minutes && !found_screen &&
+            !mori_system_ini_appendf(out, out_cap, &out_len, "screen_idle_off_minutes=%u\n", (unsigned)screen_minutes)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+        if (update_wifi_minutes && !found_wifi &&
+            !mori_system_ini_appendf(out, out_cap, &out_len, "wifi_idle_off_minutes=%u\n", (unsigned)wifi_minutes)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+        if (update_wifi_minutes && !found_legacy_wifi &&
+            !mori_system_ini_appendf(
+                out,
+                out_cap,
+                &out_len,
+                "wifi_idle_disconnect=%u\n",
+                wifi_minutes != MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN ? 1U : 0U)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+        if (update_brightness && !found_brightness &&
+            !mori_system_ini_appendf(out, out_cap, &out_len, "brightness=%u\n", (unsigned)brightness)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+        if (update_volume && !found_volume &&
+            !mori_system_ini_appendf(out, out_cap, &out_len, "volume=%u\n", (unsigned)volume_percent)) {
+            free(out);
+            free(file);
+            return ESP_FAIL;
+        }
+    }
+
+    out[out_len] = '\0';
+    free(file);
+    {
+        esp_err_t err = write_text_file_force(MORI_SYSTEM_INI_PATH, out);
+        free(out);
+        return err;
+    }
+}
+
 static void mori_sync_system_language_ini_with_ui_default(void)
 {
     uint8_t language = mori_load_ui_language_from_system_ini(NULL);
-    mori_ntp_cfg_t ntp = {0};
-    char content[256] = {0};
 
     if (card == NULL || language != UI_LANGUAGE_ZH) {
         return;
@@ -1653,14 +2295,7 @@ static void mori_sync_system_language_ini_with_ui_default(void)
         return;
     }
 
-    mori_load_ntp_cfg_from_system_ini(&ntp);
-    snprintf(
-        content,
-        sizeof(content),
-        "# MORI system settings\nlanguage_version=1\nlanguage_ini=lang_zh_cn.ini\nui_language=1\nntp_enable=%u\nntp_server=%s\n",
-        ntp.enable ? 1U : 0U,
-        ntp.server);
-    if (write_text_file_force(MORI_SYSTEM_INI_PATH, content) == ESP_OK) {
+    if (mori_save_language_settings_to_system_ini(MORI_SYSTEM_LANGUAGE_ZH_INI, UI_LANGUAGE_ZH) == ESP_OK) {
         ESP_LOGI("main", "system language default migrated to zh");
     }
 }
@@ -2274,6 +2909,7 @@ static void ensure_setting_files(void)
         MORI_SYSTEM_INI_PATH,
         s_system_upgrade_items,
         sizeof(s_system_upgrade_items) / sizeof(s_system_upgrade_items[0]));
+    mori_upgrade_system_power_idle_settings();
     mori_sync_system_language_ini_with_ui_default();
     mori_fix_empty_ntp_server_for_ui_language();
 
@@ -2352,15 +2988,15 @@ static const char *tca9555_pin_name(uint16_t pin_mask)
         case TCA9555_IO0_7:
             return "BTN_A";
         case TCA9555_IO1_0:
-            return "BTN_VOL_UP";
+            return "BTN_JOY";
         case TCA9555_IO1_1:
-            return "BTN_MENU";
+            return "BTN_VOL_UP";
         case TCA9555_IO1_2:
-            return "BTN_VOL_DOWN";
+            return "BTN_MENU";
         case TCA9555_IO1_3:
-            return "IO1_3";
+            return "BTN_VOL_DOWN";
         case TCA9555_IO1_4:
-            return "IO1_4";
+            return "AMP_SD#";
         case TCA9555_IO1_5:
             return "IO1_5";
         case TCA9555_IO1_6:
@@ -2386,6 +3022,7 @@ static bool tca9555_is_known_button(uint16_t pin_mask)
         case TCA9555_IO1_0:
         case TCA9555_IO1_1:
         case TCA9555_IO1_2:
+        case TCA9555_IO1_3:
             return true;
         default:
             return false;
@@ -2422,12 +3059,15 @@ static bool tca9555_button_to_ui_button(uint16_t pin_mask, ui_button_t *button)
             *button = UI_BUTTON_BACK;
             return true;
         case TCA9555_IO1_0:
-            *button = UI_BUTTON_VOL_UP;
+            *button = UI_BUTTON_PANEL_TOGGLE;
             return true;
         case TCA9555_IO1_1:
-            *button = UI_BUTTON_MENU;
+            *button = UI_BUTTON_VOL_UP;
             return true;
         case TCA9555_IO1_2:
+            *button = UI_BUTTON_MENU;
+            return true;
+        case TCA9555_IO1_3:
             *button = UI_BUTTON_VOL_DOWN;
             return true;
         default:
@@ -2628,18 +3268,21 @@ static void init_i2c_peripherals(void)
     }
 
     /*
-     * Follow moriesp32 sample behavior: ensure all 16 pins are inputs first,
-     * then allow ini overrides (if apply=1).
+     * Keep the button matrix as inputs by default, but drive AMP_SD# high so
+     * the audio amplifier is enabled unless tca9555.ini explicitly overrides it.
      */
     for (int i = 0; i < 3; i++) {
-        err = tca9555_write_config(MORI_TCA9555_BOOT_INPUT_CFG);
+        err = tca9555_write_outputs(MORI_TCA9555_BOARD_OUTPUT_DEFAULT);
+        if (err == ESP_OK) {
+            err = tca9555_write_config(MORI_TCA9555_BOARD_CONFIG_DEFAULT);
+        }
         if (err == ESP_OK) {
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(150));
     }
     if (err != ESP_OK) {
-        ESP_LOGW("main", "TCA9555 default input config failed: %s", esp_err_to_name(err));
+        ESP_LOGW("main", "TCA9555 board default config failed: %s", esp_err_to_name(err));
     }
 
     apply_tca9555_ini_if_present();
@@ -2714,22 +3357,52 @@ static void stop_web_service_if_running(void)
     }
 }
 
+static uint32_t newer_activity_timestamp_ms(uint32_t a, uint32_t b)
+{
+    if (a == 0U) {
+        return b;
+    }
+    if (b == 0U) {
+        return a;
+    }
+    return ((int32_t)(a - b) >= 0) ? a : b;
+}
+
+static void mark_wifi_activity(void)
+{
+    uint32_t now_ms = newer_activity_timestamp_ms(
+        ui_get_last_activity_ms(),
+        ui_get_last_network_activity_ms());
+
+    if (now_ms == 0U) {
+        now_ms = esp_log_timestamp();
+    }
+    s_last_wifi_activity_ms = now_ms;
+}
+
 static void idle_monitor_task(void *arg)
 {
     (void)arg;
 
     for (;;) {
-        uint32_t last_activity_ms = ui_get_last_activity_ms();
+        uint32_t last_activity_ms = newer_activity_timestamp_ms(
+            s_last_wifi_activity_ms,
+            newer_activity_timestamp_ms(ui_get_last_activity_ms(), ui_get_last_network_activity_ms()));
         uint32_t now_ms = esp_log_timestamp();
+        uint16_t wifi_idle_minutes = s_wifi_idle_off_minutes;
+        uint32_t wifi_idle_off_ms = (uint32_t)wifi_idle_minutes * 60U * 1000U;
 
+        s_last_wifi_activity_ms = last_activity_ms;
         if (last_activity_ms != 0U &&
             !burner_task_is_running_snapshot() &&
+            wifi_idle_minutes != MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN &&
             !s_wifi_idle_suspended &&
-            (now_ms - last_activity_ms) >= MORI_WIFI_IDLE_OFF_MS) {
+            !s_wifi_reconnect_running &&
+            (now_ms - last_activity_ms) >= wifi_idle_off_ms) {
             stop_web_service_if_running();
             wifi_maneger_disconnect();
             s_wifi_idle_suspended = true;
-            ESP_LOGI("main", "idle timeout reached, Wi-Fi disconnected");
+            ESP_LOGD("main", "Wi-Fi idle timeout %u min reached, disconnected", (unsigned)wifi_idle_minutes);
         }
 
         vTaskDelay(pdMS_TO_TICKS(MORI_IDLE_MONITOR_POLL_MS));
@@ -2789,8 +3462,9 @@ static void wifi_reconnect_task(void *arg)
     (void)arg;
 
     ui_set_status_text("connecting saved wifi");
-    s_wifi_idle_suspended = false;
     wifi_maneger_connect_saved(STA_CONNECT_TIMEOUT_MS);
+    s_wifi_idle_suspended = false;
+    mark_wifi_activity();
     s_wifi_reconnect_running = false;
     vTaskDelete(NULL);
 }
@@ -2820,6 +3494,7 @@ static void wifi_state_handler(WIFI_STATE state)
             ui_set_status_text("wifi connected");
         }
         s_wifi_idle_suspended = false;
+        mark_wifi_activity();
         ESP_LOGI(wifi_manager_tag, "Wi-Fi connected");
         mori_apply_ntp_service();
         trigger_web_start_async();
@@ -2836,6 +3511,7 @@ static void wifi_state_handler(WIFI_STATE state)
             ui_set_status_text("wifi connected");
         }
         s_wifi_idle_suspended = false;
+        mark_wifi_activity();
         ESP_LOGI(wifi_manager_tag, "Provisioning connected, waiting user confirm");
         mori_apply_ntp_service();
     } else if (state == WIFI_STATE_DISCONNECTED) {
@@ -2849,6 +3525,7 @@ static void wifi_state_handler(WIFI_STATE state)
         ui_set_ip_text("192.168.4.1");
         ui_set_status_text("wifi provisioning mode");
         s_wifi_idle_suspended = false;
+        mark_wifi_activity();
         ESP_LOGI(wifi_manager_tag, "Provision AP enabled");
     }
 }
@@ -2887,6 +3564,7 @@ static void mount_sdcard_if_possible(void)
     }
     ESP_LOGI("main", "GBX cache auto rebuild disabled; update manually from system menu");
     mori_apply_ui_language_from_system_ini();
+    (void)music_player_set_volume(mori_load_audio_volume_from_system_ini(NULL));
 }
 
 static void init_nvs_storage(void)
@@ -2910,6 +3588,7 @@ void app_main(void)
     esp_reset_reason_t reset_reason = esp_reset_reason();
 
     ESP_LOGI("main", "boot start, reset_reason=%s (%d)", main_reset_reason_str(reset_reason), (int)reset_reason);
+    configure_runtime_log_levels();
     (void)power_manager_cpu_freq_init();
     mori_apply_timezone();
 
@@ -2925,6 +3604,14 @@ void app_main(void)
 
     ESP_LOGI("main", "boot step: mount sdcard");
     mount_sdcard_if_possible();
+    {
+        uint16_t screen_minutes = MORI_SCREEN_IDLE_OFF_DEFAULT_MIN;
+        uint16_t wifi_minutes = MORI_WIFI_IDLE_OFF_DEFAULT_MIN;
+
+        mori_load_power_idle_settings_from_system_ini(&screen_minutes, &wifi_minutes);
+        s_screen_idle_off_minutes = screen_minutes;
+        s_wifi_idle_off_minutes = wifi_minutes;
+    }
     ESP_LOGI("main", "boot step: init i2c peripherals");
     init_i2c_peripherals();
     if (card != NULL) {
@@ -2951,10 +3638,13 @@ void app_main(void)
     if (lvgl_err != ESP_OK) {
         ESP_LOGW("main", "LVGL/display init failed, continuing headless: %s", esp_err_to_name(lvgl_err));
     } else {
+        (void)lcd_display_set_brightness(mori_load_display_brightness_from_system_ini(NULL));
+        mori_set_screen_idle_off_minutes(s_screen_idle_off_minutes);
         ui_set_activity_callback(activity_reconnect_wifi_if_needed);
         start_boot_key_task();
         start_idle_monitor_task();
         ui_mark_activity();
+        mark_wifi_activity();
         ui_set_status_text("system initialized");
     }
 

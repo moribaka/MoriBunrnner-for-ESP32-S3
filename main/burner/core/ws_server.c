@@ -40,6 +40,7 @@
 #include "ip5306.h"
 #include "lcd_display.h"
 #include "mcu_debug.h"
+#include "mori_system_settings.h"
 #include "pin_map.h"
 #include "tca9555.h"
 #include "ui.h"
@@ -104,9 +105,12 @@
 #define BURNER_MBC5_TITLE_LEN 16u
 #define TF_IO_CHUNK_SIZE 2048
 #define BURN_TF_STDIO_BUFFER_BYTES (128U * 1024U)
-#define WEB_HTTPD_STACK_SIZE 8192
+#define WEB_HTTPD_STACK_SIZE 16384
+#define WEB_HTTPD_CORE_ID 0
+#define WEB_HTTPD_TASK_PRIORITY 4
 #define WEB_ROOT_DIR_REL ".web"
 #define WEB_MAIN_FILE_REL ".web/main.html"
+#define WEB_BUILTIN_MAIN_FILE_REL "main.html"
 #define WEB_FILE_PATH_LEN_MAX 320
 #define WEB_MAIN_UPLOAD_MAX_SIZE (512 * 1024)
 #define WEB_FILE_UPLOAD_MAX_SIZE (1024 * 1024)
@@ -170,9 +174,9 @@ typedef struct {
 #define BURNER_ROM_ERASE_TIMEOUT_PER_MB_MS 20000U
 #define BURNER_ROM_ERASE_TIMEOUT_MAX_MS (5U * 60U * 1000U)
 #define BURNER_ROM_CHIP_ERASE_TIMEOUT_MS BURNER_ROM_ERASE_TIMEOUT_MAX_MS
-#define BURNER_GBA_FALLBACK_DEVICE_SIZE BURN_GBA_LINEAR_ADDR_BYTES
-#define BURNER_GBA_FALLBACK_SECTOR_SIZE (128U * 1024U)
-#define BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES 0U
+#define BURNER_GBA_RETAIL_ROM_WINDOW_SIZE BURN_GBA_LINEAR_ADDR_BYTES
+#define BURNER_GBA_RETAIL_ROM_SECTOR_SIZE (128U * 1024U)
+#define BURNER_GBA_RETAIL_ROM_BUFFER_WRITE_BYTES 0U
 #define BURNER_GBA_HOST_UNLOCK_ADDR0 0x555u
 #define BURNER_GBA_HOST_UNLOCK_ADDR1 0x2AAu
 #define BURNER_GBA_HOST_CFI_ENTER_ADDR 0x055u
@@ -557,6 +561,7 @@ typedef struct {
     char rom_name[BURNER_FILE_NAME_LEN];
     char rom_path[BURNER_FILE_PATH_LEN];
     char message[96];
+    bool chip_erase_ui_active;
     bool erase_phase_planned;
     bool erase_phase_active;
     bool cancel_requested;
@@ -863,6 +868,7 @@ void burner_status_set_gba_sram_patch_probe(
     bool scanned,
     bool detected);
 void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t cart_byte, bool equal);
+void burner_status_set_chip_erase_ui_active(bool active);
 void burner_status_plan_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size);
 void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size);
 void burner_status_advance_erase_phase(uint32_t sectors_done, uint32_t bytes_done);
@@ -1530,313 +1536,6 @@ const char s_base_settings_html[] =
     "}"
     "initPage();"
     "</script></body></html>";
-
-#if 0
-/* Legacy unused inline pages kept only for reference. */
-const char __attribute__((unused)) s_tf_html[] =
-    "<!doctype html><html><head>"
-    "<meta charset='utf-8'>"
-    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-    "<title>TF File Manager</title>"
-    "<style>"
-    "body{font-family:Arial,sans-serif;max-width:980px;margin:24px auto;padding:0 16px;background:#f7f9fc;color:#101323;}"
-    "a{margin-right:10px;}"
-    ".toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}"
-    "input,button{padding:8px 10px;border:1px solid #c8d2e4;border-radius:8px;background:#fff;}"
-    "button{cursor:pointer;}"
-    "button.primary{background:#0d6efd;color:#fff;border-color:#0d6efd;}"
-    "button.danger{background:#dc3545;color:#fff;border-color:#dc3545;}"
-    ".pathline{display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px;border:1px solid #d7deec;border-radius:10px;background:#fff;}"
-    ".pathline .dots{font-family:Consolas,monospace;font-weight:700;font-size:20px;line-height:1;text-decoration:none;}"
-    ".pathline .dots.disabled{color:#93a0ba;pointer-events:none;}"
-    ".mono{font-family:Consolas,monospace;}"
-    ".list{background:#fff;border:1px solid #d7deec;border-radius:10px;padding:8px;}"
-    ".item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 6px;border-bottom:1px solid #eef2f8;}"
-    ".item:last-child{border-bottom:none;}"
-    ".entry{display:inline-block;max-width:78%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
-    ".dir-link{color:#0b5ed7;text-decoration:none;font-weight:600;}"
-    ".file-link{color:#101323;text-decoration:none;}"
-    ".meta{font-size:12px;color:#6c7891;white-space:nowrap;}"
-    "#msg{margin:10px 0;padding:8px 10px;background:#eef3ff;border:1px solid #d6e3ff;border-radius:8px;min-height:20px;}"
-    ".modal{position:fixed;inset:0;background:rgba(8,16,36,0.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999;}"
-    ".modal.show{display:flex;}"
-    ".dialog{width:min(92vw,420px);background:#fff;border-radius:12px;padding:16px;border:1px solid #d7deec;}"
-    ".dialog h3{margin:0 0 8px;font-size:16px;word-break:break-word;}"
-    ".dialog p{margin:0 0 12px;font-size:12px;color:#6c7891;word-break:break-all;}"
-    ".dlg-actions{display:flex;gap:8px;flex-wrap:wrap;}"
-    "</style></head><body>"
-    "<h2>TF File Manager</h2>"
-    "<p><a href='/'>Home</a><a href='/cart'>Cartridge</a><a href='/settings'>Settings</a></p>"
-    "<div class='toolbar'>"
-    "<input id='path' class='mono' type='text' value='' style='flex:1;min-width:240px' placeholder='relative path, empty means /sdcard root'>"
-    "<button id='go'>Go</button>"
-    "<button id='refresh'>Refresh</button>"
-    "</div>"
-    "<div class='pathline'>"
-    "<a id='up_link' class='dots' href='#' title='Parent folder'>...</a>"
-    "<span id='path_view' class='mono'>/sdcard</span>"
-    "</div>"
-    "<div class='toolbar'>"
-    "<input id='new_dir' type='text' placeholder='new folder name'>"
-    "<button id='mkdir'>Create Folder</button>"
-    "</div>"
-    "<div class='toolbar'>"
-    "<input id='upload_file' type='file' multiple style='flex:1;min-width:220px'>"
-    "<button id='upload' class='primary'>Upload To Current Folder</button>"
-    "</div>"
-    "<div id='msg'>Loading...</div>"
-    "<div id='list' class='list'></div>"
-    "<div id='file_modal' class='modal'>"
-    "<div class='dialog'>"
-    "<h3 id='dlg_name'>File</h3>"
-    "<p id='dlg_path'></p>"
-    "<div class='dlg-actions'>"
-    "<button id='dlg_download'>Download</button>"
-    "<button id='dlg_rename'>Rename</button>"
-    "<button id='dlg_delete' class='danger'>Delete</button>"
-    "<button id='dlg_close'>Close</button>"
-    "</div>"
-    "</div>"
-    "</div>"
-    "<script>"
-    "const listEl=document.getElementById('list');"
-    "const msgEl=document.getElementById('msg');"
-    "const pathEl=document.getElementById('path');"
-    "const pathViewEl=document.getElementById('path_view');"
-    "const upLink=document.getElementById('up_link');"
-    "const modalEl=document.getElementById('file_modal');"
-    "const dlgNameEl=document.getElementById('dlg_name');"
-    "const dlgPathEl=document.getElementById('dlg_path');"
-    "let currentPath='';"
-    "let selectedEntry=null;"
-    "function setMsg(text,isErr){"
-    "msgEl.textContent=text;"
-    "msgEl.style.background=isErr?'#fff2f2':'#eef3ff';"
-    "msgEl.style.borderColor=isErr?'#ffcdcd':'#d6e3ff';"
-    "}"
-    "function joinPath(base,name){return base?base+'/'+name:name;}"
-    "function parentPath(path){const i=path.lastIndexOf('/');return i<0?'':path.slice(0,i);}"
-    "function humanSize(bytes){"
-    "const n=Number(bytes)||0;"
-    "if(n<1024)return n+' B';"
-    "if(n<1024*1024)return (n/1024).toFixed(1)+' KB';"
-    "return (n/1024/1024).toFixed(1)+' MB';"
-    "}"
-    "async function requestJson(url,opt){"
-    "const r=await fetch(url,opt);"
-    "const t=await r.text();"
-    "if(!r.ok){throw new Error(t||('HTTP '+r.status));}"
-    "try{return JSON.parse(t);}catch(e){throw new Error('Invalid response: '+t);}"
-    "}"
-    "function updatePathUi(){"
-    "pathEl.value=currentPath;"
-    "pathViewEl.textContent='/sdcard'+(currentPath?('/'+currentPath):'');"
-    "if(currentPath){"
-    "upLink.classList.remove('disabled');"
-    "}else{"
-    "upLink.classList.add('disabled');"
-    "}"
-    "}"
-    "function showModal(entry){"
-    "selectedEntry=entry;"
-    "dlgNameEl.textContent=entry.name||'file';"
-    "dlgPathEl.textContent=entry.path||'';"
-    "modalEl.classList.add('show');"
-    "}"
-    "function closeModal(){"
-    "selectedEntry=null;"
-    "modalEl.classList.remove('show');"
-    "}"
-    "async function loadList(path){"
-    "const target=(typeof path==='string')?path:currentPath;"
-    "const data=await requestJson('/api/tf/list?path='+encodeURIComponent(target));"
-    "currentPath=data.path||'';"
-    "updatePathUi();"
-    "renderRows(Array.isArray(data.entries)?data.entries:[]);"
-    "setMsg('Path: /sdcard'+(currentPath?('/'+currentPath):'')+', items: '+(data.entries?data.entries.length:0),false);"
-    "}"
-    "function renderRows(entries){"
-    "listEl.innerHTML='';"
-    "entries.sort((a,b)=>{const ra=Number.isFinite(+a.sort_rank)?+a.sort_rank:(a.is_dir?0:4);const rb=Number.isFinite(+b.sort_rank)?+b.sort_rank:(b.is_dir?0:4);if(ra!==rb)return ra-rb;return String(a.name).localeCompare(String(b.name),undefined,{sensitivity:'base',numeric:true});});"
-    "if(entries.length===0){"
-    "const empty=document.createElement('div');"
-    "empty.className='item';"
-    "empty.textContent='(empty)';"
-    "listEl.appendChild(empty);"
-    "return;"
-    "}"
-    "for(const e of entries){"
-    "const row=document.createElement('div');"
-    "const left=document.createElement('div');"
-    "const right=document.createElement('div');"
-    "const link=document.createElement('a');"
-    "row.className='item';"
-    "left.className='entry';"
-    "right.className='meta';"
-    "link.href='#';"
-    "if(e.is_dir){"
-    "link.className='dir-link';"
-    "link.textContent='[DIR] '+(e.name||'');"
-    "link.onclick=async(ev)=>{"
-    "ev.preventDefault();"
-    "try{await loadList(e.path||'');}catch(err){setMsg(String(err),true);}"
-    "};"
-    "right.textContent='folder';"
-    "}else{"
-    "link.className='file-link';"
-    "link.textContent=e.name||'';"
-    "link.onclick=(ev)=>{ev.preventDefault();showModal(e);};"
-    "right.textContent=humanSize(e.size);"
-    "}"
-    "left.appendChild(link);"
-    "row.appendChild(left);"
-    "row.appendChild(right);"
-    "listEl.appendChild(row);"
-    "}"
-    "}"
-    "document.getElementById('go').onclick=()=>loadList(pathEl.value.trim()).catch(e=>setMsg(String(e),true));"
-    "upLink.onclick=(ev)=>{"
-    "ev.preventDefault();"
-    "if(!currentPath)return;"
-    "loadList(parentPath(currentPath)).catch(e=>setMsg(String(e),true));"
-    "};"
-    "document.getElementById('refresh').onclick=()=>loadList().catch(e=>setMsg(String(e),true));"
-    "document.getElementById('mkdir').onclick=async()=>{"
-    "const name=document.getElementById('new_dir').value.trim();"
-    "if(!name){setMsg('Folder name is empty',true);return;}"
-    "const target=joinPath(currentPath,name);"
-    "try{"
-    "await requestJson('/api/tf/mkdir?path='+encodeURIComponent(target),{method:'POST'});"
-    "document.getElementById('new_dir').value='';"
-    "await loadList();"
-    "}catch(err){setMsg(String(err),true);}"
-    "};"
-    "document.getElementById('upload').onclick=async()=>{"
-    "const input=document.getElementById('upload_file');"
-    "const files=input.files;"
-    "if(!files||files.length===0){setMsg('Choose one or more files first',true);return;}"
-    "try{"
-    "for(let i=0;i<files.length;i++){"
-    "const f=files[i];"
-    "setMsg('Uploading '+f.name+' ('+(i+1)+'/'+files.length+') ...',false);"
-    "await requestJson('/api/tf/upload?dir='+encodeURIComponent(currentPath)+'&name='+encodeURIComponent(f.name),{"
-    "method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f"
-    "});"
-    "}"
-    "input.value='';"
-    "await loadList();"
-    "setMsg('Upload completed',false);"
-    "}catch(err){setMsg(String(err),true);}"
-    "};"
-    "document.getElementById('dlg_close').onclick=closeModal;"
-    "modalEl.onclick=(ev)=>{if(ev.target===modalEl)closeModal();};"
-    "document.getElementById('dlg_download').onclick=()=>{"
-    "if(!selectedEntry)return;"
-    "window.location='/api/tf/download?path='+encodeURIComponent(selectedEntry.path||'');"
-    "};"
-    "document.getElementById('dlg_rename').onclick=async()=>{"
-    "if(!selectedEntry)return;"
-    "const newName=prompt('New name',selectedEntry.name||'');"
-    "if(!newName||newName===selectedEntry.name)return;"
-    "const target=joinPath(currentPath,newName);"
-    "try{"
-    "await requestJson('/api/tf/rename?from='+encodeURIComponent(selectedEntry.path||'')+'&to='+encodeURIComponent(target),{method:'POST'});"
-    "closeModal();"
-    "await loadList();"
-    "}catch(err){setMsg(String(err),true);}"
-    "};"
-    "document.getElementById('dlg_delete').onclick=async()=>{"
-    "if(!selectedEntry)return;"
-    "if(!confirm('Delete '+(selectedEntry.path||'')+' ?'))return;"
-    "try{"
-    "await requestJson('/api/tf/delete?path='+encodeURIComponent(selectedEntry.path||''),{method:'DELETE'});"
-    "closeModal();"
-    "await loadList();"
-    "}catch(err){setMsg(String(err),true);}"
-    "};"
-    "updatePathUi();"
-    "loadList('').catch(e=>setMsg(String(e),true));"
-    "</script></body></html>";
-
-const char __attribute__((unused)) s_settings_html[] =
-    "<!doctype html><html><head>"
-    "<meta charset='utf-8'>"
-    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-    "<title>MORI Device Settings</title>"
-    "<style>"
-    "body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 16px;}"
-    "a{margin-right:10px;}"
-    "button{padding:8px 12px;margin-right:8px;margin-bottom:8px;}"
-    "pre{background:#111;color:#e6e6e6;padding:12px;white-space:pre-wrap;min-height:120px;}"
-    "</style></head><body>"
-    "<h2>Device Settings</h2>"
-    "<p><a href='/'>Home</a><a href='/tf'>TF Files</a><a href='/cart'>Cartridge</a></p>"
-    "<button id='refresh'>Refresh Device Info</button>"
-    "<pre id='info'>Loading...</pre>"
-    "<script>"
-    "async function loadInfo(){"
-    "const r=await fetch('/api/device/info');"
-    "document.getElementById('info').textContent=await r.text();"
-    "}"
-    "document.getElementById('refresh').onclick=loadInfo;"
-    "loadInfo();"
-    "</script></body></html>";
-
-const char __attribute__((unused)) s_default_upload_html[] =
-    "<!doctype html><html><head>"
-    "<meta charset='utf-8'>"
-    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-    "<title>Cartridge Manager</title>"
-    "<style>"
-    "body{font-family:Arial,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;line-height:1.45;}"
-    "a{margin-right:10px;}"
-    "input,button,select{padding:10px;margin:8px 0;width:100%;box-sizing:border-box;}"
-    "button{cursor:pointer;}"
-    "pre{background:#111;color:#e6e6e6;padding:12px;white-space:pre-wrap;}"
-    "</style></head><body>"
-    "<h2>Cartridge Manager</h2>"
-    "<p><a href='/'>Home</a><a href='/tf'>TF Files</a><a href='/settings'>Settings</a></p>"
-    "<p>Upload ROM to TF first, then start burning by selecting TF file name.</p>"
-    "<input id='rom' type='file' accept='.gba,.bin,.rom'>"
-    "<button id='upload'>Upload To TF</button>"
-    "<input id='tf_name' type='text' placeholder='TF ROM file name, e.g. game.gba'>"
-    "<select id='mode'><option value='gba'>GBA</option><option value='mbc5'>MBC5</option></select>"
-    "<input id='slot' type='number' min='0' value='0' placeholder='slot'>"
-    "<button id='burn_tf'>Burn From TF File</button>"
-    "<pre id='status'>Loading...</pre>"
-    "<script>"
-    "const statusEl=document.getElementById('status');"
-    "function show(s){"
-    "statusEl.textContent='State: '+s.state+'\\nProgress: '+s.progress+'%\\nProcessed: '+s.processed+'/'+s.total+' bytes\\nROM: '+s.rom+'\\nMessage: '+s.message;"
-    "}"
-    "async function poll(){"
-    "try{const r=await fetch('/api/status');if(r.ok){show(await r.json());}}catch(e){}"
-    "}"
-    "setInterval(poll,1000);poll();"
-    "document.getElementById('upload').onclick=async()=>{"
-    "const f=document.getElementById('rom').files[0];"
-    "if(!f){alert('Please choose a ROM file first.');return;}"
-    "const mode=document.getElementById('mode').value||'gba';"
-    "const r=await fetch('/api/upload?name='+encodeURIComponent(f.name)+'&mode='+encodeURIComponent(mode),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});"
-    "const t=await r.text();"
-    "alert(t);"
-    "document.getElementById('tf_name').value=f.name;"
-    "poll();"
-    "};"
-    "document.getElementById('burn_tf').onclick=async()=>{"
-    "const name=document.getElementById('tf_name').value.trim();"
-    "const mode=document.getElementById('mode').value||'gba';"
-    "const slot=document.getElementById('slot').value.trim();"
-    "if(!name){alert('Please enter a TF ROM file name.');return;}"
-    "let url='/api/write?name='+encodeURIComponent(name)+'&mode='+encodeURIComponent(mode);"
-    "if(slot!==''){url+='&slot='+encodeURIComponent(slot);}"
-    "const r=await fetch(url,{method:'POST'});"
-    "const t=await r.text();"
-    "alert(t);"
-    "poll();"
-    "};"
-    "</script></body></html>";
-#endif
 
 const char *burner_state_to_str(burner_state_t state)
 {
@@ -2608,7 +2307,7 @@ esp_err_t burner_send_json(httpd_req_t *req, const char *json_text)
         return ESP_ERR_INVALID_ARG;
     }
 
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, json_text, HTTPD_RESP_USE_STRLEN);
 }
@@ -2950,6 +2649,23 @@ bool burner_build_full_path(const char *rel_path, char *full_path, size_t full_p
     return n > 0 && n < (int)full_path_len;
 }
 
+static bool burner_build_assets_full_path(const char *rel_path, char *full_path, size_t full_path_len)
+{
+    int n;
+
+    if (rel_path == NULL || full_path == NULL || full_path_len < 2) {
+        return false;
+    }
+
+    if (rel_path[0] == '\0') {
+        n = snprintf(full_path, full_path_len, "%s", assets_mount_point);
+    } else {
+        n = snprintf(full_path, full_path_len, "%s/%s", assets_mount_point, rel_path);
+    }
+
+    return n > 0 && n < (int)full_path_len;
+}
+
 bool burner_json_escape(const char *src, char *dst, size_t dst_len)
 {
     size_t di = 0;
@@ -3146,13 +2862,13 @@ static void burner_lang_set_defaults(burner_lang_pack_t *lang)
     burner_lang_copy(
         lang->page_tip,
         sizeof(lang->page_tip),
-        "This page does not depend on TF and is always available for debug/configuration.");
-    burner_lang_copy(lang->business_title, sizeof(lang->business_title), "Business Web (TF)");
+        "This page does not depend on TF and is always available for debug/recovery.");
+    burner_lang_copy(lang->business_title, sizeof(lang->business_title), "Business Web (Built-in)");
     burner_lang_copy(lang->btn_open_business, sizeof(lang->btn_open_business), "Open Business Web");
     burner_lang_copy(
         lang->business_tip,
         sizeof(lang->business_tip),
-        "Business web is loaded from /sdcard/.web/main.html");
+        "Default source is built-in /assets/main.html; /sdcard/.web/main.html can override it.");
     burner_lang_copy(
         lang->recovery_title,
         sizeof(lang->recovery_title),
@@ -3642,101 +3358,6 @@ static bool burner_lang_version_valid(const char *version)
     return true;
 }
 
-static bool burner_ntp_server_name_valid(const char *name)
-{
-    size_t len = 0;
-
-    if (name == NULL) {
-        return false;
-    }
-
-    len = strlen(name);
-    if (len == 0 || len >= WEB_NTP_SERVER_MAX) {
-        return false;
-    }
-
-    for (size_t i = 0; i < len; i++) {
-        unsigned char ch = (unsigned char)name[i];
-        if (!(isalnum(ch) || ch == '.' || ch == '-' || ch == '_')) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-static bool burner_bool_text_valid(const char *value)
-{
-    if (value == NULL || value[0] == '\0') {
-        return false;
-    }
-
-    if (strcasecmp(value, "1") == 0 || strcasecmp(value, "true") == 0 ||
-        strcasecmp(value, "yes") == 0 || strcasecmp(value, "on") == 0) {
-        return true;
-    }
-    if (strcasecmp(value, "0") == 0 || strcasecmp(value, "false") == 0 ||
-        strcasecmp(value, "no") == 0 || strcasecmp(value, "off") == 0) {
-        return true;
-    }
-
-    return false;
-}
-
-static void burner_system_ini_load_ntp(
-    const char *system_ini_path,
-    char *ntp_enable,
-    size_t ntp_enable_len,
-    char *ntp_server,
-    size_t ntp_server_len)
-{
-    FILE *fp = NULL;
-    char line[WEB_LANG_LINE_MAX];
-
-    if (ntp_enable == NULL || ntp_enable_len < 2 || ntp_server == NULL || ntp_server_len < 2) {
-        return;
-    }
-
-    snprintf(ntp_enable, ntp_enable_len, "1");
-    snprintf(ntp_server, ntp_server_len, "%s", WEB_NTP_SERVER_DEFAULT);
-
-    if (system_ini_path == NULL) {
-        return;
-    }
-
-    fp = fopen(system_ini_path, "rb");
-    if (fp == NULL) {
-        return;
-    }
-
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        size_t len = strlen(line);
-        bool line_truncated = (len > 0 && len == sizeof(line) - 1 && line[len - 1] != '\n');
-        char *key = NULL;
-        char *value = NULL;
-
-        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
-            line[--len] = '\0';
-        }
-
-        if (burner_ini_split_line(line, &key, &value)) {
-            if (strcmp(key, "ntp_enable") == 0 && burner_bool_text_valid(value)) {
-                snprintf(ntp_enable, ntp_enable_len, "%s", value);
-            } else if (strcmp(key, "ntp_server") == 0 && burner_ntp_server_name_valid(value)) {
-                snprintf(ntp_server, ntp_server_len, "%s", value);
-            }
-        }
-
-        if (line_truncated) {
-            int ch = 0;
-            while ((ch = fgetc(fp)) != EOF && ch != '\n') {
-            }
-        }
-    }
-
-    fclose(fp);
-}
-
 static bool burner_lang_is_reserved_ini(const char *name)
 {
     if (name == NULL) {
@@ -3816,14 +3437,9 @@ static esp_err_t burner_lang_write_system_ini(
 {
     burner_lang_meta_t meta = {0};
     uint8_t ui_language = UI_LANGUAGE_DEFAULT;
-    char ntp_enable[WEB_NTP_ENABLE_MAX] = {0};
-    char ntp_server[WEB_NTP_SERVER_MAX] = {0};
     char setting_path[WEB_FILE_PATH_LEN_MAX] = {0};
-    char system_path[WEB_FILE_PATH_LEN_MAX] = {0};
-    char tmp_path[WEB_FILE_PATH_LEN_MAX] = {0};
-    FILE *fp = NULL;
-    bool write_ok = false;
     struct stat st = {0};
+    esp_err_t err;
 
     if (!burner_lang_is_selectable_ini(language_ini)) {
         return ESP_ERR_INVALID_ARG;
@@ -3843,49 +3459,9 @@ static esp_err_t burner_lang_write_system_ini(
         return ESP_FAIL;
     }
 
-    if (!burner_build_full_path(WEB_LANG_SYSTEM_INI_REL, system_path, sizeof(system_path))) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-    if (snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", system_path) >= (int)sizeof(tmp_path)) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    burner_system_ini_load_ntp(system_path, ntp_enable, sizeof(ntp_enable), ntp_server, sizeof(ntp_server));
-
-    fp = fopen(tmp_path, "wb");
-    if (fp == NULL) {
-        return ESP_FAIL;
-    }
-
-    if (fprintf(
-            fp,
-            "# MORI system settings\nlanguage_version=%s\nlanguage_ini=%s\nui_language=%u\nntp_enable=%s\nntp_server=%s\n",
-            meta.language_version,
-            meta.language_ini,
-            (unsigned)ui_language,
-            ntp_enable,
-            ntp_server) > 0 &&
-        fflush(fp) == 0) {
-        write_ok = true;
-    }
-
-    if (fclose(fp) != 0) {
-        write_ok = false;
-    }
-    fp = NULL;
-
-    if (!write_ok) {
-        unlink(tmp_path);
-        return ESP_FAIL;
-    }
-
-    if (unlink(system_path) != 0 && errno != ENOENT) {
-        unlink(tmp_path);
-        return ESP_FAIL;
-    }
-    if (rename(tmp_path, system_path) != 0) {
-        unlink(tmp_path);
-        return ESP_FAIL;
+    err = mori_save_language_settings_to_system_ini(meta.language_ini, ui_language);
+    if (err != ESP_OK) {
+        return err;
     }
 
     if (saved_meta != NULL) {
@@ -4335,6 +3911,7 @@ bool burner_uri_to_web_rel_path(const char *uri, char *rel_path, size_t rel_path
     char decoded[WEB_FILE_PATH_LEN_MAX] = {0};
     char normalized[WEB_FILE_PATH_LEN_MAX] = {0};
     const char *raw_rel = NULL;
+    const char *dot = NULL;
 
     if (uri == NULL || rel_path == NULL || rel_path_len < 2) {
         return false;
@@ -4344,8 +3921,12 @@ bool burner_uri_to_web_rel_path(const char *uri, char *rel_path, size_t rel_path
         return false;
     }
 
-    if (strcmp(uri_path, "/") == 0 || strcmp(uri_path, "/tf") == 0 || strcmp(uri_path, "/cart") == 0 ||
-        strcmp(uri_path, "/burner") == 0 || strcmp(uri_path, "/settings") == 0) {
+    if (strcmp(uri_path, "/") == 0 || strcmp(uri_path, "/tf") == 0 || strcmp(uri_path, "/tf/") == 0 ||
+        strcmp(uri_path, "/cart") == 0 || strcmp(uri_path, "/cart/") == 0 || strcmp(uri_path, "/burner") == 0 ||
+        strcmp(uri_path, "/burner/") == 0 || strcmp(uri_path, "/settings") == 0 ||
+        strcmp(uri_path, "/settings/") == 0 || strcmp(uri_path, "/smb") == 0 || strcmp(uri_path, "/smb/") == 0 ||
+        strcmp(uri_path, "/wifi") == 0 || strcmp(uri_path, "/wifi/") == 0 || strcmp(uri_path, "/power") == 0 ||
+        strcmp(uri_path, "/power/") == 0 || strcmp(uri_path, "/book") == 0 || strcmp(uri_path, "/book/") == 0) {
         return snprintf(rel_path, rel_path_len, "%s", WEB_MAIN_FILE_REL) < (int)rel_path_len;
     }
 
@@ -4370,6 +3951,11 @@ bool burner_uri_to_web_rel_path(const char *uri, char *rel_path, size_t rel_path
         return false;
     }
 
+    dot = strrchr(normalized, '.');
+    if (dot == NULL && strstr(normalized, "/.") == NULL) {
+        return snprintf(rel_path, rel_path_len, "%s", WEB_MAIN_FILE_REL) < (int)rel_path_len;
+    }
+
     if (strcmp(normalized, WEB_ROOT_DIR_REL) == 0) {
         return snprintf(rel_path, rel_path_len, "%s", WEB_MAIN_FILE_REL) < (int)rel_path_len;
     }
@@ -4384,31 +3970,49 @@ bool burner_uri_to_web_rel_path(const char *uri, char *rel_path, size_t rel_path
 esp_err_t burner_send_static_file(httpd_req_t *req, const char *rel_path)
 {
     char full_path[WEB_FILE_PATH_LEN_MAX] = {0};
+    char assets_full_path[WEB_FILE_PATH_LEN_MAX] = {0};
     struct stat st;
     FILE *fp = NULL;
     uint8_t *buf = NULL;
     const char *content_type = NULL;
+    const char *assets_rel_path = rel_path;
+    bool path_ready = false;
 
     if (req == NULL || rel_path == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    {
-        esp_err_t access_err = burner_reject_if_tf_busy(req);
-        if (access_err != ESP_OK) {
-            return access_err;
+    if (card != NULL && !usb_msc_tf_in_use_by_host()) {
+        if (!burner_build_full_path(rel_path, full_path, sizeof(full_path))) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "web file path too long");
+        }
+        if (stat(full_path, &st) == 0 && !S_ISDIR(st.st_mode)) {
+            path_ready = true;
         }
     }
 
-    if (card == NULL) {
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TF card not ready");
+    if (!path_ready) {
+        if (strcmp(rel_path, WEB_MAIN_FILE_REL) == 0) {
+            assets_rel_path = WEB_BUILTIN_MAIN_FILE_REL;
+        }
+        if (!burner_build_assets_full_path(assets_rel_path, assets_full_path, sizeof(assets_full_path))) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "web file path too long");
+        }
+        if (stat(assets_full_path, &st) == 0 && !S_ISDIR(st.st_mode)) {
+            if (snprintf(full_path, sizeof(full_path), "%s", assets_full_path) >= (int)sizeof(full_path)) {
+                return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "web file path too long");
+            }
+            path_ready = true;
+        }
     }
 
-    if (!burner_build_full_path(rel_path, full_path, sizeof(full_path))) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "web file path too long");
-    }
-
-    if (stat(full_path, &st) != 0 || S_ISDIR(st.st_mode)) {
+    if (!path_ready) {
+        ESP_LOGW(
+            BURNER_TAG,
+            "web file not found: uri=%s rel=%s assets_rel=%s",
+            req->uri,
+            rel_path,
+            assets_rel_path);
         return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "web file not found");
     }
 
@@ -4432,6 +4036,7 @@ esp_err_t burner_send_static_file(httpd_req_t *req, const char *rel_path)
         if (read_len == 0) {
             break;
         }
+        web_ws_mark_network_activity();
         if (httpd_resp_send_chunk(req, (const char *)buf, read_len) != ESP_OK) {
             free(buf);
             fclose(fp);

@@ -203,6 +203,7 @@ esp_err_t burner_upload_handler(httpd_req_t *req)
             break;
         }
 
+        web_ws_mark_network_activity();
         if (fwrite(buf, 1, (size_t)recv_len, fp) != (size_t)recv_len) {
             failed = true;
             burner_status_update(

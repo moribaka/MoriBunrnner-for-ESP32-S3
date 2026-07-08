@@ -110,53 +110,6 @@ bool burner_parse_ram_mode(const char *ram_type_text, bool *fram_mode)
     return false;
 }
 
-static uint32_t burner_planned_stage_erase_sector_count(
-    uint32_t addr_begin,
-    uint32_t total_bytes,
-    uint32_t sector_size,
-    uint32_t stage_capacity)
-{
-    uint32_t processed = 0u;
-    uint64_t total_sectors = 0u;
-
-    if (total_bytes == 0u || sector_size == 0u || stage_capacity == 0u ||
-        (sector_size & (sector_size - 1u)) != 0u) {
-        return 0u;
-    }
-
-    while (processed < total_bytes) {
-        uint32_t stage_addr = addr_begin + processed;
-        uint32_t stage_bytes = total_bytes - processed;
-        uint32_t stage_erase_begin = stage_addr;
-        uint32_t stage_erase_end;
-
-        if (stage_bytes > stage_capacity) {
-            stage_bytes = stage_capacity;
-        }
-        stage_erase_end = stage_addr + stage_bytes - 1u;
-        if (processed > 0u) {
-            uint32_t mask = sector_size - 1u;
-            uint64_t ceil_begin_u64 = (uint64_t)stage_addr + (uint64_t)mask;
-            if (ceil_begin_u64 > UINT32_MAX) {
-                stage_erase_begin = UINT32_MAX;
-            } else {
-                stage_erase_begin = (uint32_t)ceil_begin_u64 & ~mask;
-            }
-            if (stage_erase_begin > stage_erase_end) {
-                stage_erase_begin = stage_erase_end;
-            }
-        }
-
-        total_sectors += burner_erase_sector_count_from_range(stage_erase_begin, stage_erase_end, sector_size);
-        if (total_sectors > UINT32_MAX) {
-            return UINT32_MAX;
-        }
-        processed += stage_bytes;
-    }
-
-    return (uint32_t)total_sectors;
-}
-
 static void burner_nor_geometry_clear(burner_nor_geometry_t *geometry)
 {
     if (geometry == NULL) {
@@ -610,22 +563,6 @@ static esp_err_t burner_nor_geometry_stage_bytes_in_cursor(
 
     *stage_bytes_out = stage_bytes;
     return ESP_OK;
-}
-
-static esp_err_t burner_nor_geometry_stage_bytes_for_addr(
-    const burner_nor_geometry_t *geometry,
-    uint32_t addr,
-    uint32_t remaining_bytes,
-    uint32_t *stage_bytes_out)
-{
-    burner_nor_region_cursor_t cursor = {0};
-    esp_err_t err;
-
-    err = burner_nor_geometry_region_cursor_begin(geometry, addr, &cursor);
-    if (err != ESP_OK) {
-        return err;
-    }
-    return burner_nor_geometry_stage_bytes_in_cursor(&cursor, addr, remaining_bytes, stage_bytes_out);
 }
 
 static esp_err_t burner_nor_geometry_limit_prefix(

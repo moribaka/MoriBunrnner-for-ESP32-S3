@@ -203,6 +203,7 @@ static void burner_task(void *param)
     }
 
 task_done:
+    burner_status_set_chip_erase_ui_active(false);
     burner_cancel_reset();
     burner_bacon_mark_activity_locked();
     if (idle_dim_suspended) {

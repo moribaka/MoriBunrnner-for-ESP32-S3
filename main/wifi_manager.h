@@ -30,6 +30,7 @@ void wifi_maneger_connect(const char *ssid, const char *password);
 esp_err_t wifi_maneger_ap(void);
 esp_err_t wifi_maneger_scan(p_wifi_scan_cb f);
 void wifi_maneger_disconnect(void);
+esp_err_t wifi_maneger_shutdown_for_reboot(void);
 
 bool wifi_maneger_has_saved_sta(void);
 esp_err_t wifi_maneger_save_sta_config(const char *ssid, const char *password);

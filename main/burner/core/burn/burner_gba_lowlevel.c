@@ -416,92 +416,6 @@ rom_read_out:
     return err;
 }
 
-#if 0
-/* Legacy GBA verify path kept only for reference. */
-static esp_err_t burner_bacon_rom_verify_read_packed(uint32_t addr_byte, uint8_t *buf, size_t len)
-{
-    const size_t bytes_per_word = 10u;
-    size_t words_done = 0u;
-    size_t total_words;
-    size_t chunk_words_limit;
-    esp_err_t err = ESP_OK;
-
-    if (buf == NULL || len == 0u || (len & 0x1u) != 0u || (addr_byte & 0x1u) != 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    total_words = len / 2u;
-    chunk_words_limit = BURNER_SPI_MAX_XFER / bytes_per_word;
-    if (chunk_words_limit == 0u) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    while (words_done < total_words) {
-        size_t chunk_words = total_words - words_done;
-        size_t seq_len;
-        uint8_t *tx_sequence = NULL;
-        uint8_t *rx_sequence = NULL;
-        bool free_tx_sequence = false;
-        bool free_rx_sequence = false;
-
-        if (chunk_words > chunk_words_limit) {
-            chunk_words = chunk_words_limit;
-        }
-        seq_len = chunk_words * bytes_per_word;
-
-        tx_sequence = burner_spi_alloc_tx_buffer(seq_len, &free_tx_sequence);
-        rx_sequence = burner_spi_alloc_rw_buffer(seq_len, &free_rx_sequence);
-        if (tx_sequence == NULL || rx_sequence == NULL) {
-            if (free_tx_sequence && tx_sequence != NULL) {
-                free(tx_sequence);
-            }
-            if (free_rx_sequence && rx_sequence != NULL) {
-                free(rx_sequence);
-            }
-            return ESP_ERR_NO_MEM;
-        }
-
-        for (size_t i = 0u; i < chunk_words; ++i) {
-            uint32_t word_addr = (addr_byte >> 1) + (uint32_t)words_done + (uint32_t)i;
-            size_t base = i * bytes_per_word;
-
-            tx_sequence[base + 0u] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
-            tx_sequence[base + 1u] = (uint8_t)(word_addr & 0xFFu);
-            tx_sequence[base + 2u] = (uint8_t)((word_addr >> 8) & 0xFFu);
-            tx_sequence[base + 3u] = (uint8_t)((word_addr >> 16) & 0xFFu);
-            tx_sequence[base + 4u] = burner_bacon_option_byte0(0, true, true, true, false, true, true);
-            tx_sequence[base + 5u] = burner_bacon_option_byte0(0, true, false, true, false, false, true);
-            tx_sequence[base + 6u] = burner_bacon_option_byte0(2, true, false, true, false, true, true);
-            tx_sequence[base + 7u] = 0x00u;
-            tx_sequence[base + 8u] = 0x00u;
-            tx_sequence[base + 9u] = burner_bacon_option_byte0(0, true, true, true, true, true, true);
-        }
-
-        err = burner_spi_transfer_cs_legacy(BURNER_SPI_CS_MODE_0, tx_sequence, rx_sequence, seq_len);
-        if (err == ESP_OK) {
-            for (size_t i = 0u; i < chunk_words; ++i) {
-                size_t base = i * bytes_per_word;
-                buf[(words_done + i) * 2u + 0u] = rx_sequence[base + 7u];
-                buf[(words_done + i) * 2u + 1u] = rx_sequence[base + 8u];
-            }
-        }
-
-        if (free_tx_sequence) {
-            free(tx_sequence);
-        }
-        if (free_rx_sequence) {
-            free(rx_sequence);
-        }
-        if (err != ESP_OK) {
-            return err;
-        }
-
-        words_done += chunk_words;
-    }
-
-    return ESP_OK;
-}
-#endif
-
 static esp_err_t burner_bacon_rom_verify_read_packed_hoststyle(uint32_t addr_byte, uint8_t *buf, size_t len)
 {
     size_t read_len_word;
@@ -663,17 +577,6 @@ static esp_err_t burner_bacon_rom_read_u16_batched(uint32_t start_word_addr, uin
     }
     return burner_bacon_rom_read(start_word_addr << 1, out, word_count * 2u);
 }
-
-#if 0
-/* Legacy GBA verify wrapper kept only for reference. */
-static esp_err_t burner_bacon_rom_verify_read_u16_batched(uint32_t start_word_addr, uint8_t *out, size_t word_count)
-{
-    if (out == NULL || word_count == 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    return burner_bacon_rom_verify_read_packed(start_word_addr << 1, out, word_count * 2u);
-}
-#endif
 
 static esp_err_t burner_bacon_rom_verify_read_u16_batched_hoststyle(uint32_t start_word_addr, uint8_t *out, size_t word_count)
 {
@@ -4470,9 +4373,9 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
                     attempt + 1u);
                 continue;
             }
-            if (known_entry != NULL &&
-                burner_nor_entry_cmdset(known_entry) != BURNER_NOR_CMDSET_INTEL &&
-                burner_gba_probe_load_entry_geometry(
+            if (known_entry == NULL ||
+                burner_nor_entry_cmdset(known_entry) == BURNER_NOR_CMDSET_INTEL ||
+                !burner_gba_probe_load_entry_geometry(
                     known_entry,
                     &cfi_device_size,
                     &cfi_sector_size,
@@ -4480,24 +4383,20 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
                     &cfi_geometry)) {
                 ESP_LOGW(
                     BURNER_TAG,
-                    "GBA probe geometry repaired from library @%" PRIu32 "Hz try=%" PRIu32,
-                    probe_hz,
-                    attempt + 1u);
-            } else {
-                cfi_device_size = BURNER_GBA_FALLBACK_DEVICE_SIZE;
-                cfi_sector_size = BURNER_GBA_FALLBACK_SECTOR_SIZE;
-                cfi_buffer_write_bytes = BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES;
-                (void)burner_nor_geometry_set_uniform(&cfi_geometry, cfi_device_size, cfi_sector_size);
-                ESP_LOGW(
-                    BURNER_TAG,
-                    "GBA probe geometry fallback @%" PRIu32 "Hz try=%" PRIu32
-                    ": flash=%" PRIu32 " sector=%" PRIu32 " buf=%u",
+                    "GBA probe rejected incomplete CFI geometry @%" PRIu32 "Hz try=%" PRIu32
+                    ": cmdset=%s primary=0x%04X",
                     probe_hz,
                     attempt + 1u,
-                    cfi_device_size,
-                    cfi_sector_size,
-                    (unsigned)cfi_buffer_write_bytes);
+                    burner_nor_cmdset_name(resolved_cmdset),
+                    cfi_primary_cmdset_id);
+                continue;
             }
+
+            ESP_LOGW(
+                BURNER_TAG,
+                "GBA probe geometry repaired from library @%" PRIu32 "Hz try=%" PRIu32,
+                probe_hz,
+                attempt + 1u);
         }
 
         *device_size = cfi_device_size;
@@ -4590,9 +4489,9 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
     id_looks_like_header = burner_gba_id_looks_like_rom_header(id_out);
     id_matches_plain_rom = burner_gba_id_matches_plain_rom_data(id_out);
     if (id_looks_like_header || id_matches_plain_rom) {
-        *device_size = BURNER_GBA_FALLBACK_DEVICE_SIZE;
-        *sector_size = BURNER_GBA_FALLBACK_SECTOR_SIZE;
-        *buffer_write_bytes = BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES;
+        *device_size = BURNER_GBA_RETAIL_ROM_WINDOW_SIZE;
+        *sector_size = BURNER_GBA_RETAIL_ROM_SECTOR_SIZE;
+        *buffer_write_bytes = BURNER_GBA_RETAIL_ROM_BUFFER_WRITE_BYTES;
         *cfi_ok_out = false;
         (void)burner_nor_geometry_set_uniform(&s_cart_ctx.geometry, *device_size, *sector_size);
         s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
@@ -4613,38 +4512,28 @@ static esp_err_t burner_bacon_gba_probe_after_power_locked(
             id_looks_like_header ? "rom-header" : "plain-rom-data");
         return ESP_OK;
     }
-    *device_size = BURNER_GBA_FALLBACK_DEVICE_SIZE;
-    *sector_size = BURNER_GBA_FALLBACK_SECTOR_SIZE;
-    *buffer_write_bytes = BURNER_GBA_FALLBACK_BUFFER_WRITE_BYTES;
+    *device_size = 0u;
+    *sector_size = 0u;
+    *buffer_write_bytes = 0u;
     *cfi_ok_out = false;
-    (void)burner_nor_geometry_set_uniform(&s_cart_ctx.geometry, *device_size, *sector_size);
-    s_cart_ctx.gba_cmdset = last_intel_id_valid ? BURNER_NOR_CMDSET_INTEL : BURNER_NOR_CMDSET_AMD;
+    memset(&s_cart_ctx.geometry, 0, sizeof(s_cart_ctx.geometry));
+    s_cart_ctx.gba_cmdset = BURNER_NOR_CMDSET_UNKNOWN;
     s_cart_ctx.gba_likely_read_only = false;
-    burner_gba_probe_amd_runtime_commit(
-        s_cart_ctx.gba_cmdset,
-        selected_amd_runtime_profile,
-        selected_amd_runtime_profile_valid,
-        selected_amd_runtime_source,
-        last_intel_id_valid ? "default-intel-no-cfi" : "default-amd");
-    burner_nor_format_chip_name(
-        chip_name,
-        sizeof(chip_name),
-        burner_gba_chip_name(id_out),
-        s_cart_ctx.gba_cmdset,
-        *device_size);
-    burner_gba_build_auto_profile_name(profile_name, sizeof(profile_name), id_out, s_cart_ctx.gba_cmdset);
-    ESP_LOGW(
+    burner_gba_probe_amd_runtime_clear();
+    ESP_LOGE(
         BURNER_TAG,
-        "GBA probe fallback after retries: chip=%s profile=%s flash=%" PRIu32
-        " sector=%" PRIu32 " buf=%u cmdset=%s source=%s",
-        chip_name,
-        profile_name,
-        *device_size,
-        *sector_size,
-        (unsigned)*buffer_write_bytes,
-        burner_nor_cmdset_name(s_cart_ctx.gba_cmdset),
-        last_intel_id_valid ? "default-intel-no-cfi" : "default-amd");
-    return ESP_OK;
+        "GBA probe failed after retries: no supported CFI/library geometry"
+        " id=%02X %02X %02X %02X %02X %02X %02X %02X last_cmdset_hint=%s",
+        id_out[0],
+        id_out[1],
+        id_out[2],
+        id_out[3],
+        id_out[4],
+        id_out[5],
+        id_out[6],
+        id_out[7],
+        last_intel_id_valid ? "intel-id" : "amd-id");
+    return ESP_ERR_NOT_FOUND;
 }
 
 esp_err_t burner_bacon_gba_probe_locked(

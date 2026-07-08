@@ -158,6 +158,7 @@ void burner_status_phase_reset_locked(void)
     s_status.dump_write_total_us = 0u;
     s_status.dump_wait_total_us = 0u;
     s_status.dump_finalize_total_us = 0u;
+    s_status.chip_erase_ui_active = false;
     burner_status_verify_sample_reset_locked();
 }
 
@@ -289,6 +290,17 @@ void burner_status_set_verify_sample(uint32_t addr, uint8_t file_byte, uint8_t c
     xSemaphoreGive(s_status_lock);
 }
 
+void burner_status_set_chip_erase_ui_active(bool active)
+{
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.chip_erase_ui_active = active;
+    xSemaphoreGive(s_status_lock);
+}
+
 void burner_status_begin_erase_phase(uint32_t total_sectors, uint32_t total_bytes, uint32_t sector_size)
 {
     if (s_status_lock == NULL) {
@@ -398,6 +410,7 @@ void burner_status_mark_erase_end(void)
         s_status.erase_phase_done_bytes = s_status.erase_phase_total_bytes;
     }
     s_status.erase_phase_active = false;
+    s_status.chip_erase_ui_active = false;
     xSemaphoreGive(s_status_lock);
 }
 

@@ -1,5 +1,11 @@
 # Name,   Type, SubType, Offset,   Size
 nvs,      data, nvs,     0x9000,   0x6000
+otadata,  data, ota,     0xF000,   0x2000
 phy_init, data, phy,     0x11000,  0x1000
-factory,  app,  factory, 0x20000,  6M
-assets,   data, spiffs,  0x620000, 2M
+factory,  app,  factory, 0x20000,  8M
+assets,   data, spiffs,  0x820000, 0x180000
+launcher, app,  ota_0,   0x9A0000, 0x140000
+retro-core, app, ota_1,  0xAE0000, 0x140000
+gwenesis, app,  ota_2,   0xC20000, 0x140000
+prboom-go, app, ota_3,   0xD60000, 0x140000
+fmsx,     app,  ota_4,   0xEA0000, 0x140000

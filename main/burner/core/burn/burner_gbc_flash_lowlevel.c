@@ -33,29 +33,133 @@ static esp_err_t burner_bacon_mbc5_ram_enable(bool enable)
     return burner_bacon_gbc_write(0x0000u, &cmd, 1);
 }
 
-static esp_err_t burner_bacon_wait_u8(uint16_t addr, uint8_t expected, uint32_t timeout_ms)
+static bool burner_mbc5_amd_status_matches_dq7(uint8_t status, uint8_t expected_data)
+{
+    return (status & 0x80u) == (expected_data & 0x80u);
+}
+
+static esp_err_t burner_bacon_mbc5_amd_wait_program_complete(
+    uint16_t addr,
+    uint8_t expected_data,
+    uint32_t timeout_ms,
+    uint8_t *status_out)
 {
     int64_t deadline_us;
-    uint8_t read_back = 0;
+    uint8_t status1 = 0u;
+    uint8_t status2 = 0u;
     esp_err_t err;
 
-    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000);
+    if (timeout_ms == 0u) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
     while (esp_timer_get_time() < deadline_us) {
         err = burner_cancel_poll();
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gbc_read_u8(addr, &read_back);
+        err = burner_bacon_gbc_read_u8(addr, &status1);
         if (err != ESP_OK) {
             return err;
         }
-        if (read_back == expected) {
-            return ESP_OK;
+        if (burner_mbc5_amd_status_matches_dq7(status1, expected_data)) {
+            err = burner_bacon_gbc_read_u8(addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if (burner_mbc5_amd_status_matches_dq7(status2, expected_data)) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+        }
+        if ((status1 & 0x20u) != 0u) {
+            err = burner_bacon_gbc_read_u8(addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if (burner_mbc5_amd_status_matches_dq7(status2, expected_data)) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+            if (status_out != NULL) {
+                *status_out = status2;
+            }
+            return ESP_ERR_TIMEOUT;
         }
         esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
         burner_task_yield_if_due();
     }
 
+    if (status_out != NULL) {
+        *status_out = status1;
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t burner_bacon_mbc5_amd_wait_erase_complete(
+    uint16_t addr,
+    uint32_t timeout_ms,
+    uint8_t *status_out)
+{
+    int64_t deadline_us;
+    uint8_t status1 = 0u;
+    uint8_t status2 = 0u;
+    esp_err_t err;
+
+    if (timeout_ms == 0u) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    deadline_us = esp_timer_get_time() + ((int64_t)timeout_ms * 1000LL);
+    while (esp_timer_get_time() < deadline_us) {
+        err = burner_cancel_poll();
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = burner_bacon_gbc_read_u8(addr, &status1);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if ((status1 & 0x80u) != 0u) {
+            err = burner_bacon_gbc_read_u8(addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if ((status2 & 0x80u) != 0u) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+        }
+        if ((status1 & 0x20u) != 0u) {
+            err = burner_bacon_gbc_read_u8(addr, &status2);
+            if (err != ESP_OK) {
+                return err;
+            }
+            if ((status2 & 0x80u) != 0u) {
+                if (status_out != NULL) {
+                    *status_out = status2;
+                }
+                return ESP_OK;
+            }
+            if (status_out != NULL) {
+                *status_out = status2;
+            }
+            return ESP_ERR_TIMEOUT;
+        }
+        esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        burner_task_yield_if_due();
+    }
+
+    if (status_out != NULL) {
+        *status_out = status1;
+    }
     return ESP_ERR_TIMEOUT;
 }
 
@@ -1371,14 +1475,14 @@ static esp_err_t burner_bacon_mbc5_erase_sector(uint32_t flash_addr, uint32_t ti
         return err;
     }
 
-    err = burner_bacon_wait_u8(cart_addr, 0xFFu, timeout_ms);
+    err = burner_bacon_mbc5_amd_wait_erase_complete(cart_addr, timeout_ms, NULL);
     if (err == ESP_ERR_TIMEOUT) {
         uint8_t read_back = 0u;
         (void)burner_bacon_gbc_read_u8(cart_addr, &read_back);
         ESP_LOGW(
             BURNER_TAG,
             "MBC5 erase timeout flash=0x%08" PRIX32 " bank=%u cart_addr=0x%04X sector=%" PRIu32
-            " read=0x%02X timeout=%ums",
+            " status=0x%02X timeout=%ums",
             flash_addr,
             (unsigned)bank,
             (unsigned)cart_addr,
@@ -1666,7 +1770,7 @@ erase_range_out:
 static esp_err_t burner_bacon_mbc5_chip_erase(void)
 {
     uint8_t cmd;
-    uint8_t read_back = 0;
+    uint8_t read_back = 0u;
     int64_t deadline_us;
     esp_err_t err;
 
@@ -1717,14 +1821,24 @@ static esp_err_t burner_bacon_mbc5_chip_erase(void)
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_gbc_read_u8(0x0000u, &read_back);
-        if (err != ESP_OK) {
-            return err;
-        }
-        if (read_back == 0xFFu) {
+        err = burner_bacon_mbc5_amd_wait_erase_complete(
+            0x0000u,
+            burner_erase_remaining_timeout_ms(deadline_us),
+            &read_back);
+        if (err == ESP_OK) {
             return ESP_OK;
         }
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        if (err != ESP_ERR_TIMEOUT) {
+            return err;
+        }
+        if ((read_back & 0x20u) != 0u) {
+            ESP_LOGW(
+                BURNER_TAG,
+                "MBC5 chip erase timeout status=0x%02X timeout=%ums",
+                (unsigned)read_back,
+                (unsigned)BURNER_ROM_CHIP_ERASE_TIMEOUT_MS);
+            return err;
+        }
     }
 
     return ESP_ERR_TIMEOUT;
@@ -1782,7 +1896,11 @@ static esp_err_t burner_bacon_gbc_rom_program(
             if (err != ESP_OK) {
                 return err;
             }
-            err = burner_bacon_wait_u8(start_addr, buf[i], BURNER_ROM_POLL_TIMEOUT_MS);
+            err = burner_bacon_mbc5_amd_wait_program_complete(
+                start_addr,
+                buf[i],
+                BURNER_ROM_POLL_TIMEOUT_MS,
+                NULL);
             if (err != ESP_OK) {
                 return err;
             }
@@ -1854,7 +1972,11 @@ static esp_err_t burner_bacon_gbc_rom_program(
             if (!fallback_to_single) {
                 last_addr = (uint16_t)(start_addr + (uint16_t)write_len - 1u);
                 last_expected = buf[i + write_len - 1u];
-                err = burner_bacon_wait_u8(last_addr, last_expected, BURNER_ROM_POLL_TIMEOUT_MS);
+                err = burner_bacon_mbc5_amd_wait_program_complete(
+                    last_addr,
+                    last_expected,
+                    BURNER_ROM_POLL_TIMEOUT_MS,
+                    NULL);
                 if (err != ESP_OK) {
                     fallback_to_single = true;
                 }
@@ -1901,7 +2023,11 @@ static esp_err_t burner_bacon_gbc_rom_program(
                     if (err != ESP_OK) {
                         return err;
                     }
-                    err = burner_bacon_wait_u8(single_addr, buf[i + single_i], BURNER_ROM_POLL_TIMEOUT_MS);
+                    err = burner_bacon_mbc5_amd_wait_program_complete(
+                        single_addr,
+                        buf[i + single_i],
+                        BURNER_ROM_POLL_TIMEOUT_MS,
+                        NULL);
                     if (err != ESP_OK) {
                         return err;
                     }

@@ -302,6 +302,120 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_wifi_forget_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t smb_status_uri = {
+        .uri = "/api/smb/status",
+        .method = HTTP_GET,
+        .handler = burner_smb_status_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_discover_uri = {
+        .uri = "/api/smb/discover",
+        .method = HTTP_GET,
+        .handler = burner_smb_discover_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_shares_uri = {
+        .uri = "/api/smb/shares",
+        .method = HTTP_POST,
+        .handler = burner_smb_shares_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_favorites_uri = {
+        .uri = "/api/smb/favorites",
+        .method = HTTP_GET,
+        .handler = burner_smb_favorites_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_favorite_add_uri = {
+        .uri = "/api/smb/favorites/add",
+        .method = HTTP_POST,
+        .handler = burner_smb_favorite_add_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_favorite_delete_uri = {
+        .uri = "/api/smb/favorites/delete",
+        .method = HTTP_POST,
+        .handler = burner_smb_favorite_delete_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_favorite_connect_uri = {
+        .uri = "/api/smb/favorites/connect",
+        .method = HTTP_POST,
+        .handler = burner_smb_favorite_connect_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_connect_uri = {
+        .uri = "/api/smb/connect",
+        .method = HTTP_POST,
+        .handler = burner_smb_connect_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_disconnect_uri = {
+        .uri = "/api/smb/disconnect",
+        .method = HTTP_POST,
+        .handler = burner_smb_disconnect_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_list_uri = {
+        .uri = "/api/smb/list",
+        .method = HTTP_GET,
+        .handler = burner_smb_list_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_music_dir_get_uri = {
+        .uri = "/api/smb/music_dir",
+        .method = HTTP_GET,
+        .handler = burner_smb_music_dir_get_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t smb_music_dir_set_uri = {
+        .uri = "/api/smb/music_dir",
+        .method = HTTP_POST,
+        .handler = burner_smb_music_dir_set_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_status_uri = {
+        .uri = "/api/music/status",
+        .method = HTTP_GET,
+        .handler = burner_music_status_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_play_smb_uri = {
+        .uri = "/api/music/play_smb",
+        .method = HTTP_POST,
+        .handler = burner_music_play_smb_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_play_smb_folder_uri = {
+        .uri = "/api/music/play_smb_folder",
+        .method = HTTP_POST,
+        .handler = burner_music_play_smb_folder_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_stop_uri = {
+        .uri = "/api/music/stop",
+        .method = HTTP_POST,
+        .handler = burner_music_stop_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_pause_uri = {
+        .uri = "/api/music/pause",
+        .method = HTTP_POST,
+        .handler = burner_music_pause_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_seek_uri = {
+        .uri = "/api/music/seek",
+        .method = HTTP_POST,
+        .handler = burner_music_seek_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t music_volume_uri = {
+        .uri = "/api/music/volume",
+        .method = HTTP_POST,
+        .handler = burner_music_volume_handler,
+        .user_ctx = NULL,
+    };
     httpd_uri_t web_main_upload_uri = {
         .uri = "/api/web/main_html",
         .method = HTTP_POST,
@@ -343,13 +457,11 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
     burner_status_reset();
     xSemaphoreGive(s_status_lock);
 
-    config.max_uri_handlers = 61;
+    config.max_uri_handlers = 78;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
     config.core_id = WEB_HTTPD_CORE_ID;
     config.task_priority = WEB_HTTPD_TASK_PRIORITY;
-    if (esp_psram_is_initialized()) {
-        config.task_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
-    }
+    config.task_caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
     // Browser WebSocket handshake headers can be longer than default.
     config.max_req_hdr_len = 4096;
     config.max_uri_len = 512;
@@ -607,6 +719,101 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         web_ws_stop();
         return err;
     }
+    err = httpd_register_uri_handler(s_httpd, &smb_status_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_discover_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_shares_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_favorites_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_favorite_add_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_favorite_delete_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_favorite_connect_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_connect_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_disconnect_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_list_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_music_dir_get_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &smb_music_dir_set_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_status_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_play_smb_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_play_smb_folder_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_stop_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_pause_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_seek_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &music_volume_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
     err = httpd_register_uri_handler(s_httpd, &web_main_upload_uri);
     if (err != ESP_OK) {
         web_ws_stop();
@@ -671,4 +878,9 @@ esp_err_t web_ws_send(uint8_t *data, int len)
 void web_ws_mark_activity(void)
 {
     ui_mark_activity();
+}
+
+void web_ws_mark_network_activity(void)
+{
+    ui_mark_network_activity();
 }
