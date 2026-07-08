@@ -21,6 +21,7 @@
 # Local progress / experiment notes
 /PROGRESS_*.md
 /EXPERIMENT_*.md
+/docs/
 
 # Editor and local workspace
 /.vscode/
