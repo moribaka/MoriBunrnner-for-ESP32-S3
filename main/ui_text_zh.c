@@ -186,6 +186,7 @@ const ui_text_entry_t g_ui_text_zh[] = {
     {"cart analyzed", "卡带已分析"},
     {"cart operations", "卡带操作"},
     {"chip erase cancelled", "已取消整片擦除"},
+    {"chip erase busy", "芯片擦除中"},
     {"chip erase started", "整片擦除已启动"},
     {"choose method", "选择方式"},
     {"clear sector protection", "清除扇区保护"},

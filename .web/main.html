@@ -529,6 +529,308 @@
             font-size: 12px;
         }
 
+        .smb-share-browser {
+            width: min(96vw, 980px);
+            max-width: 980px;
+            padding: 24px;
+        }
+
+        .smb-share-browser .modal-body {
+            margin-bottom: 18px;
+        }
+
+        .smb-share-layout {
+            display: grid;
+            grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .smb-share-fields,
+        .smb-share-panel {
+            display: grid;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .smb-share-options {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .smb-modal-hint {
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .smb-share-list {
+            display: grid;
+            gap: 8px;
+            max-height: min(58vh, 560px);
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .smb-share-item {
+            grid-template-columns: 40px minmax(0, 1fr) 80px 80px 86px;
+            min-height: 58px;
+        }
+
+        .smb-share-item .file-name {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            line-height: 1.35;
+        }
+
+        .smb-share-item .file-name-text {
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .smb-share-comment {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 400;
+            margin-top: 4px;
+            overflow-wrap: anywhere;
+        }
+
+        .smb-share-item .file-actions {
+            opacity: 1;
+            justify-content: flex-end;
+        }
+
+        .smb-share-item .file-actions .btn {
+            width: auto;
+            min-width: 56px;
+            white-space: nowrap;
+        }
+
+        .smb-browser-card {
+            overflow: hidden;
+        }
+
+        .smb-browser-header {
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .smb-browser-subtitle {
+            margin-top: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .smb-browser-workspace {
+            grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+            gap: 18px;
+        }
+
+        .smb-browser-tip {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.6;
+            padding: 18px;
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .smb-file-item {
+            grid-template-columns: 40px minmax(0, 1.8fr) 96px 136px 124px;
+            align-items: start;
+        }
+
+        .smb-file-item .file-name {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            line-height: 1.45;
+            padding-top: 2px;
+        }
+
+        .smb-file-item .file-name-text {
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .smb-file-item .file-actions {
+            opacity: 1;
+            justify-content: flex-end;
+            align-self: center;
+        }
+
+        .reader-modal {
+            width: min(96vw, 1120px);
+            max-width: 1120px;
+            padding: 24px;
+        }
+
+        .reader-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .reader-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .reader-meta {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .reader-toolbar-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .reader-status {
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(0, 240, 255, 0.08);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .reader-status.error {
+            background: rgba(255, 68, 68, 0.08);
+            border-color: rgba(255, 68, 68, 0.24);
+            color: #ffc2c2;
+        }
+
+        .reader-viewport {
+            min-height: 62vh;
+            max-height: 72vh;
+            overflow: auto;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            padding: 16px;
+        }
+
+        .reader-empty {
+            min-height: 48vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 24px;
+        }
+
+        .reader-frame {
+            width: 100%;
+            height: 68vh;
+            border: none;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .reader-image-wrap {
+            min-height: 58vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reader-image {
+            max-width: 100%;
+            max-height: 66vh;
+            object-fit: contain;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .reader-text-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: 'Consolas', 'Cascadia Code', monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
+        .reader-epub {
+            color: var(--text-primary);
+        }
+
+        .reader-epub-toc {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .reader-epub-toc a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(0, 240, 255, 0.08);
+        }
+
+        .reader-epub-section {
+            padding: 18px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .reader-epub-section:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .reader-epub-section h2 {
+            margin-bottom: 14px;
+            font-size: 22px;
+        }
+
+        .reader-epub-content {
+            line-height: 1.8;
+        }
+
+        .reader-epub-content p,
+        .reader-epub-content li,
+        .reader-epub-content blockquote,
+        .reader-epub-content pre {
+            margin-bottom: 1em;
+        }
+
+        .reader-epub-content pre,
+        .reader-epub-content code {
+            font-family: 'Consolas', 'Cascadia Code', monospace;
+        }
+
+        .reader-inline-note {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-style: italic;
+        }
+
         .system-status-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1386,6 +1688,59 @@
                 animation: file-name-marquee var(--scroll-duration, 6s) linear infinite alternate;
             }
 
+            .smb-share-browser {
+                width: calc(100% - 16px);
+                padding: 12px;
+            }
+
+            .smb-share-layout {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .smb-browser-workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .smb-share-list {
+                max-height: 48vh;
+            }
+
+            .smb-share-item {
+                grid-template-columns: 32px minmax(0, 1fr) 72px;
+            }
+
+            .smb-file-item {
+                grid-template-columns: 40px minmax(0, 1fr) auto;
+            }
+
+            .smb-share-item .file-actions .btn {
+                width: auto;
+                min-width: 52px;
+                padding: 0 10px;
+            }
+
+            .reader-modal {
+                width: 100%;
+                padding: 12px;
+            }
+
+            .reader-viewport {
+                min-height: 52vh;
+                max-height: 62vh;
+                padding: 12px;
+            }
+
+            .reader-frame {
+                height: 56vh;
+            }
+
+            .reader-header-actions,
+            .reader-toolbar,
+            .reader-toolbar-actions {
+                width: 100%;
+            }
+
             .burn-status,
             .power-grid,
             .wifi-list {
@@ -1894,9 +2249,17 @@
                     <span class="nav-icon">💻</span>
                     <span>系统信息</span>
                 </a>
+                <a href="#/book" class="nav-item" data-page="book">
+                    <span class="nav-icon">📚</span>
+                    <span>书库阅读</span>
+                </a>
                 <a href="#/tf" class="nav-item" data-page="tf">
                     <span class="nav-icon">📁</span>
                     <span>TF 文件管理</span>
+                </a>
+                <a href="#/smb" class="nav-item" data-page="smb">
+                    <span class="nav-icon">🗄️</span>
+                    <span>SMB 服务器</span>
                 </a>
                 <a href="#/wifi" class="nav-item" data-page="wifi">
                     <span class="nav-icon">📶</span>
@@ -2128,6 +2491,31 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="readerModal">
+        <div class="modal reader-modal">
+            <h3 class="modal-title">
+                <span id="readerTitle">阅读器</span>
+                <div class="reader-header-actions">
+                    <button class="btn btn-sm" id="readerEditBtn" onclick="openCurrentPreviewInEditor()">✏️ 编辑</button>
+                    <button class="btn btn-sm" onclick="openReaderInNewTab()">↗️ 新窗口</button>
+                    <button class="minimize-btn" onclick="closeReaderModal()" title="关闭">✕</button>
+                </div>
+            </h3>
+            <div class="modal-body" style="margin-bottom: 0;">
+                <div class="reader-toolbar">
+                    <div class="reader-meta" id="readerMeta">准备打开文件</div>
+                    <div class="reader-toolbar-actions">
+                        <button class="btn btn-sm" onclick="downloadCurrentPreview()">⬇️ 下载</button>
+                    </div>
+                </div>
+                <div class="reader-status hidden" id="readerStatus"></div>
+                <div class="reader-viewport" id="readerViewport">
+                    <div class="reader-empty">选择文件后会在这里显示内容</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 其他模态框 -->
     <div class="modal-overlay" id="modal">
         <div class="modal">
@@ -2147,6 +2535,7 @@
         // 全局状态
         const state = {
             currentPath: '',
+            fileBrowserMode: 'tf',
             currentPage: 'tf',
             burnStatus: null,
             statusInterval: null,
@@ -2210,19 +2599,31 @@
             pendingDumpAutoDownloaded: false,
             lastBurnMessage: '',
             burnCancelPending: false,
-            cartProbeData: null
+            cartProbeData: null,
+            currentPreview: null,
+            smbCurrentPath: '',
+            smbStatus: null,
+            smbServers: [],
+            smbFavorites: [],
+            smbScanLoading: false,
+            smbModalShares: [],
+            smbModalReuseAuth: false,
+            musicStatusTimer: null
         };
 
         // 页面渲染函数
         const pages = {
             system: renderSystemPage,
+            book: renderBookPage,
             tf: renderTFPage,
+            smb: renderSMBPage,
             wifi: renderWiFiPage,
             power: renderPowerPage,
             burner: renderBurnerPage,
             settings: renderSettingsPage
         };
 
+        const BOOK_ROOT_PATH = 'book';
         const ROM_DUMP_CHUNK_OPTIONS_KB = Object.freeze([32, 64, 128, 256]);
         const MANUAL_ROM_SIZE_OPTIONS_MIB = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128]);
 
@@ -2438,8 +2839,14 @@
             if (state.currentPage === 'system' && pageName !== 'system') {
                 stopSystemAutoRefresh();
             }
+            if (state.currentPage === 'smb' && pageName !== 'smb') {
+                stopMusicStatusPolling();
+            }
 
             state.currentPage = pageName;
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.page === pageName);
+            });
             const render = pages[pageName];
             if (render) {
                 document.getElementById('mainContent').innerHTML = '';
@@ -2447,8 +2854,25 @@
             }
         }
 
+        function isBookMode() {
+            return state.fileBrowserMode === 'book';
+        }
+
+        function isPathInBookScope(path) {
+            return path === BOOK_ROOT_PATH || path.startsWith(BOOK_ROOT_PATH + '/');
+        }
+
+        function coerceBookPath(path) {
+            const normalized = String(path || '').replace(/^\/+|\/+$/g, '');
+            if (!normalized) {
+                return BOOK_ROOT_PATH;
+            }
+            return isPathInBookScope(normalized) ? normalized : BOOK_ROOT_PATH;
+        }
+
         // TF 文件管理页面（支持多选）
         function renderTFPage() {
+            state.fileBrowserMode = 'tf';
             const container = document.getElementById('mainContent');
             container.innerHTML = `
                 <div class="page-header animate-in">
@@ -2493,6 +2917,44 @@
             setupTfFileListDragDrop();
         }
 
+        function renderBookPage() {
+            state.fileBrowserMode = 'book';
+            const container = document.getElementById('mainContent');
+            container.innerHTML = `
+                <div class="page-header animate-in">
+                    <h1 class="page-title">📚 书库阅读</h1>
+                    <p class="page-subtitle">固定读取 /book，只允许在书库目录中浏览与打开</p>
+                </div>
+
+                <div class="multi-select-bar" id="multiSelectBar">
+                    <span class="multi-select-count">已选择 0 项</span>
+                    <button class="btn btn-sm" onclick="downloadSelected()">⬇️ 下载</button>
+                    <button class="btn btn-sm" onclick="clearSelection()">✕ 取消</button>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="file-toolbar">
+                        <button class="btn" onclick="refreshFileList()" id="refreshBtn">
+                            <span>🔄</span> 刷新书库
+                        </button>
+                    </div>
+
+                    <div class="breadcrumb" id="breadcrumb">
+                        <span class="breadcrumb-item" onclick="navigateTo('${BOOK_ROOT_PATH}')">书库</span>
+                    </div>
+
+                    <div class="file-list" id="fileList">
+                        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <div class="spinner" style="margin: 0 auto 16px;"></div>
+                            加载中...
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            loadFileList(BOOK_ROOT_PATH);
+        }
+
         function setupTfFileListDragDrop() {
             const fileList = document.getElementById('fileList');
             if (!fileList) return;
@@ -2525,6 +2987,111 @@
                     startMultiUpload(e.dataTransfer.files);
                 }
             });
+        }
+
+        function renderSMBPage() {
+            const container = document.getElementById('mainContent');
+            container.innerHTML = `
+                <div class="page-header animate-in">
+                    <h1 class="page-title">🗄️ SMB 服务器</h1>
+                    <p class="page-subtitle">同一台 NAS 填过一次账号密码后，后续浏览共享和添加位置都会自动复用。</p>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="card-header">
+                        <h3 class="card-title">已添加的位置</h3>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn" onclick="scanSMBServers()" id="smbScanBtn">扫描局域网 SMB</button>
+                            <button class="btn btn-primary" onclick="showSMBConnectModal()">添加位置</button>
+                            <button class="btn" onclick="loadSMBFavorites()">刷新</button>
+                            <button class="btn btn-danger" onclick="disconnectSMB()">断开当前连接</button>
+                        </div>
+                    </div>
+                    <div id="smbDiscoveryPanel" style="margin-bottom: 16px;"></div>
+                    <div id="smbFavoritesPanel" style="margin-bottom: 16px;">
+                        <div style="text-align: center; padding: 24px; color: var(--text-secondary);">
+                            <div class="spinner" style="margin: 0 auto 12px;"></div>
+                            正在读取已添加位置...
+                        </div>
+                    </div>
+                    <div class="card-header" style="padding-left: 0; padding-right: 0; margin-top: 4px;">
+                        <h3 class="card-title">当前连接</h3>
+                        <button class="btn btn-sm" onclick="loadSMBStatus()">刷新</button>
+                    </div>
+                    <div id="smbStatusPanel">
+                        <div style="text-align: center; padding: 24px; color: var(--text-secondary);">
+                            <div class="spinner" style="margin: 0 auto 12px;"></div>
+                            正在读取 SMB 状态...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card animate-in smb-browser-card" id="smbShareBrowserCard">
+                    <div class="card-header smb-browser-header">
+                        <div>
+                            <h3 class="card-title">共享浏览器</h3>
+                            <div class="smb-browser-subtitle">先确认服务器，再连续添加共享。留空账号密码时，会优先复用这台服务器已经保存过的凭据。</div>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="loadSMBSharesFromModal()" id="smbLoadSharesBtn">读取共享文件夹</button>
+                            <button class="btn" onclick="clearSMBConnectPanel()">清空</button>
+                        </div>
+                    </div>
+                    <div class="smb-share-layout smb-browser-workspace">
+                        <div class="smb-share-fields">
+                            <input type="text" class="input" id="smbHost" placeholder="NAS IP 或主机名" onkeydown="handleSMBModalKey(event)">
+                            <input type="text" class="input" id="smbUser" placeholder="账号，留空自动复用已保存凭据" onkeydown="handleSMBModalKey(event)">
+                            <input type="password" class="input" id="smbPassword" placeholder="密码，留空自动复用已保存凭据" onkeydown="handleSMBModalKey(event)">
+                            <input type="text" class="input" id="smbDomain" placeholder="域/工作组，可留空" onkeydown="handleSMBModalKey(event)">
+                            <input type="number" class="input" id="smbPort" placeholder="端口" value="445" min="1" max="65535" onkeydown="handleSMBModalKey(event)">
+                            <label class="smb-share-options">
+                                <input type="checkbox" id="smbSigning">
+                                <span>启用 SMB 签名</span>
+                            </label>
+                            <div class="smb-modal-hint">同一台 SMB 服务器填过一次密码后，这里留空也能继续浏览和添加共享；只有要切换账号时才需要重新填写。</div>
+                        </div>
+                        <div class="smb-share-panel" id="smbSharePanel">
+                            <div class="smb-browser-tip">请先填写 NAS 地址，再点击“读取共享文件夹”。从扫描结果或“已添加的位置”进入时，会自动带出服务器信息。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="file-toolbar">
+                        <button class="btn" onclick="refreshSMBList()" id="smbRefreshBtn"><span>🔄</span> 刷新</button>
+                        <button class="btn" onclick="setSMBMusicFolder()"><span>🎵</span> 设为音乐文件夹</button>
+                    </div>
+                    <div class="breadcrumb" id="smbBreadcrumb">
+                        <span class="breadcrumb-item" onclick="navigateSMB('')">共享根目录</span>
+                    </div>
+                    <div class="file-list" id="smbFileList">
+                        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            请先连接 SMB 服务器
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="card-header">
+                        <h3 class="card-title">音乐播放</h3>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-primary btn-sm" onclick="playSMBMusicFolder()">播放音乐文件夹</button>
+                            <button class="btn btn-sm" onclick="loadMusicStatus()">刷新</button>
+                        </div>
+                    </div>
+                    <div id="musicPlayerPanel">
+                        <div style="color: var(--text-secondary);">尚未读取播放状态</div>
+                    </div>
+                </div>
+            `;
+
+            loadSMBStatus().then(() => {
+                if (state.smbStatus && state.smbStatus.connected) {
+                    loadSMBList(state.smbCurrentPath || '');
+                }
+            });
+            loadSMBFavorites();
+            startMusicStatusPolling();
         }
 
         // Wi-Fi 管理页面
@@ -3378,6 +3945,45 @@
             return '手动模式已开启，请从列表中选择一个 GBX 配置。';
         }
 
+        function ensureManualConfigAvailable(modeOverride, options = {}) {
+            const mode = String(modeOverride || state.cartMode || 'gba').toLowerCase() === 'mbc5' ? 'mbc5' : 'gba';
+            const seedKey = String(options.seedKey || `manual|${mode}|${getBurnRecipeModeValue()}`);
+            const announce = options.announce !== false;
+            const enableManual = options.enableManual === true;
+            const isNewSeed = state.manualConfigSeedKey !== seedKey;
+
+            state.manualConfigVisible = true;
+            state.manualConfigSeedKey = seedKey;
+
+            if (isNewSeed) {
+                state.manualConfigEnabled = enableManual;
+                state.manualGbxProfile = '';
+                if (announce) {
+                    addBurnLog('已开放手动配置选项，可直接指定 GBX 配置', 'info');
+                }
+            } else if (enableManual) {
+                state.manualConfigEnabled = true;
+            }
+
+            if (!state.manualRomSizeMiB) {
+                setManualRomSizeMiB(32, false);
+            }
+            if (mode === 'mbc5') {
+                setManualRamType(
+                    ['sram', 'fram'].includes(String(state.manualRamType || '').toLowerCase()) ? state.manualRamType : 'sram',
+                    false);
+            } else if (!String(state.manualRamType || '').trim()) {
+                setManualRamType('unknown', false);
+            }
+
+            updateManualConfigUi();
+            if (getBurnRecipeModeValue() === 'gbx') {
+                loadGbxProfiles(mode, isNewSeed || !!options.forceReload);
+            }
+
+            return { mode, isNewSeed };
+        }
+
         function getBurnRecipeModeValue() {
             return normalizeRecipeModeValue(state.recipeMode);
         }
@@ -3637,17 +4243,11 @@
                 probe.chip || '',
                 probe.recipeMode || ''
             ].join('|');
-            const isNewSeed = state.manualConfigSeedKey !== seedKey;
-            const mode = probe.mode === 'mbc5' ? 'mbc5' : 'gba';
-
-            state.manualConfigVisible = true;
-            state.manualConfigSeedKey = seedKey;
-
-            if (isNewSeed) {
-                state.manualConfigEnabled = false;
-                state.manualGbxProfile = '';
-                addBurnLog('分析完成，已开放手动配置选项', 'info');
-            }
+            const ensured = ensureManualConfigAvailable(
+                probe.mode,
+                { seedKey, announce: true });
+            const isNewSeed = ensured.isNewSeed;
+            const mode = ensured.mode;
 
             if (Number(probe.deviceSize || 0) > 0) {
                 const sizeMiB = Math.ceil(Number(probe.deviceSize || 0) / (1024 * 1024));
@@ -4513,6 +5113,10 @@
                 }
                 showToast('ID 读取成功', 'success');
             } catch (error) {
+                if (getBurnRecipeModeValue() === 'gbx') {
+                    ensureManualConfigAvailable(mode, { announce: false, enableManual: true });
+                    addBurnLog('GBX 自动分析失败，已切到手动模式，请直接选择 GBX 配置', 'warning');
+                }
                 addBurnLog('读取失败: ' + error.message, 'error');
                 showToast('ID 读取失败', 'error');
             }
@@ -4549,6 +5153,10 @@
                 logCartIdDebugSample(data);
                 showToast('ID+内容 读取成功', 'success');
             } catch (error) {
+                if (getBurnRecipeModeValue() === 'gbx') {
+                    ensureManualConfigAvailable(mode, { announce: false, enableManual: true });
+                    addBurnLog('GBX 自动分析失败，已切到手动模式，请直接选择 GBX 配置', 'warning');
+                }
                 addBurnLog('调试读取失败: ' + error.message, 'error');
                 showToast('ID+内容 读取失败', 'error');
             }
@@ -6219,13 +6827,15 @@
 
         // 文件列表加载（支持多选）
         async function loadFileList(path) {
-            state.currentPath = path;
-            updateBreadcrumb(path);
+            const effectivePath = isBookMode() ? coerceBookPath(path) : path;
+            state.currentPath = effectivePath;
+            updateBreadcrumb(effectivePath);
             state.selectedFiles.clear();
             updateMultiSelectBar();
             
             try {
-                const response = await apiCall(`/api/tf/list?path=${encodeURIComponent(path)}`);
+                const scopeQuery = isBookMode() ? '&scope=book' : '';
+                const response = await apiCall(`/api/tf/list?path=${encodeURIComponent(effectivePath)}${scopeQuery}`);
                 const data = await response.json();
                 
                 if (data.ok) {
@@ -6264,16 +6874,18 @@
                 return a.is_dir ? -1 : 1;
             });
 
+            const bookMode = isBookMode();
             list.innerHTML = entries.map(entry => `
-                <div class="file-item" data-path="${entry.path}" data-is-dir="${entry.is_dir}" data-name="${entry.name}" data-size="${entry.size}" onclick="handleFileClick(this, event)">
+                <div class="file-item" data-path="${escapeAttr(entry.path)}" data-is-dir="${entry.is_dir}" data-name="${escapeAttr(entry.name)}" data-size="${entry.size}" onclick="handleFileClick(this, event)">
                     <div class="file-icon">${entry.is_dir ? '📁' : getFileIcon(entry.name)}</div>
-                    <div class="file-name" title="${entry.name}"><span class="file-name-text">${entry.name}</span></div>
+                    <div class="file-name" title="${escapeAttr(entry.name)}"><span class="file-name-text">${escapeHtml(entry.name)}</span></div>
                     <div class="file-size">${entry.is_dir ? '--' : formatSize(entry.size)}</div>
                     <div class="file-date">${formatFileModifiedTime(entry.mtime, serverTimeSeconds)}</div>
                     <div class="file-actions" onclick="event.stopPropagation()">
-                        ${entry.is_dir ? '' : `<button class="btn" onclick="downloadFile('${entry.path}')">⬇️</button>`}
-                        <button class="btn" onclick="showRenameModal('${entry.path}')">✏️</button>
-                        <button class="btn btn-danger" onclick="showDeleteModal('${entry.path}', ${entry.is_dir})">🗑️</button>
+                        ${entry.is_dir ? '' : (bookMode && canPreviewFile(entry.name) ? `<button class="btn" onclick="openReaderFromButton(this)">👁️</button>` : '')}
+                        ${entry.is_dir ? '' : `<button class="btn" onclick="downloadFileFromButton(this)">⬇️</button>`}
+                        ${bookMode ? '' : `<button class="btn" onclick="showRenameModalFromButton(this)">✏️</button>`}
+                        ${bookMode ? '' : `<button class="btn btn-danger" onclick="showDeleteModalFromButton(this)">🗑️</button>`}
                     </div>
                 </div>
             `).join('');
@@ -6318,18 +6930,83 @@
             if (isDir) {
                 navigateTo(path);
             } else {
-                const ext = name.split('.').pop().toLowerCase();
+                if (isBookMode()) {
+                    if (canPreviewFile(name)) {
+                        openReader(path, name);
+                    } else {
+                        downloadFile(path);
+                    }
+                    return;
+                }
+
+                const ext = getFileExtension(name);
                 const isRom = ['gba', 'gb', 'gbc'].includes(ext);
-                const isTextFile = ['ini', 'txt', 'cfg', 'conf', 'json', 'xml', 'md', 'log'].includes(ext);
                 
                 if (isRom) {
                     showFileActionModal(name, size, path);
-                } else if (isTextFile) {
-                    openTextEditor(path, name);
+                } else if (isBookMode() && canPreviewFile(name)) {
+                    openReader(path, name);
                 } else {
                     downloadFile(path);
                 }
             }
+        }
+
+        function getFileExtension(filename) {
+            const value = String(filename || '');
+            const dot = value.lastIndexOf('.');
+            return dot >= 0 ? value.slice(dot + 1).toLowerCase() : '';
+        }
+
+        function isTextPreviewExtension(ext) {
+            return ['txt', 'log', 'ini', 'cfg', 'conf', 'md', 'json', 'xml', 'csv'].includes(ext);
+        }
+
+        function isEditableTextFile(name) {
+            return isTextPreviewExtension(getFileExtension(name));
+        }
+
+        function isImagePreviewExtension(ext) {
+            return ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext);
+        }
+
+        function canPreviewFile(name) {
+            const ext = getFileExtension(name);
+            return isTextPreviewExtension(ext) || isImagePreviewExtension(ext) || ext === 'pdf' || ext === 'epub';
+        }
+
+        function buildPreviewUrl(path) {
+            const effectivePath = isBookMode() ? coerceBookPath(path) : path;
+            const scopeQuery = isBookMode() || isPathInBookScope(String(effectivePath || '')) ? '&scope=book' : '';
+            return `/api/tf/download?path=${encodeURIComponent(effectivePath)}&preview=1${scopeQuery}`;
+        }
+
+        function getFileItemFromButton(button) {
+            return button ? button.closest('.file-item') : null;
+        }
+
+        function openReaderFromButton(button) {
+            const item = getFileItemFromButton(button);
+            if (!item) return;
+            openReader(item.dataset.path, item.dataset.name);
+        }
+
+        function downloadFileFromButton(button) {
+            const item = getFileItemFromButton(button);
+            if (!item) return;
+            downloadFile(item.dataset.path);
+        }
+
+        function showRenameModalFromButton(button) {
+            const item = getFileItemFromButton(button);
+            if (!item) return;
+            showRenameModal(item.dataset.path);
+        }
+
+        function showDeleteModalFromButton(button) {
+            const item = getFileItemFromButton(button);
+            if (!item) return;
+            showDeleteModal(item.dataset.path, item.dataset.isDir === 'true');
         }
 
         function toggleFileSelection(element) {
@@ -6391,6 +7068,719 @@
             showToast('批量删除完成', 'success');
         }
 
+        async function loadSMBStatus() {
+            const panel = document.getElementById('smbStatusPanel');
+            try {
+                const response = await apiCall('/api/smb/status');
+                const data = await response.json();
+                state.smbStatus = data;
+                renderSMBFavoritesPanel();
+                if (!panel) return data;
+
+                if (data.connected) {
+                    const shareText = `//${data.host}/${data.share}`;
+                    panel.innerHTML = `
+                        <div class="wifi-status-card">
+                            <div class="wifi-icon-large">🗄️</div>
+                            <div class="wifi-info">
+                                <div class="wifi-name">${escapeHtml(shareText)}</div>
+                                <div class="wifi-details">
+                                    用户: ${escapeHtml(data.user || 'guest')} | 端口: ${data.port || 445} | 音乐文件夹: ${escapeHtml(data.music_dir || '未设置')}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+                                <button class="btn btn-sm" onclick="showCurrentSMBShareBrowser()">继续添加共享</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    panel.innerHTML = `
+                        <div style="text-align: center; padding: 28px; color: var(--text-secondary);">
+                            <div style="font-size: 42px; margin-bottom: 12px;">🗄️</div>
+                            尚未连接 SMB 服务器
+                            ${data.last_error ? `<div style="margin-top: 8px; color: var(--accent-secondary);">${escapeHtml(data.last_error)}</div>` : ''}
+                        </div>
+                    `;
+                }
+                return data;
+            } catch (error) {
+                if (panel) {
+                    panel.innerHTML = `<div style="padding: 24px; color: var(--accent-secondary);">读取 SMB 状态失败: ${escapeHtml(error.message)}</div>`;
+                }
+                return null;
+            }
+        }
+
+        async function loadSMBFavorites() {
+            const panel = document.getElementById('smbFavoritesPanel');
+            try {
+                const response = await apiCall('/api/smb/favorites');
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '读取失败');
+                }
+                state.smbFavorites = Array.isArray(data.favorites) ? data.favorites : [];
+                renderSMBFavoritesPanel();
+            } catch (error) {
+                if (panel) {
+                    panel.innerHTML = `<div style="padding: 18px; color: var(--accent-secondary);">读取已添加位置失败: ${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        function renderSMBFavoritesPanel() {
+            const panel = document.getElementById('smbFavoritesPanel');
+            if (!panel) return;
+
+            if (!state.smbFavorites || state.smbFavorites.length === 0) {
+                panel.innerHTML = `
+                    <div style="text-align: center; padding: 28px; color: var(--text-secondary);">
+                        尚未添加 SMB 位置，扫描或手动添加后会保存在这里
+                    </div>
+                `;
+                return;
+            }
+
+            panel.innerHTML = `
+                <div style="display: grid; gap: 8px;">
+                    ${state.smbFavorites.map(item => {
+                        const status = state.smbStatus || {};
+                        const active = Boolean(status.connected) &&
+                            String(item.host || '').trim().toLowerCase() === String(status.host || '').trim().toLowerCase() &&
+                            String(item.share || '').trim().toLowerCase() === String(status.share || '').trim().toLowerCase() &&
+                            (Number(item.port) || 445) === (Number(status.port) || 445);
+                        return `
+                        <div class="wifi-status-card" style="padding: 12px;">
+                            <div class="wifi-icon-large" style="font-size: 28px;">📁</div>
+                            <div class="wifi-info">
+                                <div class="wifi-name">${escapeHtml(item.label || `//${item.host}/${item.share}`)}</div>
+                                <div class="wifi-details">
+                                    用户: ${escapeHtml(item.user || 'guest')} | 端口: ${item.port || 445}
+                                    ${active ? ' | 已连接' : ''}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+                                <button class="btn btn-primary btn-sm" onclick="connectSMBFavorite(${Number(item.id) || 0})">${active ? '浏览' : '连接'}</button>
+                                <button class="btn btn-sm" onclick="addSMBShareForFavorite(${Number(item.id) || 0})">添加共享</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteSMBFavorite(${Number(item.id) || 0})">删除</button>
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+            `;
+        }
+
+        function addSMBShareForFavorite(id) {
+            const item = (state.smbFavorites || []).find(entry => Number(entry.id) === Number(id));
+            if (!item) return;
+            showSMBConnectModal({
+                host: item.host || '',
+                port: item.port || 445,
+                domain: item.domain || '',
+                signing: Boolean(item.signing),
+                reuseSavedAuth: true
+            });
+        }
+
+        function showCurrentSMBShareBrowser() {
+            const status = state.smbStatus || {};
+            if (!status.host) {
+                showToast('当前没有可复用的 SMB 服务器信息', 'warning');
+                return;
+            }
+            showSMBConnectModal({
+                host: status.host || '',
+                port: status.port || 445,
+                domain: status.domain || '',
+                signing: Boolean(status.signing),
+                reuseSavedAuth: true
+            });
+        }
+
+        async function connectSMBFavorite(id) {
+            if (!id) return;
+            try {
+                const response = await apiCall('/api/smb/favorites/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '连接失败');
+                }
+                state.smbCurrentPath = '';
+                showToast('SMB 已连接', 'success');
+                await loadSMBStatus();
+                await loadSMBList('');
+            } catch (error) {
+                showToast('SMB 连接失败: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteSMBFavorite(id) {
+            if (!id) return;
+            const item = (state.smbFavorites || []).find(entry => Number(entry.id) === Number(id));
+            const label = item ? (item.label || `//${item.host}/${item.share}`) : '这个 SMB 位置';
+            if (!confirm(`确定删除已添加的 SMB 位置「${label}」吗？当前连接不会被自动断开。`)) {
+                return;
+            }
+            try {
+                const response = await apiCall('/api/smb/favorites/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '删除失败');
+                }
+                showToast('已删除 SMB 位置', 'success');
+                await loadSMBFavorites();
+            } catch (error) {
+                showToast('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        function renderSMBDiscoveryPanel() {
+            const panel = document.getElementById('smbDiscoveryPanel');
+            if (!panel) return;
+
+            if (state.smbScanLoading) {
+                panel.innerHTML = `
+                    <div style="padding: 18px; color: var(--text-secondary); display: flex; align-items: center; gap: 12px;">
+                        <div class="spinner"></div>
+                        正在扫描局域网 SMB 服务器...
+                    </div>
+                `;
+                return;
+            }
+            if (!state.smbServers || state.smbServers.length === 0) {
+                panel.innerHTML = '';
+                return;
+            }
+
+            panel.innerHTML = `
+                <div style="display: grid; gap: 8px;">
+                    ${state.smbServers.map((server, index) => `
+                        <div class="wifi-status-card" style="padding: 12px;">
+                            <div class="wifi-icon-large" style="font-size: 28px;">🗄️</div>
+                            <div class="wifi-info">
+                                <div class="wifi-name">${escapeHtml(server.name || server.host || 'SMB Server')}</div>
+                                <div class="wifi-details">${escapeHtml(server.host || '')}:${server.port || 445}</div>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="useSMBDiscoveredServer(${index})">使用</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function scanSMBServers() {
+            const btn = document.getElementById('smbScanBtn');
+            state.smbScanLoading = true;
+            state.smbServers = [];
+            if (btn) btn.disabled = true;
+            renderSMBDiscoveryPanel();
+
+            try {
+                const response = await apiCall('/api/smb/discover?timeout_ms=12000');
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '扫描失败');
+                }
+                state.smbServers = Array.isArray(data.servers) ? data.servers : [];
+                if (state.smbServers.length === 0) {
+                    const network = data.network ? `（${data.network}）` : '';
+                    showToast(`没有扫描到 SMB 服务器${network}，可手动填写 NAS 地址`, 'warning');
+                } else {
+                    const network = data.network ? `，网段 ${data.network}` : '';
+                    showToast(`扫描到 ${state.smbServers.length} 台 SMB 服务器${network}`, 'success');
+                }
+            } catch (error) {
+                showToast('SMB 扫描失败: ' + error.message, 'error');
+            } finally {
+                state.smbScanLoading = false;
+                if (btn) btn.disabled = false;
+                renderSMBDiscoveryPanel();
+            }
+        }
+
+        function findSMBFavoriteForServer(host, port = 445) {
+            const normalizedHost = String(host || '').trim().toLowerCase();
+            const normalizedPort = Number(port) || 445;
+            if (!normalizedHost) return null;
+            return (state.smbFavorites || []).find(item =>
+                String(item.host || '').trim().toLowerCase() === normalizedHost &&
+                (Number(item.port) || 445) === normalizedPort
+            ) || null;
+        }
+
+        function useSMBDiscoveredServer(index) {
+            const server = state.smbServers && state.smbServers[index];
+            if (!server) return;
+            const saved = findSMBFavoriteForServer(server.host, server.port || 445);
+            showSMBConnectModal(saved ? {
+                ...server,
+                domain: saved.domain || '',
+                signing: Boolean(saved.signing),
+                reuseSavedAuth: true
+            } : server);
+        }
+
+        function setSMBConnectPanelValues(values = {}, options = {}) {
+            const hostEl = document.getElementById('smbHost');
+            const userEl = document.getElementById('smbUser');
+            const passwordEl = document.getElementById('smbPassword');
+            const domainEl = document.getElementById('smbDomain');
+            const portEl = document.getElementById('smbPort');
+            const signingEl = document.getElementById('smbSigning');
+            const reuseSavedAuth = Boolean(values.reuseSavedAuth);
+            const message = options.message || (reuseSavedAuth
+                ? '已带出服务器信息，这台服务器可以直接复用之前保存过的账号密码。'
+                : '请填写服务器信息后，点击“读取共享文件夹”。');
+
+            if (!hostEl || !userEl || !passwordEl || !domainEl || !portEl || !signingEl) {
+                return false;
+            }
+
+            hostEl.value = values.host || '';
+            userEl.value = values.user || '';
+            passwordEl.value = values.password || '';
+            domainEl.value = values.domain || '';
+            portEl.value = values.port || 445;
+            signingEl.checked = Boolean(values.signing);
+            userEl.placeholder = reuseSavedAuth ? '账号，留空自动复用已保存凭据' : '账号，可留空';
+            passwordEl.placeholder = reuseSavedAuth ? '密码，留空自动复用已保存凭据' : '密码，可留空';
+            state.smbModalShares = [];
+            state.smbModalReuseAuth = reuseSavedAuth;
+            if (!options.preservePanel) {
+                renderSMBSharePanel([], message);
+            }
+            return true;
+        }
+
+        function clearSMBConnectPanel() {
+            setSMBConnectPanelValues({
+                host: '',
+                user: '',
+                password: '',
+                domain: '',
+                port: 445,
+                signing: false,
+                reuseSavedAuth: false
+            }, {
+                message: '请先填写 NAS 地址，再点击“读取共享文件夹”。从扫描结果或“已添加的位置”进入时，会自动带出服务器信息。'
+            });
+        }
+
+        function showSMBConnectModal(serverOverride = null) {
+            const current = state.smbStatus || {};
+            const host = serverOverride && serverOverride.host ? serverOverride.host : (current.host || '');
+            const port = serverOverride && serverOverride.port ? serverOverride.port : (current.port || 445);
+            const saved = findSMBFavoriteForServer(host, port);
+            const domain = serverOverride && typeof serverOverride.domain === 'string' ? serverOverride.domain : (saved?.domain || current.domain || '');
+            const signing = serverOverride && typeof serverOverride.signing === 'boolean' ? serverOverride.signing : Boolean(saved?.signing || current.signing);
+            const reuseSavedAuth = Boolean((serverOverride && serverOverride.reuseSavedAuth) || saved);
+            const user = reuseSavedAuth ? '' : (serverOverride && serverOverride.user ? serverOverride.user : (current.user || ''));
+            const card = document.getElementById('smbShareBrowserCard');
+            const shouldAutoLoad = Boolean(host) && Boolean((serverOverride && serverOverride.host) || current.connected);
+
+            if (!setSMBConnectPanelValues({
+                host,
+                user,
+                password: '',
+                domain,
+                port,
+                signing,
+                reuseSavedAuth
+            })) {
+                return;
+            }
+
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            if (!host) {
+                document.getElementById('smbHost')?.focus();
+            }
+            if (shouldAutoLoad) {
+                setTimeout(loadSMBSharesFromModal, 80);
+            }
+        }
+
+        function getSMBModalPayload(share = '') {
+            return {
+                host: (document.getElementById('smbHost')?.value || '').trim(),
+                share: String(share || '').trim(),
+                user: (document.getElementById('smbUser')?.value || '').trim(),
+                password: document.getElementById('smbPassword')?.value || '',
+                domain: (document.getElementById('smbDomain')?.value || '').trim(),
+                port: Number(document.getElementById('smbPort')?.value || 445),
+                signing: Boolean(document.getElementById('smbSigning')?.checked)
+            };
+        }
+
+        function handleSMBModalKey(event) {
+            if (event && event.key === 'Enter') {
+                event.preventDefault();
+                loadSMBSharesFromModal();
+            }
+        }
+
+        function isSMBShareAlreadyAdded(shareName) {
+            const payload = getSMBModalPayload('');
+            const host = String(payload.host || '').trim().toLowerCase();
+            const share = String(shareName || '').trim();
+            const port = Number(payload.port) || 445;
+            if (!host || !share) return false;
+            return (state.smbFavorites || []).some(item =>
+                String(item.host || '').trim().toLowerCase() === host &&
+                String(item.share || '') === share &&
+                (Number(item.port) || 445) === port
+            );
+        }
+
+        function renderSMBSharePanel(shares, message = '') {
+            const panel = document.getElementById('smbSharePanel');
+            if (!panel) return;
+
+            if (message) {
+                panel.innerHTML = `<div style="color: var(--text-secondary); font-size: 13px;">${escapeHtml(message)}</div>`;
+                return;
+            }
+            if (!shares || shares.length === 0) {
+                panel.innerHTML = `<div style="color: var(--text-secondary); font-size: 13px;">没有读到共享文件夹，确认账号密码后再试。</div>`;
+                return;
+            }
+            panel.innerHTML = `
+                <div class="smb-share-list">
+                    ${shares.map(share => {
+                        const added = isSMBShareAlreadyAdded(share.name || '');
+                        return `
+                        <div class="file-item smb-share-item${added ? ' selected' : ''}" data-share="${escapeAttr(share.name || '')}" data-added="${added ? '1' : '0'}" ${added ? '' : 'onclick="addSMBShareFromButton(this)"'}>
+                            <div class="file-icon">📁</div>
+                            <div class="file-name" title="${escapeAttr(share.name || '')}">
+                                <span class="file-name-text">${escapeHtml(share.name || '')}</span>
+                                ${share.comment ? `<div class="smb-share-comment">${escapeHtml(share.comment)}</div>` : ''}
+                            </div>
+                            <div class="file-size">共享</div>
+                            <div class="file-date">${share.hidden ? '隐藏' : '--'}</div>
+                            <div class="file-actions" onclick="event.stopPropagation()">
+                                <button type="button" class="btn ${added ? '' : 'btn-primary'} btn-sm" ${added ? 'disabled' : ''} onclick="addSMBShareFromButton(this.closest('.file-item'))">${added ? '已添加' : '添加'}</button>
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+            `;
+        }
+
+        function addSMBShareFromButton(element) {
+            const share = element ? element.dataset.share : '';
+            if (element && element.dataset.added === '1') return;
+            addSMBFavorite(share);
+        }
+
+        async function loadSMBSharesFromModal() {
+            const btn = document.getElementById('smbLoadSharesBtn');
+            const payload = getSMBModalPayload('');
+
+            if (!payload.host) {
+                showToast('请先填写 NAS 地址', 'warning');
+                document.getElementById('smbHost')?.focus();
+                return;
+            }
+
+            if (btn) btn.disabled = true;
+            renderSMBSharePanel([], '正在读取共享文件夹...');
+            try {
+                const response = await apiCall('/api/smb/shares', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '读取共享失败');
+                }
+                state.smbModalShares = Array.isArray(data.shares) ? data.shares : [];
+                renderSMBSharePanel(state.smbModalShares);
+            } catch (error) {
+                renderSMBSharePanel([], `共享读取失败：${error.message}。如果 NAS 禁止匿名枚举，请填账号密码后再试。`);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function addSMBFavorite(share) {
+            const payload = getSMBModalPayload(share);
+
+            if (!payload.host || !payload.share) {
+                showToast('请选择共享文件夹', 'warning');
+                return;
+            }
+
+            try {
+                const response = await apiCall('/api/smb/favorites/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '添加失败');
+                }
+                await loadSMBFavorites();
+                renderSMBSharePanel(state.smbModalShares);
+                showToast('已添加 SMB 位置，可继续添加同服务器其他共享', 'success');
+            } catch (error) {
+                showToast('添加失败: ' + error.message, 'error');
+            }
+        }
+
+        async function disconnectSMB() {
+            try {
+                await apiCall('/api/smb/disconnect', { method: 'POST' });
+                state.smbCurrentPath = '';
+                showToast('已断开当前 SMB 连接，已添加位置仍会保留', 'success');
+                await loadSMBStatus();
+                renderSMBFavoritesPanel();
+                const list = document.getElementById('smbFileList');
+                if (list) list.innerHTML = '<div style="text-align:center; padding:40px; color: var(--text-secondary);">请先连接 SMB 服务器</div>';
+                updateSMBBreadcrumb('');
+            } catch (error) {
+                showToast('断开失败: ' + error.message, 'error');
+            }
+        }
+
+        async function loadSMBList(path) {
+            const list = document.getElementById('smbFileList');
+            const effectivePath = String(path || '').replace(/^\/+|\/+$/g, '');
+            state.smbCurrentPath = effectivePath;
+            updateSMBBreadcrumb(effectivePath);
+
+            if (list) {
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <div class="spinner" style="margin: 0 auto 16px;"></div>
+                        加载中...
+                    </div>
+                `;
+            }
+
+            try {
+                const response = await apiCall(`/api/smb/list?path=${encodeURIComponent(effectivePath)}`);
+                const data = await response.json();
+                if (!data.ok) {
+                    throw new Error(data.message || '加载失败');
+                }
+                renderSMBFileList(data.entries || []);
+            } catch (error) {
+                if (list) {
+                    list.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: var(--accent-secondary);">
+                            加载失败: ${escapeHtml(error.message)}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function renderSMBFileList(entries) {
+            const list = document.getElementById('smbFileList');
+            if (!list) return;
+            if (!entries.length) {
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
+                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;">📂</div>
+                        空文件夹
+                    </div>
+                `;
+                return;
+            }
+
+            entries.sort((a, b) => {
+                if (a.is_dir === b.is_dir) return String(a.name || '').localeCompare(String(b.name || ''));
+                return a.is_dir ? -1 : 1;
+            });
+
+            list.innerHTML = entries.map(entry => {
+                const ext = getFileExtension(entry.name);
+                const isAudio = ['mp3', 'aac', 'flac', 'wav'].includes(ext);
+                return `
+                    <div class="file-item smb-file-item" data-path="${escapeAttr(entry.path)}" data-is-dir="${entry.is_dir}" data-name="${escapeAttr(entry.name)}" data-size="${entry.size || 0}" onclick="handleSMBFileClick(this)">
+                        <div class="file-icon">${entry.is_dir ? '📁' : getFileIcon(entry.name)}</div>
+                        <div class="file-name" title="${escapeAttr(entry.name)}"><span class="file-name-text">${escapeHtml(entry.name)}</span></div>
+                        <div class="file-size">${entry.is_dir ? '--' : formatSize(entry.size || 0)}</div>
+                        <div class="file-date">${entry.mtime ? formatFileModifiedTime(entry.mtime) : '--'}</div>
+                        <div class="file-actions" onclick="event.stopPropagation()">
+                            ${entry.is_dir ? `<button class="btn" onclick="navigateSMBFromButton(this)">打开</button>` : ''}
+                            ${isAudio ? `<button class="btn btn-primary" onclick="playSMBFromButton(this)">播放</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            requestAnimationFrame(updateFileNameMarquee);
+        }
+
+        function getSMBItemFromButton(button) {
+            return button ? button.closest('.file-item') : null;
+        }
+
+        function navigateSMBFromButton(button) {
+            const item = getSMBItemFromButton(button);
+            if (!item) return;
+            navigateSMB(item.dataset.path || '');
+        }
+
+        function playSMBFromButton(button) {
+            const item = getSMBItemFromButton(button);
+            if (!item) return;
+            playSMBFile(item.dataset.path || '');
+        }
+
+        function handleSMBFileClick(element) {
+            const path = element.dataset.path || '';
+            const isDir = element.dataset.isDir === 'true';
+            const name = element.dataset.name || '';
+            if (isDir) {
+                navigateSMB(path);
+                return;
+            }
+            if (['mp3', 'aac', 'flac', 'wav'].includes(getFileExtension(name))) {
+                playSMBFile(path);
+            } else {
+                showToast('当前文件不是可播放音频', 'warning');
+            }
+        }
+
+        async function setSMBMusicFolder() {
+            try {
+                const response = await apiCall('/api/smb/music_dir', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: state.smbCurrentPath || '' })
+                });
+                const data = await response.json();
+                if (!data.ok) throw new Error(data.message || '设置失败');
+                showToast('已设置 SMB 音乐文件夹', 'success');
+                loadSMBStatus();
+            } catch (error) {
+                showToast('设置失败: ' + error.message, 'error');
+            }
+        }
+
+        async function playSMBFile(path) {
+            try {
+                const response = await apiCall('/api/music/play_smb', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                const data = await response.json();
+                if (!data.ok) throw new Error(data.message || '播放失败');
+                showToast('开始播放 SMB 音乐', 'success');
+                loadMusicStatus();
+            } catch (error) {
+                showToast('播放失败: ' + error.message, 'error');
+            }
+        }
+
+        async function playSMBMusicFolder() {
+            try {
+                const response = await apiCall('/api/music/play_smb_folder', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (!data.ok) throw new Error(data.message || '播放失败');
+                showToast('开始播放: ' + (data.name || 'SMB 音乐'), 'success');
+                loadMusicStatus();
+            } catch (error) {
+                showToast('播放文件夹失败: ' + error.message, 'error');
+            }
+        }
+
+        function startMusicStatusPolling() {
+            stopMusicStatusPolling();
+            loadMusicStatus();
+            state.musicStatusTimer = setInterval(loadMusicStatus, 2000);
+        }
+
+        function stopMusicStatusPolling() {
+            if (state.musicStatusTimer) {
+                clearInterval(state.musicStatusTimer);
+                state.musicStatusTimer = null;
+            }
+        }
+
+        async function loadMusicStatus() {
+            const panel = document.getElementById('musicPlayerPanel');
+            if (!panel) return;
+            try {
+                const response = await apiCall('/api/music/status');
+                const data = await response.json();
+                renderMusicStatus(data);
+            } catch (error) {
+                panel.innerHTML = `<div style="color: var(--accent-secondary);">读取播放状态失败: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function renderMusicStatus(data) {
+            const panel = document.getElementById('musicPlayerPanel');
+            if (!panel || !data) return;
+            const percent = data.file_size > 0 ? Math.min(100, Math.round((data.position || 0) * 100 / data.file_size)) : 0;
+            const title = data.name || '未播放';
+            panel.innerHTML = `
+                <div style="display: grid; gap: 14px;">
+                    <div>
+                        <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">
+                            状态: ${escapeHtml(data.state || 'idle')} | 来源: ${escapeHtml(data.source || '--')} | ${formatSize(data.position || 0)} / ${formatSize(data.file_size || 0)}
+                        </div>
+                        ${data.message ? `<div style="margin-top: 6px; color: var(--accent-secondary);">${escapeHtml(data.message)}</div>` : ''}
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${percent}%"></div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn" onclick="musicSeek(-1048576)">后退</button>
+                        <button class="btn btn-primary" onclick="musicPause()">暂停/继续</button>
+                        <button class="btn" onclick="musicSeek(1048576)">前进</button>
+                        <button class="btn btn-danger" onclick="musicStop()">停止</button>
+                        <input class="input" type="number" id="musicVolumeInput" min="0" max="100" value="${Number(data.volume || 0)}" style="width: 90px;" onchange="musicSetVolume(this.value)">
+                    </div>
+                </div>
+            `;
+        }
+
+        async function musicPause() {
+            await apiCall('/api/music/pause', { method: 'POST' });
+            loadMusicStatus();
+        }
+
+        async function musicStop() {
+            await apiCall('/api/music/stop', { method: 'POST' });
+            loadMusicStatus();
+        }
+
+        async function musicSeek(delta) {
+            await apiCall('/api/music/seek', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ delta })
+            });
+            loadMusicStatus();
+        }
+
+        async function musicSetVolume(volume) {
+            await apiCall('/api/music/volume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volume: Number(volume || 0) })
+            });
+            loadMusicStatus();
+        }
+
         // Wi-Fi 功能
         async function loadWiFiStatus() {
             try {
@@ -6409,11 +7799,15 @@
                         <div class="wifi-status-card">
                             <div class="wifi-icon-large">📶</div>
                             <div class="wifi-info">
-                                <div class="wifi-name">${data.ssid}</div>
+                                <div class="wifi-name">${escapeHtml(data.ssid)}</div>
                                 <div class="wifi-details">
-                                    IP: ${data.ip} | 信号: ${data.rssi}dBm | 信道: ${data.channel}
+                                    IP: ${escapeHtml(data.ip)} | 信号: ${data.rssi}dBm | 信道: ${data.channel}
                                 </div>
                             </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;">
+                            <button class="btn btn-primary" onclick="showWiFiAddressQR('${escapeAttr(data.ip)}')">查看二维码</button>
+                            <button class="btn" onclick="disconnectWiFi()">断开连接</button>
                         </div>
                     `;
                 } else {
@@ -7285,12 +8679,13 @@
         }
 
         function getFileIcon(filename) {
-            const ext = filename.split('.').pop().toLowerCase();
+            const ext = getFileExtension(filename);
             const icons = {
                 gba: '🎮', gb: '🎮', gbc: '🎮',
-                txt: '📄', md: '📝', json: '📋',
+                txt: '📄', log: '📄', ini: '📄', cfg: '📄', conf: '📄', md: '📝', json: '📋', xml: '📋', csv: '📋',
+                pdf: '📕', epub: '📚',
                 zip: '📦', rar: '📦', '7z': '📦',
-                png: '🖼️', jpg: '🖼️', gif: '🖼️'
+                png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', bmp: '🖼️', webp: '🖼️', svg: '🖼️'
             };
             return icons[ext] || '📄';
         }
@@ -7299,18 +8694,49 @@
             const breadcrumb = document.getElementById('breadcrumb');
             if (!breadcrumb) return;
 
-            const parts = path.split('/').filter(p => p);
-            const html = ['<span class="breadcrumb-item" onclick="navigateTo(\'\')">根目录</span>'];
+            const effectivePath = isBookMode() ? coerceBookPath(path) : String(path || '');
+            const parts = effectivePath.split('/').filter(p => p);
+            const html = [
+                isBookMode()
+                    ? `<span class="breadcrumb-item" onclick="navigateTo('${BOOK_ROOT_PATH}')">书库</span>`
+                    : '<span class="breadcrumb-item" onclick="navigateTo(\'\')">根目录</span>'
+            ];
 
             let currentPath = '';
+            const visibleParts = isBookMode() && parts[0] === BOOK_ROOT_PATH ? parts.slice(1) : parts;
+            visibleParts.forEach((part, index) => {
+                currentPath = isBookMode()
+                    ? (currentPath ? `${currentPath}/${part}` : `${BOOK_ROOT_PATH}/${part}`)
+                    : (currentPath ? `${currentPath}/${part}` : part);
+                const isLast = index === visibleParts.length - 1;
+                html.push('<span class="breadcrumb-separator">/</span>');
+                if (isLast) {
+                    html.push(`<span style="color: var(--accent-primary);">${escapeHtml(part)}</span>`);
+                } else {
+                    html.push(`<span class="breadcrumb-item" onclick="navigateTo('${escapeAttr(currentPath)}')">${escapeHtml(part)}</span>`);
+                }
+            });
+
+            breadcrumb.innerHTML = html.join('');
+        }
+
+        function updateSMBBreadcrumb(path) {
+            const breadcrumb = document.getElementById('smbBreadcrumb');
+            if (!breadcrumb) return;
+
+            const effectivePath = String(path || '').replace(/^\/+|\/+$/g, '');
+            const parts = effectivePath.split('/').filter(p => p);
+            const html = ['<span class="breadcrumb-item" onclick="navigateSMB(\'\')">共享根目录</span>'];
+            let currentPath = '';
+
             parts.forEach((part, index) => {
-                currentPath += (currentPath ? '/' : '') + part;
+                currentPath = currentPath ? `${currentPath}/${part}` : part;
                 const isLast = index === parts.length - 1;
                 html.push('<span class="breadcrumb-separator">/</span>');
                 if (isLast) {
-                    html.push(`<span style="color: var(--accent-primary);">${part}</span>`);
+                    html.push(`<span style="color: var(--accent-primary);">${escapeHtml(part)}</span>`);
                 } else {
-                    html.push(`<span class="breadcrumb-item" onclick="navigateTo('${currentPath}')">${part}</span>`);
+                    html.push(`<span class="breadcrumb-item" onclick="navigateSMB('${escapeAttr(currentPath)}')">${escapeHtml(part)}</span>`);
                 }
             });
 
@@ -7318,18 +8744,34 @@
         }
 
         function navigateTo(path) {
-            loadFileList(path);
+            loadFileList(isBookMode() ? coerceBookPath(path) : path);
+        }
+
+        function navigateSMB(path) {
+            loadSMBList(path);
         }
 
         function refreshFileList() {
             const btn = document.getElementById('refreshBtn');
             if (!btn) {
-                loadFileList(state.currentPath);
+                loadFileList(isBookMode() ? coerceBookPath(state.currentPath) : state.currentPath);
                 return;
             }
 
             btn.innerHTML = '<span class="spinner"></span> 刷新';
-            loadFileList(state.currentPath).finally(() => {
+            loadFileList(isBookMode() ? coerceBookPath(state.currentPath) : state.currentPath).finally(() => {
+                btn.innerHTML = '<span>🔄</span> 刷新';
+            });
+        }
+
+        function refreshSMBList() {
+            const btn = document.getElementById('smbRefreshBtn');
+            if (!btn) {
+                loadSMBList(state.smbCurrentPath || '');
+                return;
+            }
+            btn.innerHTML = '<span class="spinner"></span> 刷新';
+            loadSMBList(state.smbCurrentPath || '').finally(() => {
                 btn.innerHTML = '<span>🔄</span> 刷新';
             });
         }
@@ -7576,7 +9018,7 @@
         function showRenameModal(path) {
             const oldName = path.split('/').pop();
             showModal('重命名', `
-                <input type="text" class="input" id="renameValue" value="${oldName}" autofocus>
+                <input type="text" class="input" id="renameValue" value="${escapeAttr(oldName)}" autofocus>
             `, async () => {
                 const newName = document.getElementById('renameValue').value.trim();
                 if (!newName || newName === oldName) {
@@ -7608,7 +9050,7 @@
         function showDeleteModal(path, isDir) {
             const name = path.split('/').pop();
             showModal('确认删除', `
-                确定要删除 ${isDir ? '文件夹' : '文件'} "<strong>${name}</strong>" 吗？${isDir ? '<br><span style="color: var(--accent-secondary);">文件夹内的所有内容将被递归删除！</span>' : ''}
+                确定要删除 ${isDir ? '文件夹' : '文件'} "<strong>${escapeHtml(name)}</strong>" 吗？${isDir ? '<br><span style="color: var(--accent-secondary);">文件夹内的所有内容将被递归删除！</span>' : ''}
             `, async () => {
                 try {
                     const response = await apiCall(`/api/tf/delete?path=${encodeURIComponent(path)}`, {
@@ -8597,11 +10039,21 @@
             }
         }
 
-        function showModal(title, body, onConfirm) {
+        function showModal(title, body, onConfirm, modalClass = '') {
             document.getElementById('modalTitle').textContent = title;
             document.getElementById('modalBody').innerHTML = body;
 
+            const modalEl = document.querySelector('#modal .modal');
+            if (modalEl) {
+                modalEl.className = 'modal';
+                if (modalClass) {
+                    modalClass.split(/\s+/).filter(Boolean).forEach(cls => modalEl.classList.add(cls));
+                }
+            }
+
             const confirmBtn = document.getElementById('modalConfirm');
+            confirmBtn.textContent = '确认';
+            confirmBtn.disabled = false;
             if (onConfirm) {
                 confirmBtn.onclick = onConfirm;
                 confirmBtn.style.display = 'inline-flex';
@@ -8615,6 +10067,11 @@
 
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
+            const modalEl = document.querySelector('#modal .modal');
+            if (modalEl) {
+                modalEl.className = 'modal';
+            }
+            state.smbModalReuseAuth = false;
         }
 
         function updateWiFiStatus() {
@@ -8634,6 +10091,172 @@
 
         function formatTime(date) {
             return date.toTimeString().split(' ')[0];
+        }
+
+        function showWiFiAddressQR(ip) {
+            const cleanIp = String(ip || '').trim();
+            const url = cleanIp ? `http://${cleanIp}/` : window.location.origin + '/';
+            showModal('网页登录二维码', `
+                <div style="display: grid; gap: 14px; justify-items: center;">
+                    <canvas id="wifiAddressQr" width="232" height="232" style="background: #fff; border-radius: 8px; padding: 8px;"></canvas>
+                    <div style="font-family: Consolas, monospace; color: var(--text-secondary); word-break: break-all; text-align: center;">${escapeHtml(url)}</div>
+                </div>
+            `);
+            requestAnimationFrame(() => drawQrCodeToCanvas('wifiAddressQr', url));
+        }
+
+        function drawQrCodeToCanvas(canvasId, text) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const qr = createQrMatrix(String(text || ''));
+            const ctx = canvas.getContext('2d');
+            const size = canvas.width;
+            const quiet = 4;
+            const modules = qr.length + quiet * 2;
+            const scale = Math.floor(size / modules);
+            const offset = Math.floor((size - modules * scale) / 2);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = '#111111';
+            for (let y = 0; y < qr.length; y++) {
+                for (let x = 0; x < qr.length; x++) {
+                    if (qr[y][x]) {
+                        ctx.fillRect(offset + (x + quiet) * scale, offset + (y + quiet) * scale, scale, scale);
+                    }
+                }
+            }
+        }
+
+        function createQrMatrix(text) {
+            const size = 25;
+            const matrix = Array.from({ length: size }, () => Array(size).fill(false));
+            const reserved = Array.from({ length: size }, () => Array(size).fill(false));
+            const formatA = [[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];
+            const formatB = [[size-1,8],[size-2,8],[size-3,8],[size-4,8],[size-5,8],[size-6,8],[size-7,8],[8,size-8],[8,size-7],[8,size-6],[8,size-5],[8,size-4],[8,size-3],[8,size-2],[8,size-1]];
+
+            function set(x, y, value, reserve = true) {
+                if (x < 0 || y < 0 || x >= size || y >= size) return;
+                matrix[y][x] = value;
+                if (reserve) reserved[y][x] = true;
+            }
+
+            function finder(x, y) {
+                for (let yy = -1; yy <= 7; yy++) {
+                    for (let xx = -1; xx <= 7; xx++) {
+                        const ax = x + xx;
+                        const ay = y + yy;
+                        const on = xx >= 0 && yy >= 0 && xx <= 6 && yy <= 6 &&
+                            (xx === 0 || yy === 0 || xx === 6 || yy === 6 || (xx >= 2 && xx <= 4 && yy >= 2 && yy <= 4));
+                        set(ax, ay, on, true);
+                    }
+                }
+            }
+
+            finder(0, 0);
+            finder(size - 7, 0);
+            finder(0, size - 7);
+            for (let yy = -2; yy <= 2; yy++) {
+                for (let xx = -2; xx <= 2; xx++) {
+                    const d = Math.max(Math.abs(xx), Math.abs(yy));
+                    set(18 + xx, 18 + yy, d === 2 || d === 0, true);
+                }
+            }
+            for (let i = 8; i < size - 8; i++) {
+                set(i, 6, i % 2 === 0, true);
+                set(6, i, i % 2 === 0, true);
+            }
+            set(8, 17, true, true);
+            formatA.concat(formatB).forEach(([x, y]) => set(x, y, false, true));
+
+            const bytes = Array.from(new TextEncoder().encode(text));
+            const dataBits = [];
+            const len = Math.min(bytes.length, 32);
+            [0, 1, 0, 0].forEach(bit => dataBits.push(bit));
+            for (let i = 7; i >= 0; i--) dataBits.push((len >> i) & 1);
+            bytes.slice(0, len).forEach(b => {
+                for (let i = 7; i >= 0; i--) dataBits.push((b >> i) & 1);
+            });
+            dataBits.push(0, 0, 0, 0);
+            while (dataBits.length % 8) dataBits.push(0);
+            const pads = [0xec, 0x11];
+            let padIndex = 0;
+            while (dataBits.length < 272) {
+                const pad = pads[padIndex++ % pads.length];
+                for (let i = 7; i >= 0; i--) dataBits.push((pad >> i) & 1);
+            }
+            const dataCodewords = [];
+            for (let i = 0; i < 34; i++) {
+                let value = 0;
+                for (let bit = 0; bit < 8; bit++) value = (value << 1) | dataBits[i * 8 + bit];
+                dataCodewords.push(value);
+            }
+            const codewords = dataCodewords.concat(qrReedSolomonRemainder(dataCodewords, 10));
+            const finalBits = [];
+            codewords.forEach(b => {
+                for (let i = 7; i >= 0; i--) finalBits.push((b >> i) & 1);
+            });
+
+            let bitIndex = 0;
+            let upward = true;
+            for (let x = size - 1; x > 0; x -= 2) {
+                if (x === 6) x--;
+                for (let step = 0; step < size; step++) {
+                    const y = upward ? size - 1 - step : step;
+                    for (let dx = 0; dx < 2; dx++) {
+                        const xx = x - dx;
+                        if (reserved[y][xx]) continue;
+                        const raw = bitIndex < finalBits.length ? finalBits[bitIndex++] === 1 : false;
+                        const mask = ((xx + y) % 2) === 0;
+                        set(xx, y, raw !== mask, false);
+                    }
+                }
+                upward = !upward;
+            }
+
+            const formatBits = [1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0];
+            formatBits.forEach((bit, i) => {
+                set(formatA[i][0], formatA[i][1], bit === 1, true);
+                set(formatB[i][0], formatB[i][1], bit === 1, true);
+            });
+
+            return matrix;
+        }
+
+        function qrGfMultiply(x, y) {
+            let z = 0;
+            for (let i = 7; i >= 0; i--) {
+                z = (z << 1) ^ ((z >>> 7) * 0x11d);
+                if (((y >>> i) & 1) !== 0) z ^= x;
+            }
+            return z & 0xff;
+        }
+
+        function qrReedSolomonDivisor(degree) {
+            const result = Array(degree).fill(0);
+            result[degree - 1] = 1;
+            let root = 1;
+            for (let i = 0; i < degree; i++) {
+                for (let j = 0; j < result.length; j++) {
+                    result[j] = qrGfMultiply(result[j], root);
+                    if (j + 1 < result.length) result[j] ^= result[j + 1];
+                }
+                root = qrGfMultiply(root, 0x02);
+            }
+            return result;
+        }
+
+        function qrReedSolomonRemainder(data, degree) {
+            const divisor = qrReedSolomonDivisor(degree);
+            const result = Array(degree).fill(0);
+            data.forEach(byte => {
+                const factor = byte ^ result.shift();
+                result.push(0);
+                divisor.forEach((coef, i) => {
+                    result[i] ^= qrGfMultiply(coef, factor);
+                });
+            });
+            return result;
         }
 
         function buildExportTimestamp(date = new Date()) {
@@ -8704,6 +10327,15 @@
             return div.innerHTML;
         }
 
+        function escapeAttr(text) {
+            return String(text ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
@@ -8740,7 +10372,10 @@
             document.getElementById('textEditModal').classList.add('active');
             
             try {
-                const response = await fetch(`/api/tf/download?path=${encodeURIComponent(path)}`);
+                const response = await fetch(buildPreviewUrl(path));
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const content = await response.text();
                 document.getElementById('textEditContent').value = content;
             } catch (error) {
@@ -8759,9 +10394,11 @@
             
             const content = document.getElementById('textEditContent').value;
             const { path, name } = currentEditingFile;
+            const slash = path.lastIndexOf('/');
+            const dir = slash >= 0 ? path.slice(0, slash) : '';
             
             try {
-                const response = await fetch(`/api/tf/upload?dir=${encodeURIComponent(state.currentPath)}&name=${encodeURIComponent(name)}`, {
+                const response = await fetch(`/api/tf/upload?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
                     body: content
@@ -8778,6 +10415,363 @@
             } catch (error) {
                 showToast('保存失败: ' + error.message, 'error');
             }
+        }
+
+        function setReaderStatus(message, isError = false) {
+            const status = document.getElementById('readerStatus');
+            if (!status) return;
+            if (!message) {
+                status.classList.add('hidden');
+                status.classList.remove('error');
+                status.textContent = '';
+                return;
+            }
+            status.classList.remove('hidden');
+            status.classList.toggle('error', !!isError);
+            status.textContent = message;
+        }
+
+        function setReaderViewportHtml(html) {
+            const viewport = document.getElementById('readerViewport');
+            if (!viewport) return;
+            viewport.innerHTML = html;
+            viewport.scrollTop = 0;
+        }
+
+        function closeReaderModal() {
+            document.getElementById('readerModal').classList.remove('active');
+            setReaderStatus('');
+            setReaderViewportHtml('<div class="reader-empty">选择文件后会在这里显示内容</div>');
+            state.currentPreview = null;
+        }
+
+        function openReaderInNewTab() {
+            if (!state.currentPreview) return;
+            window.open(buildPreviewUrl(state.currentPreview.path), '_blank', 'noopener');
+        }
+
+        function downloadCurrentPreview() {
+            if (!state.currentPreview) return;
+            downloadFile(state.currentPreview.path);
+        }
+
+        function openCurrentPreviewInEditor() {
+            if (!state.currentPreview) return;
+            if (!isEditableTextFile(state.currentPreview.name)) {
+                showToast('当前文件不是可编辑文本', 'warning');
+                return;
+            }
+            closeReaderModal();
+            openTextEditor(state.currentPreview.path, state.currentPreview.name);
+        }
+
+        async function openReader(path, name) {
+            if (!isPathInBookScope(String(path || ''))) {
+                throw new Error('只允许从 /book 打开阅读器');
+            }
+            const ext = getFileExtension(name);
+            state.currentPreview = { path, name, ext };
+            document.getElementById('readerTitle').textContent = `阅读: ${name}`;
+            document.getElementById('readerMeta').textContent = `${name} · ${ext || 'file'}`;
+            document.getElementById('readerEditBtn').style.display = isEditableTextFile(name) ? 'inline-flex' : 'none';
+            setReaderStatus('');
+            setReaderViewportHtml('<div class="reader-empty"><div><div class="spinner" style="margin: 0 auto 16px;"></div>正在加载内容...</div></div>');
+            document.getElementById('readerModal').classList.add('active');
+
+            try {
+                if (isTextPreviewExtension(ext)) {
+                    const response = await fetch(buildPreviewUrl(path));
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const text = await response.text();
+                    setReaderViewportHtml(`<div class="reader-text-content">${escapeHtml(text)}</div>`);
+                    return;
+                }
+
+                if (isImagePreviewExtension(ext)) {
+                    const url = buildPreviewUrl(path);
+                    setReaderViewportHtml(`
+                        <div class="reader-image-wrap">
+                            <img class="reader-image" src="${escapeAttr(url)}" alt="${escapeAttr(name)}">
+                        </div>
+                    `);
+                    return;
+                }
+
+                if (ext === 'pdf') {
+                    const url = buildPreviewUrl(path);
+                    setReaderStatus('PDF 使用浏览器内置查看器展示。');
+                    setReaderViewportHtml(`<iframe class="reader-frame" src="${escapeAttr(url)}" title="${escapeAttr(name)}"></iframe>`);
+                    return;
+                }
+
+                if (ext === 'epub') {
+                    setReaderStatus('EPUB 正在浏览器侧解包并提取章节文字，首次打开会稍慢一些。');
+                    await openEpubReader(path, name);
+                    return;
+                }
+
+                setReaderViewportHtml('<div class="reader-empty">当前文件类型暂不支持预览</div>');
+            } catch (error) {
+                console.error('Reader open failed:', error);
+                setReaderStatus(`预览失败: ${error.message}`, true);
+                setReaderViewportHtml(`
+                    <div class="reader-empty">
+                        <div>
+                            <div style="font-size: 40px; margin-bottom: 12px;">⚠️</div>
+                            <div style="margin-bottom: 10px;">无法直接预览这个文件。</div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">你仍然可以使用右上角的新窗口或下载按钮继续查看。</div>
+                        </div>
+                    </div>
+                `);
+            }
+        }
+
+        function readZipLe16(bytes, offset) {
+            return bytes[offset] | (bytes[offset + 1] << 8);
+        }
+
+        function readZipLe32(bytes, offset) {
+            return (bytes[offset]) |
+                (bytes[offset + 1] << 8) |
+                (bytes[offset + 2] << 16) |
+                (bytes[offset + 3] << 24);
+        }
+
+        function decodeZipText(bytes) {
+            return new TextDecoder('utf-8').decode(bytes);
+        }
+
+        function normalizeZipPath(path) {
+            const parts = [];
+            for (const part of String(path || '').replace(/\\/g, '/').split('/')) {
+                if (!part || part === '.') continue;
+                if (part === '..') {
+                    parts.pop();
+                } else {
+                    parts.push(part);
+                }
+            }
+            return parts.join('/');
+        }
+
+        function resolveZipPath(basePath, href) {
+            if (!href) return normalizeZipPath(basePath);
+            if (/^[a-z]+:/i.test(href)) return href;
+            const cleanHref = href.split('#')[0].split('?')[0];
+            if (cleanHref.startsWith('/')) {
+                return normalizeZipPath(cleanHref.slice(1));
+            }
+            const base = basePath.includes('/') ? basePath.slice(0, basePath.lastIndexOf('/') + 1) : '';
+            return normalizeZipPath(base + cleanHref);
+        }
+
+        function getXmlElementsByLocalName(root, localName) {
+            return Array.from(root.getElementsByTagName('*')).filter(node => node.localName === localName);
+        }
+
+        function parseZipEntries(arrayBuffer) {
+            const bytes = new Uint8Array(arrayBuffer);
+            const maxComment = 0xffff;
+            const minEocd = 22;
+            const start = Math.max(0, bytes.length - (maxComment + minEocd));
+            let eocdOffset = -1;
+
+            for (let i = bytes.length - minEocd; i >= start; i--) {
+                if (bytes[i] === 0x50 && bytes[i + 1] === 0x4b && bytes[i + 2] === 0x05 && bytes[i + 3] === 0x06) {
+                    eocdOffset = i;
+                    break;
+                }
+            }
+            if (eocdOffset < 0) {
+                throw new Error('EPUB ZIP 目录损坏');
+            }
+
+            const totalEntries = readZipLe16(bytes, eocdOffset + 10);
+            const centralOffset = readZipLe32(bytes, eocdOffset + 16) >>> 0;
+            let offset = centralOffset;
+            const entries = new Map();
+
+            for (let i = 0; i < totalEntries; i++) {
+                if (readZipLe32(bytes, offset) !== 0x02014b50) {
+                    throw new Error('EPUB central directory 无效');
+                }
+
+                const method = readZipLe16(bytes, offset + 10);
+                const compressedSize = readZipLe32(bytes, offset + 20) >>> 0;
+                const uncompressedSize = readZipLe32(bytes, offset + 24) >>> 0;
+                const nameLen = readZipLe16(bytes, offset + 28);
+                const extraLen = readZipLe16(bytes, offset + 30);
+                const commentLen = readZipLe16(bytes, offset + 32);
+                const localHeaderOffset = readZipLe32(bytes, offset + 42) >>> 0;
+                const nameBytes = bytes.slice(offset + 46, offset + 46 + nameLen);
+                const name = normalizeZipPath(decodeZipText(nameBytes));
+
+                entries.set(name, {
+                    name,
+                    method,
+                    compressedSize,
+                    uncompressedSize,
+                    localHeaderOffset
+                });
+
+                offset += 46 + nameLen + extraLen + commentLen;
+            }
+
+            return entries;
+        }
+
+        async function unzipEntry(arrayBuffer, entry) {
+            const bytes = new Uint8Array(arrayBuffer);
+            const offset = entry.localHeaderOffset;
+            if (readZipLe32(bytes, offset) !== 0x04034b50) {
+                throw new Error(`EPUB 本地文件头无效: ${entry.name}`);
+            }
+
+            const nameLen = readZipLe16(bytes, offset + 26);
+            const extraLen = readZipLe16(bytes, offset + 28);
+            const dataStart = offset + 30 + nameLen + extraLen;
+            const compressed = bytes.slice(dataStart, dataStart + entry.compressedSize);
+
+            if (entry.method === 0) {
+                return compressed;
+            }
+            if (entry.method === 8) {
+                if (typeof DecompressionStream === 'undefined') {
+                    throw new Error('当前浏览器不支持 EPUB 解压');
+                }
+                const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+                const inflated = await new Response(stream).arrayBuffer();
+                return new Uint8Array(inflated);
+            }
+            throw new Error(`EPUB 压缩方式不支持: ${entry.method}`);
+        }
+
+        async function readZipTextEntry(arrayBuffer, entries, path) {
+            const entry = entries.get(normalizeZipPath(path));
+            if (!entry) {
+                throw new Error(`EPUB 缺少文件: ${path}`);
+            }
+            const data = await unzipEntry(arrayBuffer, entry);
+            return decodeZipText(data);
+        }
+
+        function sanitizeEpubNode(node) {
+            if (!node) return '';
+            if (node.nodeType === Node.TEXT_NODE) {
+                return escapeHtml(node.textContent || '');
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+
+            const tag = node.tagName.toLowerCase();
+            const blocked = new Set(['script', 'style', 'link', 'iframe', 'object', 'embed', 'base', 'meta', 'head']);
+            if (blocked.has(tag)) {
+                return '';
+            }
+            if (tag === 'img') {
+                const alt = node.getAttribute('alt') || node.getAttribute('src') || 'image';
+                return `<p class="reader-inline-note">[图片: ${escapeHtml(alt)}]</p>`;
+            }
+
+            const children = Array.from(node.childNodes).map(child => sanitizeEpubNode(child)).join('');
+            if (tag === 'br') {
+                return '<br>';
+            }
+            if (tag === 'hr') {
+                return '<hr>';
+            }
+            if (tag === 'a') {
+                return children;
+            }
+
+            const allowed = new Set([
+                'p', 'div', 'section', 'article', 'blockquote', 'pre', 'code',
+                'strong', 'em', 'b', 'i', 'u', 'span', 'ul', 'ol', 'li',
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+            ]);
+
+            if (allowed.has(tag)) {
+                return `<${tag}>${children}</${tag}>`;
+            }
+            return children;
+        }
+
+        function extractEpubSectionTitle(doc, fallbackName, index) {
+            const heading = doc.querySelector('h1, h2, h3, title');
+            const title = heading ? heading.textContent.trim() : '';
+            return title || fallbackName || `章节 ${index + 1}`;
+        }
+
+        async function openEpubReader(path, name) {
+            const response = await fetch(buildPreviewUrl(path));
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const entries = parseZipEntries(arrayBuffer);
+            const containerXml = await readZipTextEntry(arrayBuffer, entries, 'META-INF/container.xml');
+            const containerDoc = new DOMParser().parseFromString(containerXml, 'application/xml');
+            const rootfile = getXmlElementsByLocalName(containerDoc, 'rootfile')[0];
+            if (!rootfile) {
+                throw new Error('EPUB 缺少 rootfile');
+            }
+
+            const opfPath = normalizeZipPath(rootfile.getAttribute('full-path') || '');
+            const opfText = await readZipTextEntry(arrayBuffer, entries, opfPath);
+            const opfDoc = new DOMParser().parseFromString(opfText, 'application/xml');
+            const manifest = new Map();
+
+            getXmlElementsByLocalName(opfDoc, 'item').forEach(item => {
+                if (!item.parentElement || item.parentElement.localName !== 'manifest') return;
+                const id = item.getAttribute('id');
+                const href = item.getAttribute('href');
+                if (!id || !href) return;
+                manifest.set(id, {
+                    href: resolveZipPath(opfPath, href),
+                    mediaType: item.getAttribute('media-type') || ''
+                });
+            });
+
+            const spine = getXmlElementsByLocalName(opfDoc, 'itemref')
+                .map(item => manifest.get(item.getAttribute('idref')))
+                .filter(Boolean);
+
+            if (spine.length === 0) {
+                throw new Error('EPUB 目录为空');
+            }
+
+            const tocLinks = [];
+            const sections = [];
+
+            for (let i = 0; i < spine.length; i++) {
+                const item = spine[i];
+                const chapterText = await readZipTextEntry(arrayBuffer, entries, item.href);
+                const chapterDoc = new DOMParser().parseFromString(chapterText, 'text/html');
+                const title = extractEpubSectionTitle(chapterDoc, item.href.split('/').pop(), i);
+                const sectionId = `epub-section-${i + 1}`;
+                const body = chapterDoc.body || chapterDoc.documentElement;
+                const html = sanitizeEpubNode(body).trim() || '<p class="reader-inline-note">这一章没有可显示的文字内容。</p>';
+
+                tocLinks.push(`<a href="#${sectionId}">${escapeHtml(title)}</a>`);
+                sections.push(`
+                    <section class="reader-epub-section" id="${sectionId}">
+                        <h2>${escapeHtml(title)}</h2>
+                        <div class="reader-epub-content">${html}</div>
+                    </section>
+                `);
+            }
+
+            setReaderStatus(`EPUB 已加载，共 ${spine.length} 个章节。`);
+            setReaderViewportHtml(`
+                <div class="reader-epub">
+                    <div class="reader-epub-toc">${tocLinks.join('')}</div>
+                    ${sections.join('')}
+                </div>
+            `);
         }
 
         // 点击模态框外部关闭
@@ -8802,6 +10796,12 @@
         document.getElementById('textEditModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('textEditModal')) {
                 closeTextEditModal();
+            }
+        });
+
+        document.getElementById('readerModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('readerModal')) {
+                closeReaderModal();
             }
         });
 

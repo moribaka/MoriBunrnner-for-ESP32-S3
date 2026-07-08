@@ -43,10 +43,21 @@ dependencies:
     source:
       type: idf
     version: 5.5.1
+  sahlberg/libsmb2:
+    component_hash: aafc0c1c742c38a8c382bbf758217a00da2d8ab19d2642731031d6b79c1b87e0
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 3.0.1
 direct_dependencies:
 - espressif/esp_audio_codec
 - espressif/esp_tinyusb
 - idf
-manifest_hash: c69a9b75276b3a0dc6a10279846f307558a8bc15ef350ab8f834bbbd460030d5
+- sahlberg/libsmb2
+manifest_hash: a5b03b2eb7d2bd0b82c047920927265903642a6884e25565aeb3540380517471
 target: esp32s3
 version: 2.0.0

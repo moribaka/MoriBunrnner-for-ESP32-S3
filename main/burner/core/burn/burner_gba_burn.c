@@ -501,6 +501,7 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
             "gbx chip erase before program",
             job->rom_name,
             job->rom_path);
+        burner_status_set_chip_erase_ui_active(true);
         burner_status_mark_erase_begin();
         erase_timer_started = true;
         err = burner_run_gba_chip_erase();
@@ -2174,6 +2175,7 @@ static esp_err_t burner_run_erase_rom_job_gba(const burner_task_param_t *job)
         "gba chip erase running",
         job->rom_name,
         job->rom_path);
+    burner_status_set_chip_erase_ui_active(true);
     burner_status_mark_erase_begin();
 
     err = burner_run_gba_chip_erase();

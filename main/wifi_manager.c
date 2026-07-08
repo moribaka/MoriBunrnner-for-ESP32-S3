@@ -25,13 +25,14 @@
 #define WIFI_PASS_BUF_LEN 65
 
 #define PROVISION_AP_SSID "MORI-GBA-SETUP"
-#define PROVISION_AP_PASS "12345678"
+#define PROVISION_AP_PASS ""
 
 static int sta_connect_cnt = 0;
 static bool is_sta_connected = false;
 static bool wifi_started = false;
 static bool wifi_initialized = false;
 static bool provisioning_waiting_confirm = false;
+static bool wifi_shutting_down_for_reboot = false;
 
 static char target_ssid[WIFI_SSID_BUF_LEN] = {0};
 
@@ -151,6 +152,14 @@ static esp_err_t recv_request_body(httpd_req_t *req, char *buf, size_t len)
     return ESP_OK;
 }
 
+static esp_err_t send_http_chunk(httpd_req_t *req, const char *chunk)
+{
+    if (req == NULL || chunk == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return httpd_resp_send_chunk(req, chunk, HTTPD_RESP_USE_STRLEN);
+}
+
 static void stop_provision_http_server(void);
 
 static esp_err_t root_get_handler(httpd_req_t *req)
@@ -162,56 +171,89 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         "<meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         "<title>MORI Wi-Fi Setup</title>"
-        "<style>body{font-family:Arial,sans-serif;max-width:520px;margin:32px auto;padding:0 16px;}input,button{width:100%;padding:10px;margin:8px 0;}button{cursor:pointer;}</style>"
+        "<style>body{font-family:Arial,sans-serif;max-width:560px;margin:32px auto;padding:0 16px;line-height:1.55;}"
+        "h2,p{margin:0 0 12px;}label{display:block;margin-top:10px;font-weight:700;}"
+        "input,button{width:100%;padding:10px;margin:8px 0;box-sizing:border-box;}"
+        "button{cursor:pointer;} .note{padding:12px;border:1px solid #ddd;border-radius:10px;background:#f7f7f7;margin-bottom:16px;}"
+        ".lang{color:#555;font-size:14px;} code{background:#f1f1f1;padding:2px 4px;border-radius:4px;}</style>"
         "</head><body>";
     static const char setup_tail[] =
-        "<h2>MORI GBA Burner Wi-Fi Setup</h2>"
-        "<p>Connect ESP32 to your router.</p>"
+        "<h2>MORI GBA Burner Wi-Fi Setup<br><span class='lang'>MORI GBA Burner Wi-Fi 配网</span></h2>"
+        "<div class='note'>"
+        "<strong>Open hotspot / 开放热点</strong><br>"
+        "SSID: <code>MORI-GBA-SETUP</code><br>"
+        "Password: <code>none</code> / 无需密码"
+        "</div>"
+        "<p>Enter your router Wi-Fi below, then tap save.<br>"
+        "<span class='lang'>请填写你家路由器的 Wi-Fi 名称和密码，然后点击保存连接。</span></p>"
         "<form method='post' action='/save'>"
-        "<label>SSID</label><input name='ssid' maxlength='32' required>"
-        "<label>Password</label><input name='password' maxlength='63' type='password'>"
-        "<button type='submit'>Save and Connect</button>"
+        "<label>SSID / Wi-Fi Name / Wi-Fi 名称</label><input name='ssid' maxlength='32' required>"
+        "<label>Password / 密码</label><input name='password' maxlength='63' type='password' placeholder='Leave empty if your Wi-Fi has no password / 无密码可留空'>"
+        "<button type='submit'>Save and Connect / 保存并连接</button>"
         "</form>"
         "</body></html>";
     static const char confirm_head[] =
-        "<h2>Wi-Fi Connected</h2>"
-        "<p>ESP32 is now connected to your router.</p>"
-        "<p>Tap confirm below to close the setup hotspot, then open this address on your phone/computer:</p>";
+        "<h2>Wi-Fi Connected<br><span class='lang'>Wi-Fi 已连接</span></h2>"
+        "<p>ESP32 is now connected to your router.<br>"
+        "<span class='lang'>设备已经连上你的路由器。</span></p>"
+        "<p>Tap confirm below to close the setup hotspot, then open this address on your phone or computer:<br>"
+        "<span class='lang'>点击下方确认后会关闭配网热点，然后请在手机或电脑上打开这个地址：</span></p>";
     static const char confirm_tail[] =
         "<form method='get' action='/'>"
-        "<button type='submit'>Refresh Status</button>"
+        "<button type='submit'>Refresh Status / 刷新状态</button>"
         "</form>"
         "<form method='post' action='/confirm'>"
-        "<button type='submit'>Confirm and Close Setup Hotspot</button>"
+        "<button type='submit'>Confirm and Close Setup Hotspot / 确认并关闭配网热点</button>"
         "</form>"
         "<form method='post' action='/later'>"
-        "<button type='submit'>Keep Hotspot On For Now</button>"
+        "<button type='submit'>Keep Hotspot On For Now / 暂时保留配网热点</button>"
         "</form>"
-        "<p>Later, you can close the hotspot from the device UI or revisit this page.</p>"
+        "<p>Later, you can close the hotspot from the device UI or revisit this page.<br>"
+        "<span class='lang'>之后也可以在设备界面里关闭热点，或者稍后再回来确认。</span></p>"
         "</body></html>";
-    char resp[1024];
+    char ip_link[128];
     int n;
+    esp_err_t err;
 
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     if (waiting_confirm && wifi_maneger_get_sta_ip(ip, sizeof(ip)) == ESP_OK) {
-        n = snprintf(
-            resp,
-            sizeof(resp),
-            "%s%s<p><a href='http://%s/' target='_blank'>http://%s/</a></p>%s",
-            page,
-            confirm_head,
-            ip,
-            ip,
-            confirm_tail);
-        if (n > 0 && n < (int)sizeof(resp)) {
-            return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+        err = send_http_chunk(req, page);
+        if (err != ESP_OK) {
+            return err;
         }
+        err = send_http_chunk(req, confirm_head);
+        if (err != ESP_OK) {
+            return err;
+        }
+        n = snprintf(
+            ip_link,
+            sizeof(ip_link),
+            "<p><a href='http://%s/' target='_blank'>http://%s/</a></p>",
+            ip,
+            ip);
+        if (n <= 0 || n >= (int)sizeof(ip_link)) {
+            httpd_resp_sendstr_chunk(req, NULL);
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "page build failed");
+        }
+        err = send_http_chunk(req, ip_link);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = send_http_chunk(req, confirm_tail);
+        if (err != ESP_OK) {
+            return err;
+        }
+        return httpd_resp_sendstr_chunk(req, NULL);
     }
-    n = snprintf(resp, sizeof(resp), "%s%s", page, setup_tail);
-    if (n <= 0 || n >= (int)sizeof(resp)) {
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "page build failed");
+    err = send_http_chunk(req, page);
+    if (err != ESP_OK) {
+        return err;
     }
-    return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    err = send_http_chunk(req, setup_tail);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return httpd_resp_sendstr_chunk(req, NULL);
 }
 
 static esp_err_t save_post_handler(httpd_req_t *req)
@@ -242,18 +284,44 @@ static esp_err_t save_post_handler(httpd_req_t *req)
     free(body);
 
     if (ssid[0] == '\0') {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ssid is required");
+        return httpd_resp_send_err(
+            req,
+            HTTPD_400_BAD_REQUEST,
+            "SSID is required / 必须填写 SSID");
     }
 
     err = wifi_maneger_save_sta_config(ssid, password);
     if (err != ESP_OK) {
         ESP_LOGE(wifi_manager_tag, "save credentials failed: %s", esp_err_to_name(err));
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "save failed");
+        return httpd_resp_send_err(
+            req,
+            HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Save failed / 保存失败");
     }
 
     wifi_maneger_connect(ssid, password);
-    httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "Saved. ESP32 is connecting to Wi-Fi now. Keep this hotspot connected until the confirm page shows your new IP.");
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    return httpd_resp_sendstr(
+        req,
+        "<!doctype html><html><head>"
+        "<meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<meta http-equiv='refresh' content='3;url=/'>"
+        "<title>Connecting...</title>"
+        "<style>body{font-family:Arial,sans-serif;max-width:560px;margin:32px auto;padding:0 16px;line-height:1.55;}"
+        ".note{padding:12px;border:1px solid #ddd;border-radius:10px;background:#f7f7f7;margin:16px 0;}"
+        "button{width:100%;padding:10px;margin-top:16px;cursor:pointer;}</style>"
+        "</head><body>"
+        "<h2>Connecting to Wi-Fi...<br><span style='color:#555;font-size:14px;'>正在连接 Wi-Fi...</span></h2>"
+        "<div class='note'>"
+        "Saved. ESP32 is connecting to your router now.<br>"
+        "已保存，设备正在连接你的路由器。"
+        "</div>"
+        "<p>Please keep your phone connected to <code>MORI-GBA-SETUP</code>. "
+        "This page will refresh automatically and show the new LAN IP when ready.<br>"
+        "请让手机继续连接 <code>MORI-GBA-SETUP</code>。准备好后，本页会自动刷新并显示新的局域网地址。</p>"
+        "<form method='get' action='/'><button type='submit'>Refresh Now / 立即刷新</button></form>"
+        "</body></html>");
 }
 
 static esp_err_t confirm_post_handler(httpd_req_t *req)
@@ -261,10 +329,16 @@ static esp_err_t confirm_post_handler(httpd_req_t *req)
     esp_err_t err = wifi_maneger_provisioning_confirm();
 
     if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "confirm failed");
+        return httpd_resp_send_err(
+            req,
+            HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Confirm failed / 确认失败");
     }
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "Setup hotspot closed. Please continue from the shown router IP.");
+    return httpd_resp_sendstr(
+        req,
+        "Setup hotspot closed. Please continue from the shown router IP.\n"
+        "配网热点已关闭，请继续使用上面显示的路由器地址。");
 }
 
 static esp_err_t later_post_handler(httpd_req_t *req)
@@ -272,10 +346,16 @@ static esp_err_t later_post_handler(httpd_req_t *req)
     esp_err_t err = wifi_maneger_provisioning_keep_ap();
 
     if (err != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "keep ap failed");
+        return httpd_resp_send_err(
+            req,
+            HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Keep AP failed / 保留热点失败");
     }
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "Setup hotspot remains active. You can close it later from the device UI or revisit this page.");
+    return httpd_resp_sendstr(
+        req,
+        "Setup hotspot remains active. You can close it later from the device UI or revisit this page.\n"
+        "配网热点会继续保留，你可以稍后在设备界面关闭，或回到此页面再确认。");
 }
 
 static esp_err_t start_provision_http_server(void)
@@ -366,31 +446,35 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_STA_START:
-                if (target_ssid[0] != '\0') {
+                if (!wifi_shutting_down_for_reboot && target_ssid[0] != '\0') {
                     esp_wifi_connect();
                 }
                 break;
 
             case WIFI_EVENT_STA_DISCONNECTED: {
                 wifi_event_sta_disconnected_t *disc = (wifi_event_sta_disconnected_t *)event_data;
-                ESP_LOGW(
-                    wifi_manager_tag,
-                    "STA disconnected, reason=%d retry=%d/%d",
-                    disc ? disc->reason : -1,
-                    sta_connect_cnt,
-                    MAX_CONNECT_RETRY);
+                if (!wifi_shutting_down_for_reboot) {
+                    ESP_LOGW(
+                        wifi_manager_tag,
+                        "STA disconnected, reason=%d retry=%d/%d",
+                        disc ? disc->reason : -1,
+                        sta_connect_cnt,
+                        MAX_CONNECT_RETRY);
+                }
 
                 if (is_sta_connected) {
                     is_sta_connected = false;
-                    if (wifi_callback != NULL) {
+                    if (!wifi_shutting_down_for_reboot && wifi_callback != NULL) {
                         wifi_callback(WIFI_STATE_DISCONNECTED);
                     }
                 }
 
-                if (target_ssid[0] != '\0' && sta_connect_cnt < MAX_CONNECT_RETRY) {
+                if (!wifi_shutting_down_for_reboot &&
+                    target_ssid[0] != '\0' &&
+                    sta_connect_cnt < MAX_CONNECT_RETRY) {
                     sta_connect_cnt++;
                     esp_wifi_connect();
-                } else if (wifi_event_group != NULL) {
+                } else if (!wifi_shutting_down_for_reboot && wifi_event_group != NULL) {
                     xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
                 }
                 break;
@@ -624,6 +708,46 @@ void wifi_maneger_disconnect(void)
     }
 }
 
+esp_err_t wifi_maneger_shutdown_for_reboot(void)
+{
+    esp_err_t err = ESP_OK;
+    esp_err_t stop_err;
+
+    wifi_shutting_down_for_reboot = true;
+    target_ssid[0] = '\0';
+    sta_connect_cnt = 0;
+    is_sta_connected = false;
+    provisioning_waiting_confirm = false;
+
+    if (wifi_event_group != NULL) {
+        xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+    }
+
+    stop_provision_http_server();
+
+    if (!wifi_initialized || !wifi_started) {
+        return ESP_OK;
+    }
+
+    stop_err = esp_wifi_disconnect();
+    if (stop_err != ESP_OK &&
+        stop_err != ESP_ERR_WIFI_NOT_STARTED &&
+        stop_err != ESP_ERR_WIFI_CONN) {
+        err = stop_err;
+    }
+
+    stop_err = esp_wifi_stop();
+    if (stop_err != ESP_OK && stop_err != ESP_ERR_WIFI_NOT_STARTED) {
+        if (err == ESP_OK) {
+            err = stop_err;
+        }
+    } else {
+        wifi_started = false;
+    }
+
+    return err;
+}
+
 bool wifi_maneger_has_saved_sta(void)
 {
     char ssid[WIFI_SSID_BUF_LEN] = {0};
@@ -784,8 +908,9 @@ esp_err_t wifi_maneger_ap(void)
     snprintf((char *)ap_config.ap.password, sizeof(ap_config.ap.password), "%s", PROVISION_AP_PASS);
     ap_config.ap.ssid_len = strlen(PROVISION_AP_SSID);
     ap_config.ap.channel = 1;
+    ap_config.ap.ssid_hidden = 0;
     ap_config.ap.max_connection = 4;
-    ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    ap_config.ap.authmode = WIFI_AUTH_OPEN;
 
     err = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
     if (err != ESP_OK) {
@@ -806,9 +931,8 @@ esp_err_t wifi_maneger_ap(void)
     provisioning_waiting_confirm = false;
     ESP_LOGI(
         wifi_manager_tag,
-        "Provision AP started. SSID=%s, PASS=%s, URL=http://192.168.4.1/",
-        PROVISION_AP_SSID,
-        PROVISION_AP_PASS);
+        "Provision AP started. SSID=%s, security=OPEN, URL=http://192.168.4.1/",
+        PROVISION_AP_SSID);
 
     if (wifi_callback != NULL) {
         wifi_callback(WIFI_STATE_PROVISIONING);

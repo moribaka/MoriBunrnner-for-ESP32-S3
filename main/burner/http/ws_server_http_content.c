@@ -6,7 +6,7 @@ static esp_err_t burner_send_builtin_html(httpd_req_t *req, const char *html)
         return ESP_ERR_INVALID_ARG;
     }
 
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     return httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
@@ -20,7 +20,7 @@ esp_err_t burner_static_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "resource not found");
     }
 
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
     return burner_send_static_file(req, rel_path);
 }
 
@@ -36,7 +36,7 @@ esp_err_t burner_sys_page_handler(httpd_req_t *req)
 
 esp_err_t burner_business_page_handler(httpd_req_t *req)
 {
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
     return burner_send_static_file(req, WEB_MAIN_FILE_REL);
 }
 
@@ -64,6 +64,84 @@ typedef struct {
     size_t count;
     size_t cap;
 } burner_tf_list_entries_t;
+
+static bool burner_tf_rel_path_in_book_scope(const char *rel_path)
+{
+    return rel_path != NULL &&
+           (strcmp(rel_path, "book") == 0 || strncmp(rel_path, "book/", strlen("book/")) == 0);
+}
+
+static bool burner_tf_book_scope_requested(httpd_req_t *req)
+{
+    char scope_arg[16] = {0};
+
+    if (req == NULL) {
+        return false;
+    }
+    if (!burner_get_query_arg(req, "scope", scope_arg, sizeof(scope_arg), false)) {
+        return false;
+    }
+    return strcasecmp(scope_arg, "book") == 0;
+}
+
+static bool burner_tf_download_preview_enabled(httpd_req_t *req)
+{
+    char preview_arg[8] = {0};
+
+    if (req == NULL) {
+        return false;
+    }
+    if (!burner_get_query_arg(req, "preview", preview_arg, sizeof(preview_arg), false)) {
+        return false;
+    }
+    return strcmp(preview_arg, "1") == 0 || strcasecmp(preview_arg, "true") == 0 ||
+           strcasecmp(preview_arg, "yes") == 0 || strcasecmp(preview_arg, "inline") == 0;
+}
+
+static const char *burner_tf_download_content_type(const char *path)
+{
+    const char *ext = NULL;
+
+    if (path == NULL) {
+        return "application/octet-stream";
+    }
+    ext = strrchr(path, '.');
+    if (ext == NULL || ext[1] == '\0') {
+        return "application/octet-stream";
+    }
+    ext++;
+
+    if (strcasecmp(ext, "txt") == 0 || strcasecmp(ext, "log") == 0 || strcasecmp(ext, "ini") == 0 ||
+        strcasecmp(ext, "cfg") == 0 || strcasecmp(ext, "conf") == 0 || strcasecmp(ext, "md") == 0 ||
+        strcasecmp(ext, "json") == 0 || strcasecmp(ext, "xml") == 0 || strcasecmp(ext, "csv") == 0) {
+        return "text/plain; charset=utf-8";
+    }
+    if (strcasecmp(ext, "pdf") == 0) {
+        return "application/pdf";
+    }
+    if (strcasecmp(ext, "epub") == 0) {
+        return "application/epub+zip";
+    }
+    if (strcasecmp(ext, "png") == 0) {
+        return "image/png";
+    }
+    if (strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0) {
+        return "image/jpeg";
+    }
+    if (strcasecmp(ext, "gif") == 0) {
+        return "image/gif";
+    }
+    if (strcasecmp(ext, "bmp") == 0) {
+        return "image/bmp";
+    }
+    if (strcasecmp(ext, "webp") == 0) {
+        return "image/webp";
+    }
+    if (strcasecmp(ext, "svg") == 0) {
+        return "image/svg+xml";
+    }
+    return "application/octet-stream";
+}
 
 static const char *burner_tf_file_ext(const char *name)
 {
@@ -188,6 +266,9 @@ esp_err_t burner_tf_list_handler(httpd_req_t *req)
 
     if (!burner_normalize_rel_path(path_arg, rel_path, sizeof(rel_path), true)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid path");
+    }
+    if (burner_tf_book_scope_requested(req) && !burner_tf_rel_path_in_book_scope(rel_path)) {
+        return httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "book scope only allows /book");
     }
 
     if (!burner_build_full_path(rel_path, dir_path, sizeof(dir_path))) {
@@ -431,6 +512,7 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
             return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "upload interrupted");
         }
 
+        web_ws_mark_network_activity();
         if (fwrite(buf, 1, (size_t)recv_len, fp) != (size_t)recv_len) {
             free(buf);
             fclose(fp);
@@ -505,6 +587,8 @@ esp_err_t burner_tf_download_handler(httpd_req_t *req)
     char rel_path[TF_PATH_LEN_MAX] = {0};
     char full_path[TF_PATH_LEN_MAX + 64] = {0};
     char disp[128] = {0};
+    bool preview = false;
+    const char *content_type = NULL;
     uint8_t *buf = NULL;
     FILE *fp = NULL;
     struct stat st;
@@ -525,6 +609,11 @@ esp_err_t burner_tf_download_handler(httpd_req_t *req)
     }
     if (!burner_normalize_rel_path(path_arg, rel_path, sizeof(rel_path), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid path");
+    }
+
+    preview = burner_tf_download_preview_enabled(req);
+    if ((preview || burner_tf_book_scope_requested(req)) && !burner_tf_rel_path_in_book_scope(rel_path)) {
+        return httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "preview only allows /book");
     }
 
     if (!burner_build_full_path(rel_path, full_path, sizeof(full_path))) {
@@ -549,8 +638,15 @@ esp_err_t burner_tf_download_handler(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no memory");
     }
 
+    content_type = burner_tf_download_content_type(rel_path);
+
     {
-        int n = snprintf(disp, sizeof(disp), "attachment; filename=\"%s\"", burner_basename(rel_path));
+        int n = snprintf(
+            disp,
+            sizeof(disp),
+            "%s; filename=\"%s\"",
+            preview ? "inline" : "attachment",
+            burner_basename(rel_path));
         if (n < 0 || n >= (int)sizeof(disp)) {
             free(buf);
             fclose(fp);
@@ -558,7 +654,7 @@ esp_err_t burner_tf_download_handler(httpd_req_t *req)
         }
     }
 
-    httpd_resp_set_type(req, "application/octet-stream");
+    httpd_resp_set_type(req, content_type);
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_hdr(req, "Content-Disposition", disp);
 
@@ -567,6 +663,7 @@ esp_err_t burner_tf_download_handler(httpd_req_t *req)
         if (read_len == 0) {
             break;
         }
+        web_ws_mark_network_activity();
         if (httpd_resp_send_chunk(req, (const char *)buf, read_len) != ESP_OK) {
             free(buf);
             fclose(fp);

@@ -1,9 +1,58 @@
 #include "ws_server_http_device.h"
 #include "ws_server_http_content.h"
 #include "ws_server_http_maintenance.h"
+#include "lcd_display.h"
+#include "mori_system_settings.h"
 #include "power_manager.h"
+#include "music_player.h"
+#include "smb_client.h"
 
 #define BURNER_POWER_STATUS_RESP_LEN 6000U
+#define SMB_JSON_BODY_MAX 640U
+#define SMB_DISCOVER_DEFAULT_TIMEOUT_MS 8000U
+
+static const char *burner_music_state_name(music_player_state_t state)
+{
+    switch (state) {
+        case MUSIC_PLAYER_STATE_IDLE:
+            return "idle";
+        case MUSIC_PLAYER_STATE_LOADING:
+            return "loading";
+        case MUSIC_PLAYER_STATE_PLAYING:
+            return "playing";
+        case MUSIC_PLAYER_STATE_PAUSED:
+            return "paused";
+        case MUSIC_PLAYER_STATE_FINISHED:
+            return "finished";
+        case MUSIC_PLAYER_STATE_ERROR:
+            return "error";
+        default:
+            return "unknown";
+    }
+}
+
+static const char *burner_music_source_name(music_player_source_t source)
+{
+    return (source == MUSIC_PLAYER_SOURCE_SMB) ? "smb" : "tf";
+}
+
+static bool burner_music_is_audio_name(const char *name)
+{
+    const char *ext = NULL;
+
+    if (name == NULL) {
+        return false;
+    }
+    ext = strrchr(name, '.');
+    if (ext == NULL || ext[1] == '\0') {
+        return false;
+    }
+    ext++;
+    return strcasecmp(ext, "mp3") == 0 ||
+           strcasecmp(ext, "aac") == 0 ||
+           strcasecmp(ext, "flac") == 0 ||
+           strcasecmp(ext, "wav") == 0;
+}
 
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req)
 {
@@ -574,6 +623,16 @@ esp_err_t burner_device_brightness_post_handler(httpd_req_t *req)
         ESP_LOGW(BURNER_TAG, "set brightness failed: %s", esp_err_to_name(err));
         return burner_send_json(req, "{\"ok\":false,\"message\":\"set brightness failed\"}");
     }
+    {
+        music_player_snapshot_t snap = {0};
+
+        music_player_get_snapshot(&snap);
+        err = mori_save_av_settings_to_system_ini(lcd_display_get_brightness(), snap.volume_percent);
+        if (err != ESP_OK) {
+            ESP_LOGW(BURNER_TAG, "save brightness failed: %s", esp_err_to_name(err));
+            return burner_send_json(req, "{\"ok\":false,\"message\":\"save brightness failed\"}");
+        }
+    }
 
     n = snprintf(
         resp,
@@ -1061,6 +1120,928 @@ esp_err_t burner_wifi_forget_handler(httpd_req_t *req)
     return burner_send_json(req, "{\"success\":true}");
 }
 
+esp_err_t burner_smb_status_handler(httpd_req_t *req)
+{
+    smb_client_status_t status = {0};
+    char host[SMB_CLIENT_HOST_MAX * 2] = {0};
+    char share[SMB_CLIENT_SHARE_MAX * 2] = {0};
+    char user[SMB_CLIENT_USER_MAX * 2] = {0};
+    char domain[SMB_CLIENT_DOMAIN_MAX * 2] = {0};
+    char music_dir[SMB_CLIENT_PATH_MAX] = {0};
+    char music_dir_esc[SMB_CLIENT_PATH_MAX * 2 + 8] = {0};
+    char err_esc[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+    char resp[900];
+    int n;
+
+    smb_client_get_status(&status);
+    smb_client_get_music_dir(music_dir, sizeof(music_dir));
+    if (!burner_json_escape(status.config.host, host, sizeof(host)) ||
+        !burner_json_escape(status.config.share, share, sizeof(share)) ||
+        !burner_json_escape(status.config.user, user, sizeof(user)) ||
+        !burner_json_escape(status.config.domain, domain, sizeof(domain)) ||
+        !burner_json_escape(music_dir, music_dir_esc, sizeof(music_dir_esc)) ||
+        !burner_json_escape(status.last_error, err_esc, sizeof(err_esc))) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    n = snprintf(
+        resp,
+        sizeof(resp),
+        "{\"ok\":true,\"connected\":%s,\"host\":\"%s\",\"share\":\"%s\","
+        "\"user\":\"%s\",\"domain\":\"%s\",\"port\":%d,\"signing\":%s,"
+        "\"music_dir\":\"%s\",\"last_error\":\"%s\"}",
+        burner_json_bool(status.connected),
+        host,
+        share,
+        user,
+        domain,
+        status.config.port,
+        burner_json_bool(status.config.signing),
+        music_dir_esc,
+        err_esc);
+    if (n < 0 || n >= (int)sizeof(resp)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    return burner_send_json(req, resp);
+}
+
+typedef struct {
+    smb_client_discovery_entry_t *items;
+    size_t count;
+    size_t cap;
+} burner_smb_discover_ctx_t;
+
+typedef struct {
+    smb_client_share_entry_t *items;
+    size_t count;
+    size_t cap;
+} burner_smb_share_ctx_t;
+
+typedef struct {
+    smb_client_favorite_t *items;
+    size_t count;
+    size_t cap;
+} burner_smb_favorite_ctx_t;
+
+static esp_err_t burner_smb_discover_emit_cb(const smb_client_discovery_entry_t *entry, void *user_ctx)
+{
+    burner_smb_discover_ctx_t *ctx = (burner_smb_discover_ctx_t *)user_ctx;
+
+    if (ctx == NULL || ctx->items == NULL || entry == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (ctx->count >= ctx->cap) {
+        return ESP_OK;
+    }
+    ctx->items[ctx->count++] = *entry;
+    return ESP_OK;
+}
+
+static esp_err_t burner_smb_share_emit_cb(const smb_client_share_entry_t *entry, void *user_ctx)
+{
+    burner_smb_share_ctx_t *ctx = (burner_smb_share_ctx_t *)user_ctx;
+
+    if (ctx == NULL || ctx->items == NULL || entry == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (ctx->count >= ctx->cap) {
+        return ESP_OK;
+    }
+    ctx->items[ctx->count++] = *entry;
+    return ESP_OK;
+}
+
+static esp_err_t burner_smb_favorite_emit_cb(const smb_client_favorite_t *entry, void *user_ctx)
+{
+    burner_smb_favorite_ctx_t *ctx = (burner_smb_favorite_ctx_t *)user_ctx;
+
+    if (ctx == NULL || ctx->items == NULL || entry == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (ctx->count >= ctx->cap) {
+        return ESP_OK;
+    }
+    ctx->items[ctx->count++] = *entry;
+    return ESP_OK;
+}
+
+esp_err_t burner_smb_discover_handler(httpd_req_t *req)
+{
+    char timeout_arg[16] = {0};
+    uint32_t timeout_ms = SMB_DISCOVER_DEFAULT_TIMEOUT_MS;
+    smb_client_discovery_entry_t *items = NULL;
+    burner_smb_discover_ctx_t ctx = {
+        .items = NULL,
+        .count = 0,
+        .cap = SMB_CLIENT_DISCOVERY_MAX,
+    };
+    esp_err_t err;
+    bool first = true;
+    char network[SMB_CLIENT_HOST_MAX] = {0};
+    char network_esc[SMB_CLIENT_HOST_MAX * 2] = {0};
+    char head[SMB_CLIENT_HOST_MAX * 2 + 80] = {0};
+    int head_len;
+
+    if (burner_get_query_arg(req, "timeout_ms", timeout_arg, sizeof(timeout_arg), false) &&
+        timeout_arg[0] != '\0') {
+        char *end = NULL;
+        unsigned long parsed = strtoul(timeout_arg, &end, 10);
+
+        if (end != timeout_arg && parsed > 0UL && parsed <= UINT32_MAX) {
+            timeout_ms = (uint32_t)parsed;
+        }
+    }
+
+    items = (smb_client_discovery_entry_t *)calloc(SMB_CLIENT_DISCOVERY_MAX, sizeof(*items));
+    if (items == NULL) {
+        return burner_send_json(req, "{\"ok\":false,\"servers\":[],\"message\":\"no memory\"}");
+    }
+    ctx.items = items;
+
+    err = smb_client_discover(timeout_ms, burner_smb_discover_emit_cb, &ctx);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 80] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : esp_err_to_name(err),
+            msg,
+            sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"servers\":[],\"message\":\"%s\"}", msg);
+        free(items);
+        return burner_send_json(req, resp);
+    }
+
+    (void)smb_client_discovery_network(network, sizeof(network));
+    (void)burner_json_escape(network, network_esc, sizeof(network_esc));
+    head_len = snprintf(
+        head,
+        sizeof(head),
+        "{\"ok\":true,\"network\":\"%s\",\"count\":%u,\"servers\":[",
+        network_esc,
+        (unsigned)ctx.count);
+    if (head_len <= 0 || head_len >= (int)sizeof(head)) {
+        free(items);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    err = httpd_resp_sendstr_chunk(req, head);
+    for (size_t i = 0; err == ESP_OK && i < ctx.count; ++i) {
+        char host[SMB_CLIENT_HOST_MAX * 2] = {0};
+        char name[SMB_CLIENT_NAME_MAX * 2 + 8] = {0};
+        char line[SMB_CLIENT_HOST_MAX * 2 + SMB_CLIENT_NAME_MAX * 2 + 96] = {0};
+        int n;
+
+        if (!burner_json_escape(items[i].host, host, sizeof(host)) ||
+            !burner_json_escape(items[i].name, name, sizeof(name))) {
+            continue;
+        }
+        n = snprintf(
+            line,
+            sizeof(line),
+            "%s{\"host\":\"%s\",\"name\":\"%s\",\"port\":%d}",
+            first ? "" : ",",
+            host,
+            name,
+            items[i].port);
+        if (n <= 0 || n >= (int)sizeof(line)) {
+            continue;
+        }
+        err = httpd_resp_sendstr_chunk(req, line);
+        first = false;
+    }
+    free(items);
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, "]}");
+    }
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, NULL);
+    }
+    return err;
+}
+
+esp_err_t burner_smb_shares_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    smb_client_config_t config = {0};
+    int port = 0;
+    bool signing = false;
+    smb_client_share_entry_t *items = NULL;
+    burner_smb_share_ctx_t ctx = {
+        .items = NULL,
+        .count = 0,
+        .cap = SMB_CLIENT_SHARE_ENUM_MAX,
+    };
+    esp_err_t err;
+    bool first = true;
+    char host_esc[SMB_CLIENT_HOST_MAX * 2] = {0};
+    char head[SMB_CLIENT_HOST_MAX * 2 + 80] = {0};
+    int head_len;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"shares\":[],\"message\":\"invalid request body\"}");
+    }
+    if (!burner_json_get_string(body, "host", config.host, sizeof(config.host)) ||
+        config.host[0] == '\0') {
+        return burner_send_json(req, "{\"ok\":false,\"shares\":[],\"message\":\"host is required\"}");
+    }
+    (void)burner_json_get_string(body, "user", config.user, sizeof(config.user));
+    (void)burner_json_get_string(body, "password", config.password, sizeof(config.password));
+    (void)burner_json_get_string(body, "domain", config.domain, sizeof(config.domain));
+    if (burner_json_get_int(body, "port", &port) && port > 0 && port <= 65535) {
+        config.port = port;
+    }
+    if (burner_json_get_bool(body, "signing", &signing)) {
+        config.signing = signing;
+    }
+    if (config.user[0] == '\0' && config.password[0] == '\0') {
+        (void)smb_client_apply_saved_auth(&config);
+    }
+
+    items = (smb_client_share_entry_t *)calloc(SMB_CLIENT_SHARE_ENUM_MAX, sizeof(*items));
+    if (items == NULL) {
+        return burner_send_json(req, "{\"ok\":false,\"shares\":[],\"message\":\"no memory\"}");
+    }
+    ctx.items = items;
+
+    err = smb_client_list_shares(&config, burner_smb_share_emit_cb, &ctx);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 96] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : "share enum failed",
+            msg,
+            sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"shares\":[],\"message\":\"%s\"}", msg);
+        free(items);
+        return burner_send_json(req, resp);
+    }
+    (void)smb_client_save_server_auth(&config);
+
+    (void)burner_json_escape(config.host, host_esc, sizeof(host_esc));
+    head_len = snprintf(
+        head,
+        sizeof(head),
+        "{\"ok\":true,\"host\":\"%s\",\"count\":%u,\"shares\":[",
+        host_esc,
+        (unsigned)ctx.count);
+    if (head_len <= 0 || head_len >= (int)sizeof(head)) {
+        free(items);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    err = httpd_resp_sendstr_chunk(req, head);
+    for (size_t i = 0; err == ESP_OK && i < ctx.count; ++i) {
+        char name[SMB_CLIENT_SHARE_MAX * 2 + 8] = {0};
+        char comment[SMB_CLIENT_NAME_MAX * 2 + 8] = {0};
+        char line[SMB_CLIENT_SHARE_MAX * 2 + SMB_CLIENT_NAME_MAX * 2 + 120] = {0};
+        int n;
+
+        if (!burner_json_escape(items[i].name, name, sizeof(name)) ||
+            !burner_json_escape(items[i].comment, comment, sizeof(comment))) {
+            continue;
+        }
+        n = snprintf(
+            line,
+            sizeof(line),
+            "%s{\"name\":\"%s\",\"comment\":\"%s\",\"hidden\":%s,\"type\":%" PRIu32 "}",
+            first ? "" : ",",
+            name,
+            comment,
+            burner_json_bool(items[i].hidden),
+            items[i].type);
+        if (n <= 0 || n >= (int)sizeof(line)) {
+            continue;
+        }
+        err = httpd_resp_sendstr_chunk(req, line);
+        first = false;
+    }
+    free(items);
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, "]}");
+    }
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, NULL);
+    }
+    return err;
+}
+
+esp_err_t burner_smb_favorites_handler(httpd_req_t *req)
+{
+    smb_client_favorite_t *items = NULL;
+    burner_smb_favorite_ctx_t ctx = {
+        .items = NULL,
+        .count = 0,
+        .cap = SMB_CLIENT_FAVORITE_MAX,
+    };
+    esp_err_t err;
+    bool first = true;
+
+    items = (smb_client_favorite_t *)calloc(SMB_CLIENT_FAVORITE_MAX, sizeof(*items));
+    if (items == NULL) {
+        return burner_send_json(req, "{\"ok\":false,\"favorites\":[],\"message\":\"no memory\"}");
+    }
+    ctx.items = items;
+    err = smb_client_list_favorites(burner_smb_favorite_emit_cb, &ctx);
+    if (err != ESP_OK) {
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 80] = {0};
+
+        (void)burner_json_escape(esp_err_to_name(err), msg, sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"favorites\":[],\"message\":\"%s\"}", msg);
+        free(items);
+        return burner_send_json(req, resp);
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    err = httpd_resp_sendstr_chunk(req, "{\"ok\":true,\"favorites\":[");
+    for (size_t i = 0; err == ESP_OK && i < ctx.count; ++i) {
+        char label[SMB_CLIENT_NAME_MAX * 2 + 8] = {0};
+        char host[SMB_CLIENT_HOST_MAX * 2] = {0};
+        char share[SMB_CLIENT_SHARE_MAX * 2] = {0};
+        char user[SMB_CLIENT_USER_MAX * 2] = {0};
+        char domain[SMB_CLIENT_DOMAIN_MAX * 2] = {0};
+        char line[SMB_CLIENT_NAME_MAX * 2 + SMB_CLIENT_HOST_MAX * 2 + SMB_CLIENT_SHARE_MAX * 2 +
+                  SMB_CLIENT_USER_MAX * 2 + SMB_CLIENT_DOMAIN_MAX * 2 + 180] = {0};
+        int n;
+
+        if (!burner_json_escape(items[i].label, label, sizeof(label)) ||
+            !burner_json_escape(items[i].config.host, host, sizeof(host)) ||
+            !burner_json_escape(items[i].config.share, share, sizeof(share)) ||
+            !burner_json_escape(items[i].config.user, user, sizeof(user)) ||
+            !burner_json_escape(items[i].config.domain, domain, sizeof(domain))) {
+            continue;
+        }
+        n = snprintf(
+            line,
+            sizeof(line),
+            "%s{\"id\":%" PRIu32 ",\"label\":\"%s\",\"host\":\"%s\",\"share\":\"%s\","
+            "\"user\":\"%s\",\"domain\":\"%s\",\"port\":%d,\"signing\":%s}",
+            first ? "" : ",",
+            items[i].id,
+            label,
+            host,
+            share,
+            user,
+            domain,
+            items[i].config.port,
+            burner_json_bool(items[i].config.signing));
+        if (n <= 0 || n >= (int)sizeof(line)) {
+            continue;
+        }
+        err = httpd_resp_sendstr_chunk(req, line);
+        first = false;
+    }
+    free(items);
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, "]}");
+    }
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, NULL);
+    }
+    return err;
+}
+
+esp_err_t burner_smb_favorite_add_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    smb_client_config_t config = {0};
+    smb_client_favorite_t favorite = {0};
+    int port = 0;
+    bool signing = false;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"invalid request body\"}");
+    }
+    if (!burner_json_get_string(body, "host", config.host, sizeof(config.host)) ||
+        !burner_json_get_string(body, "share", config.share, sizeof(config.share)) ||
+        config.host[0] == '\0' ||
+        config.share[0] == '\0') {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"host and share are required\"}");
+    }
+    (void)burner_json_get_string(body, "user", config.user, sizeof(config.user));
+    (void)burner_json_get_string(body, "password", config.password, sizeof(config.password));
+    (void)burner_json_get_string(body, "domain", config.domain, sizeof(config.domain));
+    if (burner_json_get_int(body, "port", &port) && port > 0 && port <= 65535) {
+        config.port = port;
+    }
+    if (burner_json_get_bool(body, "signing", &signing)) {
+        config.signing = signing;
+    }
+    if (config.user[0] == '\0' && config.password[0] == '\0') {
+        (void)smb_client_apply_saved_auth(&config);
+    }
+
+    (void)smb_client_save_server_auth(&config);
+    err = smb_client_save_favorite(&config, &favorite);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 80] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : esp_err_to_name(err),
+            msg,
+            sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"message\":\"%s\"}", msg);
+        return burner_send_json(req, resp);
+    }
+
+    {
+        char label[SMB_CLIENT_NAME_MAX * 2 + 8] = {0};
+        char host[SMB_CLIENT_HOST_MAX * 2] = {0};
+        char share[SMB_CLIENT_SHARE_MAX * 2] = {0};
+        char resp[SMB_CLIENT_NAME_MAX * 2 + SMB_CLIENT_HOST_MAX * 2 + SMB_CLIENT_SHARE_MAX * 2 + 120] = {0};
+
+        (void)burner_json_escape(favorite.label, label, sizeof(label));
+        (void)burner_json_escape(favorite.config.host, host, sizeof(host));
+        (void)burner_json_escape(favorite.config.share, share, sizeof(share));
+        snprintf(
+            resp,
+            sizeof(resp),
+            "{\"ok\":true,\"favorite\":{\"id\":%" PRIu32 ",\"label\":\"%s\",\"host\":\"%s\",\"share\":\"%s\"}}",
+            favorite.id,
+            label,
+            host,
+            share);
+        return burner_send_json(req, resp);
+    }
+}
+
+esp_err_t burner_smb_favorite_delete_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    int id = 0;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK || !burner_json_get_int(body, "id", &id) || id <= 0) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"id is required\"}");
+    }
+    err = smb_client_remove_favorite((uint32_t)id);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"favorite not found\"}");
+    }
+    return burner_send_json(req, "{\"ok\":true}");
+}
+
+esp_err_t burner_smb_favorite_connect_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    int id = 0;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK || !burner_json_get_int(body, "id", &id) || id <= 0) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"id is required\"}");
+    }
+    err = smb_client_connect_favorite((uint32_t)id);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 80] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : "connect failed",
+            msg,
+            sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"message\":\"%s\"}", msg);
+        return burner_send_json(req, resp);
+    }
+    return burner_send_json(req, "{\"ok\":true,\"message\":\"connected\"}");
+}
+
+esp_err_t burner_smb_connect_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    smb_client_config_t config = {0};
+    int port = 0;
+    bool signing = false;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"invalid request body\"}");
+    }
+
+    if (!burner_json_get_string(body, "host", config.host, sizeof(config.host)) ||
+        !burner_json_get_string(body, "share", config.share, sizeof(config.share)) ||
+        config.host[0] == '\0' ||
+        config.share[0] == '\0') {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"host and share are required\"}");
+    }
+    (void)burner_json_get_string(body, "user", config.user, sizeof(config.user));
+    (void)burner_json_get_string(body, "password", config.password, sizeof(config.password));
+    (void)burner_json_get_string(body, "domain", config.domain, sizeof(config.domain));
+    if (burner_json_get_int(body, "port", &port) && port > 0 && port <= 65535) {
+        config.port = port;
+    }
+    if (burner_json_get_bool(body, "signing", &signing)) {
+        config.signing = signing;
+    }
+    if (config.user[0] == '\0' && config.password[0] == '\0') {
+        (void)smb_client_apply_saved_auth(&config);
+    }
+
+    err = smb_client_connect(&config);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char esc[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 64] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : "connect failed",
+            esc,
+            sizeof(esc));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"message\":\"%s\"}", esc);
+        return burner_send_json(req, resp);
+    }
+
+    if (config.user[0] != '\0' || config.password[0] != '\0' || config.domain[0] != '\0') {
+        (void)smb_client_save_server_auth(&config);
+    }
+
+    return burner_send_json(req, "{\"ok\":true,\"message\":\"connected\"}");
+}
+
+esp_err_t burner_smb_disconnect_handler(httpd_req_t *req)
+{
+    (void)req;
+    smb_client_disconnect();
+    return burner_send_json(req, "{\"ok\":true}");
+}
+
+typedef struct {
+    smb_client_dirent_t *items;
+    size_t count;
+    size_t cap;
+} burner_smb_list_ctx_t;
+
+static esp_err_t burner_smb_list_emit_cb(const smb_client_dirent_t *entry, void *user_ctx)
+{
+    burner_smb_list_ctx_t *ctx = (burner_smb_list_ctx_t *)user_ctx;
+
+    if (ctx == NULL || entry == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (ctx->count >= ctx->cap) {
+        size_t next_cap = (ctx->cap == 0U) ? 32U : ctx->cap * 2U;
+        smb_client_dirent_t *new_items =
+            (smb_client_dirent_t *)realloc(ctx->items, next_cap * sizeof(*ctx->items));
+        if (new_items == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+        ctx->items = new_items;
+        ctx->cap = next_cap;
+    }
+    ctx->items[ctx->count++] = *entry;
+    return ESP_OK;
+}
+
+esp_err_t burner_smb_list_handler(httpd_req_t *req)
+{
+    char path_arg[SMB_CLIENT_PATH_MAX] = {0};
+    char path[SMB_CLIENT_PATH_MAX] = {0};
+    char path_esc[SMB_CLIENT_PATH_MAX * 2 + 8] = {0};
+    char head[SMB_CLIENT_PATH_MAX * 2 + 64] = {0};
+    burner_smb_list_ctx_t list = {0};
+    esp_err_t err;
+    bool first = true;
+    int n;
+
+    if (!burner_get_query_arg(req, "path", path_arg, sizeof(path_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid query path");
+    }
+    if (!smb_client_normalize_path(path_arg, path, sizeof(path), true)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid path");
+    }
+    err = smb_client_list(path, burner_smb_list_emit_cb, &list);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 64] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : "list failed",
+            msg,
+            sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"message\":\"%s\"}", msg);
+        free(list.items);
+        return burner_send_json(req, resp);
+    }
+
+    if (!burner_json_escape(path, path_esc, sizeof(path_esc))) {
+        free(list.items);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    n = snprintf(head, sizeof(head), "{\"ok\":true,\"path\":\"%s\",\"entries\":[", path_esc);
+    if (n < 0 || n >= (int)sizeof(head)) {
+        free(list.items);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    err = httpd_resp_sendstr_chunk(req, head);
+    for (size_t i = 0; err == ESP_OK && i < list.count; ++i) {
+        char name_esc[SMB_CLIENT_NAME_MAX * 2 + 8] = {0};
+        char child_esc[SMB_CLIENT_PATH_MAX * 2 + 8] = {0};
+        char line[SMB_CLIENT_PATH_MAX * 4 + 180] = {0};
+
+        if (!burner_json_escape(list.items[i].name, name_esc, sizeof(name_esc)) ||
+            !burner_json_escape(list.items[i].path, child_esc, sizeof(child_esc))) {
+            continue;
+        }
+        n = snprintf(
+            line,
+            sizeof(line),
+            "%s{\"name\":\"%s\",\"path\":\"%s\",\"is_dir\":%s,\"size\":%" PRIu64 ",\"mtime\":%" PRIu64 "}",
+            first ? "" : ",",
+            name_esc,
+            child_esc,
+            burner_json_bool(list.items[i].is_dir),
+            list.items[i].size,
+            list.items[i].mtime);
+        if (n <= 0 || n >= (int)sizeof(line)) {
+            continue;
+        }
+        err = httpd_resp_sendstr_chunk(req, line);
+        first = false;
+    }
+    free(list.items);
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, "]}");
+    }
+    if (err == ESP_OK) {
+        err = httpd_resp_sendstr_chunk(req, NULL);
+    }
+    return err;
+}
+
+esp_err_t burner_smb_music_dir_get_handler(httpd_req_t *req)
+{
+    char path[SMB_CLIENT_PATH_MAX] = {0};
+    char esc[SMB_CLIENT_PATH_MAX * 2 + 8] = {0};
+    char resp[SMB_CLIENT_PATH_MAX * 2 + 40] = {0};
+
+    smb_client_get_music_dir(path, sizeof(path));
+    if (!burner_json_escape(path, esc, sizeof(esc))) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+    snprintf(resp, sizeof(resp), "{\"ok\":true,\"path\":\"%s\"}", esc);
+    return burner_send_json(req, resp);
+}
+
+esp_err_t burner_smb_music_dir_set_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    char path[SMB_CLIENT_PATH_MAX] = {0};
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK || !burner_json_get_string(body, "path", path, sizeof(path))) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"path is required\"}");
+    }
+    err = smb_client_set_music_dir(path);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"invalid path\"}");
+    }
+    return burner_send_json(req, "{\"ok\":true}");
+}
+
+esp_err_t burner_music_status_handler(httpd_req_t *req)
+{
+    music_player_snapshot_t snap = {0};
+    char path[MUSIC_PLAYER_PATH_MAX * 2 + 8] = {0};
+    char name[MUSIC_PLAYER_NAME_MAX * 2 + 8] = {0};
+    char message[MUSIC_PLAYER_MESSAGE_MAX * 2 + 8] = {0};
+    char resp[MUSIC_PLAYER_PATH_MAX * 2 + MUSIC_PLAYER_NAME_MAX * 2 + MUSIC_PLAYER_MESSAGE_MAX * 2 + 260] = {0};
+    int n;
+
+    music_player_get_snapshot(&snap);
+    if (!burner_json_escape(snap.path, path, sizeof(path)) ||
+        !burner_json_escape(snap.name, name, sizeof(name)) ||
+        !burner_json_escape(snap.message, message, sizeof(message))) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+
+    n = snprintf(
+        resp,
+        sizeof(resp),
+        "{\"ok\":true,\"state\":\"%s\",\"source\":\"%s\",\"path\":\"%s\",\"name\":\"%s\","
+        "\"message\":\"%s\",\"file_size\":%" PRIu32 ",\"position\":%" PRIu32 ","
+        "\"sample_rate\":%" PRIu32 ",\"channels\":%u,\"bits_per_sample\":%u,\"volume\":%u}",
+        burner_music_state_name(snap.state),
+        burner_music_source_name(snap.source),
+        path,
+        name,
+        message,
+        snap.file_size,
+        snap.position,
+        snap.sample_rate,
+        (unsigned)snap.channels,
+        (unsigned)snap.bits_per_sample,
+        (unsigned)snap.volume_percent);
+    if (n < 0 || n >= (int)sizeof(resp)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+    }
+    return burner_send_json(req, resp);
+}
+
+esp_err_t burner_music_play_smb_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    char path[SMB_CLIENT_PATH_MAX] = {0};
+    smb_client_dirent_t entry = {0};
+    uint32_t file_size = 0;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK || !burner_json_get_string(body, "path", path, sizeof(path))) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"path is required\"}");
+    }
+    if (smb_client_stat(path, &entry) == ESP_OK && entry.is_dir) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"path is a directory\"}");
+    }
+    if (entry.size > 0U && entry.size <= UINT32_MAX) {
+        file_size = (uint32_t)entry.size;
+    }
+
+    err = music_player_play_smb(path, file_size);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"playback start failed\"}");
+    }
+    return burner_send_json(req, "{\"ok\":true}");
+}
+
+typedef struct {
+    bool found;
+    smb_client_dirent_t entry;
+} burner_smb_first_audio_ctx_t;
+
+static esp_err_t burner_smb_first_audio_cb(const smb_client_dirent_t *entry, void *user_ctx)
+{
+    burner_smb_first_audio_ctx_t *ctx = (burner_smb_first_audio_ctx_t *)user_ctx;
+
+    if (ctx == NULL || entry == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (entry->is_dir || !burner_music_is_audio_name(entry->name)) {
+        return ESP_OK;
+    }
+    if (!ctx->found || strcasecmp(entry->name, ctx->entry.name) < 0) {
+        ctx->entry = *entry;
+        ctx->found = true;
+    }
+    return ESP_OK;
+}
+
+esp_err_t burner_music_play_smb_folder_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    char folder[SMB_CLIENT_PATH_MAX] = {0};
+    char normalized[SMB_CLIENT_PATH_MAX] = {0};
+    burner_smb_first_audio_ctx_t pick = {0};
+    uint32_t file_size = 0;
+    esp_err_t err;
+
+    if (req->content_len > 0) {
+        err = burner_read_request_body(req, body, sizeof(body), NULL);
+        if (err != ESP_OK) {
+            return burner_send_json(req, "{\"ok\":false,\"message\":\"invalid request body\"}");
+        }
+        (void)burner_json_get_string(body, "path", folder, sizeof(folder));
+    }
+    if (folder[0] == '\0') {
+        smb_client_get_music_dir(folder, sizeof(folder));
+    }
+    if (!smb_client_normalize_path(folder, normalized, sizeof(normalized), true)) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"invalid music folder\"}");
+    }
+
+    err = smb_client_list(normalized, burner_smb_first_audio_cb, &pick);
+    if (err != ESP_OK) {
+        smb_client_status_t status = {0};
+        char msg[SMB_CLIENT_MESSAGE_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_MESSAGE_MAX * 2 + 64] = {0};
+
+        smb_client_get_status(&status);
+        (void)burner_json_escape(
+            status.last_error[0] != '\0' ? status.last_error : "list folder failed",
+            msg,
+            sizeof(msg));
+        snprintf(resp, sizeof(resp), "{\"ok\":false,\"message\":\"%s\"}", msg);
+        return burner_send_json(req, resp);
+    }
+    if (!pick.found) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"no playable audio in folder\"}");
+    }
+
+    if (pick.entry.size > 0U && pick.entry.size <= UINT32_MAX) {
+        file_size = (uint32_t)pick.entry.size;
+    }
+    err = music_player_play_smb(pick.entry.path, file_size);
+    if (err != ESP_OK) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"playback start failed\"}");
+    }
+
+    {
+        char path_esc[SMB_CLIENT_PATH_MAX * 2 + 8] = {0};
+        char name_esc[SMB_CLIENT_NAME_MAX * 2 + 8] = {0};
+        char resp[SMB_CLIENT_PATH_MAX * 2 + SMB_CLIENT_NAME_MAX * 2 + 120] = {0};
+        int n;
+
+        if (!burner_json_escape(pick.entry.path, path_esc, sizeof(path_esc)) ||
+            !burner_json_escape(pick.entry.name, name_esc, sizeof(name_esc))) {
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+        }
+        n = snprintf(
+            resp,
+            sizeof(resp),
+            "{\"ok\":true,\"path\":\"%s\",\"name\":\"%s\",\"size\":%" PRIu64 "}",
+            path_esc,
+            name_esc,
+            pick.entry.size);
+        if (n < 0 || n >= (int)sizeof(resp)) {
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
+        }
+        return burner_send_json(req, resp);
+    }
+}
+
+esp_err_t burner_music_stop_handler(httpd_req_t *req)
+{
+    esp_err_t err;
+
+    (void)req;
+    err = music_player_stop();
+    return burner_send_json(req, err == ESP_OK ? "{\"ok\":true}" : "{\"ok\":false,\"message\":\"stop failed\"}");
+}
+
+esp_err_t burner_music_pause_handler(httpd_req_t *req)
+{
+    esp_err_t err;
+
+    (void)req;
+    err = music_player_toggle_pause();
+    return burner_send_json(req, err == ESP_OK ? "{\"ok\":true}" : "{\"ok\":false,\"message\":\"pause failed\"}");
+}
+
+esp_err_t burner_music_seek_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    int delta = 0;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK || !burner_json_get_int(body, "delta", &delta)) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"delta is required\"}");
+    }
+    err = music_player_seek_relative(delta);
+    return burner_send_json(req, err == ESP_OK ? "{\"ok\":true}" : "{\"ok\":false,\"message\":\"seek failed\"}");
+}
+
+esp_err_t burner_music_volume_handler(httpd_req_t *req)
+{
+    char body[SMB_JSON_BODY_MAX] = {0};
+    int volume = 0;
+    esp_err_t err;
+
+    err = burner_read_request_body(req, body, sizeof(body), NULL);
+    if (err != ESP_OK || !burner_json_get_int(body, "volume", &volume)) {
+        return burner_send_json(req, "{\"ok\":false,\"message\":\"volume is required\"}");
+    }
+    if (volume < 0) {
+        volume = 0;
+    } else if (volume > 100) {
+        volume = 100;
+    }
+    err = music_player_set_volume((uint8_t)volume);
+    if (err == ESP_OK) {
+        err = mori_save_av_settings_to_system_ini(lcd_display_get_brightness(), (uint8_t)volume);
+    }
+    return burner_send_json(req, err == ESP_OK ? "{\"ok\":true}" : "{\"ok\":false,\"message\":\"volume failed\"}");
+}
+
 esp_err_t burner_web_upload_file(
     httpd_req_t *req,
     const char *default_name,
@@ -1180,6 +2161,7 @@ esp_err_t burner_web_upload_file(
             failed = true;
             break;
         }
+        web_ws_mark_network_activity();
         if (fwrite(buf, 1, (size_t)recv_len, fp) != (size_t)recv_len) {
             failed = true;
             break;

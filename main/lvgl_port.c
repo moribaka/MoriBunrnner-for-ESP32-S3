@@ -18,7 +18,7 @@
 #define LVGL_TASK_PRIORITY 4
 #define LVGL_DRAW_BUF_LINES 20
 #define LVGL_TASK_FRAME_MS 16
-#define LVGL_IDLE_DIM_TIMEOUT_MS (60U * 1000U)
+#define LVGL_IDLE_DIM_TIMEOUT_DEFAULT_MIN 1U
 #define LVGL_TASK_CORE_ID 0
 #define LVGL_PSRAM_POOL_COUNT 4
 #define LVGL_PSRAM_POOL_CHUNK_BYTES (48U * 1024U)
@@ -35,6 +35,7 @@ static int64_t s_last_activity_us = 0;
 static bool s_idle_dimmed = false;
 static uint8_t s_active_brightness = 0;
 static volatile uint32_t s_idle_dim_suspend_count = 0;
+static volatile uint16_t s_idle_dim_timeout_minutes = LVGL_IDLE_DIM_TIMEOUT_DEFAULT_MIN;
 
 static void *lvgl_alloc_draw_buffer(size_t size, const char *name)
 {
@@ -121,9 +122,18 @@ void lvgl_port_set_idle_dim_suspended(bool suspended)
     }
 }
 
+void lvgl_port_set_idle_dim_timeout_minutes(uint16_t minutes)
+{
+    s_idle_dim_timeout_minutes = minutes;
+    if (minutes == 0U) {
+        lvgl_port_mark_activity();
+    }
+}
+
 bool lvgl_port_is_idle_dimmed(void)
 {
     int64_t now_us;
+    uint16_t timeout_minutes = s_idle_dim_timeout_minutes;
 
     if (!s_inited) {
         return false;
@@ -136,8 +146,15 @@ bool lvgl_port_is_idle_dimmed(void)
     if (s_idle_dim_suspend_count > 0u) {
         return false;
     }
+    if (timeout_minutes == 0U) {
+        if (s_idle_dimmed) {
+            s_idle_dimmed = false;
+            (void)lcd_display_set_brightness(s_active_brightness);
+        }
+        return false;
+    }
     if (!s_idle_dimmed &&
-        (uint64_t)(now_us - s_last_activity_us) >= ((uint64_t)LVGL_IDLE_DIM_TIMEOUT_MS * 1000ULL)) {
+        (uint64_t)(now_us - s_last_activity_us) >= ((uint64_t)timeout_minutes * 60ULL * 1000ULL * 1000ULL)) {
         s_active_brightness = lcd_display_get_brightness();
         s_idle_dimmed = true;
         (void)lcd_display_set_brightness(LVGL_IDLE_BRIGHTNESS);

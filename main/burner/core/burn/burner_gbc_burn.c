@@ -1086,6 +1086,7 @@ static esp_err_t burner_run_erase_rom_job_mbc5(const burner_task_param_t *job)
         "chip erase running",
         job->rom_name,
         job->rom_path);
+    burner_status_set_chip_erase_ui_active(true);
     burner_status_mark_erase_begin();
 
     err = burner_run_mbc5_chip_erase();
