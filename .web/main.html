@@ -2341,6 +2341,10 @@
                         <option value="8">8 MB</option>
                     </select>
                 </div>
+                <label style="display:flex; align-items:center; gap:8px; margin: 8px 0 16px; text-align:left;">
+                    <input type="checkbox" id="fileActionWaitcntPatch">
+                    <span>启用 GBA WAITCNT 补丁</span>
+                </label>
                 <div class="file-action-buttons">
                     <button class="btn btn-primary" onclick="confirmBurn()">
                         <span>🔥</span> 烧录
@@ -2597,6 +2601,7 @@
             pendingDumpRelPath: '',
             pendingDumpName: '',
             pendingDumpAutoDownloaded: false,
+            gbaWaitcntPatch: false,
             lastBurnMessage: '',
             burnCancelPending: false,
             cartProbeData: null,
@@ -5233,6 +5238,9 @@
                 }
                 if (mode === 'mbc5') {
                     writeUrl += `&mbc5_chunk_kb=${encodeURIComponent(String(mbc5ChunkKb))}`;
+                }
+                if (mode === 'gba' && state.gbaWaitcntPatch) {
+                    writeUrl += '&waitcnt=true';
                 }
                 const { response, data } = await startTaskRequest(appendBurnRecipeQuery(writeUrl));
 
@@ -8502,8 +8510,10 @@
             const writePathSelect = document.getElementById('fileActionWritePathSelect');
             const pipelineEraseSelect = document.getElementById('fileActionPipelineEraseSelect');
             const psramMbSelect = document.getElementById('fileActionPsramMbSelect');
+            const waitcntPatchSelect = document.getElementById('fileActionWaitcntPatch');
             const requestedWritePath = writePathSelect ? writePathSelect.value : (state.writePathMode || 'psram');
             const requestedPipelineErase = pipelineEraseSelect ? pipelineEraseSelect.value : getPipelineEraseMode();
+            state.gbaWaitcntPatch = Boolean(waitcntPatchSelect && waitcntPatchSelect.checked);
             if (psramMbSelect) {
                 setPsramWindowMb(psramMbSelect.value);
             }
@@ -8644,6 +8654,9 @@
                 }
                 if (mode === 'mbc5') {
                     writeUrl += `&mbc5_chunk_kb=${encodeURIComponent(String(mbc5ChunkKb))}`;
+                }
+                if (mode === 'gba' && state.gbaWaitcntPatch) {
+                    writeUrl += '&waitcnt=true';
                 }
                 const { response: writeResponse, data: writeData } = await startTaskRequest(writeUrl);
                 if (!writeResponse.ok || !writeData.ok) {

@@ -232,6 +232,7 @@ static void ui_start_file_action_task(void *param)
                 request->psram_mb,
                 request->mbc5_chunk_kb,
                 request->gba_force_no_cfi,
+                false,
                 request->gbx_profile_file,
                 &result,
                 error_msg,

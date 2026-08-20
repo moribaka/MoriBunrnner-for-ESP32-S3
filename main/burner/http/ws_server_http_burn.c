@@ -308,12 +308,14 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     char psram_mb_arg[16] = {0};
     char mbc5_chunk_kb_arg[16] = {0};
     char force_no_cfi_arg[16] = {0};
+    char waitcnt_patch_arg[16] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
     char error_msg[160] = {0};
     uint32_t slot = 0;
     uint32_t mbc5_chunk_kb = s_burn_mbc5_chunk_kb;
     uint32_t psram_mb = s_burn_psram_window_mb;
     bool gba_force_no_cfi = false;
+    bool apply_gba_waitcnt_patch = false;
     bool erase_always = (s_burn_erase_always != 0u);
     burner_cart_mode_t cart_mode = BURNER_CART_MODE_MBC5;
     burner_recipe_mode_t recipe_mode = s_burn_recipe_mode_default;
@@ -362,6 +364,9 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "force_no_cfi", force_no_cfi_arg, sizeof(force_no_cfi_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid force_no_cfi query");
     }
+    if (!burner_get_query_arg(req, "waitcnt", waitcnt_patch_arg, sizeof(waitcnt_patch_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid waitcnt query");
+    }
     if (!burner_parse_cart_mode_text(mode_arg, &cart_mode)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mode must be gba or mbc5");
     }
@@ -393,6 +398,9 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (force_no_cfi_arg[0] != '\0' && !burner_parse_bool_text(force_no_cfi_arg, &gba_force_no_cfi)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "force_no_cfi must be true/false/1/0");
     }
+    if (waitcnt_patch_arg[0] != '\0' && !burner_parse_bool_text(waitcnt_patch_arg, &apply_gba_waitcnt_patch)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "waitcnt must be true/false/1/0");
+    }
     if (cart_mode != BURNER_CART_MODE_GBA) {
         gba_force_no_cfi = false;
     }
@@ -407,6 +415,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         psram_mb,
         mbc5_chunk_kb,
         gba_force_no_cfi,
+        apply_gba_waitcnt_patch,
         gbx_profile_arg,
         &result,
         error_msg,
@@ -419,12 +428,13 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     n = snprintf(
         resp,
         sizeof(resp),
-        "{\"ok\":true,\"mode\":\"%s\",\"write_path\":\"%s\",\"mbc5_chunk_kb\":%" PRIu32 ",\"psram_mb\":%" PRIu32 ",\"force_no_cfi\":%s,\"message\":\"burn started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
+        "{\"ok\":true,\"mode\":\"%s\",\"write_path\":\"%s\",\"mbc5_chunk_kb\":%" PRIu32 ",\"psram_mb\":%" PRIu32 ",\"force_no_cfi\":%s,\"waitcnt\":%s,\"message\":\"burn started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
         (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
         burner_write_path_to_str(write_path),
         result.mbc5_chunk_kb,
         result.psram_mb,
         result.gba_force_no_cfi ? "true" : "false",
+        apply_gba_waitcnt_patch ? "true" : "false",
         result.full_path,
         result.effective_size);
     if (n <= 0 || n >= (int)sizeof(resp)) {
@@ -750,6 +760,7 @@ esp_err_t burner_start_write_from_tf(
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
+    bool apply_gba_waitcnt_patch,
     const char *gbx_profile_file,
     burner_task_start_result_t *result,
     char *error_msg,
@@ -766,6 +777,9 @@ esp_err_t burner_start_write_from_tf(
     uint32_t mbc5_program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
     char probe_err[96] = {0};
     bool gba_force_multi = false;
+    burner_gba_patch_report_t patch_report = {0};
+    char patched_full_path[BURNER_FILE_PATH_LEN] = {0};
+    char patch_error[128] = {0};
     esp_err_t err;
 
     if (card == NULL) {
@@ -785,6 +799,7 @@ esp_err_t burner_start_write_from_tf(
     mbc5_program_chunk_bytes = burner_mbc5_program_chunk_kb_to_bytes(mbc5_chunk_kb);
     if (cart_mode != BURNER_CART_MODE_GBA) {
         gba_force_no_cfi = false;
+        apply_gba_waitcnt_patch = false;
     }
 
     err = burner_resolve_input_file(
@@ -804,22 +819,32 @@ esp_err_t burner_start_write_from_tf(
         return burner_start_error(err, "invalid rom file", error_msg, error_msg_len);
     }
 
-    if (cart_mode == BURNER_CART_MODE_GBA && (write_size & 0x1u) != 0u) {
-        FILE *pad_fp;
-
-        if (write_size == UINT32_MAX) {
-            return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
+    if (cart_mode == BURNER_CART_MODE_GBA) {
+        err = burner_prepare_gba_patch_file(
+            full_path,
+            apply_gba_waitcnt_patch,
+            patched_full_path,
+            sizeof(patched_full_path),
+            &patch_report,
+            patch_error,
+            sizeof(patch_error));
+        if (err != ESP_OK) {
+            return burner_start_error(
+                err,
+                patch_error[0] != '\0' ? patch_error : "gba patch preparation failed",
+                error_msg,
+                error_msg_len);
         }
-        pad_fp = fopen(full_path, "ab");
-        if (pad_fp == NULL) {
-            return burner_start_error(ESP_FAIL, "append gba padding failed", error_msg, error_msg_len);
+        if (patch_report.created_copy) {
+            snprintf(full_path, sizeof(full_path), "%s", patched_full_path);
+            write_size = patch_report.output_size;
+            ESP_LOGI(
+                BURNER_TAG,
+                "GBA patch prepared: file=%s sram=%s waitcnt=%" PRIu32,
+                full_path,
+                patch_report.sram_patched ? patch_report.patch_name : "none",
+                patch_report.waitcnt_count);
         }
-        if (fputc(0x00, pad_fp) == EOF) {
-            fclose(pad_fp);
-            return burner_start_error(ESP_FAIL, "append gba padding failed", error_msg, error_msg_len);
-        }
-        fclose(pad_fp);
-        write_size += 1u;
     }
 
     if (cart_mode == BURNER_CART_MODE_GBA) {

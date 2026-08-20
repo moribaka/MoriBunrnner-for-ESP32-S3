@@ -2,6 +2,7 @@
 #define WS_SERVER_INTERNAL_H
 
 #include "ws_server.h"
+#include "burner_gba_patch.h"
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -868,6 +869,7 @@ esp_err_t burner_start_write_from_tf(
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
+    bool apply_gba_waitcnt_patch,
     const char *gbx_profile_file,
     burner_task_start_result_t *result,
     char *error_msg,

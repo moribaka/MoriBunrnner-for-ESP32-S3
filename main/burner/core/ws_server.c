@@ -3807,6 +3807,8 @@ esp_err_t burner_ensure_rom_dir(void)
 
 #include "burn/burner_gba_lowlevel.c"
 
+#include "burner_gba_patch.c"
+
 #include "burn/burner_gba_gbx_lowlevel.c"
 
 #include "burn/burner_gbc_flash_lowlevel.c"
