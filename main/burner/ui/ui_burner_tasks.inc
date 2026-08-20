@@ -1,3 +1,23 @@
+static void ui_patch_analysis_task(void *param)
+{
+    char *path = (char *)param;
+    bool available = burner_gba_rom_has_sram_patch_target(path);
+
+    free(path);
+    if (ui_take_model_lock()) {
+        s_gba_sram_patch_available = available;
+        s_gba_patch_analysis_active = false;
+        s_gba_patch_analysis_done = true;
+        if (!available) {
+            s_gba_sram_patch = false;
+        }
+        ui_set_status_locked(&s_model, available ? ui_tr("patch options ready") : ui_tr("SRAM patch not needed"));
+        ui_mark_content_dirty(&s_model);
+        xSemaphoreGive(s_model_lock);
+    }
+    vTaskDelete(NULL);
+}
+
 static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_entry_t *entry)
 {
     ui_file_kind_t kind;
@@ -28,11 +48,10 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
     } else {
         *ui_last_rom_file_for_mode_mut(s_cart_mode) = *entry;
         *ui_last_rom_kind_for_mode_mut(s_cart_mode) = kind;
-        s_gba_sram_patch_available = (s_cart_mode == BURNER_CART_MODE_GBA) &&
-                                     burner_gba_rom_has_sram_patch_target(entry->path);
-        if (!s_gba_sram_patch_available) {
-            s_gba_sram_patch = false;
-        }
+        s_gba_sram_patch_available = false;
+        s_gba_patch_analysis_active = false;
+        s_gba_patch_analysis_done = false;
+        s_gba_sram_patch = false;
         if (s_cart_mode == BURNER_CART_MODE_MBC5) {
             s_gb_mapper_override_kind = BURNER_GB_MAPPER_UNKNOWN;
         }

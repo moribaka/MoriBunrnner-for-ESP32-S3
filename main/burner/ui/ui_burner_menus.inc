@@ -154,6 +154,45 @@ static void ui_burn_rom_open_write_menu_locked(ui_model_t *model)
     ui_set_status_locked(model, ui_tr("select burn patch"));
 }
 
+static void ui_start_patch_analysis_locked(ui_model_t *model)
+{
+    const ui_file_entry_t *rom;
+    char *path;
+
+    if (model == NULL || s_gba_patch_analysis_active) {
+        return;
+    }
+    rom = ui_last_rom_file_for_mode(s_cart_mode);
+    if (rom == NULL || rom->path[0] == '\0') {
+        ui_set_status_locked(model, ui_tr("select ROM first"));
+        return;
+    }
+    path = (char *)malloc(strlen(rom->path) + 1U);
+    if (path == NULL) {
+        ui_set_status_locked(model, ui_tr("no memory"));
+        return;
+    }
+    strcpy(path, rom->path);
+    s_gba_patch_analysis_active = true;
+    s_gba_patch_analysis_done = false;
+    s_gba_sram_patch_available = false;
+    s_gba_sram_patch = false;
+    ui_set_status_locked(model, ui_tr("analyzing ROM..."));
+    ui_mark_content_dirty(model);
+    if (xTaskCreatePinnedToCore(
+            ui_patch_analysis_task,
+            "ui_patch_probe",
+            UI_BURN_PROBE_TASK_STACK_SIZE,
+            path,
+            UI_STORAGE_TASK_PRIORITY,
+            NULL,
+            UI_BURN_TASK_CORE_ID) != pdPASS) {
+        free(path);
+        s_gba_patch_analysis_active = false;
+        ui_set_status_locked(model, ui_tr("analysis start failed"));
+    }
+}
+
 static void ui_burn_rom_open_recipe_menu_locked(ui_model_t *model)
 {
     if (model == NULL) {
