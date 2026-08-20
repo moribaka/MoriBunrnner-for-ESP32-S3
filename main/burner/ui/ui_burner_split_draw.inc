@@ -100,6 +100,23 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
             yy += UI_LIST_LINE_H;
             ui_px_info_line(text_x, yy, text_w, ui_tr("Size:"), save_size_text);
             yy += UI_LIST_LINE_H;
+            if (status.probe_gba_batteryless_region_found) {
+                char batteryless_address_text[24] = {0};
+                snprintf(
+                    batteryless_address_text,
+                    sizeof(batteryless_address_text),
+                    "0x%06" PRIX32,
+                    status.probe_gba_batteryless_save_address);
+                ui_px_info_line(text_x, yy, text_w, "Save area:", batteryless_address_text);
+                yy += UI_LIST_LINE_H;
+                ui_px_info_line(
+                    text_x,
+                    yy,
+                    text_w,
+                    "Save data:",
+                    status.probe_gba_batteryless_data_present ? "present" : "empty");
+                yy += UI_LIST_LINE_H;
+            }
             ui_px_info_line(text_x, yy, text_w, ui_tr("SRAM patch:"), ui_gba_sram_patch_label(&status));
             yy += UI_LIST_LINE_H;
         }

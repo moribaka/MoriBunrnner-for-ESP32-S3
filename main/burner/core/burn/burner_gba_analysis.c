@@ -433,6 +433,178 @@ static bool burner_detect_gba_save_type_from_rom_locked(
     return detected;
 }
 
+static uint32_t burner_read_le32(const uint8_t *bytes)
+{
+    return (uint32_t)bytes[0] |
+           ((uint32_t)bytes[1] << 8) |
+           ((uint32_t)bytes[2] << 16) |
+           ((uint32_t)bytes[3] << 24);
+}
+
+/* Batteryless patches keep their save image in a reserved ROM-tail range. */
+esp_err_t burner_probe_gba_batteryless_save_locked(
+    uint32_t device_size,
+    uint32_t *save_address_out,
+    uint32_t *save_size_out,
+    bool *region_found_out,
+    bool *data_present_out)
+{
+    uint8_t boot[4] = {0};
+    uint8_t search[BURNER_BATTERYLESS_SEARCH_BYTES] = {0};
+    const size_t marker_len = sizeof(BURNER_BATTERYLESS_MARKER) - 1u;
+    uint32_t search_address;
+    uint32_t save_address = 0u;
+    uint32_t save_size = 0u;
+    bool region_found = false;
+    bool data_present = false;
+
+    if (save_address_out == NULL || save_size_out == NULL ||
+        region_found_out == NULL || data_present_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *save_address_out = 0u;
+    *save_size_out = 0u;
+    *region_found_out = false;
+    *data_present_out = false;
+    if (device_size < sizeof(boot)) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    if (burner_bacon_gba_read_block(boot, sizeof(boot), 0u, false) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    /* The GBA reset vector is an ARM branch; this is the same entry-point
+       calculation used by the batteryless patch format. */
+    uint32_t boot_vector = burner_read_le32(boot);
+    uint32_t boot_vector_addr = ((boot_vector & 0x00FFFFFFu) + 2u) << 2;
+    if (boot_vector_addr >= device_size ||
+        BURNER_BATTERYLESS_SEARCH_BYTES > (device_size - boot_vector_addr)) {
+        return ESP_OK;
+    }
+    search_address = boot_vector_addr;
+    if (burner_bacon_gba_read_block(
+            search,
+            sizeof(search),
+            search_address,
+            false) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    for (size_t i = 0u; i + marker_len <= sizeof(search); ++i) {
+        uint16_t payload_size;
+        uint32_t offset;
+        uint32_t payload_start;
+        uint8_t payload_header[12] = {0};
+
+        if (memcmp(search + i, BURNER_BATTERYLESS_MARKER, marker_len) != 0 ||
+            i + 0x0Fu >= sizeof(search)) {
+            continue;
+        }
+        payload_size = (uint16_t)search[i + 0x0Eu] |
+                       ((uint16_t)search[i + 0x0Fu] << 8);
+        if (payload_size == 0u) {
+            payload_size = 0x414u;
+        }
+        offset = search_address + (uint32_t)i + 0x10u;
+        if (offset < payload_size) {
+            continue;
+        }
+        payload_start = offset - payload_size;
+        if (payload_start >= device_size ||
+            sizeof(payload_header) > device_size - payload_start ||
+            burner_bacon_gba_read_block(
+                payload_header,
+                sizeof(payload_header),
+                payload_start,
+                false) != ESP_OK) {
+            return ESP_FAIL;
+        }
+        save_size = burner_read_le32(payload_header + 8u);
+        if (save_size == 0u || save_size > device_size - offset) {
+            continue;
+        }
+        save_address = offset;
+        region_found = true;
+        break;
+    }
+
+    if (!region_found) {
+        return ESP_OK;
+    }
+
+    data_present = false;
+    for (uint32_t offset = 0u; offset < save_size; offset += BURNER_GBA_SAVE_SCAN_STEP_BYTES) {
+        uint8_t chunk[BURNER_GBA_SAVE_SCAN_STEP_BYTES];
+        uint32_t read_size = save_size - offset;
+        if (read_size > sizeof(chunk)) {
+            read_size = sizeof(chunk);
+        }
+        if (burner_bacon_gba_read_block(
+                chunk,
+                read_size,
+                save_address + offset,
+                false) != ESP_OK) {
+            return ESP_FAIL;
+        }
+        for (uint32_t i = 0u; i < read_size; ++i) {
+            if (chunk[i] != 0xFFu) {
+                data_present = true;
+                break;
+            }
+        }
+        if (data_present) {
+            break;
+        }
+    }
+
+    *save_address_out = save_address;
+    *save_size_out = save_size;
+    *region_found_out = true;
+    *data_present_out = data_present;
+    return ESP_OK;
+}
+
+esp_err_t burner_probe_gba_batteryless_save(
+    uint32_t device_size,
+    uint32_t *save_address_out,
+    uint32_t *save_size_out,
+    bool *region_found_out,
+    bool *data_present_out)
+{
+    burner_task_param_t probe_job = {0};
+    esp_err_t err;
+
+    if (save_address_out == NULL || save_size_out == NULL ||
+        region_found_out == NULL || data_present_out == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (device_size == 0u) {
+        err = burner_probe_cart_capacity_bytes(BURNER_CART_MODE_GBA, &device_size);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+    probe_job.cart_mode = BURNER_CART_MODE_GBA;
+    probe_job.mode = BURNER_JOB_READ_ROM;
+    probe_job.addr_begin = 0u;
+    probe_job.total_bytes = device_size;
+
+    burner_spi_lock_take();
+    err = burner_spi_prepare_burn_gba(&probe_job);
+    if (err == ESP_OK) {
+        err = burner_probe_gba_batteryless_save_locked(
+            device_size,
+            save_address_out,
+            save_size_out,
+            region_found_out,
+            data_present_out);
+    }
+    burner_bacon_restore_3v3_power();
+    burner_spi_lock_give();
+    return err;
+}
+
 static bool burner_memmem_binary(const uint8_t *haystack, size_t haystack_len, const uint8_t *needle, size_t needle_len)
 {
     size_t i;

@@ -6,6 +6,8 @@ static void ui_px_draw_burner_cart_info(const ui_model_t *model)
     char sector_count_text[32] = {0};
     char d0d1_text[24] = {0};
     char id_text[32] = {0};
+    char batteryless_address_text[24] = {0};
+    char batteryless_data_text[16] = {0};
     int32_t y0 = UI_LIST_HEADER_H + (int32_t)(UI_BURN_ROM_ACTION_ROWS + 1U) * UI_LIST_LINE_H;
     int32_t w = UI_CANVAS_W - UI_LIST_BAR_W - 12;
 
@@ -44,6 +46,22 @@ static void ui_px_draw_burner_cart_info(const ui_model_t *model)
             ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 100, w - 72, ui_gba_sram_patch_label(&status), true);
             ui_px_text_clipped(UI_LIST_TEXT_X + 148, y0 + 36, w - 148, ui_tr("Save"), true);
             ui_px_text_clipped(UI_LIST_TEXT_X + 216, y0 + 36, w - 216, ui_gba_save_type_probe_label(&status), true);
+            if (status.probe_gba_batteryless_region_found) {
+                snprintf(
+                    batteryless_address_text,
+                    sizeof(batteryless_address_text),
+                    "0x%06" PRIX32,
+                    status.probe_gba_batteryless_save_address);
+                snprintf(
+                    batteryless_data_text,
+                    sizeof(batteryless_data_text),
+                    "%s",
+                    status.probe_gba_batteryless_data_present ? "present" : "empty");
+                ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 116, w, "Save area", true);
+                ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 116, w - 72, batteryless_address_text, true);
+                ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 132, w, "Data", true);
+                ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 132, w - 72, batteryless_data_text, true);
+            }
         } else {
             ui_px_text_clipped(UI_LIST_TEXT_X, y0 + 36, w, ui_tr("Capacity"), true);
             ui_px_text_clipped(UI_LIST_TEXT_X + 72, y0 + 36, w - 72, size_text, true);

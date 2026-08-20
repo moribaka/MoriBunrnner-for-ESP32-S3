@@ -174,6 +174,10 @@ void burner_status_probe_reset_locked(void)
     s_status.probe_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
     s_status.probe_gba_save_size = 0u;
     s_status.probe_gba_save_detected = false;
+    s_status.probe_gba_batteryless_save_address = 0u;
+    s_status.probe_gba_batteryless_save_size = 0u;
+    s_status.probe_gba_batteryless_region_found = false;
+    s_status.probe_gba_batteryless_data_present = false;
     s_status.probe_gba_sram_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
     s_status.probe_gba_sram_patch_scanned = false;
     s_status.probe_gba_sram_patch_detected = false;
@@ -218,6 +222,10 @@ void burner_status_set_probe_info(
         s_status.probe_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
         s_status.probe_gba_save_size = 0u;
         s_status.probe_gba_save_detected = false;
+        s_status.probe_gba_batteryless_save_address = 0u;
+        s_status.probe_gba_batteryless_save_size = 0u;
+        s_status.probe_gba_batteryless_region_found = false;
+        s_status.probe_gba_batteryless_data_present = false;
         s_status.probe_gba_sram_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
         s_status.probe_gba_sram_patch_scanned = false;
         s_status.probe_gba_sram_patch_detected = false;
@@ -256,6 +264,24 @@ void burner_status_set_gba_save_probe(
     s_status.probe_gba_save_type = save_type;
     s_status.probe_gba_save_size = save_size;
     s_status.probe_gba_save_detected = detected;
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_set_gba_batteryless_probe(
+    uint32_t save_address,
+    uint32_t save_size,
+    bool region_found,
+    bool data_present)
+{
+    if (s_status_lock == NULL) {
+        return;
+    }
+
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    s_status.probe_gba_batteryless_save_address = save_address;
+    s_status.probe_gba_batteryless_save_size = save_size;
+    s_status.probe_gba_batteryless_region_found = region_found;
+    s_status.probe_gba_batteryless_data_present = region_found && data_present;
     xSemaphoreGive(s_status_lock);
 }
 

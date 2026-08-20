@@ -100,6 +100,8 @@
 #define BURNER_GBA_SAVE_HEADER_SCAN_BYTES (64u * 1024u)
 #define BURNER_GBA_ANALYSIS_HEAD_BYTES (1u * 1024u * 1024u)
 #define BURNER_GBA_SAVE_SCAN_STEP_BYTES 0x1000u
+#define BURNER_BATTERYLESS_MARKER "<3 from Maniac"
+#define BURNER_BATTERYLESS_SEARCH_BYTES 0x2000u
 #define BURNER_GBA_TITLE_LEN 12u
 #define BURNER_MBC5_TITLE_OFFSET 0x134u
 #define BURNER_MBC5_TITLE_LEN 16u
@@ -550,6 +552,10 @@ typedef struct {
     burner_gba_save_type_t probe_gba_save_type;
     uint32_t probe_gba_save_size;
     bool probe_gba_save_detected;
+    uint32_t probe_gba_batteryless_save_address;
+    uint32_t probe_gba_batteryless_save_size;
+    bool probe_gba_batteryless_region_found;
+    bool probe_gba_batteryless_data_present;
     burner_gba_sram_patch_kind_t probe_gba_sram_patch_kind;
     bool probe_gba_sram_patch_scanned;
     bool probe_gba_sram_patch_detected;
@@ -863,6 +869,11 @@ void burner_status_set_gba_save_probe(
     burner_gba_save_type_t save_type,
     uint32_t save_size,
     bool detected);
+void burner_status_set_gba_batteryless_probe(
+    uint32_t save_address,
+    uint32_t save_size,
+    bool region_found,
+    bool data_present);
 void burner_status_set_gba_sram_patch_probe(
     burner_gba_sram_patch_kind_t patch_kind,
     bool scanned,

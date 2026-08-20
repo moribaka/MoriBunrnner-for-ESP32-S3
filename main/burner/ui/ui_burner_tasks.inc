@@ -610,6 +610,10 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     uint16_t buffer_write_bytes = 0;
     burner_gba_save_type_t gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
     uint32_t gba_save_size = 0;
+    uint32_t batteryless_save_address = 0u;
+    uint32_t batteryless_save_size = 0u;
+    bool batteryless_region_found = false;
+    bool batteryless_data_present = false;
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
     bool gbx_profile_matched = false;
     bool gba_d0d1_known = false;
@@ -797,14 +801,34 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                 &gba_save_type,
                 &gba_save_size,
                 &detected);
+            esp_err_t batteryless_err = ESP_OK;
+            if (err == ESP_OK) {
+                batteryless_err = burner_probe_gba_batteryless_save_locked(
+                    save_probe_device_size,
+                    &batteryless_save_address,
+                    &batteryless_save_size,
+                    &batteryless_region_found,
+                    &batteryless_data_present);
+            }
             burner_bacon_restore_3v3_power();
             burner_spi_lock_give();
             if (err == ESP_OK) {
+                if (batteryless_err == ESP_OK && batteryless_region_found) {
+                    gba_save_type = BURNER_GBA_SAVE_TYPE_BATTERYLESS;
+                    gba_save_size = batteryless_save_size;
+                    detected = true;
+                }
                 burner_status_set_gba_save_probe(gba_save_type, gba_save_size, detected);
                 burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
+                burner_status_set_gba_batteryless_probe(
+                    batteryless_save_address,
+                    batteryless_save_size,
+                    batteryless_region_found,
+                    batteryless_data_present);
             } else {
                 burner_status_set_gba_save_probe(BURNER_GBA_SAVE_TYPE_SRAM, 0u, false);
                 burner_status_set_gba_sram_patch_probe(BURNER_GBA_SRAM_PATCH_NONE, false, false);
+                burner_status_set_gba_batteryless_probe(0u, 0u, false, false);
             }
         }
         if (gbx_profile_matched) {

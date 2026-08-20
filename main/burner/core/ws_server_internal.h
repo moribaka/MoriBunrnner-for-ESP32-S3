@@ -529,6 +529,10 @@ typedef struct {
     burner_gba_save_type_t probe_gba_save_type;
     uint32_t probe_gba_save_size;
     bool probe_gba_save_detected;
+    uint32_t probe_gba_batteryless_save_address;
+    uint32_t probe_gba_batteryless_save_size;
+    bool probe_gba_batteryless_region_found;
+    bool probe_gba_batteryless_data_present;
     burner_gba_sram_patch_kind_t probe_gba_sram_patch_kind;
     bool probe_gba_sram_patch_scanned;
     bool probe_gba_sram_patch_detected;
@@ -950,6 +954,11 @@ void burner_status_set_gba_save_probe(
     burner_gba_save_type_t save_type,
     uint32_t save_size,
     bool detected);
+void burner_status_set_gba_batteryless_probe(
+    uint32_t save_address,
+    uint32_t save_size,
+    bool region_found,
+    bool data_present);
 void burner_status_set_gba_sram_patch_probe(
     burner_gba_sram_patch_kind_t patch_kind,
     bool scanned,
@@ -1275,6 +1284,18 @@ esp_err_t burner_probe_gba_save_type_head_locked(
     burner_gba_save_type_t *save_type_out,
     uint32_t *save_size_out,
     bool *detected_out);
+esp_err_t burner_probe_gba_batteryless_save_locked(
+    uint32_t device_size,
+    uint32_t *save_address_out,
+    uint32_t *save_size_out,
+    bool *region_found_out,
+    bool *data_present_out);
+esp_err_t burner_probe_gba_batteryless_save(
+    uint32_t device_size,
+    uint32_t *save_address_out,
+    uint32_t *save_size_out,
+    bool *region_found_out,
+    bool *data_present_out);
 esp_err_t burner_probe_gba_sram_patch(
     burner_gba_sram_patch_kind_t *patch_kind_out,
     bool *detected_out);

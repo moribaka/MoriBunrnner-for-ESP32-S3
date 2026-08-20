@@ -551,7 +551,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     char id_hex[32];
     char chip_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
     char sample_hex[BURNER_CART_ID_DEBUG_SAMPLE_MAX * 3 + 4];
-    char resp[1408];
+    char resp[1664];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
     const char *gba_chip_label = NULL;
@@ -569,6 +569,10 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     burner_gba_save_type_t gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
     burner_gba_sram_patch_kind_t gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
     uint32_t gba_save_size = 0u;
+    uint32_t gba_batteryless_save_address = 0u;
+    uint32_t gba_batteryless_save_size = 0u;
+    bool gba_batteryless_region_found = false;
+    bool gba_batteryless_data_present = false;
     bool is_busy = false;
     bool sample_ok = false;
     esp_err_t err;
@@ -750,6 +754,19 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
             gba_patch_detected = false;
         }
+        if (analysis_err == ESP_OK) {
+            esp_err_t batteryless_err = burner_probe_gba_batteryless_save(
+                save_probe_device_size,
+                &gba_batteryless_save_address,
+                &gba_batteryless_save_size,
+                &gba_batteryless_region_found,
+                &gba_batteryless_data_present);
+            if (batteryless_err == ESP_OK && gba_batteryless_region_found) {
+                gba_save_type = BURNER_GBA_SAVE_TYPE_BATTERYLESS;
+                gba_save_size = gba_batteryless_save_size;
+                gba_save_detected = true;
+            }
+        }
     }
 
     if (err != ESP_OK) {
@@ -862,6 +879,11 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             gbx_profile_matched ? "GBX" :
                                   ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
         burner_status_set_gba_save_probe(gba_save_type, gba_save_size, gba_save_detected);
+        burner_status_set_gba_batteryless_probe(
+            gba_batteryless_save_address,
+            gba_batteryless_save_size,
+            gba_batteryless_region_found,
+            gba_batteryless_data_present);
         burner_status_set_gba_sram_patch_probe(
             gba_patch_kind,
             true,
@@ -894,6 +916,8 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             "\"cfi_ok\":%s,\"device_size\":%" PRIu32 ",\"sector_size\":%" PRIu32 ",\"buffer_write\":%u,"
             "\"d0d1_known\":%s,\"d0d1_swapped\":%s,"
             "\"gba_save_type\":\"%s\",\"gba_save_size\":%" PRIu32 ",\"gba_save_detected\":%s,"
+            "\"batteryless_save_address\":%" PRIu32 ",\"batteryless_save_size\":%" PRIu32 ","
+            "\"batteryless_region_found\":%s,\"batteryless_data_present\":%s,"
             "\"gba_sram_patch_kind\":\"%s\",\"gba_sram_patch_scanned\":true,\"gba_sram_patch_detected\":%s,"
             "\"sample_ok\":%s,\"sample_addr\":%" PRIu32 ",\"sample_len\":%" PRIu32 ","
             "\"sample_hex\":\"%s\",\"sample_error\":\"%s\"}",
@@ -917,6 +941,10 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             burner_http_gba_save_type_name(gba_save_type),
             gba_save_size,
             gba_save_detected ? "true" : "false",
+            gba_batteryless_save_address,
+            gba_batteryless_save_size,
+            gba_batteryless_region_found ? "true" : "false",
+            gba_batteryless_data_present ? "true" : "false",
             burner_http_gba_sram_patch_name(gba_patch_kind),
             gba_patch_detected ? "true" : "false",
             sample_ok ? "true" : "false",
@@ -950,7 +978,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     uint16_t buffer_write_bytes = 0;
     char id_hex[32];
     char chip_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
-    char resp[960];
+    char resp[1152];
     const char *gba_cmd_mode = "word";
     const char *gba_cmd_data_lane = "low";
     const char *gba_chip_label = NULL;
@@ -967,6 +995,10 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     burner_gba_save_type_t gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
     burner_gba_sram_patch_kind_t gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
     uint32_t gba_save_size = 0u;
+    uint32_t gba_batteryless_save_address = 0u;
+    uint32_t gba_batteryless_save_size = 0u;
+    bool gba_batteryless_region_found = false;
+    bool gba_batteryless_data_present = false;
     bool is_busy = false;
     esp_err_t err;
     int n;
@@ -1210,15 +1242,33 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                 &gba_patch_kind,
                 &gba_patch_detected);
 
-            if (analysis_err != ESP_OK) {
+        if (analysis_err != ESP_OK) {
                 gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
                 gba_save_size = 0u;
                 gba_save_detected = false;
                 gba_patch_kind = BURNER_GBA_SRAM_PATCH_NONE;
-                gba_patch_detected = false;
+            gba_patch_detected = false;
+        }
+        if (analysis_err == ESP_OK) {
+            esp_err_t batteryless_err = burner_probe_gba_batteryless_save(
+                save_probe_device_size,
+                &gba_batteryless_save_address,
+                &gba_batteryless_save_size,
+                &gba_batteryless_region_found,
+                &gba_batteryless_data_present);
+            if (batteryless_err == ESP_OK && gba_batteryless_region_found) {
+                gba_save_type = BURNER_GBA_SAVE_TYPE_BATTERYLESS;
+                gba_save_size = gba_batteryless_save_size;
+                gba_save_detected = true;
             }
         }
+        }
         burner_status_set_gba_save_probe(gba_save_type, gba_save_size, gba_save_detected);
+        burner_status_set_gba_batteryless_probe(
+            gba_batteryless_save_address,
+            gba_batteryless_save_size,
+            gba_batteryless_region_found,
+            gba_batteryless_data_present);
         burner_status_set_gba_sram_patch_probe(gba_patch_kind, true, gba_patch_detected);
         n = snprintf(
             id_hex,
@@ -1342,6 +1392,8 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         "\"probe_gba_multi\":%s,\"probe_gba_force_multi\":%s,"
         "\"probe_gba_d0d1_known\":%s,\"probe_gba_d0d1_swapped\":%s,"
         "\"probe_gba_save_type\":\"%s\",\"probe_gba_save_size\":%" PRIu32 ",\"probe_gba_save_detected\":%s,"
+        "\"probe_gba_batteryless_save_address\":%" PRIu32 ",\"probe_gba_batteryless_save_size\":%" PRIu32 ","
+        "\"probe_gba_batteryless_region_found\":%s,\"probe_gba_batteryless_data_present\":%s,"
         "\"probe_gba_sram_patch_kind\":\"%s\",\"probe_gba_sram_patch_scanned\":%s,"
         "\"probe_gba_sram_patch_detected\":%s,"
         "\"probe_device_size\":%" PRIu32 ",\"probe_sector_size\":%" PRIu32 ",\"probe_buffer_write_bytes\":%u,"
@@ -1404,6 +1456,10 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         burner_http_gba_save_type_name(snap.probe_gba_save_type),
         snap.probe_gba_save_size,
         snap.probe_gba_save_detected ? "true" : "false",
+        snap.probe_gba_batteryless_save_address,
+        snap.probe_gba_batteryless_save_size,
+        snap.probe_gba_batteryless_region_found ? "true" : "false",
+        snap.probe_gba_batteryless_data_present ? "true" : "false",
         burner_http_gba_sram_patch_name(snap.probe_gba_sram_patch_kind),
         snap.probe_gba_sram_patch_scanned ? "true" : "false",
         snap.probe_gba_sram_patch_detected ? "true" : "false",
