@@ -21,7 +21,9 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             snprintf(hint, hint_len, "%s", ui_write_path_label());
         } else if (index == 1U) {
             snprintf(title, title_len, "%s", ui_tr("SRAM patch"));
-            snprintf(hint, hint_len, "%s", s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No"));
+            snprintf(hint, hint_len, "%s", ui_gba_sram_patch_selectable() ?
+                                                    (s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No")) :
+                                                    ui_tr("Not needed"));
         } else {
             snprintf(title, title_len, "%s", ui_tr("Latency patch"));
             snprintf(hint, hint_len, "%s", s_gba_waitcnt_patch ? ui_tr("Yes") : ui_tr("No"));

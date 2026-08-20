@@ -1718,6 +1718,7 @@ static uint32_t s_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
 static uint8_t s_ram_latency = 10;
 static bool s_gba_sram_patch = false;
 static bool s_gba_waitcnt_patch = false;
+static bool s_gba_sram_patch_available = false;
 static ui_file_entry_t s_last_rom_file_by_cart[2] = {0};
 static ui_file_kind_t s_last_rom_kind_by_cart[2] = {UI_FILE_KIND_UNSUPPORTED, UI_FILE_KIND_UNSUPPORTED};
 static ui_file_entry_t s_last_save_file = {0};
@@ -1770,6 +1771,11 @@ static void ui_smb_toggle_signing_locked(ui_model_t *model);
 static void ui_smb_adjust_port_locked(ui_model_t *model, int delta);
 static bool ui_music_header_marquee_active(const ui_model_t *model);
 static bool ui_music_drawer_marquee_active(const ui_model_t *model);
+
+static bool ui_gba_sram_patch_selectable(void)
+{
+    return s_cart_mode == BURNER_CART_MODE_GBA && s_gba_sram_patch_available;
+}
 
 static bool ui_take_model_lock(void)
 {
@@ -4627,6 +4633,14 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
     if (count == 0U || delta == 0) {
         return;
     }
+    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
+        !ui_gba_sram_patch_selectable() && count == UI_BURN_ROM_WRITE_PATH_ITEM_COUNT) {
+        if (model->selected == 0U || model->selected == 2U) {
+            model->selected = (model->selected == 0U) ? 2U : 0U;
+            ui_mark_motion_dirty(model);
+            return;
+        }
+    }
     if (ui_page_is_icon_grid(model->page)) {
         ui_icon_page_config_t config = {0};
         uint16_t next_selected = model->selected;
@@ -5312,6 +5326,10 @@ static void ui_select_locked(
                         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
                     }
                 } else if (model->selected == 1U) {
+                    if (!ui_gba_sram_patch_selectable()) {
+                        ui_set_status_locked(model, ui_tr("SRAM patch not needed"));
+                        return;
+                    }
                     s_gba_sram_patch = !s_gba_sram_patch;
                     ui_set_status_locked(model, s_gba_sram_patch ? ui_tr("SRAM patch: yes") : ui_tr("SRAM patch: no"));
                     ui_mark_content_dirty(model);

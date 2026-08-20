@@ -331,6 +331,32 @@ static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set)
     return 0;
 }
 
+bool burner_gba_rom_has_sram_patch_target(const char *input_path)
+{
+    FILE *fp;
+    uint32_t total = 0U;
+    size_t i;
+
+    if (input_path == NULL) {
+        return false;
+    }
+    fp = fopen(input_path, "rb");
+    if (fp == NULL || file_size(fp, &total) != 0) {
+        if (fp != NULL) fclose(fp);
+        return false;
+    }
+    for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
+        uint32_t offset = 0U;
+        if (find_pattern(fp, total, s_generated_patch_sets[i].identifier,
+                         s_generated_patch_sets[i].identifier_len, NULL, 0U, &offset) == 0) {
+            fclose(fp);
+            return true;
+        }
+    }
+    fclose(fp);
+    return false;
+}
+
 int burner_prepare_gba_patch_file(
     const char *input_path,
     bool apply_sram_patch,

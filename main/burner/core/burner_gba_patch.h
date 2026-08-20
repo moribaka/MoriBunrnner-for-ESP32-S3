@@ -14,6 +14,9 @@ typedef struct {
     uint32_t output_size;
 } burner_gba_patch_report_t;
 
+/* Returns true when a ROM contains a known non-SRAM save implementation. */
+bool burner_gba_rom_has_sram_patch_target(const char *input_path);
+
 /* Prepare a patched ROM without modifying input_path. */
 int burner_prepare_gba_patch_file(
     const char *input_path,
