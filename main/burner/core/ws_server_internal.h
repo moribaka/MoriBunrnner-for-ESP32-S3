@@ -64,7 +64,7 @@
 #define BURN_MBC5_DUMP_CHUNK_BYTES (64U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
-#define BURN_ERASE_ALWAYS_DEFAULT 0U
+#define BURN_ERASE_ALWAYS_DEFAULT 1U
 #define BURN_ERASE_PROBE_BYTES 512U
 #define BURN_BLANK_SAMPLE_BYTES 2U
 #define BURN_BLANK_SAMPLE_POINTS 4U
@@ -869,6 +869,7 @@ esp_err_t burner_start_write_from_tf(
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
+    bool apply_gba_sram_patch,
     bool apply_gba_waitcnt_patch,
     const char *gbx_profile_file,
     burner_task_start_result_t *result,

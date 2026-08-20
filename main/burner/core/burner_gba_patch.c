@@ -333,6 +333,7 @@ static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set)
 
 int burner_prepare_gba_patch_file(
     const char *input_path,
+    bool apply_sram_patch,
     bool apply_waitcnt_patch,
     char *output_path,
     size_t output_path_len,
@@ -367,7 +368,14 @@ int burner_prepare_gba_patch_file(
         set_error(error_msg, error_msg_len, "open rom for patch scan failed");
         return ESP_FAIL;
     }
-    if (!apply_waitcnt_patch) {
+    if (!apply_sram_patch && !apply_waitcnt_patch && (total & 1U) == 0U) {
+        fclose(input_fp);
+        input_fp = NULL;
+        snprintf(output_path, output_path_len, "%s", input_path);
+        if (report != NULL) report->output_size = total;
+        return ESP_OK;
+    }
+    if (apply_sram_patch && !apply_waitcnt_patch) {
         bool has_sram_identifier = false;
         for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
             uint32_t identifier_offset = 0U;
@@ -407,7 +415,7 @@ int burner_prepare_gba_patch_file(
         return ESP_FAIL;
     }
 
-    for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
+    for (i = 0U; apply_sram_patch && i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
         uint32_t identifier_offset = 0U;
         if (find_pattern(
                 fp,

@@ -17,6 +17,7 @@ typedef struct {
 /* Prepare a patched ROM without modifying input_path. */
 int burner_prepare_gba_patch_file(
     const char *input_path,
+    bool apply_sram_patch,
     bool apply_waitcnt,
     char *output_path,
     size_t output_path_len,

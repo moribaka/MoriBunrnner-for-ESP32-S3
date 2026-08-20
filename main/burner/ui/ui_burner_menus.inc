@@ -1,16 +1,3 @@
-static ui_file_action_t ui_burn_write_action_for_index(uint16_t index)
-{
-    switch (index) {
-        case 0:
-            return UI_FILE_ACTION_BURN_PSRAM;
-        case 1:
-            return UI_FILE_ACTION_BURN_PIPELINE;
-        case 2:
-        default:
-            return UI_FILE_ACTION_BURN_DIRECT;
-    }
-}
-
 static uint32_t ui_burn_dump_size_for_index(uint16_t index)
 {
     switch (index) {
@@ -161,11 +148,10 @@ static void ui_burn_rom_open_write_menu_locked(ui_model_t *model)
     }
     s_burn_rom_write_menu = true;
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_WRITE;
-    model->selected = (s_write_path == BURNER_WRITE_PATH_PSRAM) ? 0U :
-                      ((s_write_path == BURNER_WRITE_PATH_PIPELINE) ? 1U : 2U);
+    model->selected = 0U;
     model->scroll = 0;
     ui_mark_content_dirty(model);
-    ui_set_status_locked(model, ui_tr("select write method"));
+    ui_set_status_locked(model, ui_tr("select burn patch"));
 }
 
 static void ui_burn_rom_open_recipe_menu_locked(ui_model_t *model)

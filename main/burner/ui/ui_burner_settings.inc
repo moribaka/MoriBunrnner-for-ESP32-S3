@@ -24,6 +24,19 @@ static const char *ui_erase_mode_label(void)
     return (s_burn_erase_always != 0u) ? "Force erase" : "Smart skip";
 }
 
+static const char *ui_write_path_label(void)
+{
+    switch (s_write_path) {
+        case BURNER_WRITE_PATH_PSRAM:
+            return "PSRAM";
+        case BURNER_WRITE_PATH_PIPELINE:
+            return "Pipeline";
+        case BURNER_WRITE_PATH_DIRECT:
+        default:
+            return "Direct";
+    }
+}
+
 static const char *ui_recipe_mode_label(burner_recipe_mode_t mode)
 {
     if (mode == BURNER_RECIPE_MODE_CHISLINK) {

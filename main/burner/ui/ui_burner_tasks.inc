@@ -106,6 +106,8 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->psram_mb = s_psram_mb;
     request->mbc5_chunk_kb = s_mbc5_chunk_kb;
     request->gba_force_no_cfi = false;
+    request->gba_sram_patch = false;
+    request->gba_waitcnt_patch = false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = model->action_file.size;
     request->gbx_profile_file[0] = '\0';
@@ -232,7 +234,8 @@ static void ui_start_file_action_task(void *param)
                 request->psram_mb,
                 request->mbc5_chunk_kb,
                 request->gba_force_no_cfi,
-                false,
+                request->gba_sram_patch,
+                request->gba_waitcnt_patch,
                 request->gbx_profile_file,
                 &result,
                 error_msg,

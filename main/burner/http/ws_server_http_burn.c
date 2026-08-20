@@ -415,6 +415,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         psram_mb,
         mbc5_chunk_kb,
         gba_force_no_cfi,
+        true,
         apply_gba_waitcnt_patch,
         gbx_profile_arg,
         &result,
@@ -760,6 +761,7 @@ esp_err_t burner_start_write_from_tf(
     uint32_t psram_mb,
     uint32_t mbc5_chunk_kb,
     bool gba_force_no_cfi,
+    bool apply_gba_sram_patch,
     bool apply_gba_waitcnt_patch,
     const char *gbx_profile_file,
     burner_task_start_result_t *result,
@@ -822,6 +824,7 @@ esp_err_t burner_start_write_from_tf(
     if (cart_mode == BURNER_CART_MODE_GBA) {
         err = burner_prepare_gba_patch_file(
             full_path,
+            apply_gba_sram_patch,
             apply_gba_waitcnt_patch,
             patched_full_path,
             sizeof(patched_full_path),

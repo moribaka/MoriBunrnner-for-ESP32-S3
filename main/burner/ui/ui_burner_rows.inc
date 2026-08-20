@@ -16,15 +16,15 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
     char settle_label[16] = {0};
     (void)model;
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
-        ui_file_action_t action = ui_burn_write_action_for_index(index);
-
-        snprintf(title, title_len, "%s", ui_file_action_label(action));
-        if (action == UI_FILE_ACTION_BURN_PSRAM) {
-            snprintf(hint, hint_len, "%s", ui_psram_window_label(s_psram_mb, psram_label, sizeof(psram_label)));
-        } else if (action == UI_FILE_ACTION_BURN_PIPELINE && s_cart_mode == BURNER_CART_MODE_MBC5) {
-            snprintf(hint, hint_len, "%" PRIu32 " KB", s_mbc5_chunk_kb);
-        } else if (hint_len > 0U) {
-            hint[0] = '\0';
+        if (index == 0U) {
+            snprintf(title, title_len, "%s", ui_tr("Burn direct"));
+            snprintf(hint, hint_len, "%s", ui_write_path_label());
+        } else if (index == 1U) {
+            snprintf(title, title_len, "%s", ui_tr("SRAM patch"));
+            snprintf(hint, hint_len, "%s", s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No"));
+        } else {
+            snprintf(title, title_len, "%s", ui_tr("Latency patch"));
+            snprintf(hint, hint_len, "%s", s_gba_waitcnt_patch ? ui_tr("Yes") : ui_tr("No"));
         }
         return;
     }
@@ -73,15 +73,18 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
     }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
         if (index == 0U) {
+            snprintf(title, title_len, "%s", ui_tr("Write method"));
+            snprintf(hint, hint_len, "%s", ui_write_path_label());
+        } else if (index == 1U) {
             snprintf(title, title_len, "%s", ui_tr("Erase mode"));
             snprintf(hint, hint_len, "%s", ui_erase_mode_label());
-        } else if (index == 1U) {
+        } else if (index == 2U) {
             snprintf(title, title_len, "%s", ui_tr("Voltage settle"));
             snprintf(hint, hint_len, "%s", ui_power_settle_label(s_bacon_power_settle_ms, settle_label, sizeof(settle_label)));
-        } else if (index == 2U) {
+        } else if (index == 3U) {
             snprintf(title, title_len, "%s", ui_tr("PSRAM window"));
             snprintf(hint, hint_len, "%s", ui_psram_window_label(s_psram_mb, psram_label, sizeof(psram_label)));
-        } else if (index == 3U) {
+        } else if (index == 4U) {
             snprintf(title, title_len, "%s", ui_tr("Dump chunk"));
             snprintf(hint, hint_len, "%" PRIu32 " KB", s_dump_chunk_kb);
         } else if (s_cart_mode == BURNER_CART_MODE_MBC5) {

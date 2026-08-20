@@ -176,7 +176,7 @@ static void burner_burn_config_apply_defaults(void)
     s_gba_fixed_erase_window_enabled = BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT;
     s_mbc5_power_5v_enabled = 0u;
     s_bacon_power_settle_ms = BURNER_POWER_SETTLE_MS;
-    s_burn_write_path_default = BURNER_WRITE_PATH_PSRAM;
+    s_burn_write_path_default = BURNER_WRITE_PATH_DIRECT;
     s_burn_recipe_mode_default = BURNER_RECIPE_MODE_CHIS;
     s_burn_psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     s_burn_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
@@ -192,7 +192,7 @@ esp_err_t burner_load_burn_config(void)
     bool gba_fixed_erase_window = (BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT != 0u);
     bool use_5v = false;
     uint32_t power_settle_ms = BURNER_POWER_SETTLE_MS;
-    burner_write_path_t write_path = BURNER_WRITE_PATH_PSRAM;
+    burner_write_path_t write_path = BURNER_WRITE_PATH_DIRECT;
     burner_recipe_mode_t recipe_mode = BURNER_RECIPE_MODE_CHIS;
     uint32_t psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     uint32_t mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;

@@ -131,8 +131,8 @@
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
 #define UI_BURN_ROM_MAPPER_ITEM_COUNT 2
-#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 4
-#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 5
+#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 5
+#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 6
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 7
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
@@ -388,6 +388,8 @@ typedef struct {
     uint32_t psram_mb;
     uint32_t mbc5_chunk_kb;
     bool gba_force_no_cfi;
+    bool gba_sram_patch;
+    bool gba_waitcnt_patch;
     burner_gba_save_type_t gba_save_type;
     uint32_t gba_save_size;
     char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
@@ -1703,7 +1705,7 @@ static ui_nav_entry_t s_nav_stack[8];
 static uint8_t s_nav_depth = 0;
 static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
-static burner_write_path_t s_write_path = BURNER_WRITE_PATH_PSRAM;
+static burner_write_path_t s_write_path = BURNER_WRITE_PATH_DIRECT;
 static burner_recipe_mode_t s_recipe_mode = BURNER_RECIPE_MODE_CHIS;
 static bool s_ram_fram = false;
 static burner_gba_save_type_t s_gba_save_type = BURNER_GBA_SAVE_TYPE_SRAM;
@@ -1714,6 +1716,8 @@ static uint32_t s_psram_mb = BURN_PSRAM_WINDOW_AUTO_MB;
 static uint32_t s_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
 static uint32_t s_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
 static uint8_t s_ram_latency = 10;
+static bool s_gba_sram_patch = false;
+static bool s_gba_waitcnt_patch = false;
 static ui_file_entry_t s_last_rom_file_by_cart[2] = {0};
 static ui_file_kind_t s_last_rom_kind_by_cart[2] = {UI_FILE_KIND_UNSUPPORTED, UI_FILE_KIND_UNSUPPORTED};
 static ui_file_entry_t s_last_save_file = {0};
@@ -5006,6 +5010,8 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->psram_mb = s_psram_mb;
     request->mbc5_chunk_kb = s_mbc5_chunk_kb;
     request->gba_force_no_cfi = false;
+    request->gba_sram_patch = (request->cart_mode == BURNER_CART_MODE_GBA) ? s_gba_sram_patch : false;
+    request->gba_waitcnt_patch = (request->cart_mode == BURNER_CART_MODE_GBA) ? s_gba_waitcnt_patch : false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = selected_file.size;
     request->gbx_profile_file[0] = '\0';
@@ -5299,17 +5305,20 @@ static void ui_select_locked(
             break;
         case UI_PAGE_BURN_ROM:
             if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
-                ui_file_action_t action = ui_burn_write_action_for_index(model->selected);
-
-                s_write_path = (action == UI_FILE_ACTION_BURN_PSRAM) ?
-                                   BURNER_WRITE_PATH_PSRAM :
-                                   ((action == UI_FILE_ACTION_BURN_PIPELINE) ?
-                                        BURNER_WRITE_PATH_PIPELINE :
-                                        BURNER_WRITE_PATH_DIRECT);
-                ui_persist_burn_settings_locked(model);
-                if (ui_prepare_last_file_action_locked(model, action, start_request) == ESP_OK) {
-                    s_burn_rom_write_menu = false;
-                    s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+                if (model->selected == 0U) {
+                    ui_file_action_t action = ui_burn_action_for_write_path(s_write_path);
+                    if (ui_prepare_last_file_action_locked(model, action, start_request) == ESP_OK) {
+                        s_burn_rom_write_menu = false;
+                        s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
+                    }
+                } else if (model->selected == 1U) {
+                    s_gba_sram_patch = !s_gba_sram_patch;
+                    ui_set_status_locked(model, s_gba_sram_patch ? ui_tr("SRAM patch: yes") : ui_tr("SRAM patch: no"));
+                    ui_mark_content_dirty(model);
+                } else {
+                    s_gba_waitcnt_patch = !s_gba_waitcnt_patch;
+                    ui_set_status_locked(model, s_gba_waitcnt_patch ? ui_tr("Latency patch: yes") : ui_tr("Latency patch: no"));
+                    ui_mark_content_dirty(model);
                 }
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_SIZE) {
                 uint32_t dump_size_mib = ui_burn_dump_size_for_index(model->selected);
@@ -5360,12 +5369,17 @@ static void ui_select_locked(
                 ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_WRITE_ROM);
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SETTINGS) {
                 if (model->selected == 0U) {
+                    s_write_path = (s_write_path == BURNER_WRITE_PATH_DIRECT) ? BURNER_WRITE_PATH_PSRAM :
+                                   ((s_write_path == BURNER_WRITE_PATH_PSRAM) ? BURNER_WRITE_PATH_PIPELINE : BURNER_WRITE_PATH_DIRECT);
+                    ui_persist_burn_settings_locked(model);
+                    ui_set_status_locked(model, ui_write_path_label());
+                } else if (model->selected == 1U) {
                     s_burn_erase_always = (s_burn_erase_always == 0u) ? 1u : 0u;
                     ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, s_burn_erase_always != 0u ?
                                                    ui_tr("Erase mode: force erase") :
                                                    ui_tr("Erase mode: smart skip"));
-                } else if (model->selected == 1U) {
+                } else if (model->selected == 2U) {
                     s_bacon_power_settle_ms = ui_next_option_u32(
                         s_power_settle_ms_options,
                         sizeof(s_power_settle_ms_options) / sizeof(s_power_settle_ms_options[0]),
@@ -5373,7 +5387,7 @@ static void ui_select_locked(
                         1);
                     ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("Voltage settle changed"));
-                } else if (model->selected == 2U) {
+                } else if (model->selected == 3U) {
                     s_psram_mb = ui_next_option_u32(
                         s_psram_mb_options,
                         sizeof(s_psram_mb_options) / sizeof(s_psram_mb_options[0]),
@@ -5381,7 +5395,7 @@ static void ui_select_locked(
                         1);
                     ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("PSRAM window changed"));
-                } else if (model->selected == 3U) {
+                } else if (model->selected == 4U) {
                     s_dump_chunk_kb = ui_next_option_u32(
                         s_dump_chunk_kb_options,
                         sizeof(s_dump_chunk_kb_options) / sizeof(s_dump_chunk_kb_options[0]),

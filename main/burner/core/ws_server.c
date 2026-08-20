@@ -64,7 +64,7 @@
 #define BURN_MBC5_DUMP_CHUNK_BYTES (64U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MIN_BYTES (32U * 1024U)
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
-#define BURN_ERASE_ALWAYS_DEFAULT 0U
+#define BURN_ERASE_ALWAYS_DEFAULT 1U
 #define BURN_ERASE_PROBE_BYTES 512U
 #define BURN_BLANK_SAMPLE_BYTES 2U
 #define BURN_BLANK_SAMPLE_POINTS 4U
@@ -752,7 +752,7 @@ uint8_t s_burn_erase_always = BURN_ERASE_ALWAYS_DEFAULT;
 uint8_t s_gba_fixed_erase_window_enabled = BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT;
 uint8_t s_mbc5_power_5v_enabled = 0;
 uint32_t s_bacon_power_settle_ms = BURNER_POWER_SETTLE_MS;
-burner_write_path_t s_burn_write_path_default = BURNER_WRITE_PATH_PSRAM;
+burner_write_path_t s_burn_write_path_default = BURNER_WRITE_PATH_DIRECT;
 burner_recipe_mode_t s_burn_recipe_mode_default = BURNER_RECIPE_MODE_CHIS;
 uint32_t s_burn_psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
 uint32_t s_burn_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
