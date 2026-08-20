@@ -214,13 +214,12 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
             continue;
         }
         ui_fill_burn_rom_row(model, index, title, sizeof(title), hint, sizeof(hint));
-        ui_px_text_clipped(
-            text_x,
-            row_y + 3,
-            text_w,
-            title,
-            !(s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE && index == 1U &&
-              s_gba_patch_analysis_done && !ui_gba_sram_patch_selectable()));
+        if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE && index == 1U &&
+            s_gba_patch_analysis_done && !ui_gba_sram_patch_selectable()) {
+            ui_px_text_clipped_disabled(text_x, row_y + 3, text_w, title);
+        } else {
+            ui_px_text_clipped(text_x, row_y + 3, text_w, title, true);
+        }
         if (hint[0] != '\0') {
             int32_t hint_w = ui_px_text_width(hint);
             int32_t hint_x;
@@ -230,13 +229,12 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
             }
             hint_x = text_x + text_w - hint_w;
             if (hint_x > text_x + ui_px_text_width(title) + 6) {
-                ui_px_text_clipped(
-                    hint_x,
-                    row_y + 3,
-                    hint_w,
-                    hint,
-                    !(s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE && index == 1U &&
-                      s_gba_patch_analysis_done && !ui_gba_sram_patch_selectable()));
+                if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE && index == 1U &&
+                    s_gba_patch_analysis_done && !ui_gba_sram_patch_selectable()) {
+                    ui_px_text_clipped_disabled(hint_x, row_y + 3, hint_w, hint);
+                } else {
+                    ui_px_text_clipped(hint_x, row_y + 3, hint_w, hint, true);
+                }
             }
         }
     }

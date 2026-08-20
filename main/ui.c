@@ -2500,6 +2500,21 @@ static void ui_px_text_clipped(int32_t x, int32_t y, int32_t max_w, const char *
     }
 }
 
+static void ui_px_text_clipped_disabled(int32_t x, int32_t y, int32_t max_w, const char *text)
+{
+    int32_t yy;
+    int32_t xx;
+
+    ui_px_text_clipped(x, y, max_w, text, true);
+    for (yy = 0; yy < UI_TEXT_GLYPH_H; ++yy) {
+        for (xx = 0; xx < max_w; ++xx) {
+            if (((xx + yy) & 1) == 0) {
+                ui_px_set(x + xx, y + yy, false);
+            }
+        }
+    }
+}
+
 static void ui_px_text_clipped_offset(int32_t x, int32_t y, int32_t max_w, const char *text, int32_t offset_x, bool on)
 {
     const char *p = text;
