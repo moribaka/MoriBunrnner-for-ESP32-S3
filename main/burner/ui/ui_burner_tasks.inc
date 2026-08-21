@@ -2,16 +2,20 @@ static void ui_patch_analysis_task(void *param)
 {
     char *path = (char *)param;
     bool available = burner_gba_rom_has_sram_patch_target(path);
+    bool batteryless_available = true;
 
     free(path);
     if (ui_take_model_lock()) {
         s_gba_sram_patch_available = available;
+        if (!batteryless_available) {
+            s_gba_batteryless_patch = false;
+        }
         s_gba_patch_analysis_active = false;
         s_gba_patch_analysis_done = true;
         if (!available) {
             s_gba_sram_patch = false;
         }
-        ui_set_status_locked(&s_model, available ? ui_tr("patch options ready") : ui_tr("SRAM patch not needed"));
+        ui_set_status_locked(&s_model, (available || batteryless_available) ? ui_tr("patch options ready") : ui_tr("patch not needed"));
         ui_mark_content_dirty(&s_model);
         xSemaphoreGive(s_model_lock);
     }
@@ -52,6 +56,7 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
         s_gba_patch_analysis_active = false;
         s_gba_patch_analysis_done = false;
         s_gba_sram_patch = false;
+        s_gba_batteryless_patch = false;
         if (s_cart_mode == BURNER_CART_MODE_MBC5) {
             s_gb_mapper_override_kind = BURNER_GB_MAPPER_UNKNOWN;
         }
@@ -132,6 +137,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     request->gba_force_no_cfi = false;
     request->gba_sram_patch = false;
     request->gba_waitcnt_patch = false;
+    request->gba_batteryless_patch = false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = model->action_file.size;
     request->gbx_profile_file[0] = '\0';
@@ -260,6 +266,7 @@ static void ui_start_file_action_task(void *param)
                 request->gba_force_no_cfi,
                 request->gba_sram_patch,
                 request->gba_waitcnt_patch,
+                request->gba_batteryless_patch,
                 request->gbx_profile_file,
                 &result,
                 error_msg,
@@ -481,6 +488,57 @@ static esp_err_t ui_start_dump_save_task(void)
     uint32_t addr_begin = 0;
     uint32_t effective_size = 0;
     esp_err_t err;
+
+    if (s_cart_mode == BURNER_CART_MODE_GBA) {
+        burner_status_t status = {0};
+        burner_status_snapshot(&status);
+        if (s_dump_batteryless_requested && status.probe_gba_batteryless_region_found) {
+            if (card == NULL || usb_msc_tf_in_use_by_host()) {
+                return ESP_ERR_INVALID_STATE;
+            }
+            err = burner_ensure_dump_dir();
+            if (err != ESP_OK) {
+                return err;
+            }
+            burner_build_output_timestamp(timestamp, sizeof(timestamp));
+            snprintf(safe_name, sizeof(safe_name), "cart_gba_batteryless_save_%s.sav", timestamp);
+            err = burner_resolve_unique_output_path(
+                DUMP_DIR_PATH,
+                safe_name,
+                safe_name,
+                sizeof(safe_name),
+                full_path,
+                sizeof(full_path));
+            if (err != ESP_OK) {
+                return err;
+            }
+            err = burner_start_task_ex(
+                BURNER_JOB_READ_ROM,
+                BURNER_CART_MODE_GBA,
+                BURNER_WRITE_PATH_DIRECT,
+                s_recipe_mode,
+                false,
+                false,
+                false,
+                BURN_MBC5_PROGRAM_CHUNK_BYTES,
+                BURN_GBA_DUMP_CHUNK_BYTES,
+                BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES,
+                safe_name,
+                full_path,
+                status.probe_gba_batteryless_save_address,
+                status.probe_gba_batteryless_save_size,
+                BURNER_GBA_SAVE_TYPE_BATTERYLESS,
+                "",
+                false,
+                0U);
+            if (err == ESP_OK) {
+                ui_set_task_page_starting("Batteryless save dump started", status.probe_gba_batteryless_save_size, UI_PAGE_BURN_ROM);
+            }
+            s_dump_batteryless_requested = false;
+            return err;
+        }
+        s_dump_batteryless_requested = false;
+    }
 
     if (s_cart_mode == BURNER_CART_MODE_GBA) {
         if (card == NULL) {

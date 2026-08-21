@@ -136,6 +136,8 @@ static ui_burn_rom_op_t ui_burn_ram_op_for_index(uint16_t index)
             return (s_cart_mode == BURNER_CART_MODE_GBA) ? UI_BURN_ROM_OP_GBA_SAVE_TYPE : UI_BURN_ROM_OP_RAM_TYPE;
         case 6:
             return UI_BURN_ROM_OP_RAM_LATENCY;
+        case 7:
+            return UI_BURN_ROM_OP_DUMP_BATTERYLESS;
         default:
             return UI_BURN_ROM_OP_INVALID;
     }
@@ -177,6 +179,7 @@ static void ui_start_patch_analysis_locked(ui_model_t *model)
     s_gba_patch_analysis_done = false;
     s_gba_sram_patch_available = false;
     s_gba_sram_patch = false;
+    s_gba_batteryless_patch = false;
     ui_set_status_locked(model, ui_tr("analyzing ROM..."));
     ui_mark_content_dirty(model);
     if (xTaskCreatePinnedToCore(

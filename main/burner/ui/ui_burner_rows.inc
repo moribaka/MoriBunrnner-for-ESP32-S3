@@ -29,9 +29,12 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                                                         (s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No")) :
                                                         ui_tr("Not needed"));
             }
-        } else {
+        } else if (index == 2U) {
             snprintf(title, title_len, "%s", ui_tr("Latency patch"));
             snprintf(hint, hint_len, "%s", s_gba_waitcnt_patch ? ui_tr("Yes") : ui_tr("No"));
+        } else {
+            snprintf(title, title_len, "%s", ui_tr("Batteryless patch"));
+            snprintf(hint, hint_len, "%s", s_gba_batteryless_patch ? ui_tr("Yes") : ui_tr("No"));
         }
         return;
     }
@@ -323,6 +326,10 @@ static void ui_fill_burn_save_row(const ui_model_t *model, uint16_t index, char 
         case 6:
             snprintf(title, title_len, "%s", ui_tr("FRAM latency"));
             snprintf(hint, hint_len, "%u", (unsigned)s_ram_latency);
+            break;
+        case 7:
+            snprintf(title, title_len, "%s", ui_tr("Export batteryless save"));
+            snprintf(hint, hint_len, "%s", s_cart_mode == BURNER_CART_MODE_GBA ? ui_tr("ROM tail") : ui_tr("GBA only"));
             break;
         default:
             snprintf(title, title_len, "%s", ui_tr("Slot"));

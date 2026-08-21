@@ -126,7 +126,7 @@
 #define UI_SYSTEM_ITEM_COUNT 5
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
-#define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 3
+#define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 4
 #define UI_BURN_ROM_RECIPE_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
@@ -134,7 +134,7 @@
 #define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 5
 #define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 6
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
-#define UI_BURN_RAM_ITEM_COUNT 7
+#define UI_BURN_RAM_ITEM_COUNT 8
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
 #define UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT 9
 #define UI_BURN_ROM_MBC5_WITH_ROM_ITEM_COUNT 10
@@ -336,6 +336,7 @@ typedef enum {
     UI_BURN_ROM_OP_GBA_SAVE_TYPE,
     UI_BURN_ROM_OP_RAM_TYPE,
     UI_BURN_ROM_OP_RAM_LATENCY,
+    UI_BURN_ROM_OP_DUMP_BATTERYLESS,
     UI_BURN_ROM_OP_SETTINGS,
     UI_BURN_ROM_OP_INVALID,
 } ui_burn_rom_op_t;
@@ -390,6 +391,7 @@ typedef struct {
     bool gba_force_no_cfi;
     bool gba_sram_patch;
     bool gba_waitcnt_patch;
+    bool gba_batteryless_patch;
     burner_gba_save_type_t gba_save_type;
     uint32_t gba_save_size;
     char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
@@ -1718,6 +1720,8 @@ static uint32_t s_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
 static uint8_t s_ram_latency = 10;
 static bool s_gba_sram_patch = false;
 static bool s_gba_waitcnt_patch = false;
+static bool s_gba_batteryless_patch = false;
+static bool s_dump_batteryless_requested = false;
 static bool s_gba_sram_patch_available = false;
 static bool s_gba_patch_analysis_active = false;
 static bool s_gba_patch_analysis_done = false;
@@ -5044,6 +5048,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
     request->gba_force_no_cfi = false;
     request->gba_sram_patch = (request->cart_mode == BURNER_CART_MODE_GBA) ? s_gba_sram_patch : false;
     request->gba_waitcnt_patch = (request->cart_mode == BURNER_CART_MODE_GBA) ? s_gba_waitcnt_patch : false;
+    request->gba_batteryless_patch = (request->cart_mode == BURNER_CART_MODE_GBA) ? s_gba_batteryless_patch : false;
     request->gba_save_type = s_gba_save_type;
     request->gba_save_size = selected_file.size;
     request->gbx_profile_file[0] = '\0';
@@ -5355,9 +5360,13 @@ static void ui_select_locked(
                     s_gba_sram_patch = !s_gba_sram_patch;
                     ui_set_status_locked(model, s_gba_sram_patch ? ui_tr("SRAM patch: yes") : ui_tr("SRAM patch: no"));
                     ui_mark_content_dirty(model);
-                } else {
+                } else if (model->selected == 2U) {
                     s_gba_waitcnt_patch = !s_gba_waitcnt_patch;
                     ui_set_status_locked(model, s_gba_waitcnt_patch ? ui_tr("Latency patch: yes") : ui_tr("Latency patch: no"));
+                    ui_mark_content_dirty(model);
+                } else {
+                    s_gba_batteryless_patch = !s_gba_batteryless_patch;
+                    ui_set_status_locked(model, s_gba_batteryless_patch ? ui_tr("Batteryless patch: yes") : ui_tr("Batteryless patch: no"));
                     ui_mark_content_dirty(model);
                 }
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_SIZE) {
@@ -5485,6 +5494,7 @@ static void ui_select_locked(
                             start_request);
                         break;
                     case UI_BURN_ROM_OP_DUMP_SAVE:
+                        s_dump_batteryless_requested = false;
                         *work_type = UI_WORK_BURN_DUMP_SAVE;
                         *start_work = true;
                         break;
@@ -5512,6 +5522,15 @@ static void ui_select_locked(
                             break;
                         }
                         ui_set_status_locked(model, ui_tr("latency changed"));
+                        break;
+                    case UI_BURN_ROM_OP_DUMP_BATTERYLESS:
+                        if (s_cart_mode == BURNER_CART_MODE_GBA) {
+                            s_dump_batteryless_requested = true;
+                            *work_type = UI_WORK_BURN_DUMP_SAVE;
+                            *start_work = true;
+                        } else {
+                            ui_set_status_locked(model, ui_tr("GBA only"));
+                        }
                         break;
                     case UI_BURN_ROM_OP_ANALYZE:
                     case UI_BURN_ROM_OP_CHOOSE_ROM:
@@ -5592,6 +5611,7 @@ static void ui_select_locked(
                             start_request);
                         break;
                     case UI_BURN_ROM_OP_DUMP_SAVE:
+                        s_dump_batteryless_requested = false;
                         *work_type = UI_WORK_BURN_DUMP_SAVE;
                         *start_work = true;
                         break;
