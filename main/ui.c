@@ -4657,11 +4657,21 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
     }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
         !ui_gba_sram_patch_selectable() && count == UI_BURN_ROM_WRITE_PATH_ITEM_COUNT) {
-        if (model->selected == 0U || model->selected == 2U) {
-            model->selected = (model->selected == 0U) ? 2U : 0U;
+        /* SRAM is not a valid target for this ROM; keep it visible but skip it. */
+        if (model->selected == 1U) {
+            model->selected = (delta > 0) ? 2U : 0U;
             ui_mark_motion_dirty(model);
             return;
         }
+        if (delta > 0) {
+            model->selected = (model->selected == 0U) ? 2U :
+                              (model->selected == 2U) ? 3U : 0U;
+        } else if (delta < 0) {
+            model->selected = (model->selected == 0U) ? 3U :
+                              (model->selected == 3U) ? 2U : 0U;
+        }
+        ui_mark_motion_dirty(model);
+        return;
     }
     if (ui_page_is_icon_grid(model->page)) {
         ui_icon_page_config_t config = {0};
