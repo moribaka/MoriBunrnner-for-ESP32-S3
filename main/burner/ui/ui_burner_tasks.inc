@@ -1,7 +1,9 @@
 static void ui_patch_analysis_task(void *param)
 {
     char *path = (char *)param;
-    bool available = burner_gba_rom_has_sram_patch_target(path);
+    char full_path[BURNER_FILE_PATH_LEN] = {0};
+    bool available = burner_build_full_path(path, full_path, sizeof(full_path)) &&
+                     burner_gba_rom_has_sram_patch_target(full_path);
     bool batteryless_available = true;
 
     free(path);
