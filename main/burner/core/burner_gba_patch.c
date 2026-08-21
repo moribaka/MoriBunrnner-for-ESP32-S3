@@ -1,11 +1,13 @@
 #include "burner_gba_patch.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #define PATCH_SCAN_BYTES (32U * 1024U)
+#define PATCH_ANALYSIS_CHUNK_BYTES (256U * 1024U)
 #define PATCH_WAITCNT_ADDRESS 0x04000204U
 #define BATTERYLESS_MARKER "<3 from Maniac"
 #define BATTERYLESS_MIN_ROM (0x400000U)
@@ -125,6 +127,87 @@ static int find_pattern(
     }
     free(buffer);
     return 1;
+}
+
+/* Scan every known patch identifier during one sequential TF read. */
+static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out)
+{
+    const size_t set_count = sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]);
+    unsigned char *buffer = NULL;
+    size_t max_len = 0U;
+    size_t carry = 0U;
+    uint32_t offset = 0U;
+    bool any_found = false;
+    bool psram_buffer = false;
+
+    if (fp == NULL || found_out == NULL) {
+        return -1;
+    }
+    for (size_t i = 0U; i < set_count; ++i) {
+        found_out[i] = false;
+        if (s_generated_patch_sets[i].identifier_len > max_len) {
+            max_len = s_generated_patch_sets[i].identifier_len;
+        }
+    }
+    if (max_len == 0U || total < max_len || fseek(fp, 0L, SEEK_SET) != 0) {
+        return 0;
+    }
+
+    buffer = (unsigned char *)heap_caps_malloc(
+        PATCH_ANALYSIS_CHUNK_BYTES + max_len - 1U,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    psram_buffer = buffer != NULL;
+    if (buffer == NULL) {
+        buffer = (unsigned char *)malloc(PATCH_ANALYSIS_CHUNK_BYTES + max_len - 1U);
+    }
+    if (buffer == NULL) {
+        return -1;
+    }
+
+    while (offset < total && !any_found) {
+        size_t want = total - offset;
+        size_t got;
+        size_t span;
+        if (want > PATCH_ANALYSIS_CHUNK_BYTES) {
+            want = PATCH_ANALYSIS_CHUNK_BYTES;
+        }
+        got = fread(buffer + carry, 1U, want, fp);
+        if (got != want) {
+            if (psram_buffer) heap_caps_free(buffer); else free(buffer);
+            return -1;
+        }
+        span = carry + got;
+        for (size_t set_index = 0U; set_index < set_count; ++set_index) {
+            const unsigned char *pattern = s_generated_patch_sets[set_index].identifier;
+            size_t pattern_len = s_generated_patch_sets[set_index].identifier_len;
+            if (found_out[set_index] || pattern_len > span) {
+                continue;
+            }
+            for (size_t start = 0U; start + pattern_len <= span; ++start) {
+                if (buffer[start] != pattern[0]) {
+                    continue;
+                }
+                if (memcmp(buffer + start, pattern, pattern_len) == 0) {
+                    found_out[set_index] = true;
+                    any_found = true;
+                    break;
+                }
+            }
+        }
+        if (max_len > 1U) {
+            size_t keep = span;
+            if (keep > max_len - 1U) {
+                keep = max_len - 1U;
+            }
+            memmove(buffer, buffer + span - keep, keep);
+            carry = keep;
+        } else {
+            carry = 0U;
+        }
+        offset += (uint32_t)got;
+    }
+    if (psram_buffer) heap_caps_free(buffer); else free(buffer);
+    return 0;
 }
 
 static int write_pattern(FILE *fp, uint32_t total, uint32_t offset, const unsigned char *data, size_t len)
@@ -339,7 +422,8 @@ bool burner_gba_rom_has_sram_patch_target(const char *input_path)
 {
     FILE *fp;
     uint32_t total = 0U;
-    size_t i;
+    bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])] = {0};
+    bool any_found = false;
 
     if (input_path == NULL) {
         return false;
@@ -349,16 +433,15 @@ bool burner_gba_rom_has_sram_patch_target(const char *input_path)
         if (fp != NULL) fclose(fp);
         return false;
     }
-    for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
-        uint32_t offset = 0U;
-        if (find_pattern(fp, total, s_generated_patch_sets[i].identifier,
-                         s_generated_patch_sets[i].identifier_len, NULL, 0U, &offset) == 0) {
-            fclose(fp);
-            return true;
+    (void)scan_patch_identifiers(fp, total, found);
+    fclose(fp);
+    for (size_t i = 0U; i < sizeof(found) / sizeof(found[0]); ++i) {
+        if (found[i]) {
+            any_found = true;
+            break;
         }
     }
-    fclose(fp);
-    return false;
+    return any_found;
 }
 
 bool burner_gba_rom_has_batteryless_patch_target(const char *input_path)
