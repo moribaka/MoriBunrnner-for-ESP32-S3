@@ -10,6 +10,63 @@ static esp_err_t burner_resolve_input_file(
 static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const char *error_msg);
 static bool burner_parse_pipeline_erase_text(const char *text, bool *erase_always_out);
 
+typedef struct {
+    burner_task_param_t job;
+    SemaphoreHandle_t done;
+    esp_err_t err;
+} burner_gba_preerase_ctx_t;
+
+static void burner_gba_preerase_task(void *arg)
+{
+    burner_gba_preerase_ctx_t *ctx = (burner_gba_preerase_ctx_t *)arg;
+
+    if (ctx != NULL) {
+        ctx->err = burner_run_gba_preerase_job(&ctx->job);
+        if (ctx->done != NULL) {
+            xSemaphoreGive(ctx->done);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+static esp_err_t burner_start_gba_preerase(burner_gba_preerase_ctx_t *ctx)
+{
+    if (ctx == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ctx->done = xSemaphoreCreateBinary();
+    if (ctx->done == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    if (burner_create_task_with_affinity(
+            burner_gba_preerase_task,
+            "gba_preerase",
+            BURN_TASK_STACK_BYTES,
+            ctx,
+            5,
+            NULL,
+            s_burn_core_cfg.erase_core) != pdPASS) {
+        vSemaphoreDelete(ctx->done);
+        ctx->done = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
+static esp_err_t burner_wait_gba_preerase(burner_gba_preerase_ctx_t *ctx)
+{
+    esp_err_t err;
+
+    if (ctx == NULL || ctx->done == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    xSemaphoreTake(ctx->done, portMAX_DELAY);
+    err = ctx->err;
+    vSemaphoreDelete(ctx->done);
+    ctx->done = NULL;
+    return err;
+}
+
 static bool burner_parse_pipeline_erase_text(const char *text, bool *erase_always_out)
 {
     if (text == NULL || erase_always_out == NULL) {
@@ -597,7 +654,8 @@ esp_err_t burner_read_handler(httpd_req_t *req)
         BURNER_GBA_SAVE_TYPE_SRAM,
         "",
         false,
-        0u);
+        0u,
+        false);
     if (err != ESP_OK) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -793,6 +851,11 @@ esp_err_t burner_start_write_from_tf(
     burner_gba_patch_report_t patch_report = {0};
     char patched_full_path[BURNER_FILE_PATH_LEN] = {0};
     char patch_error[128] = {0};
+    burner_gba_preerase_ctx_t preerase = {0};
+    bool preerase_started = false;
+    bool preerase_done = false;
+    bool capacity_probed = false;
+    bool patch_requested = apply_gba_sram_patch || apply_gba_waitcnt_patch || apply_gba_batteryless_patch;
     esp_err_t err;
 
     if (card == NULL) {
@@ -800,6 +863,9 @@ esp_err_t burner_start_write_from_tf(
     }
     if (usb_msc_tf_in_use_by_host()) {
         return burner_start_error(ESP_ERR_INVALID_STATE, "tf busy by usb host", error_msg, error_msg_len);
+    }
+    if (burner_task_is_running_snapshot()) {
+        return burner_start_error(ESP_ERR_INVALID_STATE, "burn task is already running", error_msg, error_msg_len);
     }
 
     if (write_path == BURNER_WRITE_PATH_PIPELINE) {
@@ -833,6 +899,51 @@ esp_err_t burner_start_write_from_tf(
         return burner_start_error(err, "invalid rom file", error_msg, error_msg_len);
     }
 
+    /* Start range erase before patching so TF analysis and cartridge erase overlap. */
+    if (cart_mode == BURNER_CART_MODE_GBA && patch_requested) {
+        uint32_t planned_size = write_size;
+
+        if ((planned_size & 1u) != 0u) {
+            if (planned_size == UINT32_MAX) {
+                return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
+            }
+            planned_size++;
+        }
+        if (apply_gba_batteryless_patch && planned_size < (4u * 1024u * 1024u)) {
+            planned_size = 4u * 1024u * 1024u;
+        }
+        err = burner_apply_gba_slot_limit(
+            slot, planned_size, &addr_begin, &effective_size, &gba_force_multi);
+        if (err != ESP_OK) {
+            return burner_start_error(err, "rom file exceeds selected slot range", error_msg, error_msg_len);
+        }
+        err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
+        if (err != ESP_OK) {
+            return burner_start_error(err, "read gba nor size failed", error_msg, error_msg_len);
+        }
+        capacity_probed = true;
+        if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
+            return burner_start_error(ESP_ERR_INVALID_SIZE, "rom size exceeds nor size", error_msg, error_msg_len);
+        }
+
+        memset(&preerase.job, 0, sizeof(preerase.job));
+        preerase.job.mode = BURNER_JOB_WRITE_ROM;
+        preerase.job.cart_mode = BURNER_CART_MODE_GBA;
+        preerase.job.recipe_mode = recipe_mode;
+        preerase.job.erase_always = erase_always;
+        preerase.job.gba_force_multi = gba_force_multi;
+        preerase.job.gba_force_no_cfi = gba_force_no_cfi;
+        preerase.job.addr_begin = addr_begin;
+        preerase.job.total_bytes = effective_size;
+        snprintf(preerase.job.rom_name, sizeof(preerase.job.rom_name), "%s", safe_name);
+        snprintf(preerase.job.rom_path, sizeof(preerase.job.rom_path), "%s", full_path);
+        err = burner_start_gba_preerase(&preerase);
+        if (err != ESP_OK) {
+            return burner_start_error(err, "failed to start gba pre-erase", error_msg, error_msg_len);
+        }
+        preerase_started = true;
+    }
+
     if (cart_mode == BURNER_CART_MODE_GBA) {
         err = burner_prepare_gba_patch_file(
             full_path,
@@ -845,6 +956,17 @@ esp_err_t burner_start_write_from_tf(
             patch_error,
             sizeof(patch_error));
         if (err != ESP_OK) {
+            if (preerase_started) {
+                (void)burner_wait_gba_preerase(&preerase);
+            }
+            burner_status_update(
+                BURNER_STATE_ERROR,
+                0,
+                0,
+                write_size,
+                patch_error[0] != '\0' ? patch_error : "gba patch preparation failed",
+                safe_name,
+                full_path);
             return burner_start_error(
                 err,
                 patch_error[0] != '\0' ? patch_error : "gba patch preparation failed",
@@ -864,6 +986,24 @@ esp_err_t burner_start_write_from_tf(
         }
     }
 
+    if (preerase_started) {
+        err = burner_wait_gba_preerase(&preerase);
+        preerase_started = false;
+        if (err == ESP_OK) {
+            preerase_done = true;
+        } else if (err != ESP_ERR_NOT_SUPPORTED) {
+            burner_status_update(
+                BURNER_STATE_ERROR,
+                0,
+                0,
+                effective_size,
+                "gba pre-erase failed",
+                safe_name,
+                full_path);
+            return burner_start_error(err, "gba pre-erase failed", error_msg, error_msg_len);
+        }
+    }
+
     if (cart_mode == BURNER_CART_MODE_GBA) {
         err = burner_apply_gba_slot_limit(slot, write_size, &addr_begin, &effective_size, &gba_force_multi);
     } else {
@@ -880,7 +1020,9 @@ esp_err_t burner_start_write_from_tf(
         return burner_start_error(ESP_ERR_INVALID_SIZE, "requested write range too large", error_msg, error_msg_len);
     }
 
-    err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
+    if (!capacity_probed) {
+        err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
+    }
     if (err != ESP_OK) {
         if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
             return burner_start_error(
@@ -929,7 +1071,8 @@ esp_err_t burner_start_write_from_tf(
         BURNER_GBA_SAVE_TYPE_SRAM,
         gbx_profile_file,
         false,
-        0u);
+        0u,
+        preerase_done);
     if (err != ESP_OK) {
         const char *task_start_error =
             (err == ESP_ERR_INVALID_STATE) ? "burn task is already running" : "burn task start failed";
@@ -1034,7 +1177,8 @@ esp_err_t burner_start_verify_from_tf(
         BURNER_GBA_SAVE_TYPE_SRAM,
         gbx_profile_file,
         false,
-        0u);
+        0u,
+        false);
     if (err != ESP_OK) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -1581,7 +1725,8 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
         BURNER_GBA_SAVE_TYPE_SRAM,
         gbx_profile_arg,
         false,
-        0u);
+        0u,
+        false);
     if (err != ESP_OK) {
         burner_status_update(
             BURNER_STATE_ERROR,

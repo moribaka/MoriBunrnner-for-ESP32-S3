@@ -463,7 +463,8 @@ static esp_err_t ui_start_dump_rom_task(void)
         BURNER_GBA_SAVE_TYPE_SRAM,
         "",
         false,
-        0U);
+        0U,
+        false);
     if (err == ESP_OK) {
         ui_set_task_page_starting(ui_tr("ROM dump started"), effective_size, UI_PAGE_BURN_ROM);
     }
@@ -521,7 +522,8 @@ static esp_err_t ui_start_dump_save_task(void)
                 BURNER_GBA_SAVE_TYPE_BATTERYLESS,
                 "",
                 false,
-                0U);
+                0U,
+                false);
             if (err == ESP_OK) {
                 ui_set_task_page_starting("Batteryless save dump started", status.probe_gba_batteryless_save_size, UI_PAGE_BURN_ROM);
             }
@@ -639,7 +641,8 @@ static esp_err_t ui_start_chip_erase_task(void)
         BURNER_GBA_SAVE_TYPE_SRAM,
         "",
         false,
-        0U);
+        0U,
+        false);
 
     if (err == ESP_OK) {
         ui_set_task_page_starting(ui_tr("chip erase started"), 1U, UI_PAGE_BURN_ROM);

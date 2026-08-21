@@ -869,6 +869,77 @@ gbx_write_done:
     return err;
 }
 
+esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job)
+{
+    esp_err_t err;
+    bool powered = false;
+    bool intel_active;
+    bool erase_every_sector;
+    uint32_t addr_end;
+
+    if (job == NULL || job->cart_mode != BURNER_CART_MODE_GBA || job->total_bytes == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (job->addr_begin > UINT32_MAX - (job->total_bytes - 1u)) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    addr_end = job->addr_begin + job->total_bytes - 1u;
+
+    err = burner_spi_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+    powered = true;
+    burner_spi_lock_take();
+    err = burner_spi_prepare_burn_gba(job);
+    burner_spi_lock_give();
+    if (err != ESP_OK) {
+        goto preerase_done;
+    }
+
+    /* FlashGBX has profile-specific erase commands; leave it to its normal writer. */
+    if (burner_gba_gbx_is_active() || !burner_nor_geometry_is_valid(&s_cart_ctx.geometry)) {
+        err = burner_gba_gbx_is_active() ? ESP_ERR_NOT_SUPPORTED : ESP_ERR_INVALID_SIZE;
+        goto preerase_done;
+    }
+    if ((uint64_t)addr_end >= (uint64_t)s_cart_ctx.device_size) {
+        err = ESP_ERR_INVALID_SIZE;
+        goto preerase_done;
+    }
+
+    intel_active = burner_gba_nor_is_intel_active();
+    erase_every_sector = job->erase_always || intel_active;
+    burner_status_plan_erase_phase(
+        burner_nor_geometry_sector_count_from_range(&s_cart_ctx.geometry, job->addr_begin, addr_end),
+        burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, job->addr_begin, addr_end),
+        burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry));
+    burner_status_update(
+        BURNER_STATE_BURNING,
+        0,
+        0,
+        job->total_bytes,
+        "erasing gba flash while preparing patch",
+        job->rom_name,
+        job->rom_path);
+    burner_status_mark_erase_begin();
+    err = burner_run_gba_range_erase(
+        job->addr_begin,
+        addr_end,
+        s_cart_ctx.sector_size,
+        burner_is_gba_multi_card(job),
+        !erase_every_sector,
+        erase_every_sector);
+    burner_status_mark_erase_end();
+
+preerase_done:
+    if (powered) {
+        burner_spi_lock_take();
+        burner_bacon_restore_3v3_power();
+        burner_spi_lock_give();
+    }
+    return err;
+}
+
 static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 {
     FILE *fp = NULL;
@@ -1118,7 +1189,10 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
 
     force_erase_sectors = job->erase_always;
     erase_every_sector = force_erase_sectors || intel_active;
-    if (force_erase_sectors) {
+    if (job->rom_preerased) {
+        should_erase = false;
+        ESP_LOGI(BURNER_TAG, "GBA burn erase policy: range was pre-erased during patch preparation");
+    } else if (force_erase_sectors) {
         should_erase = true;
         ESP_LOGI(
             BURNER_TAG,

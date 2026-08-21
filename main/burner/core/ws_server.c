@@ -601,6 +601,7 @@ typedef struct burner_task_param {
     char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
     bool gba_force_multi;
     bool gba_force_no_cfi;
+    bool rom_preerased;
     bool task_with_caps;
 } burner_task_param_t;
 

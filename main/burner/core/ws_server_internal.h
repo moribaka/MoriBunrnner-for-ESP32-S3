@@ -579,6 +579,7 @@ typedef struct burner_task_param {
     char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
     bool gba_force_multi;
     bool gba_force_no_cfi;
+    bool rom_preerased;
     bool task_with_caps;
 } burner_task_param_t;
 
@@ -1357,7 +1358,9 @@ esp_err_t burner_start_task_ex(
     burner_gba_save_type_t gba_save_type,
     const char *gbx_profile_file,
     bool ram_fram,
-    uint8_t ram_latency);
+    uint8_t ram_latency,
+    bool rom_preerased);
+esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job);
 esp_err_t burner_start_task(
     burner_job_mode_t mode,
     const char *rom_name,

@@ -252,7 +252,8 @@ esp_err_t burner_start_task_ex(
     burner_gba_save_type_t gba_save_type,
     const char *gbx_profile_file,
     bool ram_fram,
-    uint8_t ram_latency)
+    uint8_t ram_latency,
+    bool rom_preerased)
 {
     BaseType_t ret;
     burner_task_param_t *job = NULL;
@@ -313,6 +314,7 @@ esp_err_t burner_start_task_ex(
     job->ram_latency = ram_latency;
     job->gba_force_multi = gba_force_multi;
     job->gba_force_no_cfi = gba_force_no_cfi;
+    job->rom_preerased = rom_preerased;
 
     if (mode == BURNER_JOB_WRITE_ROM) {
         burn_task_affinity = s_burn_core_cfg.psram_core;
@@ -394,7 +396,8 @@ esp_err_t burner_start_task(
         gba_save_type,
         "",
         ram_fram,
-        ram_latency);
+        ram_latency,
+        false);
 }
 
 esp_err_t burner_start_gba_save_write_from_tf_new(
@@ -457,5 +460,6 @@ esp_err_t burner_start_gba_save_dump_new(
         save_type,
         "",
         false,
-        0u);
+        0u,
+        false);
 }
