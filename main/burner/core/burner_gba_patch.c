@@ -1,6 +1,8 @@
 #include "burner_gba_patch.h"
 #include "esp_err.h"
 #include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -184,6 +186,9 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out)
                 continue;
             }
             for (size_t start = 0U; start + pattern_len <= span; ++start) {
+                if ((start & 0xFFFFU) == 0U) {
+                    vTaskDelay(1);
+                }
                 if (buffer[start] != pattern[0]) {
                     continue;
                 }

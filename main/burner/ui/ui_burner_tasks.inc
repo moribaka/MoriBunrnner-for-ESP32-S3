@@ -350,20 +350,9 @@ static void ui_start_file_action_async(ui_file_start_request_t *request)
         return;
     }
 
-    request->task_with_caps = true;
-    ret = xTaskCreatePinnedToCoreWithCaps(
-        ui_start_file_action_task,
-        "ui_file_start",
-        UI_FILE_START_TASK_STACK_SIZE,
-        request,
-        UI_FILE_START_TASK_PRIORITY,
-        NULL,
-        UI_BURN_TASK_CORE_ID,
-        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (ret == pdPASS) {
-        return;
-    }
-
+    /* This task opens TF/SPIFFS files before handing off to the burn task.
+     * Keep its stack in internal RAM because SPI flash cache operations cannot
+     * run while the active task stack resides in PSRAM. */
     request->task_with_caps = false;
     ret = xTaskCreatePinnedToCore(
         ui_start_file_action_task,
