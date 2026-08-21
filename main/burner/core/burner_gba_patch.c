@@ -8,6 +8,7 @@
 #define PATCH_SCAN_BYTES (32U * 1024U)
 #define PATCH_WAITCNT_ADDRESS 0x04000204U
 #define BATTERYLESS_MARKER "<3 from Maniac"
+#define BATTERYLESS_MIN_ROM (0x400000U)
 
 #ifndef BURNER_FILE_PATH_LEN
 #define BURNER_FILE_PATH_LEN 304U
@@ -424,8 +425,8 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
 
     if (fp == NULL || total_io == NULL) return -1;
     total = *total_io;
-    payload_fp = fopen("/assets/batteryless_payload_flash4_compat.bin", "rb");
-    if (payload_fp == NULL) payload_fp = fopen("assets/batteryless_payload_flash4_compat.bin", "rb");
+    payload_fp = fopen("/assets/bl_payload.bin", "rb");
+    if (payload_fp == NULL) payload_fp = fopen("assets/bl_payload.bin", "rb");
     if (payload_fp == NULL || file_size(payload_fp, &payload_len) != 0 || payload_len < 32U) {
         set_error(error_msg, error_msg_len, "batteryless payload is unavailable");
         if (payload_fp != NULL) fclose(payload_fp);

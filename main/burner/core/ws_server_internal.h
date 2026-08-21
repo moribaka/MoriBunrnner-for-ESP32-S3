@@ -875,6 +875,7 @@ esp_err_t burner_start_write_from_tf(
     bool gba_force_no_cfi,
     bool apply_gba_sram_patch,
     bool apply_gba_waitcnt_patch,
+    bool apply_gba_batteryless_patch,
     const char *gbx_profile_file,
     burner_task_start_result_t *result,
     char *error_msg,

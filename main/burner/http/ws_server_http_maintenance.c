@@ -756,7 +756,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
         }
         if (analysis_err == ESP_OK) {
             esp_err_t batteryless_err = burner_probe_gba_batteryless_save(
-                save_probe_device_size,
+                device_size,
                 &gba_batteryless_save_address,
                 &gba_batteryless_save_size,
                 &gba_batteryless_region_found,
