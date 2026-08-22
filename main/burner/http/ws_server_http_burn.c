@@ -897,6 +897,9 @@ esp_err_t burner_start_write_from_tf(
         apply_gba_waitcnt_patch = false;
         apply_gba_batteryless_patch = false;
     }
+    if (!apply_gba_sram_patch) {
+        apply_gba_batteryless_patch = false;
+    }
 
     err = burner_resolve_input_file(
         raw_name,
@@ -931,8 +934,14 @@ esp_err_t burner_start_write_from_tf(
             }
             planned_size++;
         }
-        if (apply_gba_batteryless_patch && planned_size < (4u * 1024u * 1024u)) {
-            planned_size = 4u * 1024u * 1024u;
+        if (apply_gba_batteryless_patch) {
+            if (planned_size > UINT32_MAX - 0x3FFFFu) {
+                return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
+            }
+            planned_size = (planned_size + 0x3FFFFu) & ~0x3FFFFu;
+            if (planned_size < (4u * 1024u * 1024u)) {
+                planned_size = 4u * 1024u * 1024u;
+            }
         }
         err = burner_apply_gba_slot_limit(
             slot, planned_size, &addr_begin, &effective_size, &gba_force_multi);

@@ -53,6 +53,11 @@ static const ui_text_entry_t s_ui_text_zh_extra[] = {
     {"Update GBX cache", "\u66f4\u65b0GBX\u7f13\u5b58"},
     {"volume down", "\u97f3\u91cf\u964d\u4f4e"},
     {"volume up", "\u97f3\u91cf\u63d0\u9ad8"},
+    {"Save patch SRAM/FLASH", "\u5b58\u6863\u8865\u4e01 SRAM/FLASH"},
+    {"Save patch: SRAM", "\u5b58\u6863\u8865\u4e01: SRAM"},
+    {"Save patch: FLASH", "\u5b58\u6863\u8865\u4e01: FLASH"},
+    {"Save patch not needed", "\u5b58\u6863\u8865\u4e01\u4e0d\u9700\u8981"},
+    {"Batteryless patch disabled", "\u514d\u7535\u8865\u4e01\u5df2\u7981\u7528"},
 };
 
 static const char *ui_text_lookup_in_table(const ui_text_entry_t *table, size_t count, const char *key)

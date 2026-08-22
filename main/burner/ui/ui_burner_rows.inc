@@ -20,21 +20,17 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             snprintf(title, title_len, "%s", ui_tr("Burn direct"));
             snprintf(hint, hint_len, "%s", ui_write_path_label());
         } else if (index == 1U) {
-            if (!s_gba_patch_analysis_done) {
-                snprintf(title, title_len, "%s", s_gba_patch_analysis_active ? ui_tr("Analyzing...") : ui_tr("Patch"));
-                if (hint_len > 0U) hint[0] = '\0';
-            } else {
-                snprintf(title, title_len, "%s", ui_tr("SRAM patch"));
-                snprintf(hint, hint_len, "%s", ui_gba_sram_patch_selectable() ?
-                                                        (s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No")) :
-                                                        ui_tr("Not needed"));
-            }
+            snprintf(title, title_len, "%s", ui_tr("Save patch SRAM/FLASH"));
+            snprintf(hint, hint_len, "%s", ui_gba_sram_patch_selectable() ?
+                                                    (s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No")) :
+                                                    ui_tr("Not needed"));
         } else if (index == 2U) {
             snprintf(title, title_len, "%s", ui_tr("Latency patch"));
             snprintf(hint, hint_len, "%s", s_gba_waitcnt_patch ? ui_tr("Yes") : ui_tr("No"));
         } else {
             snprintf(title, title_len, "%s", ui_tr("Batteryless patch"));
-            snprintf(hint, hint_len, "%s", s_gba_batteryless_patch ? ui_tr("Yes") : ui_tr("No"));
+            snprintf(hint, hint_len, "%s", !s_gba_sram_patch ? ui_tr("Disabled") :
+                                                    (s_gba_batteryless_patch ? ui_tr("Yes") : ui_tr("No")));
         }
         return;
     }

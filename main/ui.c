@@ -1727,10 +1727,10 @@ static uint8_t s_ram_latency = 10;
 static bool s_gba_sram_patch = false;
 static bool s_gba_waitcnt_patch = false;
 static bool s_gba_batteryless_patch = false;
-static bool s_dump_batteryless_requested = false;
 static bool s_gba_sram_patch_available = false;
 static bool s_gba_patch_analysis_active = false;
 static bool s_gba_patch_analysis_done = false;
+static bool s_dump_batteryless_requested = false;
 static ui_file_entry_t s_last_rom_file_by_cart[2] = {0};
 static ui_file_kind_t s_last_rom_kind_by_cart[2] = {UI_FILE_KIND_UNSUPPORTED, UI_FILE_KIND_UNSUPPORTED};
 static ui_file_entry_t s_last_save_file = {0};
@@ -1745,11 +1745,11 @@ static void ui_drop_nav_target_locked(ui_page_t page);
 static void ui_mark_content_dirty(ui_model_t *model);
 static void ui_mark_chrome_dirty(ui_model_t *model);
 static void ui_burn_probe_task(void *param);
+static void ui_patch_analysis_task(void *param);
 static bool ui_burner_operation_active(void);
 static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row);
 static const char *ui_probe_chip_name(const burner_status_t *status);
 static const char *ui_probe_type_label(const burner_status_t *status, burner_cart_mode_t mode);
-static void ui_patch_analysis_task(void *param);
 static void ui_px_draw_music_file_row(
     const ui_model_t *model,
     const music_player_snapshot_t *snap,
@@ -1787,8 +1787,8 @@ static bool ui_music_drawer_marquee_active(const ui_model_t *model);
 
 static bool ui_gba_sram_patch_selectable(void)
 {
-    return s_cart_mode == BURNER_CART_MODE_GBA && s_gba_patch_analysis_done &&
-           s_gba_sram_patch_available;
+    return s_cart_mode == BURNER_CART_MODE_GBA &&
+           (!s_gba_patch_analysis_done || s_gba_sram_patch_available);
 }
 
 static bool ui_take_model_lock(void)
@@ -5372,22 +5372,25 @@ static void ui_select_locked(
                         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
                     }
                 } else if (model->selected == 1U) {
-                    if (!s_gba_patch_analysis_done) {
-                        ui_start_patch_analysis_locked(model);
-                        return;
-                    }
                     if (!ui_gba_sram_patch_selectable()) {
-                        ui_set_status_locked(model, ui_tr("SRAM patch not needed"));
+                        ui_set_status_locked(model, ui_tr("Save patch not needed"));
                         return;
                     }
                     s_gba_sram_patch = !s_gba_sram_patch;
-                    ui_set_status_locked(model, s_gba_sram_patch ? ui_tr("SRAM patch: yes") : ui_tr("SRAM patch: no"));
+                    if (!s_gba_sram_patch) {
+                        s_gba_batteryless_patch = false;
+                    }
+                    ui_set_status_locked(model, s_gba_sram_patch ? ui_tr("Save patch: SRAM") : ui_tr("Save patch: FLASH"));
                     ui_mark_content_dirty(model);
                 } else if (model->selected == 2U) {
                     s_gba_waitcnt_patch = !s_gba_waitcnt_patch;
                     ui_set_status_locked(model, s_gba_waitcnt_patch ? ui_tr("Latency patch: yes") : ui_tr("Latency patch: no"));
                     ui_mark_content_dirty(model);
                 } else {
+                    if (!s_gba_sram_patch) {
+                        ui_set_status_locked(model, ui_tr("Batteryless patch disabled"));
+                        return;
+                    }
                     s_gba_batteryless_patch = !s_gba_batteryless_patch;
                     ui_set_status_locked(model, s_gba_batteryless_patch ? ui_tr("Batteryless patch: yes") : ui_tr("Batteryless patch: no"));
                     ui_mark_content_dirty(model);

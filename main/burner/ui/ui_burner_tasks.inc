@@ -4,20 +4,16 @@ static void ui_patch_analysis_task(void *param)
     char full_path[BURNER_FILE_PATH_LEN] = {0};
     bool available = burner_build_full_path(path, full_path, sizeof(full_path)) &&
                      burner_gba_rom_has_sram_patch_target(full_path);
-    bool batteryless_available = true;
 
     free(path);
     if (ui_take_model_lock()) {
         s_gba_sram_patch_available = available;
-        if (!batteryless_available) {
-            s_gba_batteryless_patch = false;
-        }
         s_gba_patch_analysis_active = false;
         s_gba_patch_analysis_done = true;
         if (!available) {
             s_gba_sram_patch = false;
+            s_gba_batteryless_patch = false;
         }
-        ui_set_status_locked(&s_model, (available || batteryless_available) ? ui_tr("patch options ready") : ui_tr("patch not needed"));
         ui_mark_content_dirty(&s_model);
         xSemaphoreGive(s_model_lock);
     }
@@ -73,6 +69,24 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
             ui_focus_burn_rom_op_locked(
                 model,
                 UI_BURN_ROM_OP_WRITE_ROM);
+            if (s_cart_mode == BURNER_CART_MODE_GBA) {
+                char *path = (char *)malloc(strlen(entry->path) + 1U);
+                if (path != NULL) {
+                    strcpy(path, entry->path);
+                    s_gba_patch_analysis_active = true;
+                    if (xTaskCreatePinnedToCore(
+                            ui_patch_analysis_task,
+                            "ui_patch_probe",
+                            UI_BURN_PROBE_TASK_STACK_SIZE,
+                            path,
+                            UI_STORAGE_TASK_PRIORITY,
+                            NULL,
+                            UI_BURN_TASK_CORE_ID) != pdPASS) {
+                        free(path);
+                        s_gba_patch_analysis_active = false;
+                    }
+                }
+            }
         }
     }
     ui_clamp_burn_rom_selection_locked(model);
