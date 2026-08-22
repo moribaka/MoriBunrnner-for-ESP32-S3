@@ -497,9 +497,16 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     static const unsigned char old_irq[] = {0xFC, 0x7F, 0x00, 0x03};
     static const unsigned char new_irq[] = {0xF4, 0x7F, 0x00, 0x03};
     static const unsigned char write_sram[] = {0x30,0xB5,0x05,0x1C,0x0C,0x1C,0x13,0x1C,0x0B,0x4A,0x10,0x88,0x0B,0x49,0x08,0x40};
+    static const unsigned char write_sram2[] = {0x80,0xB5,0x83,0xB0,0x6F,0x46,0x38,0x60,0x79,0x60,0xBA,0x60,0x09,0x48,0x09,0x49};
+    static const unsigned char write_sram_arm[] = {0x04,0xC0,0x90,0xE4,0x01,0xC0,0xC1,0xE4,0x2C,0xC4,0xA0,0xE1,0x01,0xC0,0xC1,0xE4};
     static const unsigned char write_eeprom[] = {0x70,0xB5,0x00,0x04,0x0A,0x1C,0x40,0x0B,0xE0,0x21,0x09,0x05,0x41,0x18,0x07,0x31,0x00,0x23,0x10,0x78};
     static const unsigned char write_flash[] = {0x70,0xB5,0x00,0x03,0x0A,0x1C,0xE0,0x21,0x09,0x05,0x41,0x18,0x01,0x23,0x1B,0x03};
+    static const unsigned char write_flash2[] = {0x7C,0xB5,0x90,0xB0,0x00,0x03,0x0A,0x1C,0xE0,0x21,0x09,0x05,0x09,0x18,0x01,0x23};
+    static const unsigned char write_flash3[] = {0xF0,0xB5,0x90,0xB0,0x0F,0x1C,0x00,0x04,0x04,0x0C,0x03,0x48,0x00,0x68,0x40,0x89};
+    static const unsigned char write_eeprom_v111[] = {0x0A,0x88,0x80,0x21,0x09,0x06,0x0A,0x43,0x02,0x60,0x07,0x48,0x00,0x47,0x00,0x00};
     static const unsigned char thumb_thunk[] = {0x00,0x4B,0x18,0x47};
+    static const unsigned char arm_thunk[] = {0x00,0x30,0x9F,0xE5,0x13,0xFF,0x2F,0xE1};
+    static const unsigned char eeprom_v111_thunk[] = {0x07,0x49,0x08,0x47};
     FILE *payload_fp = NULL;
     unsigned char *rom = NULL;
     unsigned char *payload = NULL;
@@ -538,7 +545,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         if (memcmp(rom + i, BATTERYLESS_MARKER, sizeof(BATTERYLESS_MARKER) - 1U) == 0) {
             fclose(payload_fp);
             free(payload);
-            free(rom);
+            heap_caps_free(rom);
             *total_io = total;
             if (save_size_out != NULL) *save_size_out = 0x8000U;
             return 0;
@@ -563,31 +570,48 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     for (uint32_t i = 0; i + sizeof(old_irq) <= rom_size; i += 4U) {
         if (memcmp(rom + i, old_irq, sizeof(old_irq)) == 0) { memcpy(rom + i, new_irq, sizeof(new_irq)); found_irq = true; }
     }
-    for (uint32_t i = 0; i + sizeof(write_sram) <= total; i += 2U) {
-        if (memcmp(rom + i, write_sram, sizeof(write_sram)) == 0) {
-            memcpy(rom + i, thumb_thunk, sizeof(thumb_thunk));
-            patch_write_le32(rom + i + 4U, 0x08000000U + payload_base + patch_read_le32(payload + 16U));
+    /* These signatures are the routines emitted by the SRAM patchers. */
+    const struct {
+        const unsigned char *signature;
+        size_t signature_len;
+        uint32_t payload_offset;
+        uint32_t save_size;
+        bool arm;
+    } hooks[] = {
+        {write_sram, sizeof(write_sram), 16U, 0x8000U, false},
+        {write_sram2, sizeof(write_sram2), 16U, 0x8000U, false},
+        {write_sram_arm, sizeof(write_sram_arm), 16U, 0x8000U, true},
+        {write_eeprom, sizeof(write_eeprom), 20U, 0x2000U, false},
+        {write_flash, sizeof(write_flash), 24U, 0x10000U, false},
+        {write_flash2, sizeof(write_flash2), 24U, 0x10000U, false},
+        {write_flash3, sizeof(write_flash3), 24U, 0x20000U, false},
+    };
+    for (size_t hook = 0U; hook < sizeof(hooks) / sizeof(hooks[0]); ++hook) {
+        const size_t stride = hooks[hook].arm ? 4U : 2U;
+        const size_t thunk_len = hooks[hook].arm ? sizeof(arm_thunk) : sizeof(thumb_thunk);
+        const unsigned char *thunk = hooks[hook].arm ? arm_thunk : thumb_thunk;
+        const size_t target_offset = hooks[hook].arm ? 8U : 4U;
+        for (uint32_t i = 0U; i + hooks[hook].signature_len <= total; i += (uint32_t)stride) {
+            if (memcmp(rom + i, hooks[hook].signature, hooks[hook].signature_len) != 0) {
+                continue;
+            }
+            memcpy(rom + i, thunk, thunk_len);
+            patch_write_le32(rom + i + target_offset, 0x08000000U + payload_base + patch_read_le32(payload + hooks[hook].payload_offset));
+            patch_write_le32(rom + payload_base + 8U, hooks[hook].save_size);
             found_sram = true;
+            break;
+        }
+        if (found_sram) {
             break;
         }
     }
     if (!found_sram) {
-        for (uint32_t i = 0U; i + sizeof(write_eeprom) <= total; i += 2U) {
-            if (memcmp(rom + i, write_eeprom, sizeof(write_eeprom)) == 0) {
-                memcpy(rom + i, thumb_thunk, sizeof(thumb_thunk));
-                patch_write_le32(rom + i + 4U, 0x08000000U + payload_base + patch_read_le32(payload + 20U));
+        /* EEPROM v1.1.1 needs a post-hook at the function epilogue. */
+        for (uint32_t i = 0U; i + 48U <= total; i += 2U) {
+            if (memcmp(rom + i, write_eeprom_v111, sizeof(write_eeprom_v111)) == 0) {
+                memcpy(rom + i + 12U, eeprom_v111_thunk, sizeof(eeprom_v111_thunk));
+                patch_write_le32(rom + i + 44U, 0x08000000U + payload_base + patch_read_le32(payload + 28U));
                 patch_write_le32(rom + payload_base + 8U, 0x2000U);
-                found_sram = true;
-                break;
-            }
-        }
-    }
-    if (!found_sram) {
-        for (uint32_t i = 0U; i + sizeof(write_flash) <= total; i += 2U) {
-            if (memcmp(rom + i, write_flash, sizeof(write_flash)) == 0) {
-                memcpy(rom + i, thumb_thunk, sizeof(thumb_thunk));
-                patch_write_le32(rom + i + 4U, 0x08000000U + payload_base + patch_read_le32(payload + 24U));
-                patch_write_le32(rom + payload_base + 8U, 0x10000U);
                 found_sram = true;
                 break;
             }
@@ -611,11 +635,11 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     }
     *total_io = rom_size;
     if (save_size_out != NULL) *save_size_out = 0x8000U;
-    free(payload); free(rom);
+    free(payload); heap_caps_free(rom);
     return 0;
 fail:
     if (payload_fp != NULL) fclose(payload_fp);
-    free(payload); free(rom);
+    free(payload); heap_caps_free(rom);
     return -1;
 }
 
@@ -645,10 +669,6 @@ int burner_prepare_gba_patch_file(
     if (report != NULL) memset(report, 0, sizeof(*report));
     if (input_path == NULL || output_path == NULL || output_path_len == 0U) {
         set_error(error_msg, error_msg_len, "invalid patch input");
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (apply_sram_patch && apply_batteryless) {
-        set_error(error_msg, error_msg_len, "sram and batteryless patches cannot be combined");
         return ESP_ERR_INVALID_ARG;
     }
     if (snprintf(tmp_path, sizeof(tmp_path), "%s.patching", input_path) >= (int)sizeof(tmp_path) ||
@@ -709,17 +729,6 @@ int burner_prepare_gba_patch_file(
         return ESP_FAIL;
     }
 
-    if (apply_batteryless) {
-        uint32_t batteryless_size = 0U;
-        if (apply_batteryless_patch(fp, &total, &batteryless_size, error_msg, error_msg_len) != 0) {
-            fclose(fp);
-            unlink(tmp_path);
-            return ESP_ERR_NOT_SUPPORTED;
-        }
-        did_batteryless = true;
-        if (report != NULL) report->batteryless_save_size = batteryless_size;
-    }
-
     for (i = 0U; apply_sram_patch && i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
         uint32_t identifier_offset = 0U;
         if (find_pattern(
@@ -750,6 +759,17 @@ int burner_prepare_gba_patch_file(
         }
         did_sram = patch_result == 0;
         if (report != NULL) snprintf(report->patch_name, sizeof(report->patch_name), "%s", s_generated_patch_sets[selected_set].name);
+    }
+    /* The batteryless patch expects the save routine after SRAM patching. */
+    if (apply_batteryless) {
+        uint32_t batteryless_size = 0U;
+        if (apply_batteryless_patch(fp, &total, &batteryless_size, error_msg, error_msg_len) != 0) {
+            fclose(fp);
+            unlink(tmp_path);
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+        did_batteryless = true;
+        if (report != NULL) report->batteryless_save_size = batteryless_size;
     }
     if ((total & 1U) != 0U) {
         static const unsigned char padding = 0U;

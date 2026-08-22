@@ -1782,7 +1782,7 @@ static bool ui_music_drawer_marquee_active(const ui_model_t *model);
 static bool ui_gba_sram_patch_selectable(void)
 {
     return s_cart_mode == BURNER_CART_MODE_GBA && s_gba_patch_analysis_done &&
-           s_gba_sram_patch_available && !s_gba_batteryless_patch;
+           s_gba_sram_patch_available;
 }
 
 static bool ui_take_model_lock(void)
@@ -5377,10 +5377,6 @@ static void ui_select_locked(
                     ui_mark_content_dirty(model);
                 } else {
                     s_gba_batteryless_patch = !s_gba_batteryless_patch;
-                    if (s_gba_batteryless_patch) {
-                        /* Batteryless replaces the same save hook as the SRAM patch. */
-                        s_gba_sram_patch = false;
-                    }
                     ui_set_status_locked(model, s_gba_batteryless_patch ? ui_tr("Batteryless patch: yes") : ui_tr("Batteryless patch: no"));
                     ui_mark_content_dirty(model);
                 }
