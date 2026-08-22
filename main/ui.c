@@ -345,6 +345,7 @@ typedef enum {
 typedef enum {
     UI_BURN_ROM_SUBMENU_NONE = 0,
     UI_BURN_ROM_SUBMENU_WRITE,
+    UI_BURN_ROM_SUBMENU_SAVE_PATCH,
     UI_BURN_ROM_SUBMENU_RECIPE_MODE,
     UI_BURN_ROM_SUBMENU_DUMP_SIZE,
     UI_BURN_ROM_SUBMENU_DUMP_CUSTOM,
@@ -1725,6 +1726,7 @@ static uint32_t s_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
 static uint32_t s_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
 static uint8_t s_ram_latency = 10;
 static bool s_gba_sram_patch = false;
+static uint8_t s_gba_save_patch_choice = 0U; /* 0 none, 1 SRAM, 2 FLASH */
 static bool s_gba_waitcnt_patch = false;
 static bool s_gba_batteryless_patch = false;
 static bool s_gba_sram_patch_available = false;
@@ -4944,6 +4946,13 @@ static void ui_back_locked(ui_model_t *model)
         ui_mark_content_dirty(model);
         return;
     }
+    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
+        s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_WRITE;
+        model->selected = 1U;
+        model->scroll = 0U;
+        ui_mark_content_dirty(model);
+        return;
+    }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
         s_burn_rom_write_menu = false;
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
@@ -5364,7 +5373,18 @@ static void ui_select_locked(
             ui_set_status_locked(model, ui_cart_is_unlocked() ? ui_tr("cart analyzed") : ui_tr("analyze cart first"));
             break;
         case UI_PAGE_BURN_ROM:
-            if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
+            if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
+                if (model->selected < 3U) {
+                    s_gba_save_patch_choice = (uint8_t)model->selected;
+                    s_gba_sram_patch = s_gba_save_patch_choice == 1U;
+                    if (s_gba_save_patch_choice != 1U) s_gba_batteryless_patch = false;
+                    s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_WRITE;
+                    model->selected = 1U;
+                    model->scroll = 0U;
+                    ui_set_status_locked(model, ui_tr("save patch selected"));
+                    ui_mark_content_dirty(model);
+                }
+            } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
                 if (model->selected == 0U) {
                     ui_file_action_t action = ui_burn_action_for_write_path(s_write_path);
                     if (ui_prepare_last_file_action_locked(model, action, start_request) == ESP_OK) {
@@ -5376,18 +5396,13 @@ static void ui_select_locked(
                         ui_set_status_locked(model, ui_tr("Save patch not needed"));
                         return;
                     }
-                    s_gba_sram_patch = !s_gba_sram_patch;
-                    if (!s_gba_sram_patch) {
-                        s_gba_batteryless_patch = false;
-                    }
-                    ui_set_status_locked(model, s_gba_sram_patch ? ui_tr("Save patch: SRAM") : ui_tr("Save patch: FLASH"));
-                    ui_mark_content_dirty(model);
+                    ui_burn_rom_open_save_patch_menu_locked(model);
                 } else if (model->selected == 2U) {
                     s_gba_waitcnt_patch = !s_gba_waitcnt_patch;
                     ui_set_status_locked(model, s_gba_waitcnt_patch ? ui_tr("Latency patch: yes") : ui_tr("Latency patch: no"));
                     ui_mark_content_dirty(model);
                 } else {
-                    if (!s_gba_sram_patch) {
+                    if (s_gba_save_patch_choice != 1U) {
                         ui_set_status_locked(model, ui_tr("Batteryless patch disabled"));
                         return;
                     }

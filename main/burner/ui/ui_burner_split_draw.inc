@@ -233,7 +233,7 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
         ui_fill_burn_rom_row(model, index, title, sizeof(title), hint, sizeof(hint));
         if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
             ((index == 1U && !ui_gba_sram_patch_selectable()) ||
-             (index == 3U && !s_gba_sram_patch))) {
+             (index == 3U && s_gba_save_patch_choice != 1U))) {
             ui_px_text_clipped_disabled(text_x, row_y + 3, text_w, title);
         } else {
             ui_px_text_clipped(text_x, row_y + 3, text_w, title, true);
@@ -249,7 +249,7 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
             if (hint_x > text_x + ui_px_text_width(title) + 6) {
                 if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
                     ((index == 1U && !ui_gba_sram_patch_selectable()) ||
-                     (index == 3U && !s_gba_sram_patch))) {
+                     (index == 3U && s_gba_save_patch_choice != 1U))) {
                     ui_px_text_clipped_disabled(hint_x, row_y + 3, hint_w, hint);
                 } else {
                     ui_px_text_clipped(hint_x, row_y + 3, hint_w, hint, true);

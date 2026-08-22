@@ -3,6 +3,9 @@ static uint16_t ui_burn_rom_item_count(void)
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
         return UI_BURN_ROM_WRITE_PATH_ITEM_COUNT;
     }
+    if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
+        return 3U;
+    }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RECIPE_MODE) {
         return UI_BURN_ROM_RECIPE_ITEM_COUNT;
     }

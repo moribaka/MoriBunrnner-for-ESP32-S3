@@ -54,6 +54,7 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
         s_gba_patch_analysis_active = false;
         s_gba_patch_analysis_done = false;
         s_gba_sram_patch = false;
+        s_gba_save_patch_choice = 0U;
         s_gba_batteryless_patch = false;
         if (s_cart_mode == BURNER_CART_MODE_MBC5) {
             s_gb_mapper_override_kind = BURNER_GB_MAPPER_UNKNOWN;
