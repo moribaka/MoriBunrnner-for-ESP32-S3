@@ -669,7 +669,8 @@ esp_err_t burner_read_handler(httpd_req_t *req)
         "",
         false,
         0u,
-        false);
+        false,
+        NULL);
     if (err != ESP_OK) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -863,6 +864,8 @@ esp_err_t burner_start_write_from_tf(
     char probe_err[96] = {0};
     bool gba_force_multi = false;
     burner_gba_patch_report_t patch_report = {0};
+    burner_gba_patch_plan_t patch_plan = {0};
+    bool patch_plan_valid = false;
     char patched_full_path[BURNER_FILE_PATH_LEN] = {0};
     char patch_error[128] = {0};
     burner_gba_preerase_ctx_t preerase = {0};
@@ -964,7 +967,7 @@ esp_err_t burner_start_write_from_tf(
         preerase_started = true;
     }
 
-    if (cart_mode == BURNER_CART_MODE_GBA) {
+    if (cart_mode == BURNER_CART_MODE_GBA && apply_gba_batteryless_patch) {
         err = burner_prepare_gba_patch_file(
             full_path,
             apply_gba_sram_patch,
@@ -1006,6 +1009,30 @@ esp_err_t burner_start_write_from_tf(
                 patch_report.waitcnt_count,
                 patch_report.batteryless_patched ? "yes" : "no");
         }
+    } else if (cart_mode == BURNER_CART_MODE_GBA && (apply_gba_sram_patch || apply_gba_waitcnt_patch)) {
+        err = burner_build_gba_patch_plan(
+            full_path,
+            apply_gba_sram_patch,
+            apply_gba_waitcnt_patch,
+            false,
+            &patch_plan,
+            &patch_report,
+            patch_error,
+            sizeof(patch_error),
+            burner_gba_patch_progress,
+            NULL);
+        if (err != ESP_OK) {
+            if (preerase_started) {
+                (void)burner_wait_gba_preerase(&preerase);
+            }
+            return burner_start_error(
+                err,
+                patch_error[0] != '\0' ? patch_error : "gba patch plan failed",
+                error_msg,
+                error_msg_len);
+        }
+        patch_plan_valid = true;
+        write_size = patch_plan.output_size;
     }
 
     if (preerase_started) {
@@ -1094,7 +1121,8 @@ esp_err_t burner_start_write_from_tf(
         gbx_profile_file,
         false,
         0u,
-        preerase_done);
+        preerase_done,
+        patch_plan_valid ? &patch_plan : NULL);
     if (err != ESP_OK) {
         const char *task_start_error =
             (err == ESP_ERR_INVALID_STATE) ? "burn task is already running" : "burn task start failed";
@@ -1200,7 +1228,8 @@ esp_err_t burner_start_verify_from_tf(
         gbx_profile_file,
         false,
         0u,
-        false);
+        false,
+        NULL);
     if (err != ESP_OK) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -1748,7 +1777,8 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
         gbx_profile_arg,
         false,
         0u,
-        false);
+        false,
+        NULL);
     if (err != ESP_OK) {
         burner_status_update(
             BURNER_STATE_ERROR,

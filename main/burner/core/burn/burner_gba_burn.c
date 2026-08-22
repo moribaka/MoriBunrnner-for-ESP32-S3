@@ -1569,6 +1569,13 @@ gba_stage_erase_done:
                     burner_gba_chis_diag_add_tf_read(tf_read_elapsed_us);
                 }
             }
+            if (job->gba_patch_plan_valid) {
+                burner_apply_gba_patch_plan(
+                    psram_stage_buf,
+                    stage_bytes,
+                    processed,
+                    &job->gba_patch_plan);
+            }
             (void)burner_gba_apply_header_checksum_fix(psram_stage_buf, stage_bytes, processed, processed == 0u);
 
             while (stage_off < stage_bytes) {
@@ -1699,6 +1706,9 @@ gba_stage_erase_done:
                 goto write_gba_done;
             }
             burner_gba_chis_diag_add_tf_read(tf_read_elapsed_us);
+            if (job->gba_patch_plan_valid) {
+                burner_apply_gba_patch_plan(buf, chunk_bytes, processed, &job->gba_patch_plan);
+            }
             (void)burner_gba_apply_header_checksum_fix(buf, chunk_bytes, processed, processed == 0u);
 
             program_sample_start_us = burner_gba_diag_now_us();

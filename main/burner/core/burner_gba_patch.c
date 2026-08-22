@@ -347,6 +347,236 @@ static int apply_waitcnt(FILE *fp, uint32_t total, uint32_t *count_out)
     return 0;
 }
 
+static int collect_waitcnt_offsets(
+    FILE *fp,
+    uint32_t total,
+    uint32_t *offsets,
+    size_t capacity,
+    size_t *count_out)
+{
+    unsigned char chunk[PATCH_SCAN_BYTES];
+    uint32_t offset = 0U;
+    size_t count = 0U;
+
+    if (count_out == NULL) {
+        return -1;
+    }
+    while (offset + 4U <= total) {
+        size_t want = total - offset;
+        size_t i;
+        if (want > sizeof(chunk)) {
+            want = sizeof(chunk);
+        }
+        want &= ~((size_t)3U);
+        if (read_at(fp, offset, chunk, want) != 0) {
+            return -1;
+        }
+        for (i = 0U; i + 4U <= want; i += 4U) {
+            if (read_u32(chunk + i) != PATCH_WAITCNT_ADDRESS) {
+                continue;
+            }
+            if (has_thumb_ldr_pc(fp, (offset + (uint32_t)i) / 4U, total) ||
+                has_arm_ldr_pc(fp, (offset + (uint32_t)i) / 4U, total)) {
+                if (count >= capacity) {
+                    return -2;
+                }
+                offsets[count++] = offset + (uint32_t)i;
+            }
+        }
+        offset += (uint32_t)want;
+    }
+    *count_out = count;
+    return 0;
+}
+
+int burner_build_gba_patch_plan(
+    const char *input_path,
+    bool apply_sram_patch,
+    bool apply_waitcnt_patch,
+    bool apply_batteryless,
+    burner_gba_patch_plan_t *plan,
+    burner_gba_patch_report_t *report,
+    char *error_msg,
+    size_t error_msg_len,
+    burner_gba_patch_progress_cb_t progress_cb,
+    void *progress_ctx)
+{
+    FILE *fp = NULL;
+    uint32_t total = 0U;
+    int selected_set = -1;
+    bool all_sram_replacements_present = true;
+    size_t i;
+
+    if (plan == NULL || input_path == NULL) {
+        set_error(error_msg, error_msg_len, "invalid patch plan input");
+        return ESP_ERR_INVALID_ARG;
+    }
+    memset(plan, 0, sizeof(*plan));
+    (void)apply_batteryless;
+    if (report != NULL) {
+        memset(report, 0, sizeof(*report));
+    }
+    fp = fopen(input_path, "rb");
+    if (fp == NULL || file_size(fp, &total) != 0 || total == 0U) {
+        if (fp != NULL) fclose(fp);
+        set_error(error_msg, error_msg_len, "open rom for patch plan failed");
+        return ESP_FAIL;
+    }
+    plan->source_size = total;
+    /* The plan does not change ROM length; structural expansions are handled
+     * by the batteryless preparation path. */
+    plan->output_size = total;
+
+    if (apply_sram_patch) {
+        for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
+            uint32_t identifier_offset = 0U;
+            if (find_pattern(fp, total,
+                             s_generated_patch_sets[i].identifier,
+                             s_generated_patch_sets[i].identifier_len,
+                             NULL, 0U, &identifier_offset, progress_cb,
+                             BURNER_GBA_PATCH_PROGRESS_SRAM, 0, 35) == 0) {
+                selected_set = (int)i;
+                break;
+            }
+        }
+        if (selected_set >= 0) {
+            const sram_patch_set_t *set = &s_generated_patch_sets[selected_set];
+            if (set->patch_count > BURNER_GBA_PATCH_MAX_SRAM_OPS) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "too many sram patch operations");
+                return ESP_ERR_INVALID_SIZE;
+            }
+            for (i = 0U; i < set->patch_count; ++i) {
+                uint32_t marker_offset = 0U;
+                uint32_t replacement_offset = 0U;
+                const sram_patch_t *patch = &set->patches[i];
+                int marker_result = find_pattern(fp, total, patch->marker, patch->marker_len,
+                                                 patch->marker_mask, patch->marker_mask_len,
+                                                 &marker_offset, progress_cb,
+                                                 BURNER_GBA_PATCH_PROGRESS_SRAM,
+                                                 (int)(35U + (i * 30U) / set->patch_count),
+                                                 (int)(35U + ((i + 1U) * 30U) / set->patch_count));
+                int replacement_result = find_pattern(fp, total, patch->replace, patch->replace_len,
+                                                      NULL, 0U, &replacement_offset, progress_cb,
+                                                      BURNER_GBA_PATCH_PROGRESS_SRAM,
+                                                      (int)(65U + (i * 30U) / set->patch_count),
+                                                      (int)(65U + ((i + 1U) * 30U) / set->patch_count));
+                if (marker_result != 0) {
+                    if (replacement_result == 0) continue;
+                    all_sram_replacements_present = false;
+                    fclose(fp);
+                    set_error(error_msg, error_msg_len, "sram patch patterns incomplete");
+                    return ESP_ERR_NOT_SUPPORTED;
+                }
+                if (patch->replace_len > BURNER_GBA_PATCH_MAX_REPLACEMENT) {
+                    fclose(fp);
+                    set_error(error_msg, error_msg_len, "sram replacement is too large");
+                    return ESP_ERR_INVALID_SIZE;
+                }
+                plan->sram[plan->sram_count].offset = marker_offset;
+                plan->sram[plan->sram_count].length = (uint16_t)patch->replace_len;
+                memcpy(plan->sram[plan->sram_count].data, patch->replace, patch->replace_len);
+                plan->sram_count++;
+            }
+            if (all_sram_replacements_present && plan->sram_count == 0U && report != NULL) {
+                report->sram_patched = false;
+            }
+            if (report != NULL) {
+                report->sram_patched = plan->sram_count != 0U;
+                snprintf(report->patch_name, sizeof(report->patch_name), "%s", set->name);
+            }
+        }
+    }
+
+    if (apply_waitcnt_patch) {
+        int result = collect_waitcnt_offsets(fp, total, plan->waitcnt_offsets,
+                                             BURNER_GBA_PATCH_MAX_WAITCNT_OPS,
+                                             &plan->waitcnt_count);
+        if (result != 0) {
+            fclose(fp);
+            set_error(error_msg, error_msg_len, result == -2 ? "too many waitcnt patch operations" : "waitcnt patch scan failed");
+            return result == -2 ? ESP_ERR_INVALID_SIZE : ESP_FAIL;
+        }
+        if (report != NULL) {
+            report->waitcnt_count = (uint32_t)plan->waitcnt_count;
+            report->waitcnt_patched = plan->waitcnt_count != 0U;
+        }
+    }
+    if (report != NULL) {
+        report->output_size = plan->output_size;
+    }
+    fclose(fp);
+    if (progress_cb != NULL) {
+        if (apply_sram_patch) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 100, "planned", progress_ctx);
+        if (apply_waitcnt_patch) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 100, "planned", progress_ctx);
+    }
+    return ESP_OK;
+}
+
+void burner_apply_gba_patch_plan(
+    uint8_t *buffer,
+    size_t buffer_size,
+    uint32_t base_offset,
+    const burner_gba_patch_plan_t *plan)
+{
+    size_t i;
+    if (buffer == NULL || plan == NULL) {
+        return;
+    }
+    for (i = 0U; i < plan->sram_count; ++i) {
+        const burner_gba_patch_write_t *op = &plan->sram[i];
+        uint32_t end = op->offset + op->length;
+        uint32_t window_end = base_offset + (uint32_t)buffer_size;
+        if (end <= base_offset || op->offset >= window_end) continue;
+        {
+            uint32_t begin = op->offset > base_offset ? op->offset : base_offset;
+            uint32_t copy_end = end < window_end ? end : window_end;
+            memcpy(buffer + (begin - base_offset), op->data + (begin - op->offset), copy_end - begin);
+        }
+    }
+    for (i = 0U; i < plan->waitcnt_count; ++i) {
+        uint32_t offset = plan->waitcnt_offsets[i];
+        if (offset >= base_offset && offset + 4U <= base_offset + buffer_size) {
+            memset(buffer + (offset - base_offset), 0, 4U);
+        }
+    }
+    if (plan->payload_length != 0U) {
+        uint32_t payload_end = plan->payload_offset + plan->payload_length;
+        uint32_t window_end = base_offset + (uint32_t)buffer_size;
+        if (plan->payload_offset < window_end && payload_end > base_offset) {
+            uint32_t begin = plan->payload_offset > base_offset ? plan->payload_offset : base_offset;
+            uint32_t end = payload_end < window_end ? payload_end : window_end;
+            memcpy(buffer + begin - base_offset,
+                   plan->payload + begin - plan->payload_offset,
+                   end - begin);
+        }
+    }
+    for (i = 0U; i < plan->batteryless_irq_count; ++i) {
+        uint32_t offset = plan->batteryless_irq_offsets[i];
+        if (offset >= base_offset && offset + 4U <= base_offset + buffer_size) {
+            buffer[offset - base_offset + 0U] = 0xF4U;
+            buffer[offset - base_offset + 1U] = 0x7FU;
+            buffer[offset - base_offset + 2U] = 0x00U;
+            buffer[offset - base_offset + 3U] = 0x03U;
+        }
+    }
+    if (plan->batteryless_header_valid && base_offset == 0U && buffer_size >= 4U) {
+        memcpy(buffer, &plan->batteryless_header_branch, sizeof(plan->batteryless_header_branch));
+    }
+    if (plan->batteryless_hook_valid) {
+        const burner_gba_patch_write_t *hook = &plan->batteryless_hook;
+        uint32_t end = hook->offset + hook->length;
+        uint32_t window_end = base_offset + (uint32_t)buffer_size;
+        if (hook->offset < window_end && end > base_offset) {
+            uint32_t begin = hook->offset > base_offset ? hook->offset : base_offset;
+            uint32_t copy_end = end < window_end ? end : window_end;
+            memcpy(buffer + begin - base_offset,
+                   hook->data + begin - hook->offset,
+                   copy_end - begin);
+        }
+    }
+}
+
 static int copy_file(const char *input_path, const char *tmp_path, uint32_t *size_out)
 {
     FILE *in = NULL;
