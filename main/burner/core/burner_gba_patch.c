@@ -67,7 +67,11 @@ static int find_pattern(
     size_t pattern_len,
     const unsigned char *mask,
     size_t mask_len,
-    uint32_t *offset_out)
+    uint32_t *offset_out,
+    burner_gba_patch_progress_cb_t progress_cb,
+    burner_gba_patch_progress_kind_t progress_kind,
+    int progress_begin,
+    int progress_end)
 {
     unsigned char *buffer;
     size_t carry = 0U;
@@ -96,6 +100,11 @@ static int find_pattern(
         if (got != want) {
             free(buffer);
             return -1;
+        }
+        if (progress_cb != NULL) {
+            int progress = progress_begin + (int)(((uint64_t)(base + (uint32_t)got) * (uint64_t)(progress_end - progress_begin)) / total);
+            if (progress > progress_end) progress = progress_end;
+            progress_cb(progress_kind, progress, "scanning", NULL);
         }
         for (i = 0U; i + pattern_len <= carry + got; ++i) {
             bool matched = true;
@@ -378,7 +387,7 @@ done:
     return result;
 }
 
-static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set)
+static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set, burner_gba_patch_progress_cb_t progress_cb)
 {
     uint32_t offsets[16] = {0};
     bool all_markers = true;
@@ -396,7 +405,11 @@ static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set)
             set->patches[i].marker_len,
             set->patches[i].marker_mask,
             set->patches[i].marker_mask_len,
-            &offsets[i]);
+            &offsets[i],
+            progress_cb,
+            BURNER_GBA_PATCH_PROGRESS_SRAM,
+            (int)((i * 100U) / (set->patch_count * 2U)),
+            (int)(((i * 2U + 1U) * 100U) / (set->patch_count * 2U)));
         uint32_t replacement_offset = 0U;
         int replacement_result = find_pattern(
             fp,
@@ -405,7 +418,11 @@ static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set)
             set->patches[i].replace_len,
             NULL,
             0U,
-            &replacement_offset);
+            &replacement_offset,
+            progress_cb,
+            BURNER_GBA_PATCH_PROGRESS_SRAM,
+            (int)(((i * 2U + 1U) * 100U) / (set->patch_count * 2U)),
+            (int)(((i + 1U) * 100U) / set->patch_count));
         if (marker_result != 0) all_markers = false;
         if (replacement_result != 0) all_replacements = false;
     }
@@ -538,13 +555,33 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         set_error(error_msg, error_msg_len, "not enough memory for batteryless patch");
         goto fail;
     }
-    if (fread(payload, 1U, payload_len, payload_fp) != payload_len || fseek(fp, 0L, SEEK_SET) != 0 || fread(rom, 1U, total, fp) != total) {
+    if (fread(payload, 1U, payload_len, payload_fp) != payload_len || fseek(fp, 0L, SEEK_SET) != 0) {
         set_error(error_msg, error_msg_len, "batteryless patch read failed");
         goto fail;
+    }
+    {
+        uint32_t read_done = 0U;
+        while (read_done < total) {
+            size_t chunk = total - read_done;
+            if (chunk > PATCH_SCAN_BYTES) chunk = PATCH_SCAN_BYTES;
+            if (fread(rom + read_done, 1U, chunk, fp) != chunk) {
+                set_error(error_msg, error_msg_len, "batteryless patch read failed");
+                goto fail;
+            }
+            read_done += (uint32_t)chunk;
+            if (progress_cb != NULL) {
+                progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                            (int)(((uint64_t)read_done * 20U) / total),
+                            "reading",
+                            progress_ctx);
+            }
+            vTaskDelay(1);
+        }
     }
     if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 25, "scanning", progress_ctx);
     for (uint32_t i = 0U; i + (sizeof(BATTERYLESS_MARKER) - 1U) <= total; ++i) {
         if (memcmp(rom + i, BATTERYLESS_MARKER, sizeof(BATTERYLESS_MARKER) - 1U) == 0) {
+            if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 100, "already patched", progress_ctx);
             fclose(payload_fp);
             free(payload);
             heap_caps_free(rom);
@@ -552,14 +589,33 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
             if (save_size_out != NULL) *save_size_out = 0x8000U;
             return 0;
         }
+        if (progress_cb != NULL && (i & 0xFFFFU) == 0U) {
+            progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                        25 + (int)(((uint64_t)i * 10U) / total),
+                        "scanning",
+                        progress_ctx);
+        }
     }
     memset(rom + total, 0xFF, rom_size - total);
-    for (int64_t candidate = (int64_t)rom_size - 0x40000 - payload_len; candidate >= 0; candidate -= 0x40000) {
+    {
+        uint32_t candidate_total = (rom_size >= 0x40000U + payload_len) ?
+                                    (uint32_t)(((uint64_t)rom_size - 0x40000U - payload_len) / 0x40000U + 1U) : 0U;
+        uint32_t candidate_index = 0U;
+        for (int64_t candidate = (int64_t)rom_size - 0x40000 - payload_len; candidate >= 0; candidate -= 0x40000) {
         bool blank = true;
-        for (uint32_t i = 0; i < 0x40000U + payload_len; ++i) {
+        uint32_t span = 0x40000U + payload_len;
+        for (uint32_t i = 0; i < span; ++i) {
             if (rom[(uint32_t)candidate + i] != 0xFFU && rom[(uint32_t)candidate + i] != 0x00U) { blank = false; break; }
+            if (progress_cb != NULL && (i & 0xFFFFU) == 0U && candidate_total > 0U) {
+                int progress = 35 + (int)((((uint64_t)candidate_index * span + i) * 20U) /
+                                          ((uint64_t)candidate_total * span));
+                progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, progress, "finding space", progress_ctx);
+            }
         }
         if (blank) { payload_base = (uint32_t)candidate; found_space = true; break; }
+        candidate_index++;
+        vTaskDelay(1);
+        }
     }
     if (!found_space || rom_size < 4U || rom[3] != 0xEAU) {
         set_error(error_msg, error_msg_len, "ROM has no batteryless payload space or unsupported entrypoint");
@@ -572,6 +628,12 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     patch_write_le32(rom, 0xEA000000U | (((0x08000000U + payload_base + patch_read_le32(payload + 12U)) - 0x08000008U) >> 2));
     for (uint32_t i = 0; i + sizeof(old_irq) <= rom_size; i += 4U) {
         if (memcmp(rom + i, old_irq, sizeof(old_irq)) == 0) { memcpy(rom + i, new_irq, sizeof(new_irq)); found_irq = true; }
+        if (progress_cb != NULL && (i & 0xFFFFU) == 0U) {
+            progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                        55 + (int)(((uint64_t)i * 10U) / rom_size),
+                        "hooking",
+                        progress_ctx);
+        }
     }
     /* These signatures are the routines emitted by the SRAM patchers. */
     const struct {
@@ -631,11 +693,32 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         goto fail;
     }
     payload_fp = NULL;
-    if (fseek(fp, 0L, SEEK_SET) != 0 ||
-        ftruncate(fileno(fp), (off_t)rom_size) != 0 ||
-        fwrite(rom, 1U, rom_size, fp) != rom_size || fflush(fp) != 0) {
+    if (fseek(fp, 0L, SEEK_SET) != 0 || ftruncate(fileno(fp), (off_t)rom_size) != 0) {
         set_error(error_msg, error_msg_len, "batteryless patch write failed");
         goto fail;
+    }
+    {
+        uint32_t write_done = 0U;
+        while (write_done < rom_size) {
+            size_t chunk = rom_size - write_done;
+            if (chunk > PATCH_SCAN_BYTES) chunk = PATCH_SCAN_BYTES;
+            if (fwrite(rom + write_done, 1U, chunk, fp) != chunk) {
+                set_error(error_msg, error_msg_len, "batteryless patch write failed");
+                goto fail;
+            }
+            write_done += (uint32_t)chunk;
+            if (progress_cb != NULL) {
+                progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                            85 + (int)(((uint64_t)write_done * 15U) / rom_size),
+                            "writing",
+                            progress_ctx);
+            }
+            vTaskDelay(1);
+        }
+        if (fflush(fp) != 0) {
+            set_error(error_msg, error_msg_len, "batteryless patch write failed");
+            goto fail;
+        }
     }
     *total_io = rom_size;
     if (save_size_out != NULL) *save_size_out = 0x8000U;
@@ -707,7 +790,11 @@ int burner_prepare_gba_patch_file(
                     s_generated_patch_sets[i].identifier_len,
                     NULL,
                     0U,
-                    &identifier_offset) == 0) {
+                    &identifier_offset,
+                    NULL,
+                    BURNER_GBA_PATCH_PROGRESS_SRAM,
+                    0,
+                    100) == 0) {
                 has_sram_identifier = true;
                 break;
             }
@@ -750,14 +837,18 @@ int burner_prepare_gba_patch_file(
                 s_generated_patch_sets[i].identifier_len,
                 NULL,
                 0U,
-                &identifier_offset) == 0) {
+                &identifier_offset,
+                NULL,
+                BURNER_GBA_PATCH_PROGRESS_SRAM,
+                0,
+                100) == 0) {
             selected_set = (int)i;
             break;
         }
     }
     if (selected_set >= 0) {
         if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 50, "patching", progress_ctx);
-        int patch_result = apply_sram_set(fp, total, &s_generated_patch_sets[selected_set]);
+        int patch_result = apply_sram_set(fp, total, &s_generated_patch_sets[selected_set], progress_cb);
         if (patch_result < 0) {
             set_error(error_msg, error_msg_len, "sram patch write failed");
             fclose(fp);
