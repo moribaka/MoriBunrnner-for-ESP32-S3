@@ -523,7 +523,9 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     payload = (unsigned char *)malloc(payload_len);
     rom_size = (total + 0x3FFFFU) & ~0x3FFFFU;
     if (rom_size < BATTERYLESS_MIN_ROM) rom_size = BATTERYLESS_MIN_ROM;
-    rom = (unsigned char *)malloc(rom_size);
+    /* The batteryless patch needs a full-ROM working copy. Keep it in PSRAM so
+     * combining it with SRAM and waitcnt patches does not exhaust internal RAM. */
+    rom = (unsigned char *)heap_caps_malloc(rom_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (payload == NULL || rom == NULL) {
         set_error(error_msg, error_msg_len, "not enough memory for batteryless patch");
         goto fail;
