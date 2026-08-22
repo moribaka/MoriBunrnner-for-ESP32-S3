@@ -419,6 +419,8 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
         err = ESP_FAIL;
         goto gbx_write_done;
     }
+    burner_tf_reader_set_source_size(
+        job->gba_patch_plan_valid ? job->gba_patch_plan.source_size : job->total_bytes);
 
     err = burner_tf_reader_start(&tf_reader, fp);
     if (err != ESP_OK) {
@@ -602,6 +604,13 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
             burner_status_record_tf_to_psram_copy((uint32_t)sector_bytes, tf_read_elapsed_us);
         }
         burner_gba_chis_diag_add_tf_read(tf_read_elapsed_us);
+        if (job->gba_patch_plan_valid) {
+            burner_apply_gba_patch_plan(
+                sector_buf,
+                sector_bytes,
+                processed,
+                &job->gba_patch_plan);
+        }
         (void)burner_gba_apply_header_checksum_fix(
             sector_buf,
             sector_bytes,
@@ -849,6 +858,7 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
     }
 
 gbx_write_done:
+    burner_tf_reader_set_source_size(0u);
     burner_gba_sector_erase_ctx_reset();
     if (erase_timer_started) {
         burner_status_mark_erase_end();
@@ -1113,6 +1123,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         err = ESP_FAIL;
         goto write_gba_done;
     }
+    burner_tf_reader_set_source_size(
+        job->gba_patch_plan_valid ? job->gba_patch_plan.source_size : job->total_bytes);
 
     err = burner_tf_reader_start(&tf_reader, fp);
     if (err != ESP_OK) {
@@ -1840,6 +1852,7 @@ write_gba_done:
     if (tf_reader_started) {
         burner_tf_reader_stop(&tf_reader);
     }
+    burner_tf_reader_set_source_size(0u);
     if (psram_stage_buf != NULL) {
         free(psram_stage_buf);
     }

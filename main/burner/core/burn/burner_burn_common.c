@@ -1262,6 +1262,13 @@ typedef struct {
     SemaphoreHandle_t done;
 } burner_tf_reader_ctx_t;
 
+static uint32_t s_tf_reader_source_size;
+
+void burner_tf_reader_set_source_size(uint32_t source_size)
+{
+    s_tf_reader_source_size = source_size;
+}
+
 static esp_err_t burner_tf_read_exact(FILE *fp, uint8_t *dst, size_t bytes)
 {
     size_t read_len;
@@ -1279,9 +1286,12 @@ static esp_err_t burner_tf_read_exact(FILE *fp, uint8_t *dst, size_t bytes)
     }
 
     read_len = fread(dst, 1, bytes, fp);
-    if (read_len != bytes) {
-        return ESP_FAIL;
+    if (read_len < bytes && ferror(fp) == 0 && feof(fp) != 0 &&
+        s_tf_reader_source_size != 0u) {
+        memset(dst + read_len, 0xFF, bytes - read_len);
+        read_len = bytes;
     }
+    if (read_len != bytes) return ESP_FAIL;
 
     return ESP_OK;
 }
@@ -1347,6 +1357,16 @@ static void burner_tf_prefetch_task(void *arg)
     } else {
         read_start_us = (uint64_t)esp_timer_get_time();
         ctx->read_len = fread(ctx->dst, 1, ctx->bytes, ctx->fp);
+        if (ctx->read_len < ctx->bytes && ferror(ctx->fp) == 0 && feof(ctx->fp) != 0 &&
+            s_tf_reader_source_size != 0u) {
+            memset(ctx->dst + ctx->read_len, 0xFF, ctx->bytes - ctx->read_len);
+            ctx->read_len = ctx->bytes;
+        }
+        if (ctx->read_len < ctx->bytes && ferror(ctx->fp) == 0 && feof(ctx->fp) != 0 &&
+            s_tf_reader_source_size != 0u) {
+            memset(ctx->dst + ctx->read_len, 0xFF, ctx->bytes - ctx->read_len);
+            ctx->read_len = ctx->bytes;
+        }
         read_elapsed_us = (uint64_t)esp_timer_get_time() - read_start_us;
         ctx->err = (ctx->read_len == ctx->bytes) ? ESP_OK : ESP_FAIL;
         if (ctx->err == ESP_OK && ctx->read_len > 0u && read_elapsed_us > 0u) {

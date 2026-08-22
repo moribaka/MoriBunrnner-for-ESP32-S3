@@ -842,6 +842,7 @@ uint32_t burner_psram_auto_window_mb(void);
 uint32_t burner_psram_window_mb_to_bytes(uint32_t mb);
 uint32_t burner_psram_window_bytes_to_mb(uint32_t bytes);
 const char *burner_core_affinity_to_str(burner_core_affinity_t affinity);
+void burner_tf_reader_set_source_size(uint32_t source_size);
 bool burner_parse_core_affinity_text(const char *text, burner_core_affinity_t *affinity_out);
 BaseType_t burner_core_affinity_to_task_core_id(burner_core_affinity_t affinity);
 BaseType_t burner_create_task_with_affinity(

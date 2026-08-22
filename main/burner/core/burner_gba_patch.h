@@ -32,6 +32,7 @@ typedef void (*burner_gba_patch_progress_cb_t)(
 #define BURNER_GBA_PATCH_MAX_WAITCNT_OPS 128U
 #define BURNER_GBA_PATCH_MAX_REPLACEMENT 128U
 #define BURNER_GBA_PATCH_MAX_IRQ_OPS 128U
+#define BURNER_GBA_PATCH_MAX_BATTERYLESS_WRITES 4U
 #define BURNER_GBA_PATCH_MAX_PAYLOAD 4096U
 
 typedef struct {
@@ -50,16 +51,9 @@ typedef struct {
     uint32_t waitcnt_offsets[BURNER_GBA_PATCH_MAX_WAITCNT_OPS];
     size_t batteryless_irq_count;
     uint32_t batteryless_irq_offsets[BURNER_GBA_PATCH_MAX_IRQ_OPS];
-    bool batteryless_header_valid;
-    uint32_t batteryless_header_branch;
-    bool batteryless_hook_valid;
-    burner_gba_patch_write_t batteryless_hook;
-    uint32_t batteryless_hook_offset;
-    uint32_t batteryless_hook_target_offset;
-    uint32_t batteryless_payload_hook_offset;
+    size_t batteryless_write_count;
+    burner_gba_patch_write_t batteryless_writes[BURNER_GBA_PATCH_MAX_BATTERYLESS_WRITES];
     uint32_t batteryless_save_size;
-    bool batteryless_hook_arm;
-    bool batteryless_hook_eeprom_v111;
     uint32_t payload_offset;
     uint16_t payload_length;
     uint8_t payload[BURNER_GBA_PATCH_MAX_PAYLOAD];
