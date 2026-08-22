@@ -54,6 +54,7 @@ static const ui_text_entry_t s_ui_text_zh_extra[] = {
     {"volume down", "\u97f3\u91cf\u964d\u4f4e"},
     {"volume up", "\u97f3\u91cf\u63d0\u9ad8"},
     {"Save patch SRAM/FLASH", "\u5b58\u6863\u8865\u4e01 SRAM/FLASH"},
+    {"Save patch SRAM/FLASH/None", "\u5b58\u6863\u8865\u4e01 SRAM/FLASH/\u65e0"},
     {"Save patch: SRAM", "\u5b58\u6863\u8865\u4e01: SRAM"},
     {"Save patch: FLASH", "\u5b58\u6863\u8865\u4e01: FLASH"},
     {"Save patch not needed", "\u5b58\u6863\u8865\u4e01\u4e0d\u9700\u8981"},

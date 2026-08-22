@@ -20,7 +20,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             snprintf(title, title_len, "%s", ui_tr("Burn direct"));
             snprintf(hint, hint_len, "%s", ui_write_path_label());
         } else if (index == 1U) {
-            snprintf(title, title_len, "%s", ui_tr("Save patch SRAM/FLASH"));
+            snprintf(title, title_len, "%s", ui_tr("Save patch SRAM/FLASH/None"));
             snprintf(hint, hint_len, "%s", ui_gba_sram_patch_selectable() ?
                                                     (s_gba_sram_patch ? ui_tr("Yes") : ui_tr("No")) :
                                                     ui_tr("Not needed"));
