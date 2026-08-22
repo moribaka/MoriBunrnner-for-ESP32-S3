@@ -647,6 +647,10 @@ int burner_prepare_gba_patch_file(
         set_error(error_msg, error_msg_len, "invalid patch input");
         return ESP_ERR_INVALID_ARG;
     }
+    if (apply_sram_patch && apply_batteryless) {
+        set_error(error_msg, error_msg_len, "sram and batteryless patches cannot be combined");
+        return ESP_ERR_INVALID_ARG;
+    }
     if (snprintf(tmp_path, sizeof(tmp_path), "%s.patching", input_path) >= (int)sizeof(tmp_path) ||
         snprintf(patched_path, sizeof(patched_path), "%s.patched.gba", input_path) >= (int)sizeof(patched_path)) {
         set_error(error_msg, error_msg_len, "patch path too long");
