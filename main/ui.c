@@ -5375,7 +5375,8 @@ static void ui_select_locked(
         case UI_PAGE_BURN_ROM:
             if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
                 if (model->selected < 3U) {
-                    s_gba_save_patch_choice = (uint8_t)model->selected;
+                    s_gba_save_patch_choice = (model->selected == 0U) ? 1U :
+                                              (model->selected == 1U) ? 2U : 0U;
                     s_gba_sram_patch = s_gba_save_patch_choice == 1U;
                     if (s_gba_save_patch_choice != 1U) s_gba_batteryless_patch = false;
                     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_WRITE;
