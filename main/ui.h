@@ -59,6 +59,12 @@ void ui_set_wifi_state(ui_wifi_state_t state);
 void ui_set_ip_text(const char *ip);
 void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total);
 void ui_show_burn_task_status(uint32_t total_hint);
+void ui_show_burn_task_status_with_patches(
+    uint32_t total_hint,
+    bool sram_patch,
+    bool batteryless_patch,
+    bool waitcnt_patch);
+void ui_set_gba_patch_progress(int kind, int progress, const char *message);
 void ui_set_status_text(const char *text);
 
 #endif /* UI_H */

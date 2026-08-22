@@ -492,7 +492,7 @@ static void patch_write_le32(unsigned char *p, uint32_t v)
     p[3] = (unsigned char)(v >> 24);
 }
 
-static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_size_out, char *error_msg, size_t error_msg_len)
+static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_size_out, char *error_msg, size_t error_msg_len, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
 {
     static const unsigned char old_irq[] = {0xFC, 0x7F, 0x00, 0x03};
     static const unsigned char new_irq[] = {0xF4, 0x7F, 0x00, 0x03};
@@ -519,6 +519,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     bool found_sram = false;
 
     if (fp == NULL || total_io == NULL) return -1;
+    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 0, "reading", progress_ctx);
     total = *total_io;
     payload_fp = fopen("/assets/bl_payload.bin", "rb");
     if (payload_fp == NULL) payload_fp = fopen("assets/bl_payload.bin", "rb");
@@ -541,6 +542,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         set_error(error_msg, error_msg_len, "batteryless patch read failed");
         goto fail;
     }
+    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 25, "scanning", progress_ctx);
     for (uint32_t i = 0U; i + (sizeof(BATTERYLESS_MARKER) - 1U) <= total; ++i) {
         if (memcmp(rom + i, BATTERYLESS_MARKER, sizeof(BATTERYLESS_MARKER) - 1U) == 0) {
             fclose(payload_fp);
@@ -563,6 +565,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         set_error(error_msg, error_msg_len, "ROM has no batteryless payload space or unsupported entrypoint");
         goto fail;
     }
+    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 55, "hooking", progress_ctx);
     memcpy(rom + payload_base, payload, payload_len);
     patch_write_le32(rom + payload_base + 8U, 0x8000U);
     patch_write_le32(rom + payload_base, 0x08000000U + 8U + ((patch_read_le32(rom) & 0x00FFFFFFU) << 2));
@@ -621,6 +624,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         set_error(error_msg, error_msg_len, "ROM save hook is unsupported for batteryless patch");
         goto fail;
     }
+    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 85, "writing", progress_ctx);
     if (fclose(payload_fp) != 0) {
         payload_fp = NULL;
         set_error(error_msg, error_msg_len, "batteryless payload close failed");
@@ -635,6 +639,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
     }
     *total_io = rom_size;
     if (save_size_out != NULL) *save_size_out = 0x8000U;
+    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 100, "done", progress_ctx);
     free(payload); heap_caps_free(rom);
     return 0;
 fail:
@@ -652,7 +657,9 @@ int burner_prepare_gba_patch_file(
     size_t output_path_len,
     burner_gba_patch_report_t *report,
     char *error_msg,
-    size_t error_msg_len)
+    size_t error_msg_len,
+    burner_gba_patch_progress_cb_t progress_cb,
+    void *progress_ctx)
 {
     char tmp_path[BURNER_FILE_PATH_LEN + 32U] = {0};
     char patched_path[BURNER_FILE_PATH_LEN + 32U] = {0};
@@ -729,6 +736,11 @@ int burner_prepare_gba_patch_file(
         return ESP_FAIL;
     }
 
+    if (progress_cb != NULL) {
+        if (apply_sram_patch) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 0, "analyzing", progress_ctx);
+        if (apply_waitcnt_patch) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 0, "waiting", progress_ctx);
+    }
+
     for (i = 0U; apply_sram_patch && i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
         uint32_t identifier_offset = 0U;
         if (find_pattern(
@@ -744,6 +756,7 @@ int burner_prepare_gba_patch_file(
         }
     }
     if (selected_set >= 0) {
+        if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 50, "patching", progress_ctx);
         int patch_result = apply_sram_set(fp, total, &s_generated_patch_sets[selected_set]);
         if (patch_result < 0) {
             set_error(error_msg, error_msg_len, "sram patch write failed");
@@ -758,12 +771,15 @@ int burner_prepare_gba_patch_file(
             return ESP_ERR_NOT_SUPPORTED;
         }
         did_sram = patch_result == 0;
+        if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 100, "done", progress_ctx);
         if (report != NULL) snprintf(report->patch_name, sizeof(report->patch_name), "%s", s_generated_patch_sets[selected_set].name);
+    } else if (apply_sram_patch && progress_cb != NULL) {
+        progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 100, "skipped", progress_ctx);
     }
     /* The batteryless patch expects the save routine after SRAM patching. */
     if (apply_batteryless) {
         uint32_t batteryless_size = 0U;
-        if (apply_batteryless_patch(fp, &total, &batteryless_size, error_msg, error_msg_len) != 0) {
+        if (apply_batteryless_patch(fp, &total, &batteryless_size, error_msg, error_msg_len, progress_cb, progress_ctx) != 0) {
             fclose(fp);
             unlink(tmp_path);
             return ESP_ERR_NOT_SUPPORTED;
@@ -788,12 +804,15 @@ int burner_prepare_gba_patch_file(
         ++total;
         did_normalize = true;
     }
+    if (apply_waitcnt_patch && progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 0, "analyzing", progress_ctx);
+    if (apply_waitcnt_patch && progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 50, "patching", progress_ctx);
     if (apply_waitcnt_patch && apply_waitcnt(fp, total, &waitcnt_count) != 0) {
         set_error(error_msg, error_msg_len, "waitcnt patch failed");
         fclose(fp);
         unlink(tmp_path);
         return ESP_FAIL;
     }
+    if (apply_waitcnt_patch && progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 100, "done", progress_ctx);
     if (fflush(fp) != 0 || fclose(fp) != 0) {
         unlink(tmp_path);
         set_error(error_msg, error_msg_len, "flush patch copy failed");

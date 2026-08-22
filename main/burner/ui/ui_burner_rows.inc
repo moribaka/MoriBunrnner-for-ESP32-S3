@@ -359,6 +359,25 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
         }
         return;
     }
+    if (index >= UI_TASK_PATCH_BASE_ROW) {
+        uint16_t patch_index = (uint16_t)(index - UI_TASK_PATCH_BASE_ROW);
+        int kind = -1;
+        if (model->gba_patch_sram) {
+            if (patch_index == 0U) kind = 0;
+            if (kind < 0) patch_index--;
+        }
+        if (kind < 0 && model->gba_patch_batteryless) {
+            if (patch_index == 0U) kind = 1;
+            if (kind < 0) patch_index--;
+        }
+        if (kind < 0 && model->gba_patch_waitcnt && patch_index == 0U) kind = 2;
+        if (kind >= 0) {
+            const char *labels[] = {"SRAM patch", "Batteryless patch", "Latency patch"};
+            snprintf(title, title_len, "%s", ui_tr(labels[kind]));
+            snprintf(hint, hint_len, "%d%% %s", model->gba_patch_progress[kind], model->gba_patch_message[kind]);
+        }
+        return;
+    }
     if (index == 1U) {
         snprintf(title, title_len, "%s", ui_tr("ROM/File"));
         snprintf(hint, hint_len, "%s", status.rom_name[0] != '\0' ? status.rom_name : "--");

@@ -16,6 +16,18 @@ typedef struct {
     uint32_t output_size;
 } burner_gba_patch_report_t;
 
+typedef enum {
+    BURNER_GBA_PATCH_PROGRESS_SRAM = 0,
+    BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+    BURNER_GBA_PATCH_PROGRESS_WAITCNT,
+} burner_gba_patch_progress_kind_t;
+
+typedef void (*burner_gba_patch_progress_cb_t)(
+    burner_gba_patch_progress_kind_t kind,
+    int progress,
+    const char *message,
+    void *user_ctx);
+
 /* Returns true when a ROM contains a known non-SRAM save implementation. */
 bool burner_gba_rom_has_sram_patch_target(const char *input_path);
 bool burner_gba_rom_has_batteryless_patch_target(const char *input_path);
@@ -30,6 +42,8 @@ int burner_prepare_gba_patch_file(
     size_t output_path_len,
     burner_gba_patch_report_t *report,
     char *error_msg,
-    size_t error_msg_len);
+    size_t error_msg_len,
+    burner_gba_patch_progress_cb_t progress_cb,
+    void *progress_ctx);
 
 #endif

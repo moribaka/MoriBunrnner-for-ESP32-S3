@@ -10,6 +10,16 @@ static esp_err_t burner_resolve_input_file(
 static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const char *error_msg);
 static bool burner_parse_pipeline_erase_text(const char *text, bool *erase_always_out);
 
+static void burner_gba_patch_progress(
+    burner_gba_patch_progress_kind_t kind,
+    int progress,
+    const char *message,
+    void *user_ctx)
+{
+    (void)user_ctx;
+    ui_set_gba_patch_progress((int)kind, progress, message);
+}
+
 typedef struct {
     burner_task_param_t job;
     SemaphoreHandle_t done;
@@ -490,7 +500,11 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (err != ESP_OK) {
         return burner_send_start_error(req, err, error_msg);
     }
-    ui_show_burn_task_status(result.effective_size);
+    ui_show_burn_task_status_with_patches(
+        result.effective_size,
+        true,
+        apply_gba_batteryless_patch,
+        apply_gba_waitcnt_patch);
 
     n = snprintf(
         resp,
@@ -899,6 +913,12 @@ esp_err_t burner_start_write_from_tf(
         return burner_start_error(err, "invalid rom file", error_msg, error_msg_len);
     }
 
+    ui_show_burn_task_status_with_patches(
+        write_size,
+        apply_gba_sram_patch,
+        apply_gba_batteryless_patch,
+        apply_gba_waitcnt_patch);
+
     /* Start range erase before patching so TF analysis and cartridge erase overlap. */
     if (cart_mode == BURNER_CART_MODE_GBA && patch_requested) {
         uint32_t planned_size = write_size;
@@ -954,7 +974,9 @@ esp_err_t burner_start_write_from_tf(
             sizeof(patched_full_path),
             &patch_report,
             patch_error,
-            sizeof(patch_error));
+            sizeof(patch_error),
+            burner_gba_patch_progress,
+            NULL);
         if (err != ESP_OK) {
             if (preerase_started) {
                 (void)burner_wait_gba_preerase(&preerase);

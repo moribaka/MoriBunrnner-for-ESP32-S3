@@ -159,6 +159,11 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     model->erase_done_sectors = 0;
     model->erase_total_sectors = 0;
     model->burn_elapsed_us = 0;
+    model->gba_patch_sram = request->gba_sram_patch;
+    model->gba_patch_batteryless = request->gba_batteryless_patch;
+    model->gba_patch_waitcnt = request->gba_waitcnt_patch;
+    memset(model->gba_patch_progress, 0, sizeof(model->gba_patch_progress));
+    memset(model->gba_patch_message, 0, sizeof(model->gba_patch_message));
     ui_set_status_locked(model, ui_tr("starting burn task"));
     *request_out = request;
     return ESP_OK;
@@ -396,6 +401,11 @@ static void ui_set_task_page_starting(const char *text, uint32_t total, ui_page_
     s_model.erase_done_sectors = 0;
     s_model.erase_total_sectors = 0;
     s_model.burn_elapsed_us = 0;
+    s_model.gba_patch_sram = false;
+    s_model.gba_patch_batteryless = false;
+    s_model.gba_patch_waitcnt = false;
+    memset(s_model.gba_patch_progress, 0, sizeof(s_model.gba_patch_progress));
+    memset(s_model.gba_patch_message, 0, sizeof(s_model.gba_patch_message));
     ui_set_status_locked(&s_model, text);
     xSemaphoreGive(s_model_lock);
 }

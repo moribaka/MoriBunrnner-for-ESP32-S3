@@ -146,6 +146,7 @@
 #define UI_BURN_SAVE_ITEM_COUNT 8
 #define UI_SETTINGS_ITEM_COUNT 10
 #define UI_TASK_STATUS_ITEM_COUNT 12
+#define UI_TASK_PATCH_BASE_ROW UI_TASK_STATUS_ITEM_COUNT
 #define UI_TASK_RESULT_ITEM_COUNT 18
 #define UI_TASK_CANCEL_CONFIRM_ITEM_COUNT 2U
 #define UI_TASK_ERASE_PROGRESS_ROW 6U
@@ -438,6 +439,11 @@ typedef struct {
     uint32_t erase_done_sectors;
     uint32_t erase_total_sectors;
     uint64_t burn_elapsed_us;
+    bool gba_patch_sram;
+    bool gba_patch_batteryless;
+    bool gba_patch_waitcnt;
+    int gba_patch_progress[3];
+    char gba_patch_message[3][32];
     bool task_result_status_valid;
     uint8_t battery_percent;
     bool battery_valid;
@@ -4298,7 +4304,13 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
         case UI_PAGE_SETTINGS:
             return UI_SETTINGS_ITEM_COUNT;
         case UI_PAGE_TASK_STATUS:
-            return s_task_cancel_confirm ? UI_TASK_CANCEL_CONFIRM_ITEM_COUNT : UI_TASK_STATUS_ITEM_COUNT;
+            if (s_task_cancel_confirm) {
+                return UI_TASK_CANCEL_CONFIRM_ITEM_COUNT;
+            }
+            return (uint16_t)(UI_TASK_STATUS_ITEM_COUNT +
+                              (model->gba_patch_sram ? 1U : 0U) +
+                              (model->gba_patch_batteryless ? 1U : 0U) +
+                              (model->gba_patch_waitcnt ? 1U : 0U));
         case UI_PAGE_TASK_RESULT:
             return UI_TASK_RESULT_ITEM_COUNT;
         default:
@@ -7543,6 +7555,60 @@ static void ui_px_draw_task_progress_row(const ui_model_t *model, uint16_t row)
     ui_px_text_clipped(percent_x, y + 4, percent_w, percent, true);
 }
 
+static int ui_task_patch_kind_for_index(const ui_model_t *model, uint16_t index)
+{
+    uint16_t patch_index;
+
+    if (model == NULL || index < UI_TASK_PATCH_BASE_ROW) {
+        return -1;
+    }
+    patch_index = (uint16_t)(index - UI_TASK_PATCH_BASE_ROW);
+    if (model->gba_patch_sram) {
+        if (patch_index == 0U) return 0;
+        patch_index--;
+    }
+    if (model->gba_patch_batteryless) {
+        if (patch_index == 0U) return 1;
+        patch_index--;
+    }
+    if (model->gba_patch_waitcnt && patch_index == 0U) return 2;
+    return -1;
+}
+
+static void ui_px_draw_task_patch_row(const ui_model_t *model, uint16_t row, int kind)
+{
+    static const char *labels[] = {"SRAM", "Batteryless", "Latency"};
+    int32_t y;
+    int32_t x = UI_LIST_TEXT_X;
+    int32_t w = UI_CANVAS_W - UI_LIST_BAR_W - 12;
+    int32_t label_w;
+    int32_t percent_w = ui_px_text_width("100%");
+    int32_t percent_x;
+    int32_t bar_x;
+    int32_t bar_w;
+    int progress;
+    int fill_w;
+    char percent[12] = {0};
+
+    if (model == NULL || kind < 0 || kind >= 3) return;
+    progress = model->gba_patch_progress[kind];
+    if (progress < 0) progress = 0;
+    if (progress > 100) progress = 100;
+    y = UI_LIST_HEADER_H + (int32_t)row * UI_LIST_LINE_H;
+    label_w = ui_px_text_width(labels[kind]) + 6;
+    percent_x = x + w - percent_w;
+    bar_x = x + label_w;
+    bar_w = percent_x - bar_x - 4;
+    if (bar_w < 24) bar_w = 24;
+    fill_w = (bar_w * progress) / 100;
+    if (progress > 0 && fill_w < 1) fill_w = 1;
+    ui_px_text(x, y + 4, labels[kind], true);
+    ui_px_frame(bar_x, y + 4, bar_w, 7, true);
+    if (fill_w > 0) ui_px_box(bar_x + 1, y + 5, fill_w > bar_w - 2 ? bar_w - 2 : fill_w, 5, true);
+    snprintf(percent, sizeof(percent), "%d%%", progress);
+    ui_px_text_clipped(percent_x, y + 4, percent_w, percent, true);
+}
+
 static void ui_px_draw_chip_erase_busy_row(const ui_model_t *model, uint16_t row)
 {
     burner_status_t status = {0};
@@ -7985,6 +8051,13 @@ static void ui_px_apply_list(const ui_model_t *model)
             ui_px_draw_task_progress_row(model, row);
             continue;
         }
+        if (model->page == UI_PAGE_TASK_STATUS) {
+            int patch_kind = ui_task_patch_kind_for_index(model, index);
+            if (patch_kind >= 0) {
+                ui_px_draw_task_patch_row(model, row, patch_kind);
+                continue;
+            }
+        }
         if (model->page == UI_PAGE_FILE_ACTIONS) {
             uint16_t action_count = ui_file_action_count_for_kind(model->action_kind);
             uint16_t detail_start = action_count + 1U;
@@ -8108,6 +8181,13 @@ static void ui_px_draw_visible_row(const ui_model_t *model, uint16_t row)
         }
         ui_px_draw_task_progress_row(model, row);
         return;
+    }
+    if (model->page == UI_PAGE_TASK_STATUS) {
+        int patch_kind = ui_task_patch_kind_for_index(model, index);
+        if (patch_kind >= 0) {
+            ui_px_draw_task_patch_row(model, row, patch_kind);
+            return;
+        }
     }
     if (model->page == UI_PAGE_FILE_ACTIONS) {
         uint16_t action_count = ui_file_action_count_for_kind(model->action_kind);
@@ -8614,6 +8694,15 @@ void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total)
 
 void ui_show_burn_task_status(uint32_t total_hint)
 {
+    ui_show_burn_task_status_with_patches(total_hint, false, false, false);
+}
+
+void ui_show_burn_task_status_with_patches(
+    uint32_t total_hint,
+    bool sram_patch,
+    bool batteryless_patch,
+    bool waitcnt_patch)
+{
     if (!ui_take_model_lock()) {
         return;
     }
@@ -8631,8 +8720,25 @@ void ui_show_burn_task_status(uint32_t total_hint)
     s_model.erase_done_sectors = 0;
     s_model.erase_total_sectors = 0;
     s_model.burn_elapsed_us = 0;
+    s_model.gba_patch_sram = sram_patch;
+    s_model.gba_patch_batteryless = batteryless_patch;
+    s_model.gba_patch_waitcnt = waitcnt_patch;
+    memset(s_model.gba_patch_progress, 0, sizeof(s_model.gba_patch_progress));
+    memset(s_model.gba_patch_message, 0, sizeof(s_model.gba_patch_message));
     ui_set_status_locked(&s_model, ui_tr("task status"));
     ui_mark_chrome_dirty(&s_model);
+    ui_mark_content_dirty(&s_model);
+    xSemaphoreGive(s_model_lock);
+}
+
+void ui_set_gba_patch_progress(int kind, int progress, const char *message)
+{
+    if (kind < 0 || kind >= 3) return;
+    if (progress < 0) progress = 0;
+    if (progress > 100) progress = 100;
+    if (!ui_take_model_lock()) return;
+    s_model.gba_patch_progress[kind] = progress;
+    snprintf(s_model.gba_patch_message[kind], sizeof(s_model.gba_patch_message[kind]), "%s", message != NULL ? message : "");
     ui_mark_content_dirty(&s_model);
     xSemaphoreGive(s_model_lock);
 }
