@@ -13,6 +13,7 @@
 #define PATCH_WAITCNT_ADDRESS 0x04000204U
 #define BATTERYLESS_MARKER "<3 from Maniac"
 #define BATTERYLESS_MIN_ROM (0x400000U)
+#define BATTERYLESS_SCAN_CHUNK_BYTES (64U * 1024U)
 
 #ifndef BURNER_FILE_PATH_LEN
 #define BURNER_FILE_PATH_LEN 304U
@@ -40,6 +41,179 @@ typedef struct {
 
 static uint32_t patch_read_le32(const unsigned char *p);
 static void patch_write_le32(unsigned char *p, uint32_t v);
+
+static int read_plan_chunk(
+    FILE *fp,
+    uint32_t total,
+    const burner_gba_patch_plan_t *plan,
+    uint32_t offset,
+    unsigned char *buffer,
+    size_t length)
+{
+    size_t available = 0U;
+
+    if (fp == NULL || buffer == NULL || offset > total) {
+        return -1;
+    }
+    if (length > (size_t)(total - offset)) {
+        available = (size_t)(total - offset);
+    } else {
+        available = length;
+    }
+    if (available > 0U) {
+        if (fseek(fp, (long)offset, SEEK_SET) != 0 || fread(buffer, 1U, available, fp) != available) {
+            return -1;
+        }
+        if (plan != NULL) {
+            burner_apply_gba_patch_plan(buffer, available, offset, plan);
+        }
+    }
+    if (available < length) {
+        memset(buffer + available, 0xFF, length - available);
+    }
+    return 0;
+}
+
+static int stream_find_plan_pattern(
+    FILE *fp,
+    uint32_t total,
+    const burner_gba_patch_plan_t *plan,
+    const unsigned char *pattern,
+    size_t pattern_len,
+    uint32_t stride,
+    uint32_t start_offset,
+    uint32_t *offset_out)
+{
+    unsigned char *buffer;
+    size_t carry = 0U;
+    uint32_t base;
+
+    if (fp == NULL || pattern == NULL || pattern_len == 0U || offset_out == NULL ||
+        start_offset > total || total < pattern_len) {
+        return -1;
+    }
+    buffer = (unsigned char *)malloc(BATTERYLESS_SCAN_CHUNK_BYTES + pattern_len - 1U);
+    if (buffer == NULL) {
+        return -2;
+    }
+    base = 0U;
+    if (fseek(fp, 0L, SEEK_SET) != 0) {
+        free(buffer);
+        return -1;
+    }
+    while (base < total) {
+        size_t want = total - base;
+        size_t got;
+        size_t span;
+
+        if (want > BATTERYLESS_SCAN_CHUNK_BYTES) want = BATTERYLESS_SCAN_CHUNK_BYTES;
+        got = fread(buffer + carry, 1U, want, fp);
+        if (got != want) {
+            free(buffer);
+            return -1;
+        }
+        if (plan != NULL) {
+            burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
+        }
+        span = carry + got;
+        for (size_t i = 0U; i + pattern_len <= span; ++i) {
+            uint32_t position = base - (uint32_t)carry + (uint32_t)i;
+            if (position < start_offset || (stride > 1U && (position % stride) != 0U)) continue;
+            if (memcmp(buffer + i, pattern, pattern_len) == 0) {
+                *offset_out = position;
+                free(buffer);
+                return 0;
+            }
+        }
+        if (pattern_len > 1U) {
+            size_t keep = span;
+            if (keep > pattern_len - 1U) keep = pattern_len - 1U;
+            memmove(buffer, buffer + span - keep, keep);
+            carry = keep;
+        } else {
+            carry = 0U;
+        }
+        base += (uint32_t)got;
+    }
+    free(buffer);
+    return 1;
+}
+
+static int stream_collect_plan_pattern(
+    FILE *fp,
+    uint32_t total,
+    const burner_gba_patch_plan_t *plan,
+    const unsigned char *pattern,
+    size_t pattern_len,
+    uint32_t stride,
+    uint32_t *offsets,
+    size_t max_offsets,
+    size_t *count_out)
+{
+    unsigned char *buffer;
+    size_t carry = 0U;
+    size_t count = 0U;
+    uint32_t base = 0U;
+
+    if (fp == NULL || pattern == NULL || pattern_len == 0U || offsets == NULL || count_out == NULL) return -1;
+    *count_out = 0U;
+    buffer = (unsigned char *)malloc(BATTERYLESS_SCAN_CHUNK_BYTES + pattern_len - 1U);
+    if (buffer == NULL) return -2;
+    if (fseek(fp, 0L, SEEK_SET) != 0) { free(buffer); return -1; }
+    while (base < total) {
+        size_t want = total - base;
+        size_t got;
+        size_t span;
+        if (want > BATTERYLESS_SCAN_CHUNK_BYTES) want = BATTERYLESS_SCAN_CHUNK_BYTES;
+        got = fread(buffer + carry, 1U, want, fp);
+        if (got != want) { free(buffer); return -1; }
+        if (plan != NULL) burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
+        span = carry + got;
+        for (size_t i = 0U; i + pattern_len <= span; ++i) {
+            uint32_t position = base - (uint32_t)carry + (uint32_t)i;
+            if (stride > 1U && (position % stride) != 0U) continue;
+            if (memcmp(buffer + i, pattern, pattern_len) == 0) {
+                if (count >= max_offsets) { free(buffer); return -3; }
+                offsets[count++] = position;
+            }
+        }
+        if (pattern_len > 1U) {
+            size_t keep = span;
+            if (keep > pattern_len - 1U) keep = pattern_len - 1U;
+            memmove(buffer, buffer + span - keep, keep);
+            carry = keep;
+        } else carry = 0U;
+        base += (uint32_t)got;
+    }
+    free(buffer);
+    *count_out = count;
+    return 0;
+}
+
+static bool stream_region_blank(
+    FILE *fp,
+    uint32_t total,
+    const burner_gba_patch_plan_t *plan,
+    uint32_t offset,
+    uint32_t length)
+{
+    unsigned char *buffer = (unsigned char *)malloc(BATTERYLESS_SCAN_CHUNK_BYTES);
+    bool blank = true;
+
+    if (buffer == NULL) return false;
+    while (length > 0U) {
+        size_t chunk = length > BATTERYLESS_SCAN_CHUNK_BYTES ? BATTERYLESS_SCAN_CHUNK_BYTES : length;
+        if (read_plan_chunk(fp, total, plan, offset, buffer, chunk) != 0) { blank = false; break; }
+        for (size_t i = 0U; i < chunk; ++i) {
+            if (buffer[i] != 0xFFU && buffer[i] != 0x00U) { blank = false; break; }
+        }
+        if (!blank) break;
+        offset += (uint32_t)chunk;
+        length -= (uint32_t)chunk;
+    }
+    free(buffer);
+    return blank;
+}
 
 static void set_error(char *error_msg, size_t error_msg_len, const char *message)
 {
@@ -505,7 +679,6 @@ int burner_build_gba_patch_plan(
         static const unsigned char arm_thunk[] = {0x00,0x30,0x9F,0xE5,0x13,0xFF,0x2F,0xE1};
         static const unsigned char eeprom_v111_thunk[] = {0x07,0x49,0x08,0x47};
         FILE *payload_fp = NULL;
-        unsigned char *rom = NULL;
         uint32_t payload_len = 0U;
         uint32_t rom_size = (total + 0x3FFFFU) & ~0x3FFFFU;
         uint32_t payload_base = 0U;
@@ -522,39 +695,36 @@ int burner_build_gba_patch_plan(
             set_error(error_msg, error_msg_len, "batteryless payload is unavailable");
             return ESP_ERR_NOT_SUPPORTED;
         }
-        rom = (unsigned char *)heap_caps_malloc(rom_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (rom == NULL || fread(plan->payload, 1U, payload_len, payload_fp) != payload_len ||
-            fseek(fp, 0L, SEEK_SET) != 0 || fread(rom, 1U, total, fp) != total) {
-            heap_caps_free(rom);
+        if (fread(plan->payload, 1U, payload_len, payload_fp) != payload_len) {
             fclose(payload_fp);
             fclose(fp);
-            set_error(error_msg, error_msg_len, "batteryless plan memory/read failed");
-            return ESP_ERR_NO_MEM;
+            set_error(error_msg, error_msg_len, "batteryless payload read failed");
+            return ESP_FAIL;
         }
         fclose(payload_fp);
-        memset(rom + total, 0xFF, rom_size - total);
-        burner_apply_gba_patch_plan(rom, total, 0U, plan);
 
         for (int64_t candidate = (int64_t)rom_size - 0x40000 - payload_len;
              candidate >= 0; candidate -= 0x40000) {
-            bool blank = true;
             uint32_t span = 0x40000U + payload_len;
-            for (uint32_t pos = 0U; pos < span; ++pos) {
-                unsigned char value = rom[(uint32_t)candidate + pos];
-                if (value != 0xFFU && value != 0x00U) { blank = false; break; }
+            if (stream_region_blank(fp, total, plan, (uint32_t)candidate, span)) {
+                payload_base = (uint32_t)candidate;
+                found_space = true;
+                break;
             }
-            if (blank) { payload_base = (uint32_t)candidate; found_space = true; break; }
         }
-        if (!found_space || total < 4U || rom[3] != 0xEAU) {
-            heap_caps_free(rom);
-            fclose(fp);
-            set_error(error_msg, error_msg_len, "ROM has no batteryless payload space or unsupported entrypoint");
-            return ESP_ERR_NOT_SUPPORTED;
+        {
+            unsigned char entry_bytes[4] = {0};
+            if (read_plan_chunk(fp, total, plan, 0U, entry_bytes, sizeof(entry_bytes)) != 0 ||
+                !found_space || total < 4U || entry_bytes[3] != 0xEAU) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "ROM has no batteryless payload space or unsupported entrypoint");
+                return ESP_ERR_NOT_SUPPORTED;
+            }
+            plan->payload_offset = payload_base;
+            plan->payload_length = (uint16_t)payload_len;
+            patch_write_le32(plan->payload + 8U, 0x8000U);
+            patch_write_le32(plan->payload, 0x08000000U + 8U + ((patch_read_le32(entry_bytes) & 0x00FFFFFFU) << 2));
         }
-        plan->payload_offset = payload_base;
-        plan->payload_length = (uint16_t)payload_len;
-        patch_write_le32(plan->payload + 8U, 0x8000U);
-        patch_write_le32(plan->payload, 0x08000000U + 8U + ((patch_read_le32(rom) & 0x00FFFFFFU) << 2));
         {
             burner_gba_patch_write_t *entry = &plan->batteryless_writes[plan->batteryless_write_count++];
             uint32_t branch = 0xEA000000U |
@@ -563,16 +733,22 @@ int burner_build_gba_patch_plan(
             entry->length = 4U;
             patch_write_le32(entry->data, branch);
         }
-        for (uint32_t pos = 0U; pos + sizeof(old_irq) <= rom_size; pos += 4U) {
-            if (memcmp(rom + pos, old_irq, sizeof(old_irq)) == 0) {
-                if (plan->batteryless_irq_count >= BURNER_GBA_PATCH_MAX_IRQ_OPS) {
-                    heap_caps_free(rom);
-                    fclose(fp);
-                    set_error(error_msg, error_msg_len, "too many batteryless IRQ patches");
-                    return ESP_ERR_INVALID_SIZE;
-                }
-                plan->batteryless_irq_offsets[plan->batteryless_irq_count++] = pos;
+        {
+            size_t irq_count = 0U;
+            int scan_result = stream_collect_plan_pattern(
+                fp, total, plan, old_irq, sizeof(old_irq), 4U,
+                plan->batteryless_irq_offsets, BURNER_GBA_PATCH_MAX_IRQ_OPS, &irq_count);
+            if (scan_result == -3) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "too many batteryless IRQ patches");
+                return ESP_ERR_INVALID_SIZE;
             }
+            if (scan_result != 0) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "batteryless IRQ scan failed");
+                return ESP_FAIL;
+            }
+            plan->batteryless_irq_count = irq_count;
         }
         const struct {
             const unsigned char *signature;
@@ -590,47 +766,55 @@ int burner_build_gba_patch_plan(
             {write_flash3, sizeof(write_flash3), 24U, 0x20000U, false},
         };
         for (size_t hook_index = 0U; hook_index < sizeof(hooks) / sizeof(hooks[0]) && !found_hook; ++hook_index) {
-            uint32_t stride = hooks[hook_index].arm ? 4U : 2U;
-            for (uint32_t pos = 0U; pos + hooks[hook_index].signature_len <= total; pos += stride) {
-                if (memcmp(rom + pos, hooks[hook_index].signature, hooks[hook_index].signature_len) == 0) {
-                    burner_gba_patch_write_t *hook = &plan->batteryless_writes[plan->batteryless_write_count++];
-                    const unsigned char *thunk = hooks[hook_index].arm ? arm_thunk : thumb_thunk;
-                    size_t thunk_len = hooks[hook_index].arm ? sizeof(arm_thunk) : sizeof(thumb_thunk);
-                    uint32_t target_offset = hooks[hook_index].arm ? 8U : 4U;
-                    hook->offset = pos;
-                    hook->length = (uint16_t)(target_offset + 4U);
-                    memcpy(hook->data, thunk, thunk_len);
-                    patch_write_le32(hook->data + target_offset,
-                                     0x08000000U + payload_base + patch_read_le32(plan->payload + hooks[hook_index].payload_offset));
-                    plan->batteryless_save_size = hooks[hook_index].save_size;
-                    patch_write_le32(plan->payload + 8U, hooks[hook_index].save_size);
-                    found_hook = true;
-                    break;
-                }
+            uint32_t pos = 0U;
+            int scan_result = stream_find_plan_pattern(
+                fp, total, plan, hooks[hook_index].signature, hooks[hook_index].signature_len,
+                hooks[hook_index].arm ? 4U : 2U, 0U, &pos);
+            if (scan_result == 0) {
+                burner_gba_patch_write_t *hook = &plan->batteryless_writes[plan->batteryless_write_count++];
+                const unsigned char *thunk = hooks[hook_index].arm ? arm_thunk : thumb_thunk;
+                size_t thunk_len = hooks[hook_index].arm ? sizeof(arm_thunk) : sizeof(thumb_thunk);
+                uint32_t target_offset = hooks[hook_index].arm ? 8U : 4U;
+                hook->offset = pos;
+                hook->length = (uint16_t)(target_offset + 4U);
+                memcpy(hook->data, thunk, thunk_len);
+                patch_write_le32(hook->data + target_offset,
+                                 0x08000000U + payload_base + patch_read_le32(plan->payload + hooks[hook_index].payload_offset));
+                plan->batteryless_save_size = hooks[hook_index].save_size;
+                patch_write_le32(plan->payload + 8U, hooks[hook_index].save_size);
+                found_hook = true;
+            } else if (scan_result == -2) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "batteryless scan memory failed");
+                return ESP_ERR_NO_MEM;
+            } else if (scan_result < 0) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "batteryless hook scan failed");
+                return ESP_FAIL;
             }
         }
         if (!found_hook) {
-            for (uint32_t pos = 0U; pos + 48U <= total; pos += 2U) {
-                if (memcmp(rom + pos, write_eeprom_v111, sizeof(write_eeprom_v111)) == 0) {
-                    burner_gba_patch_write_t *thunk =
-                        &plan->batteryless_writes[plan->batteryless_write_count++];
-                    burner_gba_patch_write_t *target =
-                        &plan->batteryless_writes[plan->batteryless_write_count++];
-                    thunk->offset = pos + 12U;
-                    thunk->length = sizeof(eeprom_v111_thunk);
-                    memcpy(thunk->data, eeprom_v111_thunk, sizeof(eeprom_v111_thunk));
-                    target->offset = pos + 44U;
-                    target->length = 4U;
-                    patch_write_le32(target->data,
-                                     0x08000000U + payload_base + patch_read_le32(plan->payload + 28U));
-                    plan->batteryless_save_size = 0x2000U;
-                    patch_write_le32(plan->payload + 8U, 0x2000U);
-                    found_hook = true;
-                    break;
-                }
+            uint32_t pos = 0U;
+            int scan_result = stream_find_plan_pattern(fp, total, plan, write_eeprom_v111,
+                                                       sizeof(write_eeprom_v111), 2U, 0U, &pos);
+            if (scan_result == 0) {
+                burner_gba_patch_write_t *thunk = &plan->batteryless_writes[plan->batteryless_write_count++];
+                burner_gba_patch_write_t *target = &plan->batteryless_writes[plan->batteryless_write_count++];
+                thunk->offset = pos + 12U;
+                thunk->length = sizeof(eeprom_v111_thunk);
+                memcpy(thunk->data, eeprom_v111_thunk, sizeof(eeprom_v111_thunk));
+                target->offset = pos + 44U;
+                target->length = 4U;
+                patch_write_le32(target->data, 0x08000000U + payload_base + patch_read_le32(plan->payload + 28U));
+                plan->batteryless_save_size = 0x2000U;
+                patch_write_le32(plan->payload + 8U, 0x2000U);
+                found_hook = true;
+            } else if (scan_result == -2) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, "batteryless scan memory failed");
+                return ESP_ERR_NO_MEM;
             }
         }
-        heap_caps_free(rom);
         if (plan->batteryless_irq_count == 0U || !found_hook) {
             fclose(fp);
             set_error(error_msg, error_msg_len, "ROM save hook is unsupported for batteryless patch");

@@ -900,6 +900,7 @@ esp_err_t burner_start_write_from_tf(
     if (!apply_gba_sram_patch) {
         apply_gba_batteryless_patch = false;
     }
+    patch_requested = apply_gba_sram_patch || apply_gba_waitcnt_patch || apply_gba_batteryless_patch;
 
     err = burner_resolve_input_file(
         raw_name,
@@ -923,57 +924,6 @@ esp_err_t burner_start_write_from_tf(
         apply_gba_sram_patch,
         apply_gba_batteryless_patch,
         apply_gba_waitcnt_patch);
-
-    /* Start range erase before patching so TF analysis and cartridge erase overlap. */
-    if (cart_mode == BURNER_CART_MODE_GBA && patch_requested) {
-        uint32_t planned_size = write_size;
-
-        if ((planned_size & 1u) != 0u) {
-            if (planned_size == UINT32_MAX) {
-                return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
-            }
-            planned_size++;
-        }
-        if (apply_gba_batteryless_patch) {
-            if (planned_size > UINT32_MAX - 0x3FFFFu) {
-                return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
-            }
-            planned_size = (planned_size + 0x3FFFFu) & ~0x3FFFFu;
-            if (planned_size < (4u * 1024u * 1024u)) {
-                planned_size = 4u * 1024u * 1024u;
-            }
-        }
-        err = burner_apply_gba_slot_limit(
-            slot, planned_size, &addr_begin, &effective_size, &gba_force_multi);
-        if (err != ESP_OK) {
-            return burner_start_error(err, "rom file exceeds selected slot range", error_msg, error_msg_len);
-        }
-        err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
-        if (err != ESP_OK) {
-            return burner_start_error(err, "read gba nor size failed", error_msg, error_msg_len);
-        }
-        capacity_probed = true;
-        if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
-            return burner_start_error(ESP_ERR_INVALID_SIZE, "rom size exceeds nor size", error_msg, error_msg_len);
-        }
-
-        memset(&preerase.job, 0, sizeof(preerase.job));
-        preerase.job.mode = BURNER_JOB_WRITE_ROM;
-        preerase.job.cart_mode = BURNER_CART_MODE_GBA;
-        preerase.job.recipe_mode = recipe_mode;
-        preerase.job.erase_always = erase_always;
-        preerase.job.gba_force_multi = gba_force_multi;
-        preerase.job.gba_force_no_cfi = gba_force_no_cfi;
-        preerase.job.addr_begin = addr_begin;
-        preerase.job.total_bytes = effective_size;
-        snprintf(preerase.job.rom_name, sizeof(preerase.job.rom_name), "%s", safe_name);
-        snprintf(preerase.job.rom_path, sizeof(preerase.job.rom_path), "%s", full_path);
-        err = burner_start_gba_preerase(&preerase);
-        if (err != ESP_OK) {
-            return burner_start_error(err, "failed to start gba pre-erase", error_msg, error_msg_len);
-        }
-        preerase_started = true;
-    }
 
     if (cart_mode == BURNER_CART_MODE_GBA && patch_requested) {
         patch_plan = (burner_gba_patch_plan_t *)heap_caps_calloc(
@@ -1006,6 +956,51 @@ esp_err_t burner_start_write_from_tf(
         }
         patch_plan_valid = true;
         write_size = patch_plan->output_size;
+    }
+
+    /* Only erase after patch planning succeeds; otherwise an analysis failure
+     * must not leave the cartridge partially erased. */
+    if (cart_mode == BURNER_CART_MODE_GBA && patch_requested) {
+        uint32_t planned_size = write_size;
+        if ((planned_size & 1u) != 0u) {
+            if (planned_size == UINT32_MAX) {
+                if (patch_plan != NULL) heap_caps_free(patch_plan);
+                return burner_start_error(ESP_ERR_INVALID_SIZE, "rom file too large", error_msg, error_msg_len);
+            }
+            planned_size++;
+        }
+        err = burner_apply_gba_slot_limit(slot, planned_size, &addr_begin, &effective_size, &gba_force_multi);
+        if (err != ESP_OK) {
+            if (patch_plan != NULL) heap_caps_free(patch_plan);
+            return burner_start_error(err, "rom file exceeds selected slot range", error_msg, error_msg_len);
+        }
+        err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
+        if (err != ESP_OK) {
+            if (patch_plan != NULL) heap_caps_free(patch_plan);
+            return burner_start_error(err, "read gba nor size failed", error_msg, error_msg_len);
+        }
+        capacity_probed = true;
+        if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
+            if (patch_plan != NULL) heap_caps_free(patch_plan);
+            return burner_start_error(ESP_ERR_INVALID_SIZE, "rom size exceeds nor size", error_msg, error_msg_len);
+        }
+        memset(&preerase.job, 0, sizeof(preerase.job));
+        preerase.job.mode = BURNER_JOB_WRITE_ROM;
+        preerase.job.cart_mode = BURNER_CART_MODE_GBA;
+        preerase.job.recipe_mode = recipe_mode;
+        preerase.job.erase_always = erase_always;
+        preerase.job.gba_force_multi = gba_force_multi;
+        preerase.job.gba_force_no_cfi = gba_force_no_cfi;
+        preerase.job.addr_begin = addr_begin;
+        preerase.job.total_bytes = effective_size;
+        snprintf(preerase.job.rom_name, sizeof(preerase.job.rom_name), "%s", safe_name);
+        snprintf(preerase.job.rom_path, sizeof(preerase.job.rom_path), "%s", full_path);
+        err = burner_start_gba_preerase(&preerase);
+        if (err != ESP_OK) {
+            if (patch_plan != NULL) heap_caps_free(patch_plan);
+            return burner_start_error(err, "failed to start gba pre-erase", error_msg, error_msg_len);
+        }
+        preerase_started = true;
     }
 
     if (preerase_started) {
