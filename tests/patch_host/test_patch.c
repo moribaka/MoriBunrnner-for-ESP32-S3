@@ -43,6 +43,20 @@ int main(void)
     assert(offset == PATCH_SCAN_BYTES - 2);
     fclose(fp);
 
+    /* All identifiers are found in one read pass, including cross-block names.
+     * A higher-priority type late in the ROM must not lose to an earlier one. */
+    fp = rom_file(3 * PATCH_ANALYSIS_CHUNK_BYTES);
+    const sram_patch_set_t *first = &s_generated_patch_sets[0];
+    const sram_patch_set_t *later = &s_generated_patch_sets[10];
+    put(fp, PATCH_ANALYSIS_CHUNK_BYTES - 3, later->identifier, later->identifier_len);
+    put(fp, 2 * PATCH_ANALYSIS_CHUNK_BYTES + 64, first->identifier, first->identifier_len);
+    bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])];
+    assert(scan_patch_identifiers(fp, 3 * PATCH_ANALYSIS_CHUNK_BYTES, found, true, NULL, NULL) == 0);
+    assert(found[0] && found[10]);
+    assert(scan_patch_identifiers(fp, 3 * PATCH_ANALYSIS_CHUNK_BYTES, found, false, NULL, NULL) == 0);
+    assert(!found[0] && found[10]);
+    fclose(fp);
+
     /* A Thumb literal reference straddles the smaller WAITCNT read window. */
     fp = rom_file(8192);
     const unsigned char thumb_ldr[] = {0x00, 0x48};

@@ -10,7 +10,7 @@
 #include <sys/types.h>
 
 #define PATCH_SCAN_BYTES (32U * 1024U)
-#define PATCH_ANALYSIS_CHUNK_BYTES (4U * 1024U * 1024U)
+#define PATCH_ANALYSIS_CHUNK_BYTES PATCH_SCAN_BYTES
 #define PATCH_WAITCNT_ADDRESS 0x04000204U
 #define BATTERYLESS_MARKER "<3 from Maniac"
 #define BATTERYLESS_MIN_ROM (0x400000U)
@@ -316,9 +316,10 @@ static int find_pattern(
     size_t carry = 0U;
     uint32_t base = 0U;
 
-    if (fp == NULL || pattern == NULL || pattern_len == 0U || offset_out == NULL || total < pattern_len) {
+    if (fp == NULL || pattern == NULL || pattern_len == 0U || offset_out == NULL) {
         return -1;
     }
+    if (total < pattern_len) return 1;
     buffer = (unsigned char *)malloc(PATCH_SCAN_BYTES + pattern_len - 1U);
     if (buffer == NULL) {
         return -2;
@@ -379,87 +380,57 @@ static int find_pattern(
     return 1;
 }
 
-/* Scan every known patch identifier during one sequential TF read. */
-static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out)
+/* One sequential TF pass, with overlap for identifiers crossing a block.
+ * Full scans preserve the generated table's priority even if a lower-priority
+ * identifier appears earlier in the file. Detection-only callers may stop early. */
+static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
+    bool scan_all, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
 {
     const size_t set_count = sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]);
-    unsigned char *buffer = NULL;
-    size_t max_len = 0U;
-    size_t carry = 0U;
-    uint32_t offset = 0U;
+    size_t max_len = 0, carry = 0;
+    uint32_t offset = 0;
     bool any_found = false;
-    bool psram_buffer = false;
-
-    if (fp == NULL || found_out == NULL) {
-        return -1;
-    }
-    for (size_t i = 0U; i < set_count; ++i) {
+    if (fp == NULL || found_out == NULL) return -1;
+    for (size_t i = 0; i < set_count; ++i) {
         found_out[i] = false;
-        if (s_generated_patch_sets[i].identifier_len > max_len) {
+        if (s_generated_patch_sets[i].identifier_len > max_len)
             max_len = s_generated_patch_sets[i].identifier_len;
-        }
     }
-    if (max_len == 0U || total < max_len || fseek(fp, 0L, SEEK_SET) != 0) {
-        return 0;
-    }
-
-    buffer = (unsigned char *)heap_caps_malloc(
-        PATCH_ANALYSIS_CHUNK_BYTES + max_len - 1U,
-        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    psram_buffer = buffer != NULL;
-    if (buffer == NULL) {
-        buffer = (unsigned char *)malloc(PATCH_ANALYSIS_CHUNK_BYTES + max_len - 1U);
-    }
-    if (buffer == NULL) {
-        return -1;
-    }
-
-    while (offset < total && !any_found) {
+    if (max_len == 0 || total == 0) return 0;
+    if (fseek(fp, 0, SEEK_SET) != 0) return -1;
+    unsigned char *buffer = malloc(PATCH_ANALYSIS_CHUNK_BYTES + max_len - 1);
+    if (buffer == NULL) return -2;
+    while (offset < total && (scan_all || !any_found)) {
         size_t want = total - offset;
-        size_t got;
-        size_t span;
-        if (want > PATCH_ANALYSIS_CHUNK_BYTES) {
-            want = PATCH_ANALYSIS_CHUNK_BYTES;
-        }
-        got = patch_debug_read(buffer + carry, 1U, want, fp);
-        if (got != want) {
-            if (psram_buffer) heap_caps_free(buffer); else free(buffer);
-            return -1;
-        }
-        span = carry + got;
-        for (size_t set_index = 0U; set_index < set_count; ++set_index) {
-            const unsigned char *pattern = s_generated_patch_sets[set_index].identifier;
-            size_t pattern_len = s_generated_patch_sets[set_index].identifier_len;
-            if (found_out[set_index] || pattern_len > span) {
-                continue;
-            }
-            for (size_t start = 0U; start + pattern_len <= span; ++start) {
-                if ((start & 0xFFFFU) == 0U) {
-                    vTaskDelay(1);
-                }
-                if (buffer[start] != pattern[0]) {
-                    continue;
-                }
-                if (memcmp(buffer + start, pattern, pattern_len) == 0) {
-                    found_out[set_index] = true;
+        if (want > PATCH_ANALYSIS_CHUNK_BYTES) want = PATCH_ANALYSIS_CHUNK_BYTES;
+        size_t got = patch_debug_read(buffer + carry, 1, want, fp);
+        if (got != want) { free(buffer); return -1; }
+        size_t span = carry + got;
+        for (size_t index = 0; index < set_count; ++index) {
+            const unsigned char *pattern = s_generated_patch_sets[index].identifier;
+            size_t length = s_generated_patch_sets[index].identifier_len;
+            if (found_out[index] || length > span) continue;
+            size_t start = 0;
+            while (start + length <= span) {
+                const unsigned char *hit = memchr(buffer + start, pattern[0], span - length - start + 1);
+                if (hit == NULL) break;
+                if (memcmp(hit, pattern, length) == 0) {
+                    found_out[index] = true;
                     any_found = true;
                     break;
                 }
+                start = (size_t)(hit - buffer) + 1;
             }
-        }
-        if (max_len > 1U) {
-            size_t keep = span;
-            if (keep > max_len - 1U) {
-                keep = max_len - 1U;
-            }
-            memmove(buffer, buffer + span - keep, keep);
-            carry = keep;
-        } else {
-            carry = 0U;
         }
         offset += (uint32_t)got;
+        if (progress_cb != NULL)
+            progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, (int)((uint64_t)offset * 35 / total), "identifying save", progress_ctx);
+        if (found_out[0]) break; /* No higher-priority match can exist. */
+        carry = span < max_len - 1 ? span : max_len - 1;
+        memmove(buffer, buffer + span - carry, carry);
+        if ((offset & 0x3FFFFU) == 0) vTaskDelay(1);
     }
-    if (psram_buffer) heap_caps_free(buffer); else free(buffer);
+    free(buffer);
     return 0;
 }
 
@@ -670,17 +641,16 @@ static int build_gba_patch_plan_impl(
     plan->output_size = total;
 
     if (apply_sram_patch) {
-        for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
-            patch_debug_phase("sram_identifier", s_generated_patch_sets[i].name);
-            uint32_t identifier_offset = 0U;
-            if (find_pattern(fp, total,
-                             s_generated_patch_sets[i].identifier,
-                             s_generated_patch_sets[i].identifier_len,
-                             NULL, 0U, &identifier_offset, progress_cb,
-                             BURNER_GBA_PATCH_PROGRESS_SRAM, 0, 35) == 0) {
-                selected_set = (int)i;
-                break;
-            }
+        bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])] = {0};
+        patch_debug_phase("sram_identifier", "all save types (one pass)");
+        int scan_result = scan_patch_identifiers(fp, total, found, true, progress_cb, progress_ctx);
+        if (scan_result != 0) {
+            fclose(fp);
+            set_error(error_msg, error_msg_len, "SRAM identifier scan failed");
+            return scan_result == -2 ? ESP_ERR_NO_MEM : ESP_FAIL;
+        }
+        for (i = 0; i < sizeof(found) / sizeof(found[0]); ++i) {
+            if (found[i]) { selected_set = (int)i; break; }
         }
         if (selected_set >= 0) {
             const sram_patch_set_t *set = &s_generated_patch_sets[selected_set];
@@ -695,23 +665,29 @@ static int build_gba_patch_plan_impl(
                 const sram_patch_t *patch = &set->patches[i];
                 patch_debug_phase("sram_marker", patch->name);
                 int marker_result = find_pattern(fp, total, patch->marker, patch->marker_len,
-                                                 patch->marker_mask, patch->marker_mask_len,
-                                                 &marker_offset, progress_cb,
-                                                 BURNER_GBA_PATCH_PROGRESS_SRAM,
-                                                 (int)(35U + (i * 30U) / set->patch_count),
-                                                 (int)(35U + ((i + 1U) * 30U) / set->patch_count));
-                patch_debug_phase("sram_replacement", patch->name);
-                int replacement_result = find_pattern(fp, total, patch->replace, patch->replace_len,
-                                                      NULL, 0U, &replacement_offset, progress_cb,
-                                                      BURNER_GBA_PATCH_PROGRESS_SRAM,
-                                                      (int)(65U + (i * 30U) / set->patch_count),
-                                                      (int)(65U + ((i + 1U) * 30U) / set->patch_count));
+                    patch->marker_mask, patch->marker_mask_len, &marker_offset, progress_cb,
+                    BURNER_GBA_PATCH_PROGRESS_SRAM,
+                    (int)(35U + (i * 60U) / set->patch_count),
+                    (int)(35U + (i * 60U + 30U) / set->patch_count));
+                if (marker_result < 0) {
+                    fclose(fp);
+                    set_error(error_msg, error_msg_len, "SRAM marker scan failed");
+                    return marker_result == -2 ? ESP_ERR_NO_MEM : ESP_FAIL;
+                }
                 if (marker_result != 0) {
+                    /* Only look for an already-patched routine when the original
+                     * is absent. A normal ROM needs no replacement-code scan. */
+                    patch_debug_phase("sram_replacement", patch->name);
+                    int replacement_result = find_pattern(fp, total, patch->replace, patch->replace_len,
+                        NULL, 0U, &replacement_offset, progress_cb, BURNER_GBA_PATCH_PROGRESS_SRAM,
+                        (int)(35U + (i * 60U + 30U) / set->patch_count),
+                        (int)(35U + ((i + 1U) * 60U) / set->patch_count));
                     if (replacement_result == 0) continue;
                     all_sram_replacements_present = false;
                     fclose(fp);
-                    set_error(error_msg, error_msg_len, "sram patch patterns incomplete");
-                    return ESP_ERR_NOT_SUPPORTED;
+                    set_error(error_msg, error_msg_len, replacement_result < 0 ?
+                        "SRAM replacement scan failed" : "sram patch patterns incomplete");
+                    return replacement_result < 0 ? ESP_FAIL : ESP_ERR_NOT_SUPPORTED;
                 }
                 if (patch->replace_len > BURNER_GBA_PATCH_MAX_REPLACEMENT) {
                     fclose(fp);
@@ -1135,7 +1111,7 @@ bool burner_gba_rom_has_sram_patch_target(const char *input_path)
         if (fp != NULL) fclose(fp);
         return false;
     }
-    (void)scan_patch_identifiers(fp, total, found);
+    (void)scan_patch_identifiers(fp, total, found, false, NULL, NULL);
     fclose(fp);
     for (size_t i = 0U; i < sizeof(found) / sizeof(found[0]); ++i) {
         if (found[i]) {
