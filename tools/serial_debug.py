@@ -59,7 +59,9 @@ def run(args):
                 if event.get("event") == "error":
                     return 1
                 if event.get("event") == terminal:
-                    return 0 if event.get("result", 0) == 0 else 1
+                    # status.result describes the previous patch, not failure
+                    # of the status query itself.
+                    return 1 if terminal == "patch_done" and event.get("result", 0) != 0 else 0
             if terminal == "patch_done" and time.monotonic() >= next_status:
                 port.write(b"status\n")
                 next_status = time.monotonic() + 2

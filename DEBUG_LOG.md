@@ -133,3 +133,9 @@ ESP-IDF 编译通过，烧录写入哈希校验通过；主机回归测试全部
 - 同目录保存 `build-aa97e65.log`、`flash-aa97e65.log`、`control.log` 及黄金太阳基线/最终串口日志。
 - 协议及命令说明：`tools/SERIAL_DEBUG.md`；电脑端入口：`tools/serial_debug.py`。
 - 源码修改均已分批提交到本地 Git，没有推送远程。
+
+### 客户端收尾修正
+
+- 最终 status 确认设备空闲，patch_running=false、burn_running=false。
+- 修正客户端退出码：status 中 result 是上次补丁结果，不能让正常状态查询因上次补丁不支持而返回失败；仅 patch_done 的失败结果映射为非零退出码。
+- 此改动仅涉及电脑端客户端，设备固件仍为已验证的 `aa97e65`。
