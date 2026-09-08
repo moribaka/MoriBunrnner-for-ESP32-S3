@@ -13,3 +13,10 @@ ESP32-S3 firmware and companion FPGA project sources for a web-based cartridge b
 - This is an ESP-IDF project built with `idf.py`.
 - The root `CMakeLists.txt` currently references a local LVGL checkout at `../lvgl-9.4.0`.
 - Generated outputs, release packages, dependency caches, and backup/reference files are intentionally excluded from this repository.
+
+## Serial diagnostics
+
+See [USB serial commands](tools/SERIAL_DEBUG.md) for device status, TF directory
+listing, non-destructive patch analysis and cancellation. The host client is
+`tools/serial_debug.py`. On-device findings and validation are recorded in
+[DEBUG_LOG.md](DEBUG_LOG.md).
