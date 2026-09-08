@@ -63,3 +63,12 @@ gcc -std=c11 -O2 -I tests/patch_host/stubs tests/patch_host/test_patch.c -o .tmp
 - Windows 重定向 stdout 默认使用 GBK，遇到串口残留字节产生的替换字符时抛出 UnicodeEncodeError。
 - 客户端显示输出明确设为 UTF-8，串口协议仍按 GBK 处理；增加串口异常的简洁错误提示。
 - 首次按猜测文件名分析返回文件不存在；接下来以目录返回的实际名称复现。
+
+### 第五批：纠正文件名编码判断，开始基线测试
+
+- 第四批提交 `5f409c0`。
+- 进一步验证确认文件 API 设置为 `CONFIG_FATFS_API_ENCODING_UTF_8=y`。此前仅看 CP936 代码页得出的 GBK 判断不正确；最初乱码来自 Windows stdout 编码。
+- 客户端默认恢复 UTF-8，保留显式编码参数与 UTF-8 标准输出。
+- 目录中确认准确文件名：`黄金太阳1 开启的封印.gba`、`黄金太阳2 失落的时代.gba`。
+- 已启动黄金太阳 1 的 SRAM + 免电池 + WAITCNT 分析；ROM 大小 9256960 字节。
+- 前 8 秒约读取 7.2MB，仍处于第一个存档类型识别扫描，串口 status 正常响应。

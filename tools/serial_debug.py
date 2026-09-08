@@ -78,7 +78,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", required=True)
     parser.add_argument("--timeout", type=float, default=15)
-    parser.add_argument("--encoding", default="gbk", help="Native FatFS filename encoding (default: gbk / CP936)")
+    parser.add_argument("--encoding", default="utf-8", help="FatFS API filename encoding (default: utf-8)")
     parser.add_argument("--log", help="Append timestamped device output to this file")
     parser.add_argument("command")
     try:
