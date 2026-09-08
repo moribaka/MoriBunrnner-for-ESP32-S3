@@ -91,7 +91,8 @@ static void lvgl_task(void *arg)
         (void)lv_timer_handler();
         /* A slow filesystem operation must not cause a burst of catch-up frames. */
         TickType_t now_tick = xTaskGetTickCount();
-        if ((TickType_t)(now_tick - last_wake) > pdMS_TO_TICKS(LVGL_TASK_FRAME_MS)) last_wake = now_tick;
+        if ((TickType_t)(now_tick - last_wake) > pdMS_TO_TICKS(LVGL_TASK_FRAME_MS))
+            last_wake = now_tick - pdMS_TO_TICKS(LVGL_TASK_FRAME_MS) + 1;
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LVGL_TASK_FRAME_MS));
     }
 }
