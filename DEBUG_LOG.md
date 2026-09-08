@@ -38,3 +38,11 @@ $env:PATH='C:\msys64\ucrt64\bin;'+$env:PATH
 gcc -std=c11 -O2 -I tests/patch_host/stubs tests/patch_host/test_patch.c -o .tmp-patch-test.exe
 & .\.tmp-patch-test.exe
 ```
+
+### 第二批：修正 USB 接收驱动
+
+- 第一批已保存为 `1674619`。
+- 修正 VFS 路径后能看到 `@mori ready`，但主机发送仍然超时。
+- 阅读 ESP-IDF 5.5.1 驱动确认：无驱动时，VFS 非阻塞 read 依赖的 `usb_serial_jtag_get_read_bytes_available()` 始终返回 0。
+- 改为安装 USB Serial/JTAG RX/TX 环形缓冲驱动，使用驱动接口读取命令，VFS 输出也切到同一驱动。
+- 本批提交后重新编译和刷机，继续验证双向通信。

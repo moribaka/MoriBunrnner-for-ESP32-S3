@@ -9,6 +9,8 @@
 #include <unistd.h>
 
 #include "cJSON.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -200,24 +202,13 @@ static void dispatch(char *line)
 static void console_task(void *arg)
 {
     (void)arg;
-#if CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG
-    int fd = open("/dev/secondary", O_RDONLY | O_NONBLOCK);
-#else
-    int fd = open("/dev/usbserjtag", O_RDONLY | O_NONBLOCK);
-#endif
-    if (fd < 0) {
-        ESP_LOGE("serial_debug", "cannot open USB Serial/JTAG console");
-        s_console = NULL;
-        vTaskDelete(NULL);
-        return;
-    }
     char line[384];
     size_t used = 0;
     bool overflow = false;
     message("ready", "Mori serial debug v1; type help");
     for (;;) {
         char input[64];
-        int count = read(fd, input, sizeof(input));
+        int count = usb_serial_jtag_read_bytes(input, sizeof(input), 0);
         for (int i = 0; i < count; ++i) {
             char c = input[i];
             if (c == '\r' || c == '\n') {
@@ -240,6 +231,15 @@ static void console_task(void *arg)
 esp_err_t serial_debug_start(void)
 {
     if (s_console != NULL) return ESP_OK;
+    if (!usb_serial_jtag_is_driver_installed()) {
+        usb_serial_jtag_driver_config_t config = {
+            .rx_buffer_size = 1024,
+            .tx_buffer_size = 2048,
+        };
+        esp_err_t err = usb_serial_jtag_driver_install(&config);
+        if (err != ESP_OK) return err;
+    }
+    usb_serial_jtag_vfs_use_driver();
     return xTaskCreatePinnedToCore(console_task, "serial_debug", 6144, NULL, 3, &s_console, 0) == pdPASS
         ? ESP_OK : ESP_ERR_NO_MEM;
 }
