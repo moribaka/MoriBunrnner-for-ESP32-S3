@@ -95,6 +95,17 @@ void burner_apply_gba_patch_plan(
     uint32_t base_offset,
     const burner_gba_patch_plan_t *plan);
 
+/* Return false to cancel writing. The callback runs in the caller's worker. */
+typedef bool (*burner_gba_patch_save_progress_cb_t)(uint32_t done, uint32_t total, void *ctx);
+
+/* Save selected patches to a new sibling *.patched[-N].gba file. Existing
+ * files are never overwritten; partial output is removed on failure/cancel. */
+int burner_save_gba_patch_file(
+    const char *input_path, bool apply_sram_patch, bool apply_waitcnt, bool apply_batteryless,
+    char *output_path, size_t output_path_len, burner_gba_patch_report_t *report,
+    char *error_msg, size_t error_msg_len, burner_gba_patch_progress_cb_t progress_cb,
+    burner_gba_patch_save_progress_cb_t save_progress_cb, void *progress_ctx);
+
 /* Prepare a patched ROM without modifying input_path. */
 int burner_prepare_gba_patch_file(
     const char *input_path,

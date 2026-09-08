@@ -26,6 +26,16 @@ static void put(FILE *fp, uint32_t offset, const void *data, size_t size)
     assert(fflush(fp) == 0);
 }
 
+static uint32_t export_cancel_after = UINT32_MAX;
+static bool export_progress(uint32_t done, uint32_t total, void *ctx)
+{
+    assert(ctx == &export_cancel_after && done <= total);
+    burner_gba_patch_debug_t state;
+    burner_gba_patch_debug_snapshot(&state);
+    assert(state.running);
+    return done < export_cancel_after;
+}
+
 int main(void)
 {
     /* Pattern overlap and wildcard masks must work across read boundaries. */
@@ -162,6 +172,48 @@ int main(void)
     unsigned char unchanged_entry[4];
     assert(fread(unchanged_entry, 1, 4, fp) == 4 && memcmp(unchanged_entry, entry, 4) == 0);
     fclose(fp);
+
+    /* File export matches the burn plan byte-for-byte, never overwrites a
+     * sibling, and removes its partial output when cancelled during writing. */
+    const char *occupied_path = ".tmp-expansion-test.patched.gba";
+    fp = fopen(occupied_path, "wb");
+    assert(fp && fwrite("keep", 1, 4, fp) == 4);
+    fclose(fp);
+    char saved_path[304];
+    assert(burner_save_gba_patch_file(dense_path, false, false, true, saved_path,
+        sizeof(saved_path), &report, error, sizeof(error), NULL, export_progress,
+        &export_cancel_after) == ESP_OK);
+    assert(strcmp(saved_path, ".tmp-expansion-test.patched-1.gba") == 0);
+    assert(report.created_copy && report.output_size == plan.output_size);
+    fp = fopen(saved_path, "rb");
+    FILE *original = fopen(dense_path, "rb");
+    assert(fp && original);
+    unsigned char expected[PATCH_SCAN_BYTES], actual[PATCH_SCAN_BYTES];
+    for (uint32_t base = 0; base < plan.output_size; base += PATCH_SCAN_BYTES) {
+        size_t count = plan.output_size - base;
+        if (count > PATCH_SCAN_BYTES) count = PATCH_SCAN_BYTES;
+        memset(expected, 0xFF, count);
+        size_t available = base < plan.source_size ? plan.source_size - base : 0;
+        if (available > count) available = count;
+        assert(fread(expected, 1, available, original) == available);
+        burner_apply_gba_patch_plan(expected, count, base, &plan);
+        assert(fread(actual, 1, count, fp) == count);
+        assert(memcmp(expected, actual, count) == 0);
+    }
+    assert(fgetc(fp) == EOF);
+    fclose(fp);
+    fclose(original);
+    export_cancel_after = PATCH_SCAN_BYTES;
+    char cancelled_path[304] = "not cleared";
+    assert(burner_save_gba_patch_file(dense_path, false, false, true, cancelled_path,
+        sizeof(cancelled_path), &report, error, sizeof(error), NULL, export_progress,
+        &export_cancel_after) == ESP_ERR_INVALID_STATE);
+    assert(cancelled_path[0] == '\0' && !report.created_copy);
+    assert(access(".tmp-expansion-test.patched-2.gba", F_OK) != 0);
+    fp = fopen(occupied_path, "rb");
+    assert(fp && fread(actual, 1, 4, fp) == 4 && memcmp(actual, "keep", 4) == 0);
+    fclose(fp);
+    assert(remove(saved_path) == 0 && remove(occupied_path) == 0);
     assert(remove(dense_path) == 0);
     puts("patch host tests passed");
     return 0;

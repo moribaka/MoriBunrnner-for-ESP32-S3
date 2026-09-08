@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
 
 #define PATCH_SCAN_BYTES (32U * 1024U)
 #define PATCH_ANALYSIS_CHUNK_BYTES PATCH_SCAN_BYTES
@@ -970,11 +972,7 @@ static int build_gba_patch_plan_impl(
 }
 
 
-int burner_build_gba_patch_plan(
-    const char *input_path, bool apply_sram_patch, bool apply_waitcnt_patch,
-    bool apply_batteryless, burner_gba_patch_plan_t *plan,
-    burner_gba_patch_report_t *report, char *error_msg, size_t error_msg_len,
-    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
+static bool patch_debug_begin(void)
 {
     int64_t started = esp_timer_get_time();
     TaskHandle_t current = xTaskGetCurrentTaskHandle();
@@ -987,14 +985,20 @@ int burner_build_gba_patch_plan(
         s_patch_debug_owner = current;
     }
     portEXIT_CRITICAL(&s_patch_debug_lock);
-    if (busy) {
-        set_error(error_msg, error_msg_len, "another patch analysis is running");
-        return ESP_ERR_INVALID_STATE;
-    }
-    patch_debug_phase("open", input_path);
-    int result = build_gba_patch_plan_impl(input_path, apply_sram_patch, apply_waitcnt_patch,
-        apply_batteryless, plan, report, error_msg, error_msg_len, progress_cb, progress_ctx);
-    int64_t elapsed = (esp_timer_get_time() - started) / 1000;
+    return !busy;
+}
+
+static bool patch_debug_cancelled(void)
+{
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    bool cancelled = s_patch_debug.cancel_requested;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+    return cancelled;
+}
+
+static int patch_debug_finish(int result, char *error_msg, size_t error_msg_len)
+{
+    int64_t elapsed = (esp_timer_get_time() - s_patch_debug_started) / 1000;
     portENTER_CRITICAL(&s_patch_debug_lock);
     bool cancelled = s_patch_debug.cancel_requested;
     if (cancelled) result = ESP_ERR_INVALID_STATE;
@@ -1005,6 +1009,22 @@ int burner_build_gba_patch_plan(
     portEXIT_CRITICAL(&s_patch_debug_lock);
     if (cancelled) set_error(error_msg, error_msg_len, "patch analysis cancelled");
     return result;
+}
+
+int burner_build_gba_patch_plan(
+    const char *input_path, bool apply_sram_patch, bool apply_waitcnt_patch,
+    bool apply_batteryless, burner_gba_patch_plan_t *plan,
+    burner_gba_patch_report_t *report, char *error_msg, size_t error_msg_len,
+    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
+{
+    if (!patch_debug_begin()) {
+        set_error(error_msg, error_msg_len, "another patch analysis is running");
+        return ESP_ERR_INVALID_STATE;
+    }
+    patch_debug_phase("open", input_path);
+    int result = build_gba_patch_plan_impl(input_path, apply_sram_patch, apply_waitcnt_patch,
+        apply_batteryless, plan, report, error_msg, error_msg_len, progress_cb, progress_ctx);
+    return patch_debug_finish(result, error_msg, error_msg_len);
 }
 
 void burner_apply_gba_patch_plan(
@@ -1066,6 +1086,142 @@ void burner_apply_gba_patch_plan(
             memset(buffer + (offset - base_offset), 0, 4U);
         }
     }
+}
+
+int burner_save_gba_patch_file(
+    const char *input_path, bool apply_sram_patch, bool apply_waitcnt, bool apply_batteryless,
+    char *output_path, size_t output_path_len, burner_gba_patch_report_t *report,
+    char *error_msg, size_t error_msg_len, burner_gba_patch_progress_cb_t progress_cb,
+    burner_gba_patch_save_progress_cb_t save_progress_cb, void *progress_ctx)
+{
+    FILE *in = NULL, *out = NULL;
+    unsigned char *buffer = NULL;
+    burner_gba_patch_plan_t *plan = NULL;
+    char destination[BURNER_FILE_PATH_LEN] = {0};
+    bool owns_output = false;
+    int result = ESP_FAIL;
+    if (output_path != NULL && output_path_len) output_path[0] = '\0';
+    if (report != NULL) memset(report, 0, sizeof(*report));
+    if (input_path == NULL || output_path == NULL || output_path_len == 0 ||
+        (!apply_sram_patch && !apply_waitcnt && !apply_batteryless)) {
+        set_error(error_msg, error_msg_len, "select at least one patch");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!patch_debug_begin()) {
+        set_error(error_msg, error_msg_len, "another patch task is running");
+        return ESP_ERR_INVALID_STATE;
+    }
+    plan = malloc(sizeof(*plan));
+    buffer = malloc(PATCH_SCAN_BYTES);
+    if (plan == NULL || buffer == NULL) {
+        result = ESP_ERR_NO_MEM;
+        set_error(error_msg, error_msg_len, "no memory for patch export");
+        goto done;
+    }
+    patch_debug_phase("open", input_path);
+    result = build_gba_patch_plan_impl(input_path, apply_sram_patch, apply_waitcnt, apply_batteryless,
+        plan, report, error_msg, error_msg_len, progress_cb, progress_ctx);
+    if (result != ESP_OK || patch_debug_cancelled()) goto done;
+    result = ESP_FAIL;
+    in = fopen(input_path, "rb");
+    uint32_t source_size = 0;
+    if (in == NULL || file_size(in, &source_size) != 0 || source_size != plan->source_size) {
+        set_error(error_msg, error_msg_len, "source ROM changed or cannot be read");
+        goto done;
+    }
+    const char *slash = strrchr(input_path, '/');
+    const char *extension = strrchr(input_path, '.');
+    size_t stem_len = extension != NULL && (slash == NULL || extension > slash)
+        ? (size_t)(extension - input_path) : strlen(input_path);
+    if (stem_len >= sizeof(destination)) {
+        set_error(error_msg, error_msg_len, "output path too long");
+        goto done;
+    }
+    for (unsigned index = 0; index < 1000; ++index) {
+        int length = index == 0
+            ? snprintf(destination, sizeof(destination), "%.*s.patched.gba", (int)stem_len, input_path)
+            : snprintf(destination, sizeof(destination), "%.*s.patched-%u.gba", (int)stem_len, input_path, index);
+        if (length < 0 || (size_t)length >= sizeof(destination) || (size_t)length >= output_path_len) {
+            set_error(error_msg, error_msg_len, "output path too long");
+            goto done;
+        }
+        int flags = O_WRONLY | O_CREAT | O_EXCL;
+#ifdef O_BINARY
+        flags |= O_BINARY;
+#endif
+        int fd = open(destination, flags, 0666);
+        if (fd < 0) {
+            if (errno == EEXIST) continue;
+            set_error(error_msg, error_msg_len, "cannot create patched ROM");
+            goto done;
+        }
+        owns_output = true;
+        out = fdopen(fd, "wb");
+        if (out == NULL) { close(fd); break; }
+        break;
+    }
+    if (out == NULL) {
+        set_error(error_msg, error_msg_len, "cannot create unique patched ROM");
+        goto done;
+    }
+    patch_debug_phase("saving_rom", destination);
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    s_patch_debug.total = plan->output_size;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+    for (uint32_t offset = 0; offset < plan->output_size;) {
+        if (patch_debug_cancelled()) goto done;
+        if (save_progress_cb != NULL && !save_progress_cb(offset, plan->output_size, progress_ctx)) {
+            burner_gba_patch_debug_cancel();
+            goto done;
+        }
+        size_t count = plan->output_size - offset;
+        if (count > PATCH_SCAN_BYTES) count = PATCH_SCAN_BYTES;
+        size_t available = offset < plan->source_size ? plan->source_size - offset : 0;
+        if (available > count) available = count;
+        memset(buffer, 0xFF, count);
+        if (available && patch_debug_read(buffer, 1, available, in) != available) {
+            set_error(error_msg, error_msg_len, "read source ROM failed");
+            goto done;
+        }
+        burner_apply_gba_patch_plan(buffer, count, offset, plan);
+        if (fwrite(buffer, 1, count, out) != count) {
+            set_error(error_msg, error_msg_len, "write patched ROM failed (check TF free space)");
+            goto done;
+        }
+        offset += (uint32_t)count;
+        portENTER_CRITICAL(&s_patch_debug_lock);
+        s_patch_debug.offset = offset;
+        portEXIT_CRITICAL(&s_patch_debug_lock);
+    }
+    if (fflush(out) != 0) {
+        set_error(error_msg, error_msg_len, "flush patched ROM failed");
+        goto done;
+    }
+    int close_result = fclose(out);
+    out = NULL;
+    if (close_result != 0) {
+        set_error(error_msg, error_msg_len, "close patched ROM failed");
+        goto done;
+    }
+    if (patch_debug_cancelled()) goto done;
+    if (save_progress_cb != NULL && !save_progress_cb(plan->output_size, plan->output_size, progress_ctx)) {
+        burner_gba_patch_debug_cancel();
+        goto done;
+    }
+    result = ESP_OK;
+done:
+    if (in != NULL) fclose(in);
+    if (out != NULL) fclose(out);
+    /* Keep the guard through cancellation/result finalization. */
+    result = patch_debug_finish(result, error_msg, error_msg_len);
+    if (result != ESP_OK && owns_output) unlink(destination);
+    if (result == ESP_OK) {
+        snprintf(output_path, output_path_len, "%s", destination);
+        if (report != NULL) report->created_copy = true;
+    }
+    free(buffer);
+    free(plan);
+    return result;
 }
 
 static int copy_file(const char *input_path, const char *tmp_path, uint32_t *size_out)
