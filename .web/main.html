@@ -2717,11 +2717,44 @@
             }
         }
 
-        async function refreshStatus() {
+        // Coalesce overlapping status work; each caller still receives its own Response body.
+        const pendingStatusRequests = new Map();
+        const pendingStatusRefreshes = new Map();
+
+        function fetchSharedStatus(url) {
+            let pending = pendingStatusRequests.get(url);
+            if (!pending) {
+                pending = fetch(url).finally(() => pendingStatusRequests.delete(url));
+                pendingStatusRequests.set(url, pending);
+            }
+            return pending.then(response => response.clone());
+        }
+
+        function runStatusRefresh(key, work) {
+            if (pendingStatusRefreshes.has(key)) return pendingStatusRefreshes.get(key);
+            const pending = Promise.resolve().then(work).finally(() => pendingStatusRefreshes.delete(key));
+            pendingStatusRefreshes.set(key, pending);
+            return pending;
+        }
+
+        function refreshStatus() { return runStatusRefresh('overview', refreshStatusImpl); }
+        function refreshSystemInfo() { return runStatusRefresh('system', refreshSystemInfoImpl); }
+        function loadMusicStatus() { return runStatusRefresh('music', loadMusicStatusImpl); }
+        function refreshBurnStatusSnapshot() { return runStatusRefresh('burn-snapshot', refreshBurnStatusSnapshotImpl); }
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                refreshStatus();
+                refreshSystemInfo();
+                if (state.currentPage === 'power') refreshPowerDetail();
+            }
+        });
+
+        async function refreshStatusImpl() {
             try {
                 const [powerReq, storageReq] = await Promise.allSettled([
-                    fetch('/api/power/status'),
-                    fetch('/api/storage/status')
+                    fetchSharedStatus('/api/power/status'),
+                    fetchSharedStatus('/api/storage/status')
                 ]);
                 
                 if (powerReq.status === 'fulfilled' && powerReq.value.ok) {
@@ -2750,7 +2783,7 @@
             refreshStatus();
             
             state.statusInterval = setInterval(() => {
-                refreshStatus();
+                if (!document.hidden) refreshStatus();
             }, 2000);
         }
 
@@ -6350,7 +6383,7 @@
         function startSystemAutoRefresh() {
             stopSystemAutoRefresh();
             state.systemRefreshTimer = setInterval(() => {
-                if (state.currentPage === 'system') {
+                if (!document.hidden && state.currentPage === 'system') {
                     refreshSystemInfo();
                 }
             }, 3000);
@@ -6382,16 +6415,16 @@
             };
         }
 
-        async function refreshSystemInfo() {
+        async function refreshSystemInfoImpl() {
             try {
                 if (state.currentPage !== 'system') {
                     return;
                 }
 
                 const [powerReq, storageReq, wifiReq] = await Promise.allSettled([
-                    fetch('/api/power/status'),
-                    fetch('/api/storage/status'),
-                    fetch('/api/wifi/status')
+                    fetchSharedStatus('/api/power/status'),
+                    fetchSharedStatus('/api/storage/status'),
+                    fetchSharedStatus('/api/wifi/status')
                 ]);
 
                 if (powerReq.status === 'fulfilled' && powerReq.value.ok) {
@@ -7711,7 +7744,7 @@
         function startMusicStatusPolling() {
             stopMusicStatusPolling();
             loadMusicStatus();
-            state.musicStatusTimer = setInterval(loadMusicStatus, 2000);
+            state.musicStatusTimer = setInterval(() => { if (!document.hidden) loadMusicStatus(); }, 2000);
         }
 
         function stopMusicStatusPolling() {
@@ -7721,7 +7754,7 @@
             }
         }
 
-        async function loadMusicStatus() {
+        async function loadMusicStatusImpl() {
             const panel = document.getElementById('musicPlayerPanel');
             if (!panel) return;
             try {
@@ -7793,7 +7826,7 @@
         async function loadWiFiStatus() {
             try {
                 // 获取当前连接状态
-                const response = await fetch('/api/wifi/status');
+                const response = await fetchSharedStatus('/api/wifi/status');
                 const data = await response.json();
                 
                 const container = document.getElementById('wifiCurrentStatus');
@@ -8096,7 +8129,7 @@
                 state.powerRefreshTimer = setInterval(() => {
                     // 只在当前页面是 power 时才刷新
                     if (state.currentPage === 'power') {
-                        refreshPowerDetail();
+                        if (!document.hidden) refreshPowerDetail();
                     } else {
                         // 不在电源页面时停止刷新
                         stopPowerAutoRefresh();
@@ -9099,9 +9132,9 @@
         function startBurnStatusPolling() {
             if (state.burnStatusInterval) clearInterval(state.burnStatusInterval);
 
-            state.burnStatusInterval = setInterval(async () => {
+            state.burnStatusInterval = setInterval(() => runStatusRefresh('burn', async () => {
                 try {
-                    const response = await fetch('/api/status');
+                    const response = await fetchSharedStatus('/api/status');
                     const data = await response.json();
                     updateBurnStatus(data);
 
@@ -9112,16 +9145,16 @@
                 } catch (error) {
                     console.error('Status poll error:', error);
                 }
-            }, 500);
+            }), 500);
         }
 
-        async function refreshBurnStatusSnapshot() {
+        async function refreshBurnStatusSnapshotImpl() {
             if (state.currentPage !== 'burner') {
                 return;
             }
 
             try {
-                const response = await fetch('/api/status');
+                const response = await fetchSharedStatus('/api/status');
                 if (!response.ok) {
                     return;
                 }
@@ -9668,7 +9701,7 @@
             statusEl.textContent = '加载中...';
             
             try {
-                const response = await fetch('/api/storage/status');
+                const response = await fetchSharedStatus('/api/storage/status');
                 const data = await response.json();
                 
                 const lines = [];
