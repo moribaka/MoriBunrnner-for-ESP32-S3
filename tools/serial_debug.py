@@ -72,10 +72,17 @@ def run(args):
 
 
 if __name__ == "__main__":
+    # Windows redirected stdout otherwise uses the legacy system code page.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", required=True)
     parser.add_argument("--timeout", type=float, default=15)
     parser.add_argument("--encoding", default="gbk", help="Native FatFS filename encoding (default: gbk / CP936)")
     parser.add_argument("--log", help="Append timestamped device output to this file")
     parser.add_argument("command")
-    sys.exit(run(parser.parse_args()))
+    try:
+        sys.exit(run(parser.parse_args()))
+    except (serial.SerialException, UnicodeError) as error:
+        print(f"Serial client error: {error}", file=sys.stderr)
+        sys.exit(1)

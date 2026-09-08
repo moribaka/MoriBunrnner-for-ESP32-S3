@@ -56,3 +56,10 @@ gcc -std=c11 -O2 -I tests/patch_host/stubs tests/patch_host/test_patch.c -o .tmp
 - Flash 备份已移至 `backup/serial-debug-20260909/flash-before.bin`。
   SHA256：`4E5043A517C975690581E63F42DFBDE6CDAAB71F488B0965376C343639909D16`。
 - 提交后重新编译和刷入，开始黄金太阳 ROM 分析。
+
+### 第四批：Windows 客户端输出修正
+
+- 第三批提交 `9154f85` 编译、刷入通过，补丁任务可以启动并返回结果。
+- Windows 重定向 stdout 默认使用 GBK，遇到串口残留字节产生的替换字符时抛出 UnicodeEncodeError。
+- 客户端显示输出明确设为 UTF-8，串口协议仍按 GBK 处理；增加串口异常的简洁错误提示。
+- 首次按猜测文件名分析返回文件不存在；接下来以目录返回的实际名称复现。
