@@ -136,6 +136,16 @@ static int read_plan_chunk(
     return 0;
 }
 
+static void patch_scan_progress(burner_gba_patch_progress_cb_t cb, void *ctx,
+    burner_gba_patch_progress_kind_t kind, uint32_t done, uint32_t total,
+    int begin, int end, const char *message)
+{
+    if (cb == NULL || total == 0) return;
+    int progress = begin + (int)((uint64_t)done * (unsigned)(end - begin) / total);
+    if (progress > end) progress = end;
+    cb(kind, progress, message, ctx);
+}
+
 static int stream_find_plan_pattern(
     FILE *fp,
     uint32_t total,
@@ -144,7 +154,8 @@ static int stream_find_plan_pattern(
     size_t pattern_len,
     uint32_t stride,
     uint32_t start_offset,
-    uint32_t *offset_out)
+    uint32_t *offset_out,
+    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx, int progress_begin, int progress_end)
 {
     unsigned char *buffer;
     size_t carry = 0U;
@@ -177,6 +188,8 @@ static int stream_find_plan_pattern(
         if (plan != NULL) {
             burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
         }
+        patch_scan_progress(progress_cb, progress_ctx, BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                            base + (uint32_t)got, total, progress_begin, progress_end, "finding save hook");
         span = carry + got;
         for (size_t i = 0U; i + pattern_len <= span; ++i) {
             uint32_t position = base - (uint32_t)carry + (uint32_t)i;
@@ -210,7 +223,8 @@ static int stream_collect_plan_pattern(
     uint32_t stride,
     uint32_t *offsets,
     size_t max_offsets,
-    size_t *count_out)
+    size_t *count_out,
+    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
 {
     unsigned char *buffer;
     size_t carry = 0U;
@@ -230,6 +244,8 @@ static int stream_collect_plan_pattern(
         got = patch_debug_read(buffer + carry, 1U, want, fp);
         if (got != want) { free(buffer); return -1; }
         if (plan != NULL) burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
+        patch_scan_progress(progress_cb, progress_ctx, BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                            base + (uint32_t)got, total, 10, 45, "scanning IRQ literals");
         span = carry + got;
         for (size_t i = 0U; i + pattern_len <= span; ++i) {
             uint32_t position = base - (uint32_t)carry + (uint32_t)i;
@@ -562,7 +578,7 @@ static int collect_waitcnt_offsets(
     uint32_t total,
     uint32_t *offsets,
     size_t capacity,
-    size_t *count_out)
+    size_t *count_out, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
 {
     unsigned char chunk[4096]; /* WAITCNT words and chunks remain 4-byte aligned. */
     uint32_t offset = 0U;
@@ -594,6 +610,8 @@ static int collect_waitcnt_offsets(
             }
         }
         offset += (uint32_t)want;
+        patch_scan_progress(progress_cb, progress_ctx, BURNER_GBA_PATCH_PROGRESS_WAITCNT,
+                            offset, total, 0, 99, "scanning literal references");
     }
     *count_out = count;
     return 0;
@@ -709,6 +727,9 @@ static int build_gba_patch_plan_impl(
         }
     }
 
+    if (apply_sram_patch && progress_cb != NULL)
+        progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 100, "planned", progress_ctx);
+
     if (apply_batteryless) {
         static const unsigned char old_irq[] = {0xFC, 0x7F, 0x00, 0x03};
         static const unsigned char write_sram[] = {0x30,0xB5,0x05,0x1C,0x0C,0x1C,0x13,0x1C,0x0B,0x4A,0x10,0x88,0x0B,0x49,0x08,0x40};
@@ -748,6 +769,7 @@ static int build_gba_patch_plan_impl(
         fclose(payload_fp);
 
         patch_debug_phase("batteryless_space", "payload and save reserve");
+        if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 0, "finding blank space", progress_ctx);
         for (int64_t candidate = (int64_t)rom_size - 0x40000 - payload_len;
              candidate >= 0; candidate -= 0x40000) {
             uint32_t span = 0x40000U + payload_len;
@@ -759,10 +781,15 @@ static int build_gba_patch_plan_impl(
         }
         {
             unsigned char entry_bytes[4] = {0};
-            if (read_plan_chunk(fp, total, plan, 0U, entry_bytes, sizeof(entry_bytes)) != 0 ||
-                !found_space || total < 4U || entry_bytes[3] != 0xEAU) {
+            if (read_plan_chunk(fp, total, plan, 0U, entry_bytes, sizeof(entry_bytes)) != 0) {
                 fclose(fp);
-                set_error(error_msg, error_msg_len, "ROM has no batteryless payload space or unsupported entrypoint");
+                set_error(error_msg, error_msg_len, "batteryless entrypoint read failed");
+                return ESP_FAIL;
+            }
+            if (total < 4U || entry_bytes[3] != 0xEAU || !found_space) {
+                fclose(fp);
+                set_error(error_msg, error_msg_len, total < 4U || entry_bytes[3] != 0xEAU ?
+                    "unsupported batteryless ROM entrypoint" : "ROM has no blank space for batteryless payload and save");
                 return ESP_ERR_NOT_SUPPORTED;
             }
             plan->payload_offset = payload_base;
@@ -783,7 +810,7 @@ static int build_gba_patch_plan_impl(
             size_t irq_count = 0U;
             int scan_result = stream_collect_plan_pattern(
                 fp, total, plan, old_irq, sizeof(old_irq), 4U,
-                plan->batteryless_irq_offsets, BURNER_GBA_PATCH_MAX_IRQ_OPS, &irq_count);
+                plan->batteryless_irq_offsets, BURNER_GBA_PATCH_MAX_IRQ_OPS, &irq_count, progress_cb, progress_ctx);
             if (scan_result == -3) {
                 fclose(fp);
                 set_error(error_msg, error_msg_len, "too many batteryless IRQ patches");
@@ -818,7 +845,8 @@ static int build_gba_patch_plan_impl(
             uint32_t pos = 0U;
             int scan_result = stream_find_plan_pattern(
                 fp, total, plan, hooks[hook_index].signature, hooks[hook_index].signature_len,
-                hooks[hook_index].arm ? 4U : 2U, 0U, &pos);
+                hooks[hook_index].arm ? 4U : 2U, 0U, &pos, progress_cb, progress_ctx,
+                45 + (int)hook_index * 6, 51 + (int)hook_index * 6);
             if (scan_result == 0) {
                 burner_gba_patch_write_t *hook = &plan->batteryless_writes[plan->batteryless_write_count++];
                 const unsigned char *thunk = hooks[hook_index].arm ? arm_thunk : thumb_thunk;
@@ -846,7 +874,7 @@ static int build_gba_patch_plan_impl(
             patch_debug_phase("batteryless_hook", "EEPROM_V111");
             uint32_t pos = 0U;
             int scan_result = stream_find_plan_pattern(fp, total, plan, write_eeprom_v111,
-                                                       sizeof(write_eeprom_v111), 2U, 0U, &pos);
+                                                       sizeof(write_eeprom_v111), 2U, 0U, &pos, progress_cb, progress_ctx, 87, 95);
             if (scan_result == 0) {
                 burner_gba_patch_write_t *thunk = &plan->batteryless_writes[plan->batteryless_write_count++];
                 burner_gba_patch_write_t *target = &plan->batteryless_writes[plan->batteryless_write_count++];
@@ -877,11 +905,14 @@ static int build_gba_patch_plan_impl(
         }
     }
 
+    if (apply_batteryless && progress_cb != NULL)
+        progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 100, "planned", progress_ctx);
+
     if (apply_waitcnt_patch) {
         patch_debug_phase("waitcnt", "literal references");
         int result = collect_waitcnt_offsets(fp, total, plan->waitcnt_offsets,
                                              BURNER_GBA_PATCH_MAX_WAITCNT_OPS,
-                                             &plan->waitcnt_count);
+                                             &plan->waitcnt_count, progress_cb, progress_ctx);
         if (result != 0) {
             fclose(fp);
             set_error(error_msg, error_msg_len, result == -2 ? "too many waitcnt patch operations" : "waitcnt patch scan failed");

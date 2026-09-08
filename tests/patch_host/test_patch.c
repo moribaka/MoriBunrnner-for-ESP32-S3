@@ -66,9 +66,9 @@ int main(void)
     put(fp, 6144, waitcnt, sizeof(waitcnt)); /* No instruction references this one. */
     uint32_t offsets[4];
     size_t count;
-    assert(collect_waitcnt_offsets(fp, 8192, offsets, 4, &count) == 0);
+    assert(collect_waitcnt_offsets(fp, 8192, offsets, 4, &count, NULL, NULL) == 0);
     assert(count == 1 && offsets[0] == 4096);
-    assert(collect_waitcnt_offsets(fp, 8192, offsets, 0, &count) == -2);
+    assert(collect_waitcnt_offsets(fp, 8192, offsets, 0, &count, NULL, NULL) == -2);
     fclose(fp);
 
     /* Word-aligned burn windows must equal one full apply, including a split SRAM patch. */
