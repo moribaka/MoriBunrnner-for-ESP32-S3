@@ -2,6 +2,11 @@ idf_component_register(SRCS  "serial_debug.c" "wifi_manager.c" "file_system.c" "
                        PRIV_REQUIRES driver esp_driver_usb_serial_jtag esp_driver_i2c esp_driver_i2s fatfs sdmmc spi_flash esp_wifi esp_http_server nvs_flash esp_lcd esp_timer esp_tinyusb esp_psram esp_app_format app_update bootloader_support spiffs json esp_audio_codec libsmb2 "lvgl-9.4.0"
                        INCLUDE_DIRS "." "app" "music" "reader" "burner" "burner/core" "burner/http" "burner/db")
 
+# File-only patch algorithms can use normal optimization independently of the
+# cartridge GPIO/SPI timing code in ws_server.c and its included driver files.
+target_sources(${COMPONENT_LIB} PRIVATE "burner/core/burner_gba_patch.c")
+set_source_files_properties("burner/core/burner_gba_patch.c" PROPERTIES COMPILE_OPTIONS "-O2")
+
 set(WEB_ASSETS_SOURCE_DIR "${PROJECT_DIR}/assets")
 set(WEB_ASSETS_STAGE_DIR "${CMAKE_BINARY_DIR}/web_assets")
 set(WEB_MAIN_HTML_FILE "${PROJECT_DIR}/.web/main.html")
