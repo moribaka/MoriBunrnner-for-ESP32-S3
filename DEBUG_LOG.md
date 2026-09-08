@@ -148,3 +148,16 @@ ESP-IDF 编译通过，烧录写入哈希校验通过；主机回归测试全部
 - 已确认正式烧录入口按扩展后的 output_size 检查所选槽位和实际 NOR 容量，检查通过后才擦除。
 - 增加 32MiB 恰好可容纳/超出 1 字节/整数溢出边界测试，以及密集 ROM 无空洞时的完整计划、EOF 后 payload 应用、源文件不变测试。
 - 本批先执行主机测试并本地提交，再编译、刷机，通过串口验证黄金太阳 1。
+
+### 扩容版本实机验证通过
+
+- 源码提交：`aaf5c1b`；设备版本：`v2.32-39-gaaf5c1b`。
+- 主机回归测试、ESP-IDF 编译、主程序刷入与写入哈希校验均通过。
+- COM26 执行 `patch sbw /sdcard/黄金太阳1 开启的封印.gba`：**56676ms 成功**。
+- SRAM=true、batteryless=true；4 个 SRAM 操作、2 个 IRQ 操作、15 个 WAITCNT 操作。
+- 原 ROM 9256960 字节；计划输出 **9699328 字节（9.25MiB）**，payload_offset=9434952，payload 后的存档区从 9437184 开始，保持 256KiB 对齐。
+- 本次仅生成内存补丁计划，原 ROM 不变，未擦写卡带；游戏及存档行为仍需烧卡后验证。
+- 主程序和 ELF 保存为 `backup/serial-debug-20260909/moriburnner-aaf5c1b.bin` / `.elf`。
+- BIN SHA256：`3E882FC723435B46858D407932B8215D34011677458A17027A17C9811DDC668C`。
+- 同目录保存 `build-aaf5c1b.log`、`flash-aaf5c1b.log`、`golden1-expanded-aaf5c1b.log`。
+- 此结果替代此前“黄金太阳 1 无空白即失败”的限制；现在仅在原区域无法放置、且追加后超过 32MiB 时拒绝空间分配。
