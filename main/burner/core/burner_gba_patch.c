@@ -14,6 +14,8 @@
 #define PATCH_WAITCNT_ADDRESS 0x04000204U
 #define BATTERYLESS_MARKER "<3 from Maniac"
 #define BATTERYLESS_MIN_ROM (0x400000U)
+#define BATTERYLESS_MAX_ROM (32U * 1024U * 1024U)
+#define BATTERYLESS_SAVE_RESERVE 0x40000U
 #define BATTERYLESS_SCAN_CHUNK_BYTES (64U * 1024U)
 
 #ifndef BURNER_FILE_PATH_LEN
@@ -103,6 +105,23 @@ static size_t patch_debug_read(void *buffer, size_t size, size_t count, FILE *fp
 
 static uint32_t patch_read_le32(const unsigned char *p);
 static void patch_write_le32(unsigned char *p, uint32_t v);
+
+/* Append without moving or overwriting source bytes. Keep the save area on
+ * the same 256 KiB boundary as the existing in-ROM placement algorithm. */
+static bool batteryless_append_layout(uint32_t source_size, uint32_t payload_len,
+    uint32_t *rom_size_out, uint32_t *payload_base_out)
+{
+    if (source_size > BATTERYLESS_MAX_ROM || payload_len == 0 ||
+        payload_len > BURNER_GBA_PATCH_MAX_PAYLOAD) return false;
+    uint64_t required = (uint64_t)source_size + payload_len + BATTERYLESS_SAVE_RESERVE;
+    uint64_t expanded = (required + BATTERYLESS_SAVE_RESERVE - 1U) &
+                        ~((uint64_t)BATTERYLESS_SAVE_RESERVE - 1U);
+    if (expanded < BATTERYLESS_MIN_ROM) expanded = BATTERYLESS_MIN_ROM;
+    if (expanded > BATTERYLESS_MAX_ROM) return false;
+    *rom_size_out = (uint32_t)expanded;
+    *payload_base_out = (uint32_t)expanded - BATTERYLESS_SAVE_RESERVE - payload_len;
+    return true;
+}
 
 static int read_plan_chunk(
     FILE *fp,
@@ -648,9 +667,14 @@ static int build_gba_patch_plan_impl(
     s_patch_debug.total = total;
     portEXIT_CRITICAL(&s_patch_debug_lock);
     plan->source_size = total;
-    /* The plan does not change ROM length; structural expansions are handled
-     * by the batteryless preparation path. */
+    /* Batteryless placement may extend output; source_size remains the TF EOF. */
     plan->output_size = total;
+
+    if (apply_batteryless && total > BATTERYLESS_MAX_ROM) {
+        fclose(fp);
+        set_error(error_msg, error_msg_len, "batteryless ROM exceeds 32 MiB address space");
+        return ESP_ERR_INVALID_SIZE;
+    }
 
     if (apply_sram_patch) {
         bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])] = {0};
@@ -773,6 +797,14 @@ static int build_gba_patch_plan_impl(
                 break;
             }
         }
+        if (!found_space) {
+            found_space = batteryless_append_layout(total, payload_len, &rom_size, &payload_base);
+            if (found_space) {
+                patch_debug_phase("batteryless_expand", "append payload and save area");
+                if (progress_cb != NULL)
+                    progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 10, "expanding ROM", progress_ctx);
+            }
+        }
         {
             unsigned char entry_bytes[4] = {0};
             if (read_plan_chunk(fp, total, plan, 0U, entry_bytes, sizeof(entry_bytes)) != 0) {
@@ -783,7 +815,7 @@ static int build_gba_patch_plan_impl(
             if (total < 4U || entry_bytes[3] != 0xEAU || !found_space) {
                 fclose(fp);
                 set_error(error_msg, error_msg_len, total < 4U || entry_bytes[3] != 0xEAU ?
-                    "unsupported batteryless ROM entrypoint" : "ROM has no blank space for batteryless payload and save");
+                    "unsupported batteryless ROM entrypoint" : "batteryless payload and save cannot fit within 32 MiB");
                 return ESP_ERR_NOT_SUPPORTED;
             }
             plan->payload_offset = payload_base;
