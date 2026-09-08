@@ -3614,6 +3614,46 @@ static bool ui_build_file_entry_for_dirent(
     return true;
 }
 
+static ui_file_entry_t *s_file_directory_cache;
+static uint16_t s_file_directory_count;
+static ui_file_filter_t s_file_directory_filter;
+static char s_file_directory_path[TF_PATH_LEN_MAX];
+
+static void ui_release_file_directory_cache(void)
+{
+    free(s_file_directory_cache);
+    s_file_directory_cache = NULL;
+    s_file_directory_count = 0;
+}
+
+static void ui_fill_file_window_locked(ui_model_t *model, ui_file_entry_t *entries, uint16_t total)
+{
+    uint16_t visible_begin, loaded = 0;
+    memset(model->file_window, 0, sizeof(model->file_window));
+    if (model->file_selected >= total && total > 0U) {
+        model->file_selected = total - 1U;
+    }
+    if (total == 0U) {
+        model->file_selected = 0;
+        model->file_scroll = 0;
+    } else {
+        model->file_scroll = ui_file_scroll_for_selected(model, model->file_selected, model->file_scroll, total);
+    }
+    visible_begin = model->file_scroll;
+    if (total > UI_FILE_WINDOW_COUNT && visible_begin + UI_FILE_WINDOW_COUNT > total) {
+        visible_begin = total - UI_FILE_WINDOW_COUNT;
+    }
+    model->file_window_start = visible_begin;
+
+    for (uint16_t i = visible_begin; i < total && loaded < UI_FILE_WINDOW_COUNT; ++i) {
+        entries[i].ordinal = i;
+        model->file_window[loaded++] = entries[i];
+    }
+
+    model->file_total = total;
+    model->file_loaded_count = loaded;
+}
+
 static void ui_scan_file_window_locked(ui_model_t *model)
 {
     char normalized[TF_PATH_LEN_MAX] = {0};
@@ -3621,14 +3661,15 @@ static void ui_scan_file_window_locked(ui_model_t *model)
     ui_file_entry_t *entries = NULL;
     DIR *dir = NULL;
     struct dirent *dirent = NULL;
-    uint16_t visible_begin;
     uint16_t total = 0;
-    uint16_t loaded = 0;
+    uint16_t capacity = 32;
 
     if (model == NULL) {
         return;
     }
 
+    ui_release_file_directory_cache();
+    ++s_ui_runtime_stats.directory_scans;
     memset(model->file_window, 0, sizeof(model->file_window));
     model->file_window_start = model->file_scroll;
     model->file_loaded_count = 0;
@@ -3659,7 +3700,7 @@ static void ui_scan_file_window_locked(ui_model_t *model)
         return;
     }
 
-    entries = (ui_file_entry_t *)calloc(UI_FILE_SCAN_LIMIT, sizeof(*entries));
+    entries = (ui_file_entry_t *)heap_caps_malloc(capacity * sizeof(*entries), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (entries == NULL) {
         closedir(dir);
         ui_set_status_locked(model, ui_tr("no memory"));
@@ -3667,6 +3708,25 @@ static void ui_scan_file_window_locked(ui_model_t *model)
     }
 
     while ((dirent = readdir(dir)) != NULL && total < UI_FILE_SCAN_LIMIT) {
+        /* Known irrelevant files need no stat() or display-name conversion. */
+        if (model->file_filter != UI_FILE_FILTER_NONE) {
+            if (dirent->d_type == DT_DIR && ui_file_dir_is_system_name(dirent->d_name)) continue;
+            if (dirent->d_type == DT_REG &&
+                !ui_file_kind_matches_filter(ui_file_kind_from_name(dirent->d_name), model->file_filter)) continue;
+        }
+        if (total == capacity) {
+            uint16_t next = capacity * 2U;
+            if (next > UI_FILE_SCAN_LIMIT) next = UI_FILE_SCAN_LIMIT;
+            ui_file_entry_t *grown = heap_caps_realloc(entries, next * sizeof(*entries), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (grown == NULL) {
+                free(entries);
+                closedir(dir);
+                ui_set_status_locked(model, ui_tr("no memory"));
+                return;
+            }
+            entries = grown;
+            capacity = next;
+        }
         if (!ui_build_file_entry_for_dirent(normalized, dirent, &entries[total])) {
             continue;
         }
@@ -3687,28 +3747,7 @@ static void ui_scan_file_window_locked(ui_model_t *model)
         qsort(entries, total, sizeof(entries[0]), ui_file_entry_compare);
     }
 
-    if (model->file_selected >= total && total > 0U) {
-        model->file_selected = total - 1U;
-    }
-    if (total == 0U) {
-        model->file_selected = 0;
-        model->file_scroll = 0;
-    } else {
-        model->file_scroll = ui_file_scroll_for_selected(model, model->file_selected, model->file_scroll, total);
-    }
-    visible_begin = model->file_scroll;
-    if (total > UI_FILE_WINDOW_COUNT && visible_begin + UI_FILE_WINDOW_COUNT > total) {
-        visible_begin = total - UI_FILE_WINDOW_COUNT;
-    }
-    model->file_window_start = visible_begin;
-
-    for (uint16_t i = visible_begin; i < total && loaded < UI_FILE_WINDOW_COUNT; ++i) {
-        entries[i].ordinal = i;
-        model->file_window[loaded++] = entries[i];
-    }
-
-    model->file_total = total;
-    model->file_loaded_count = loaded;
+    ui_fill_file_window_locked(model, entries, total);
     if (total >= UI_FILE_SCAN_LIMIT) {
         ui_set_status_locked(model, ui_tr("directory clipped"));
     } else if (total == 0U && model->file_filter != UI_FILE_FILTER_NONE) {
@@ -3720,7 +3759,10 @@ static void ui_scan_file_window_locked(ui_model_t *model)
     } else {
         ui_set_status_locked(model, normalized[0] == '\0' ? ui_tr("TF root") : normalized);
     }
-    free(entries);
+    s_file_directory_cache = entries;
+    s_file_directory_count = total;
+    s_file_directory_filter = model->file_filter;
+    snprintf(s_file_directory_path, sizeof(s_file_directory_path), "%s", normalized);
 }
 
 static bool ui_current_file_locked(const ui_model_t *model, ui_file_entry_t *entry_out)
@@ -3784,7 +3826,14 @@ static void ui_file_ensure_window_locked(ui_model_t *model, bool force_scan)
     if (force_scan || !ui_file_visible_window_loaded_locked(model)) {
         uint16_t cached_selected = model->file_selected;
 
-        ui_scan_file_window_locked(model);
+        if (!force_scan && s_file_directory_cache != NULL &&
+            s_file_directory_filter == model->file_filter &&
+            strcmp(s_file_directory_path, model->file_path) == 0 && !usb_msc_tf_in_use_by_host()) {
+            ui_fill_file_window_locked(model, s_file_directory_cache, s_file_directory_count);
+            ++s_ui_runtime_stats.directory_cache_hits;
+        } else {
+            ui_scan_file_window_locked(model);
+        }
         if (model->file_total > 0U && cached_selected < model->file_total) {
             model->file_selected = cached_selected;
             model->file_scroll =
@@ -8547,6 +8596,8 @@ void ui_process(void)
     if (!ui_take_model_lock()) {
         return;
     }
+    if (s_model.page != UI_PAGE_FILES && s_model.page != UI_PAGE_MUSIC_FILES)
+        ui_release_file_directory_cache();
     ui_music_process_pending_toggle_locked(&s_model);
     ui_update_burn_rom_prompt_locked(&s_model);
     ++s_ui_runtime_stats.process_calls;
