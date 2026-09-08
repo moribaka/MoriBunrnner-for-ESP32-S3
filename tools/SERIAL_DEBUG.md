@@ -13,6 +13,10 @@ not change the application's path encoding.
 | Command | Behavior |
 | --- | --- |
 | `status` | Firmware version, uptime, heap, active patch phase, file offset, total bytes read, I/O time and result |
+| `ui` | UI processing/render counts, metadata polls, directory cache hits and selected item |
+| `key up` / `key a` / `key b` | Send a normal UI key press; also supports down/left/right/menu/panel/vol+/vol- |
+| `epub /sdcard/book.epub` | Read up to 32 chapters forward/backward and report text hash and ZIP index builds |
+| `play /sdcard/music.wav` | Queue an audio file through the regular player |
 | `ls /sdcard/path` | List up to 256 directory entries; paths may contain spaces and Chinese characters |
 | `patch s /sdcard/game.gba` | Build an SRAM patch plan using the production implementation |
 | `patch sb /sdcard/game.gba` | Build SRAM and batteryless plans |

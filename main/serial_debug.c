@@ -22,6 +22,8 @@
 #include "burner/core/burner_gba_patch.h"
 #include "usb_msc_tf.h"
 #include "ui.h"
+#include "reader/epub_native.h"
+#include "music/music_player.h"
 
 static TaskHandle_t s_console;
 static portMUX_TYPE s_job_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -146,6 +148,49 @@ static void patch_worker(void *arg)
     vTaskDelete(NULL);
 }
 
+static void epub_worker(void *arg)
+{
+    char *path = arg;
+    ui_epub_book_t *book = NULL;
+    uint32_t bytes = 0, hash = 2166136261U, sections = 0;
+    int64_t start = esp_timer_get_time();
+    bool ok = ui_epub_book_open(path, &book);
+    if (ok) {
+        sections = ui_epub_book_section_count(book);
+        if (sections > 32) sections = 32;
+        for (unsigned pass = 0; pass < 2 && ok; ++pass) {
+            for (uint32_t i = 0; i < sections && ok; ++i) {
+                uint8_t *text = NULL;
+                size_t length = 0;
+                uint32_t section = pass == 0 ? i : sections - 1 - i;
+                ok = ui_epub_book_load_section_text(book, section, &text, &length);
+                if (ok) {
+                    for (size_t j = 0; j < length; ++j) hash = (hash ^ text[j]) * 16777619U;
+                    bytes += (uint32_t)length;
+                }
+                ui_epub_book_free_buffer(text);
+                vTaskDelay(1);
+            }
+        }
+    }
+    cJSON *json = event("epub_done");
+    if (json != NULL) {
+        cJSON_AddNumberToObject(json, "result", ok ? ESP_OK : ESP_FAIL);
+        cJSON_AddNumberToObject(json, "sections", sections);
+        cJSON_AddNumberToObject(json, "bytes", bytes);
+        cJSON_AddNumberToObject(json, "hash", hash);
+        cJSON_AddNumberToObject(json, "index_builds", ui_epub_book_index_build_count(book));
+        cJSON_AddNumberToObject(json, "elapsed_ms", (esp_timer_get_time() - start) / 1000);
+    }
+    ui_epub_book_close(book);
+    free(path);
+    reply(json);
+    portENTER_CRITICAL(&s_job_lock);
+    s_job_running = false;
+    portEXIT_CRITICAL(&s_job_lock);
+    vTaskDelete(NULL);
+}
+
 static bool local_path(const char *path)
 {
     return path != NULL && strlen(path) < 304 &&
@@ -155,6 +200,34 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strncmp(line, "epub ", 5) == 0) {
+        if (!local_path(line + 5) || usb_msc_tf_in_use_by_host()) { message("error", "invalid path or TF busy"); return; }
+        char *path = strdup(line + 5);
+        if (path == NULL) { message("error", "no memory"); return; }
+        portENTER_CRITICAL(&s_job_lock);
+        bool busy = s_job_running;
+        if (!busy) s_job_running = true;
+        portEXIT_CRITICAL(&s_job_lock);
+        if (busy) { free(path); message("error", "debug worker busy"); return; }
+        if (xTaskCreatePinnedToCore(epub_worker, "debug_epub", 16384, path, 2, NULL, 1) != pdPASS) {
+            free(path);
+            portENTER_CRITICAL(&s_job_lock);
+            s_job_running = false;
+            portEXIT_CRITICAL(&s_job_lock);
+            message("error", "cannot start EPUB worker");
+        }
+        return;
+    }
+    if (strncmp(line, "play ", 5) == 0) {
+        struct stat st;
+        if (!local_path(line + 5) || usb_msc_tf_in_use_by_host() || stat(line + 5, &st) != 0 ||
+            !S_ISREG(st.st_mode) || st.st_size <= 0 || (uint64_t)st.st_size > UINT32_MAX) {
+            message("error", "invalid audio path or TF busy"); return;
+        }
+        esp_err_t err = music_player_play(line + 5, (uint32_t)st.st_size);
+        message(err == ESP_OK ? "play" : "error", esp_err_to_name(err));
+        return;
+    }
     if (strcmp(line, "ui") == 0) {
         ui_runtime_stats_t stats;
         ui_get_runtime_stats(&stats);
@@ -200,7 +273,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ls /sdcard/path | patch FLAGS /sdcard/file.gba | patch-save FLAGS /sdcard/file.gba | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT; patch analyzes; patch-save writes a new ROM file");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {

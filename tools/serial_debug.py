@@ -40,6 +40,7 @@ def run(args):
             "status": "status", "ls": "ls_done", "patch": "patch_done", "patch-save": "patch_done",
             "cancel": "cancel", "help": "help", "reboot": "reboot",
             "ui": "ui", "key": "key",
+            "epub": "epub_done", "play": "play",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:
             pending.extend(port.read(4096))
@@ -62,7 +63,7 @@ def run(args):
                 if event.get("event") == terminal:
                     # status.result describes the previous patch, not failure
                     # of the status query itself.
-                    return 1 if terminal == "patch_done" and event.get("result", 0) != 0 else 0
+                    return 1 if terminal in ("patch_done", "epub_done") and event.get("result", 0) != 0 else 0
             if terminal == "patch_done" and time.monotonic() >= next_status:
                 port.write(b"status\n")
                 next_status = time.monotonic() + 2
