@@ -1,0 +1,40 @@
+# 串口补丁调试记录
+
+## 2026-09-09：接入串口诊断
+
+用户反馈：历史上补丁处理长时间无响应，ROM 疑似《黄金太阳》；具体补丁组合不确定。
+用户要求：每批源码修改保存到本地 Git，并更新本 Markdown 日志。
+
+### 已确认的环境
+
+- 设备：COM26，ESP32-S3 rev v0.2，8MB PSRAM，16MB Flash。
+- 原设备固件：`v2.32-26-ga5065ff`，编译于 2026-08-22。
+- 本地起点：`e824218`（2026-08-23），已含免电池补丁计划流式处理。
+- 完整 Flash 已备份到 `.tmp-debug-before.bin`（16777216 字节）；备份耗时 209.6 秒。
+- 已读取设备分区表，与本地一致。本次仅更新 0x20000 的 factory 主程序。
+
+### 第一批改动
+
+- 增加独立 USB Serial/JTAG 命令任务：状态、TF 目录、补丁计划分析、取消和重启。
+- 增加 `tools/serial_debug.py` 客户端，解析 `@mori` JSON 回复，分析时每两秒查询状态。
+- 正式补丁计划入口增加单任务互斥、扫描阶段、累计读取字节和 I/O 耗时记录。
+- 调试补丁只生成内存计划，不写 ROM 或卡带。
+- WAITCNT 两处扫描栈缓冲从 32KB 改成 4KB：界面和 HTTP 任务仅有 16KB 栈。
+- 增加主机回归测试：跨块模式匹配、通配掩码、WAITCNT 跨块引用、烧录窗口补丁一致性、失败后释放任务状态。
+
+### 验证及连接修正
+
+- ESP-IDF 5.5.1 编译通过；主程序首次写入与设备哈希校验通过。
+- 启动日志证实调试固件进入 app_main，TF、屏幕及 Wi-Fi 启动正常。
+- 首次串口无响应的原因：当前配置把 USB 串口作为 secondary，ESP-IDF 注册路径是 `/dev/secondary`，并非主控制台的 `/dev/usbserjtag`。
+- 已按配置修正设备路径并补充打开失败日志；正在重新编译、刷入验证。
+- 主机测试已通过（GCC，`tests/patch_host/test_patch.c`）。
+- 尚未开始真实 ROM 性能测试，不能据此认定历史卡顿原因已解决。
+
+主机测试命令（PowerShell，需把 GCC 同目录加入 PATH）：
+
+```powershell
+$env:PATH='C:\msys64\ucrt64\bin;'+$env:PATH
+gcc -std=c11 -O2 -I tests/patch_host/stubs tests/patch_host/test_patch.c -o .tmp-patch-test.exe
+& .\.tmp-patch-test.exe
+```

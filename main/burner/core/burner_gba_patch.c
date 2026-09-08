@@ -1,5 +1,6 @@
 #include "burner_gba_patch.h"
 #include "esp_err.h"
+#include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -39,6 +40,67 @@ typedef struct {
 
 #include "burner_gba_patch_generated.h"
 
+
+/* Snapshot updates never hold a lock across TF I/O or UI callbacks. */
+static portMUX_TYPE s_patch_debug_lock = portMUX_INITIALIZER_UNLOCKED;
+static burner_gba_patch_debug_t s_patch_debug;
+static TaskHandle_t s_patch_debug_owner;
+static int64_t s_patch_debug_started;
+
+void burner_gba_patch_debug_snapshot(burner_gba_patch_debug_t *out)
+{
+    if (out == NULL) return;
+    int64_t now = esp_timer_get_time();
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    *out = s_patch_debug;
+    if (out->running) out->elapsed_ms = (now - s_patch_debug_started) / 1000;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+}
+
+bool burner_gba_patch_debug_cancel(void)
+{
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    bool running = s_patch_debug.running;
+    if (running) s_patch_debug.cancel_requested = true;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+    return running;
+}
+
+static void patch_debug_phase(const char *phase, const char *detail)
+{
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    if (s_patch_debug_owner == current) {
+        snprintf(s_patch_debug.phase, sizeof(s_patch_debug.phase), "%s", phase);
+        snprintf(s_patch_debug.detail, sizeof(s_patch_debug.detail), "%s", detail ? detail : "");
+        s_patch_debug.offset = 0;
+        ++s_patch_debug.passes;
+    }
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+}
+
+static size_t patch_debug_read(void *buffer, size_t size, size_t count, FILE *fp)
+{
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    bool tracked = s_patch_debug_owner == current;
+    bool cancelled = tracked && s_patch_debug.cancel_requested;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+    if (cancelled) return 0;
+    long position = tracked ? ftell(fp) : 0;
+    int64_t started = tracked ? esp_timer_get_time() : 0;
+    size_t got = fread(buffer, size, count, fp);
+    int64_t elapsed = tracked ? esp_timer_get_time() - started : 0;
+    if (tracked) {
+        portENTER_CRITICAL(&s_patch_debug_lock);
+        s_patch_debug.read_bytes += got * size;
+        s_patch_debug.read_us += elapsed;
+        s_patch_debug.offset = position < 0 ? 0 : (uint32_t)(position + got * size);
+        portEXIT_CRITICAL(&s_patch_debug_lock);
+    }
+    return got;
+}
+
 static uint32_t patch_read_le32(const unsigned char *p);
 static void patch_write_le32(unsigned char *p, uint32_t v);
 
@@ -61,7 +123,7 @@ static int read_plan_chunk(
         available = length;
     }
     if (available > 0U) {
-        if (fseek(fp, (long)offset, SEEK_SET) != 0 || fread(buffer, 1U, available, fp) != available) {
+        if (fseek(fp, (long)offset, SEEK_SET) != 0 || patch_debug_read(buffer, 1U, available, fp) != available) {
             return -1;
         }
         if (plan != NULL) {
@@ -107,7 +169,7 @@ static int stream_find_plan_pattern(
         size_t span;
 
         if (want > BATTERYLESS_SCAN_CHUNK_BYTES) want = BATTERYLESS_SCAN_CHUNK_BYTES;
-        got = fread(buffer + carry, 1U, want, fp);
+        got = patch_debug_read(buffer + carry, 1U, want, fp);
         if (got != want) {
             free(buffer);
             return -1;
@@ -165,7 +227,7 @@ static int stream_collect_plan_pattern(
         size_t got;
         size_t span;
         if (want > BATTERYLESS_SCAN_CHUNK_BYTES) want = BATTERYLESS_SCAN_CHUNK_BYTES;
-        got = fread(buffer + carry, 1U, want, fp);
+        got = patch_debug_read(buffer + carry, 1U, want, fp);
         if (got != want) { free(buffer); return -1; }
         if (plan != NULL) burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
         span = carry + got;
@@ -273,7 +335,7 @@ static int find_pattern(
         if (want > PATCH_SCAN_BYTES) {
             want = PATCH_SCAN_BYTES;
         }
-        got = fread(buffer + carry, 1U, want, fp);
+        got = patch_debug_read(buffer + carry, 1U, want, fp);
         if (got != want) {
             free(buffer);
             return -1;
@@ -359,7 +421,7 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out)
         if (want > PATCH_ANALYSIS_CHUNK_BYTES) {
             want = PATCH_ANALYSIS_CHUNK_BYTES;
         }
-        got = fread(buffer + carry, 1U, want, fp);
+        got = patch_debug_read(buffer + carry, 1U, want, fp);
         if (got != want) {
             if (psram_buffer) heap_caps_free(buffer); else free(buffer);
             return -1;
@@ -414,7 +476,7 @@ static int read_at(FILE *fp, uint32_t offset, void *data, size_t len)
     if (fp == NULL || data == NULL || fseek(fp, (long)offset, SEEK_SET) != 0) {
         return -1;
     }
-    return fread(data, 1U, len, fp) == len ? 0 : -1;
+    return patch_debug_read(data, 1U, len, fp) == len ? 0 : -1;
 }
 
 static uint16_t read_u16(const unsigned char *p)
@@ -489,7 +551,7 @@ static bool has_arm_ldr_pc(FILE *fp, uint32_t target_word, uint32_t total)
 
 static int apply_waitcnt(FILE *fp, uint32_t total, uint32_t *count_out)
 {
-    unsigned char chunk[PATCH_SCAN_BYTES];
+    unsigned char chunk[4096]; /* Fits the 16 KiB UI worker stack. */
     uint32_t offset = 0U;
     uint32_t count = 0U;
 
@@ -531,7 +593,7 @@ static int collect_waitcnt_offsets(
     size_t capacity,
     size_t *count_out)
 {
-    unsigned char chunk[PATCH_SCAN_BYTES];
+    unsigned char chunk[4096]; /* WAITCNT words and chunks remain 4-byte aligned. */
     uint32_t offset = 0U;
     size_t count = 0U;
 
@@ -566,7 +628,7 @@ static int collect_waitcnt_offsets(
     return 0;
 }
 
-int burner_build_gba_patch_plan(
+static int build_gba_patch_plan_impl(
     const char *input_path,
     bool apply_sram_patch,
     bool apply_waitcnt_patch,
@@ -599,6 +661,9 @@ int burner_build_gba_patch_plan(
         set_error(error_msg, error_msg_len, "open rom for patch plan failed");
         return ESP_FAIL;
     }
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    s_patch_debug.total = total;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
     plan->source_size = total;
     /* The plan does not change ROM length; structural expansions are handled
      * by the batteryless preparation path. */
@@ -606,6 +671,7 @@ int burner_build_gba_patch_plan(
 
     if (apply_sram_patch) {
         for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
+            patch_debug_phase("sram_identifier", s_generated_patch_sets[i].name);
             uint32_t identifier_offset = 0U;
             if (find_pattern(fp, total,
                              s_generated_patch_sets[i].identifier,
@@ -627,12 +693,14 @@ int burner_build_gba_patch_plan(
                 uint32_t marker_offset = 0U;
                 uint32_t replacement_offset = 0U;
                 const sram_patch_t *patch = &set->patches[i];
+                patch_debug_phase("sram_marker", patch->name);
                 int marker_result = find_pattern(fp, total, patch->marker, patch->marker_len,
                                                  patch->marker_mask, patch->marker_mask_len,
                                                  &marker_offset, progress_cb,
                                                  BURNER_GBA_PATCH_PROGRESS_SRAM,
                                                  (int)(35U + (i * 30U) / set->patch_count),
                                                  (int)(35U + ((i + 1U) * 30U) / set->patch_count));
+                patch_debug_phase("sram_replacement", patch->name);
                 int replacement_result = find_pattern(fp, total, patch->replace, patch->replace_len,
                                                       NULL, 0U, &replacement_offset, progress_cb,
                                                       BURNER_GBA_PATCH_PROGRESS_SRAM,
@@ -695,7 +763,7 @@ int burner_build_gba_patch_plan(
             set_error(error_msg, error_msg_len, "batteryless payload is unavailable");
             return ESP_ERR_NOT_SUPPORTED;
         }
-        if (fread(plan->payload, 1U, payload_len, payload_fp) != payload_len) {
+        if (patch_debug_read(plan->payload, 1U, payload_len, payload_fp) != payload_len) {
             fclose(payload_fp);
             fclose(fp);
             set_error(error_msg, error_msg_len, "batteryless payload read failed");
@@ -703,6 +771,7 @@ int burner_build_gba_patch_plan(
         }
         fclose(payload_fp);
 
+        patch_debug_phase("batteryless_space", "payload and save reserve");
         for (int64_t candidate = (int64_t)rom_size - 0x40000 - payload_len;
              candidate >= 0; candidate -= 0x40000) {
             uint32_t span = 0x40000U + payload_len;
@@ -734,6 +803,7 @@ int burner_build_gba_patch_plan(
             patch_write_le32(entry->data, branch);
         }
         {
+            patch_debug_phase("batteryless_irq", "IRQ literals");
             size_t irq_count = 0U;
             int scan_result = stream_collect_plan_pattern(
                 fp, total, plan, old_irq, sizeof(old_irq), 4U,
@@ -766,6 +836,9 @@ int burner_build_gba_patch_plan(
             {write_flash3, sizeof(write_flash3), 24U, 0x20000U, false},
         };
         for (size_t hook_index = 0U; hook_index < sizeof(hooks) / sizeof(hooks[0]) && !found_hook; ++hook_index) {
+            char label[32];
+            snprintf(label, sizeof(label), "hook %u", (unsigned)hook_index);
+            patch_debug_phase("batteryless_hook", label);
             uint32_t pos = 0U;
             int scan_result = stream_find_plan_pattern(
                 fp, total, plan, hooks[hook_index].signature, hooks[hook_index].signature_len,
@@ -794,6 +867,7 @@ int burner_build_gba_patch_plan(
             }
         }
         if (!found_hook) {
+            patch_debug_phase("batteryless_hook", "EEPROM_V111");
             uint32_t pos = 0U;
             int scan_result = stream_find_plan_pattern(fp, total, plan, write_eeprom_v111,
                                                        sizeof(write_eeprom_v111), 2U, 0U, &pos);
@@ -828,6 +902,7 @@ int burner_build_gba_patch_plan(
     }
 
     if (apply_waitcnt_patch) {
+        patch_debug_phase("waitcnt", "literal references");
         int result = collect_waitcnt_offsets(fp, total, plan->waitcnt_offsets,
                                              BURNER_GBA_PATCH_MAX_WAITCNT_OPS,
                                              &plan->waitcnt_count);
@@ -851,6 +926,44 @@ int burner_build_gba_patch_plan(
         if (apply_batteryless) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 100, "planned", progress_ctx);
     }
     return ESP_OK;
+}
+
+
+int burner_build_gba_patch_plan(
+    const char *input_path, bool apply_sram_patch, bool apply_waitcnt_patch,
+    bool apply_batteryless, burner_gba_patch_plan_t *plan,
+    burner_gba_patch_report_t *report, char *error_msg, size_t error_msg_len,
+    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
+{
+    int64_t started = esp_timer_get_time();
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    bool busy = s_patch_debug.running;
+    if (!busy) {
+        memset(&s_patch_debug, 0, sizeof(s_patch_debug));
+        s_patch_debug.running = true;
+        s_patch_debug_started = started;
+        s_patch_debug_owner = current;
+    }
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+    if (busy) {
+        set_error(error_msg, error_msg_len, "another patch analysis is running");
+        return ESP_ERR_INVALID_STATE;
+    }
+    patch_debug_phase("open", input_path);
+    int result = build_gba_patch_plan_impl(input_path, apply_sram_patch, apply_waitcnt_patch,
+        apply_batteryless, plan, report, error_msg, error_msg_len, progress_cb, progress_ctx);
+    int64_t elapsed = (esp_timer_get_time() - started) / 1000;
+    portENTER_CRITICAL(&s_patch_debug_lock);
+    bool cancelled = s_patch_debug.cancel_requested;
+    if (cancelled) result = ESP_ERR_INVALID_STATE;
+    s_patch_debug.result = result;
+    s_patch_debug.elapsed_ms = elapsed;
+    s_patch_debug.running = false;
+    s_patch_debug_owner = NULL;
+    portEXIT_CRITICAL(&s_patch_debug_lock);
+    if (cancelled) set_error(error_msg, error_msg_len, "patch analysis cancelled");
+    return result;
 }
 
 void burner_apply_gba_patch_plan(
@@ -935,7 +1048,7 @@ static int copy_file(const char *input_path, const char *tmp_path, uint32_t *siz
     if (buffer == NULL) {
         goto done;
     }
-    while ((got = fread(buffer, 1U, PATCH_SCAN_BYTES, in)) > 0U) {
+    while ((got = patch_debug_read(buffer, 1U, PATCH_SCAN_BYTES, in)) > 0U) {
         if (fwrite(buffer, 1U, got, out) != got) {
             goto done;
         }
@@ -1050,7 +1163,7 @@ bool burner_gba_rom_has_batteryless_patch_target(const char *input_path)
         return false;
     }
     buffer = (unsigned char *)malloc(total);
-    if (buffer != NULL && fread(buffer, 1U, total, fp) == total) {
+    if (buffer != NULL && patch_debug_read(buffer, 1U, total, fp) == total) {
         for (size_t i = 0U; i + marker_len <= total; ++i) {
             if (memcmp(buffer + i, BATTERYLESS_MARKER, marker_len) == 0) {
                 found = true;
@@ -1122,7 +1235,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         set_error(error_msg, error_msg_len, "not enough memory for batteryless patch");
         goto fail;
     }
-    if (fread(payload, 1U, payload_len, payload_fp) != payload_len || fseek(fp, 0L, SEEK_SET) != 0) {
+    if (patch_debug_read(payload, 1U, payload_len, payload_fp) != payload_len || fseek(fp, 0L, SEEK_SET) != 0) {
         set_error(error_msg, error_msg_len, "batteryless patch read failed");
         goto fail;
     }
@@ -1131,7 +1244,7 @@ static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_
         while (read_done < total) {
             size_t chunk = total - read_done;
             if (chunk > PATCH_SCAN_BYTES) chunk = PATCH_SCAN_BYTES;
-            if (fread(rom + read_done, 1U, chunk, fp) != chunk) {
+            if (patch_debug_read(rom + read_done, 1U, chunk, fp) != chunk) {
                 set_error(error_msg, error_msg_len, "batteryless patch read failed");
                 goto fail;
             }

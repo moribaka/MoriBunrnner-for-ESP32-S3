@@ -6,6 +6,20 @@
 #include <stdint.h>
 
 typedef struct {
+    bool running;
+    bool cancel_requested;
+    char phase[32];
+    char detail[64];
+    uint32_t offset, total, passes;
+    uint64_t read_bytes;
+    int64_t read_us, elapsed_ms;
+    int result;
+} burner_gba_patch_debug_t;
+
+void burner_gba_patch_debug_snapshot(burner_gba_patch_debug_t *out);
+bool burner_gba_patch_debug_cancel(void);
+
+typedef struct {
     bool created_copy;
     bool sram_patched;
     bool waitcnt_patched;

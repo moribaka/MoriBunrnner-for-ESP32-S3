@@ -40,6 +40,7 @@
 #include "wifi_manager.h"
 #include "burner/core/ws_server_internal.h"
 #include "tca9555.h"
+#include "serial_debug.h"
 
 #define SD_INIT_MAX_RETRY 5
 #define STA_CONNECT_TIMEOUT_MS 15000
@@ -3589,6 +3590,7 @@ void app_main(void)
 
     ESP_LOGI("main", "boot start, reset_reason=%s (%d)", main_reset_reason_str(reset_reason), (int)reset_reason);
     configure_runtime_log_levels();
+    ESP_ERROR_CHECK(serial_debug_start());
     (void)power_manager_cpu_freq_init();
     mori_apply_timezone();
 
