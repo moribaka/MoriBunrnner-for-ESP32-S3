@@ -32,7 +32,7 @@ def run(args):
         port.open()
         port.reset_input_buffer()
         command = args.command.strip()
-        port.write((command + "\n").encode("utf-8"))
+        port.write((command + "\n").encode(args.encoding))
         deadline = time.monotonic() + args.timeout
         next_status = time.monotonic() + 2
         pending = bytearray()
@@ -44,7 +44,7 @@ def run(args):
             pending.extend(port.read(4096))
             while b"\n" in pending:
                 raw, _, pending = pending.partition(b"\n")
-                line = raw.decode("utf-8", errors="replace").rstrip("\r")
+                line = raw.decode(args.encoding, errors="replace").rstrip("\r")
                 print(line, flush=True)
                 if log:
                     log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}\n")
@@ -75,6 +75,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", required=True)
     parser.add_argument("--timeout", type=float, default=15)
+    parser.add_argument("--encoding", default="gbk", help="Native FatFS filename encoding (default: gbk / CP936)")
     parser.add_argument("--log", help="Append timestamped device output to this file")
     parser.add_argument("command")
     sys.exit(run(parser.parse_args()))

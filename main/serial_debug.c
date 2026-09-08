@@ -187,7 +187,7 @@ static void dispatch(char *line)
         portEXIT_CRITICAL(&s_job_lock);
         if (busy) { free(job); message("error", "debug patch already running"); return; }
         /* Separate worker keeps status/cancel responsive during TF scans. */
-        if (xTaskCreatePinnedToCore(patch_worker, "debug_patch", 48 * 1024, job, 2, NULL, 1) != pdPASS) {
+        if (xTaskCreatePinnedToCore(patch_worker, "debug_patch", 16 * 1024, job, 2, NULL, 1) != pdPASS) {
             free(job);
             portENTER_CRITICAL(&s_job_lock);
             s_job_running = false;

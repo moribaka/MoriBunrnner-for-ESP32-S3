@@ -1,11 +1,15 @@
 # USB serial diagnostics
 
-The firmware accepts UTF-8 lines on the ESP32-S3 native USB Serial/JTAG port
+The firmware accepts lines in the native FatFS filename encoding (currently
+GBK / CP936) on the ESP32-S3 native USB Serial/JTAG port
 (115200 baud). Replies are JSON lines prefixed with `@mori `; normal firmware
 logs can appear between replies. No Wi-Fi connection is required.
 
 Start with `python tools/serial_debug.py --port COM26 help` (substitute the
 device's current COM port). ESP-IDF's Python environment already has pyserial.
+The client converts command paths and replies using `--encoding gbk` by default,
+and saves its log files as UTF-8. Change this option if the firmware's FatFS
+filename encoding changes.
 
 | Command | Behavior |
 | --- | --- |

@@ -46,3 +46,13 @@ gcc -std=c11 -O2 -I tests/patch_host/stubs tests/patch_host/test_patch.c -o .tmp
 - 阅读 ESP-IDF 5.5.1 驱动确认：无驱动时，VFS 非阻塞 read 依赖的 `usb_serial_jtag_get_read_bytes_available()` 始终返回 0。
 - 改为安装 USB Serial/JTAG RX/TX 环形缓冲驱动，使用驱动接口读取命令，VFS 输出也切到同一驱动。
 - 本批提交后重新编译和刷机，继续验证双向通信。
+
+### 第三批：实机连接成功，适配文件名和栈大小
+
+- 第二批提交 `2bde78f` 编译、刷机和双向通信均通过。
+- `status` 返回设备版本、内存；`ls /sdcard` 找到黄金太阳 1/2。
+- 当前最大连续内部内存约 31KB，48KB 调试栈不合适；降低到 16KB，与界面任务一致。
+- FatFS 配置为 CP936，客户端默认以 GBK 编解码串口文件名，日志仍保存 UTF-8。
+- Flash 备份已移至 `backup/serial-debug-20260909/flash-before.bin`。
+  SHA256：`4E5043A517C975690581E63F42DFBDE6CDAAB71F488B0965376C343639909D16`。
+- 提交后重新编译和刷入，开始黄金太阳 ROM 分析。
