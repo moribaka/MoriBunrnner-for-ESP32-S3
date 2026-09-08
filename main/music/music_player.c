@@ -1,4 +1,5 @@
 #include "music_player.h"
+#include "pcm_convert.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -611,23 +612,6 @@ static bool music_player_pcm_ring_write(
     return true;
 }
 
-static void music_player_apply_volume_stereo16(uint8_t *buf, size_t len, uint8_t volume_percent)
-{
-    int16_t *samples = (int16_t *)buf;
-    size_t sample_count = len / sizeof(int16_t);
-
-    if (buf == NULL || len == 0U || volume_percent >= 100U) {
-        return;
-    }
-    if (volume_percent == 0U) {
-        memset(buf, 0, len);
-        return;
-    }
-    for (size_t i = 0; i < sample_count; ++i) {
-        samples[i] = (int16_t)(((int32_t)samples[i] * (int32_t)volume_percent) / 100);
-    }
-}
-
 static void music_player_output_task(void *arg)
 {
     music_player_pcm_ring_t *ring = (music_player_pcm_ring_t *)arg;
@@ -667,7 +651,7 @@ static void music_player_output_task(void *arg)
                 break;
             }
         }
-        music_player_apply_volume_stereo16(i2s_buf, read_len, volume_percent);
+        music_pcm_apply_volume_stereo16(i2s_buf, read_len, volume_percent);
         err = i2s_channel_write(s_i2s_tx, i2s_buf, read_len, &wrote_bytes, MUSIC_PLAYER_WRITE_TIMEOUT_MS);
         if (err != ESP_OK || wrote_bytes != read_len) {
             ESP_LOGW(
@@ -793,108 +777,6 @@ static void music_player_apply_start_position(
     if (esp_audio_simple_dec_open(&dec_cfg, decoder) != ESP_AUDIO_ERR_OK) {
         *decoder = NULL;
     }
-}
-
-static int16_t music_player_read_sample_as_s16(const uint8_t *src, uint8_t bits_per_sample)
-{
-    switch (bits_per_sample) {
-        case 8:
-            return (int16_t)(((int16_t)((int32_t)(*src) - 128)) << 8);
-        case 16:
-            return (int16_t)((int16_t)src[0] | ((int16_t)src[1] << 8));
-        case 24: {
-            int32_t value = ((int32_t)src[0]) |
-                            ((int32_t)src[1] << 8) |
-                            ((int32_t)src[2] << 16);
-            if ((value & 0x00800000L) != 0) {
-                value |= ~0x00FFFFFFL;
-            }
-            return (int16_t)(value >> 8);
-        }
-        case 32: {
-            int32_t value = ((int32_t)src[0]) |
-                            ((int32_t)src[1] << 8) |
-                            ((int32_t)src[2] << 16) |
-                            ((int32_t)src[3] << 24);
-            return (int16_t)(value >> 16);
-        }
-        default:
-            return 0;
-    }
-}
-
-static size_t music_player_convert_frame_to_stereo16(
-    const uint8_t *src,
-    size_t src_size,
-    uint8_t bits_per_sample,
-    uint8_t channels,
-    uint8_t volume_percent,
-    uint8_t *dst,
-    size_t dst_size)
-{
-    size_t bytes_per_sample = (size_t)((bits_per_sample + 7U) / 8U);
-    size_t frame_bytes;
-    size_t frame_count;
-    int16_t *out = (int16_t *)dst;
-
-    if (src == NULL || dst == NULL || channels == 0U || bytes_per_sample == 0U) {
-        return 0U;
-    }
-    frame_bytes = bytes_per_sample * channels;
-    if (frame_bytes == 0U) {
-        return 0U;
-    }
-    frame_count = src_size / frame_bytes;
-    if (frame_count * sizeof(int16_t) * 2U > dst_size) {
-        frame_count = dst_size / (sizeof(int16_t) * 2U);
-    }
-
-    if (bits_per_sample == 16U && channels == 1U) {
-        for (size_t i = 0; i < frame_count; ++i) {
-            const uint8_t *frame = src + (i * 2U);
-            int16_t sample = (int16_t)((int16_t)frame[0] | ((int16_t)frame[1] << 8));
-
-            out[i * 2U] = sample;
-            out[i * 2U + 1U] = sample;
-        }
-        return frame_count * sizeof(int16_t) * 2U;
-    }
-
-    if (bits_per_sample == 16U && channels == 2U) {
-        for (size_t i = 0; i < frame_count; ++i) {
-            const uint8_t *frame = src + (i * 4U);
-            int32_t left = (int16_t)((int16_t)frame[0] | ((int16_t)frame[1] << 8));
-            int32_t right = (int16_t)((int16_t)frame[2] | ((int16_t)frame[3] << 8));
-            int16_t sample = (int16_t)((left + right) / 2);
-
-            out[i * 2U] = sample;
-            out[i * 2U + 1U] = sample;
-        }
-        return frame_count * sizeof(int16_t) * 2U;
-    }
-
-    for (size_t i = 0; i < frame_count; ++i) {
-        const uint8_t *frame = src + (i * frame_bytes);
-        int32_t sample = 0;
-
-        if (channels == 1U) {
-            sample = music_player_read_sample_as_s16(frame, bits_per_sample);
-        } else {
-            int32_t left = music_player_read_sample_as_s16(frame, bits_per_sample);
-            int32_t right = music_player_read_sample_as_s16(frame + bytes_per_sample, bits_per_sample);
-            sample = (left + right) / 2;
-        }
-        sample = (sample * (int32_t)volume_percent) / 100;
-        if (sample > INT16_MAX) {
-            sample = INT16_MAX;
-        } else if (sample < INT16_MIN) {
-            sample = INT16_MIN;
-        }
-        out[i * 2U] = (int16_t)sample;
-        out[i * 2U + 1U] = (int16_t)sample;
-    }
-
-    return frame_count * sizeof(int16_t) * 2U;
 }
 
 static void music_player_shift_input_buffer(uint8_t *buf, size_t *buf_len, uint32_t consumed)
@@ -1538,12 +1420,11 @@ static esp_err_t music_player_write_pcm_to_ring(
         size_t consumed_frames;
         size_t consumed_bytes;
 
-        converted_size = music_player_convert_frame_to_stereo16(
+        converted_size = music_pcm_convert_frame_to_stereo16(
             src + src_offset,
             src_size - src_offset,
             bits_per_sample,
             channels,
-            100U,
             convert_buf,
             convert_buf_size);
         if (converted_size == 0U) {

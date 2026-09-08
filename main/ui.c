@@ -192,7 +192,6 @@
 #define UI_MUSIC_DIR "music"
 #define UI_MUSIC_HISTORY_PATH mount_point "/.setting/music_history.ini"
 #define UI_MUSIC_HISTORY_SAVE_MS 2000U
-#define UI_MUSIC_HISTORY_SAVE_DELTA_BYTES 65536U
 #define UI_READER_HISTORY_PATH mount_point "/.setting/reader_history.ini"
 #define UI_MUSIC_DRAWER_W 160
 #define UI_MUSIC_DRAWER_X_CLOSED (-UI_MUSIC_DRAWER_W)

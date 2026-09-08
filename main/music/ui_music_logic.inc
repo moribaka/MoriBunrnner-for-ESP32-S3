@@ -13,7 +13,6 @@ static void ui_music_save_history_snapshot(const music_player_snapshot_t *snap)
 {
     FILE *fp = NULL;
     uint32_t now_ms;
-    uint32_t delta;
     bool same_path;
 
     if (snap == NULL || snap->source != MUSIC_PLAYER_SOURCE_TF || snap->path[0] == '\0') {
@@ -27,12 +26,8 @@ static void ui_music_save_history_snapshot(const music_player_snapshot_t *snap)
 
     now_ms = esp_log_timestamp();
     same_path = strcmp(s_music_history_saved_path, snap->path) == 0;
-    delta = (snap->position > s_music_history_saved_position) ?
-                (snap->position - s_music_history_saved_position) :
-                (s_music_history_saved_position - snap->position);
     if (same_path &&
         snap->state == s_music_history_saved_state &&
-        delta < UI_MUSIC_HISTORY_SAVE_DELTA_BYTES &&
         (now_ms - s_music_history_last_save_ms) < UI_MUSIC_HISTORY_SAVE_MS) {
         return;
     }
@@ -42,6 +37,7 @@ static void ui_music_save_history_snapshot(const music_player_snapshot_t *snap)
         return;
     }
 
+    if (card == NULL || usb_msc_tf_in_use_by_host()) return;
     fp = fopen(UI_MUSIC_HISTORY_PATH, "wb");
     if (fp == NULL) {
         return;
