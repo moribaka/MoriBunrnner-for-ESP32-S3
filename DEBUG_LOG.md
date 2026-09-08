@@ -190,3 +190,17 @@ ESP-IDF 编译通过，烧录写入哈希校验通过；主机回归测试全部
 - 串口及菜单固件 `3cfbfe9` 已编译、刷入并通过哈希校验。
 - 增加 `tests/patch_host/verify_export.c`，用于将设备保存的 sbw ROM 与主机生成的同一补丁计划逐字节比较，覆盖写入与扩容填充。
 - 正在通过设备现有 TF 下载接口保存原 ROM 校验信息，并执行串口 patch-save 实机导出。
+
+### 保存 ROM 功能验证完成
+
+- 已刷入固件 `3cfbfe9`（设备版本 `v2.32-43-g3cfbfe9`）；菜单在 GBA 补丁/烧录页底部显示“打补丁并保存ROM”。
+- 通过串口调用与菜单相同的导出 API，执行黄金太阳 1 的 SRAM + 免电池 + WAITCNT：**98255ms 成功**。
+- TF 卡生成 `/sdcard/黄金太阳1 开启的封印.patched.gba`，大小 **9699328 字节（9.25MiB）**。
+- 经设备 TF 下载接口读回，使用 `verify_export.c` 将全部 9699328 字节与主机生成的补丁计划比较：完全一致，4 个 SRAM、2 个 IRQ、15 个 WAITCNT 操作，payload=0x008FF748。
+- 原 ROM 导出前后 SHA256 一致：`80fad181aedd2085ff7965312b40a1ffd3b2b5f08251ad015c4a99f86c132423`。
+- 新 ROM SHA256：`b2471c930bfae1a1228d85b5cecefe6e98c8c9000d5d3272cc6ef2be38875bf6`。
+- 实机重名/取消测试：已有 `.patched.gba` 时再次导出，在写入 98304 字节后取消，返回 cancelled；`.patched-1.gba` 下载返回 404，已有 `.patched.gba` 的内容与哈希保持不变。
+- 主机回归测试、ESP-IDF 构建和主程序刷入校验通过。菜单代码已构建部署；本轮设备自动化验证通过串口完成，未操作实体按键。
+- 固件/ELF、构建/刷机日志保存到 `backup/serial-debug-20260909/`，使用 `3cfbfe9` 后缀；固件 SHA256 为 `B2F8BD4D7C4B89908A21585307C2EC1FAC88392C60D22187128CD3E83C565295`。
+- 实机导出记录：`golden1-patch-save.log`；取消记录：`export-cancel.log`。读回 ROM 和源 ROM 校验副本也保存在该目录。
+- 本轮没有擦写卡带，源 ROM 和已有输出文件均保留；源码已分批提交本地 Git。
