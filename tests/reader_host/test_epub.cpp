@@ -31,6 +31,8 @@ int main(int argc, char **argv)
     }
     uint8_t *text = nullptr;
     size_t length = 0;
+    assert(hash == 0xF1333AC3U && bytes == 218348);
+    assert(ui_epub_book_index_build_count(book) == 1);
     assert(!ui_epub_book_load_section_text(book, 32, &text, &length));
     ui_epub_book_close(book);
     assert(!ui_epub_book_open("missing-epub-test.epub", &book));

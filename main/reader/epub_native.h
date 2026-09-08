@@ -15,6 +15,7 @@ void ui_epub_book_close(ui_epub_book_t *book);
 
 const char *ui_epub_book_title(const ui_epub_book_t *book);
 uint32_t ui_epub_book_section_count(const ui_epub_book_t *book);
+uint32_t ui_epub_book_index_build_count(const ui_epub_book_t *book);
 
 bool ui_epub_book_load_section_text(
     ui_epub_book_t *book,

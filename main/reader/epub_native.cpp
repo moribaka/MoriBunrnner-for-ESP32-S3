@@ -3,6 +3,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <sys/stat.h>
 
 #include <algorithm>
 #include <map>
@@ -212,48 +214,93 @@ static std::string zip_join_path(const std::string &base, const std::string &chi
 class ZipArchiveReader {
 public:
     explicit ZipArchiveReader(std::string path) : path_(std::move(path)) {}
+    ~ZipArchiveReader() { reset_index(); }
+    ZipArchiveReader(const ZipArchiveReader &) = delete;
+    ZipArchiveReader &operator=(const ZipArchiveReader &) = delete;
+
+    uint32_t index_build_count() const { return index_build_count_; }
 
     bool read_file(const std::string &entry_name, std::string *out) const
     {
-        mz_zip_archive archive = {};
-        mz_uint32 file_index = 0U;
-        mz_zip_archive_file_stat stat = {};
-        void *data = nullptr;
-        bool ok = false;
-
-        if (out == nullptr) {
-            return false;
-        }
+        if (out == nullptr) return false;
         out->clear();
+        FILE *file = fopen(path_.c_str(), "rb");
+        if (file == nullptr) return false;
+#ifdef _WIN32
+        struct _stat64 st = {};
+        bool stat_ok = _fstat64(_fileno(file), &st) == 0;
+#else
+        struct stat st = {};
+        bool stat_ok = fstat(fileno(file), &st) == 0;
+#endif
+        if (!stat_ok || st.st_size < 0) { fclose(file); return false; }
+        mz_uint64 size = static_cast<mz_uint64>(st.st_size);
+        if (!indexed_ || size != archive_size_ || st.st_mtime != archive_mtime_) {
+            reset_index();
+            archive_.m_pRead = read_at;
+            archive_.m_pIO_opaque = file;
+            indexed_ = mz_zip_reader_init(&archive_, size, 0U) != 0;
+            if (indexed_) {
+                archive_size_ = size;
+                archive_mtime_ = st.st_mtime;
+                ++index_build_count_;
+            }
+        } else {
+            archive_.m_pIO_opaque = file;
+        }
 
-        if (!mz_zip_reader_init_file(&archive, path_.c_str(), 0U)) {
-            ESP_LOGW(TAG, "open zip failed: %s", path_.c_str());
-            return false;
+        mz_uint32 file_index = 0;
+        mz_zip_archive_file_stat stat = {};
+        bool ok = indexed_ &&
+            mz_zip_reader_locate_file_v2(&archive_, entry_name.c_str(), nullptr, 0U, &file_index) &&
+            mz_zip_reader_file_stat(&archive_, file_index, &stat) &&
+            stat.m_uncomp_size <= SIZE_MAX;
+        if (ok) {
+            // Decompress directly into the string instead of allocating and
+            // copying another full uncompressed chapter.
+            out->resize(static_cast<size_t>(stat.m_uncomp_size));
+            char empty = 0;
+            void *destination = out->empty() ? static_cast<void *>(&empty) : &(*out)[0];
+            ok = mz_zip_reader_extract_to_mem(&archive_, file_index, destination, out->size(), 0U) != 0;
         }
-        if (!mz_zip_reader_locate_file_v2(&archive, entry_name.c_str(), nullptr, 0U, &file_index)) {
-            mz_zip_reader_end(&archive);
-            return false;
+        archive_.m_pIO_opaque = nullptr;
+        fclose(file); // Keep only the index; do not hold TF handles between reads.
+        if (!ok) {
+            out->clear();
+            reset_index();
         }
-        if (!mz_zip_reader_file_stat(&archive, file_index, &stat)) {
-            mz_zip_reader_end(&archive);
-            return false;
-        }
-
-        data = mz_zip_reader_extract_to_heap(&archive, file_index, nullptr, 0U);
-        if (data == nullptr) {
-            mz_zip_reader_end(&archive);
-            return false;
-        }
-
-        out->assign(static_cast<const char *>(data), static_cast<size_t>(stat.m_uncomp_size));
-        mz_free(data);
-        ok = true;
-        mz_zip_reader_end(&archive);
         return ok;
     }
 
 private:
+    static size_t read_at(void *opaque, mz_uint64 offset, void *buffer, size_t length)
+    {
+        FILE *file = static_cast<FILE *>(opaque);
+        if (file == nullptr) return 0;
+#ifdef _WIN32
+        if (_ftelli64(file) != static_cast<__int64>(offset) &&
+            _fseeki64(file, static_cast<__int64>(offset), SEEK_SET) != 0) return 0;
+#else
+        off_t target = static_cast<off_t>(offset);
+        if (target < 0 || static_cast<mz_uint64>(target) != offset) return 0;
+        if (ftello(file) != target && fseeko(file, target, SEEK_SET) != 0) return 0;
+#endif
+        return fread(buffer, 1, length, file);
+    }
+
+    void reset_index() const
+    {
+        if (archive_.m_pState != nullptr) mz_zip_reader_end(&archive_);
+        archive_ = {};
+        indexed_ = false;
+    }
+
     std::string path_;
+    mutable mz_zip_archive archive_ = {};
+    mutable bool indexed_ = false;
+    mutable mz_uint64 archive_size_ = 0;
+    mutable time_t archive_mtime_ = 0;
+    mutable uint32_t index_build_count_ = 0;
 };
 
 static const tinyxml2::XMLElement *first_child_element_any_namespace(
@@ -515,6 +562,8 @@ public:
         return title_;
     }
 
+    uint32_t index_build_count() const { return zip_.index_build_count(); }
+
     uint32_t section_count() const
     {
         return static_cast<uint32_t>(spine_items_.size());
@@ -661,6 +710,11 @@ extern "C" uint32_t ui_epub_book_section_count(const ui_epub_book_t *book)
         return 0U;
     }
     return book->impl->section_count();
+}
+
+extern "C" uint32_t ui_epub_book_index_build_count(const ui_epub_book_t *book)
+{
+    return book != nullptr && book->impl != nullptr ? book->impl->index_build_count() : 0;
 }
 
 extern "C" bool ui_epub_book_load_section_text(
