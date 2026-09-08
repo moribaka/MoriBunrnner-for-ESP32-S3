@@ -21,6 +21,7 @@
 #include "burner/core/ws_server_internal.h"
 #include "burner/core/burner_gba_patch.h"
 #include "usb_msc_tf.h"
+#include "ui.h"
 
 static TaskHandle_t s_console;
 static portMUX_TYPE s_job_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -154,6 +155,40 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "ui") == 0) {
+        ui_runtime_stats_t stats;
+        ui_get_runtime_stats(&stats);
+        cJSON *json = event("ui");
+        if (json != NULL) {
+            cJSON_AddNumberToObject(json, "process_calls", stats.process_calls);
+            cJSON_AddNumberToObject(json, "render_calls", stats.render_calls);
+            cJSON_AddNumberToObject(json, "music_polls", stats.music_polls);
+            cJSON_AddNumberToObject(json, "model_bytes", stats.model_bytes);
+            cJSON_AddNumberToObject(json, "directory_scans", stats.directory_scans);
+            cJSON_AddNumberToObject(json, "cache_hits", stats.directory_cache_hits);
+            cJSON_AddNumberToObject(json, "page", stats.page);
+            cJSON_AddNumberToObject(json, "selected", stats.selected);
+            cJSON_AddNumberToObject(json, "count", stats.item_count);
+            cJSON_AddStringToObject(json, "selection", stats.selection);
+            cJSON_AddStringToObject(json, "status", stats.status);
+        }
+        reply(json);
+        return;
+    }
+    if (strncmp(line, "key ", 4) == 0) {
+        const char *names[] = {"left", "right", "up", "down", "a", "panel", "b", "menu", "vol+", "vol-"};
+        for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
+            if (strcmp(line + 4, names[i]) == 0) {
+                ui_post_button((ui_button_t)i, true);
+                vTaskDelay(pdMS_TO_TICKS(40));
+                ui_post_button((ui_button_t)i, false);
+                message("key", names[i]);
+                return;
+            }
+        }
+        message("error", "unknown key");
+        return;
+    }
     if (strcmp(line, "status") == 0) { status(); return; }
     if (strcmp(line, "cancel") == 0) {
         message("cancel", burner_gba_patch_debug_cancel() ? "requested" : "no active patch");

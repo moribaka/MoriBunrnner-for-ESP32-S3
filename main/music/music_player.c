@@ -170,7 +170,7 @@ static void music_player_set_snapshot(
     music_player_snapshot_lock();
     s_snapshot.state = state;
     s_snapshot.source = source;
-    if (path != NULL) {
+    if (path != NULL && path != s_snapshot.path && strcmp(s_snapshot.path, path) != 0) {
         snprintf(s_snapshot.path, sizeof(s_snapshot.path), "%s", path);
         music_player_copy_name_from_path(s_snapshot.name, sizeof(s_snapshot.name), path);
     }
@@ -753,8 +753,10 @@ static void music_player_update_progress(
     music_player_snapshot_lock();
     s_snapshot.state = MUSIC_PLAYER_STATE_PLAYING;
     s_snapshot.source = source;
-    snprintf(s_snapshot.path, sizeof(s_snapshot.path), "%s", path);
-    music_player_copy_name_from_path(s_snapshot.name, sizeof(s_snapshot.name), path);
+    if (path != NULL && path != s_snapshot.path && strcmp(s_snapshot.path, path) != 0) {
+        snprintf(s_snapshot.path, sizeof(s_snapshot.path), "%s", path);
+        music_player_copy_name_from_path(s_snapshot.name, sizeof(s_snapshot.name), path);
+    }
     s_snapshot.file_size = file_size;
     s_snapshot.position = position;
     s_snapshot.elapsed_ms = elapsed_ms;

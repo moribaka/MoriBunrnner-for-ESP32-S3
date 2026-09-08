@@ -67,4 +67,13 @@ void ui_show_burn_task_status_with_patches(
 void ui_set_gba_patch_progress(int kind, int progress, const char *message);
 void ui_set_status_text(const char *text);
 
+typedef struct {
+    uint32_t process_calls, render_calls, music_polls;
+    uint32_t directory_scans, directory_cache_hits;
+    uint32_t model_bytes, page, selected, item_count;
+    char selection[128];
+    char status[96];
+} ui_runtime_stats_t;
+void ui_get_runtime_stats(ui_runtime_stats_t *out);
+
 #endif /* UI_H */

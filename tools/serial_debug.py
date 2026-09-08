@@ -39,6 +39,7 @@ def run(args):
         terminal = {
             "status": "status", "ls": "ls_done", "patch": "patch_done", "patch-save": "patch_done",
             "cancel": "cancel", "help": "help", "reboot": "reboot",
+            "ui": "ui", "key": "key",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:
             pending.extend(port.read(4096))

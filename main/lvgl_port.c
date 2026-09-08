@@ -78,14 +78,20 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 static void lvgl_task(void *arg)
 {
     TickType_t last_wake = xTaskGetTickCount();
+    uint64_t last_tick_ms = (uint64_t)esp_timer_get_time() / 1000U;
 
     (void)arg;
 
     while (1) {
         (void)lvgl_port_is_idle_dimmed();
-        lv_tick_inc(LVGL_TASK_FRAME_MS);
+        uint64_t now_ms = (uint64_t)esp_timer_get_time() / 1000U;
+        lv_tick_inc((uint32_t)(now_ms - last_tick_ms));
+        last_tick_ms = now_ms;
         ui_process();
         (void)lv_timer_handler();
+        /* A slow filesystem operation must not cause a burst of catch-up frames. */
+        TickType_t now_tick = xTaskGetTickCount();
+        if ((TickType_t)(now_tick - last_wake) > pdMS_TO_TICKS(LVGL_TASK_FRAME_MS)) last_wake = now_tick;
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LVGL_TASK_FRAME_MS));
     }
 }

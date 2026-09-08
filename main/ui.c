@@ -187,6 +187,7 @@
 #define UI_FPS_REFRESH_MS 1000U
 #define UI_BATTERY_REFRESH_MS 5000U
 #define UI_LIVE_REFRESH_MS 250U
+#define UI_MUSIC_REFRESH_MS 100U
 #define UI_FILE_PSRAM_WINDOW_MB 4U
 #define UI_MUSIC_DIR "music"
 #define UI_MUSIC_HISTORY_PATH mount_point "/.setting/music_history.ini"
@@ -716,6 +717,7 @@ static void ui_calc_burn_snapshot_fields(
 static void ui_present_active_burn_task_locked(ui_model_t *model, const burner_status_t *status, ui_page_t return_page);
 
 static EXT_RAM_BSS_ATTR ui_model_t s_model;
+static ui_runtime_stats_t s_ui_runtime_stats;
 
 static void ui_reset_model_defaults(ui_model_t *model)
 {
@@ -6508,8 +6510,9 @@ static void ui_issue_pending_task_cancel(void)
     xSemaphoreGive(s_model_lock);
 }
 
-static void ui_refresh_sources(void)
+static bool ui_refresh_sources(void)
 {
+    static uint32_t last_music_refresh_ms;
     uint32_t now_ms = esp_log_timestamp();
     music_player_snapshot_t snapshot = {0};
     bool music_player_changed = false;
@@ -6520,6 +6523,8 @@ static void ui_refresh_sources(void)
     ui_update_fps_if_needed(now_ms);
     ui_update_power_if_needed(now_ms);
     ui_update_burn_snapshot_if_needed(now_ms);
+    if (last_music_refresh_ms != 0 && now_ms - last_music_refresh_ms < UI_MUSIC_REFRESH_MS) return false;
+    last_music_refresh_ms = now_ms;
     music_player_get_snapshot(&snapshot);
     ui_music_save_history_snapshot(&snapshot);
     if (!s_music_snapshot_cached) {
@@ -6544,6 +6549,7 @@ static void ui_refresh_sources(void)
         }
         xSemaphoreGive(s_model_lock);
     }
+    return true;
 }
 
 static void ui_fill_action_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len, const char **symbol, uint32_t *accent)
@@ -8536,29 +8542,29 @@ void ui_process(void)
 
     ui_process_button_queue();
     ui_process_button_repeats();
-    ui_refresh_sources();
+    bool music_polled = ui_refresh_sources();
 
     if (!ui_take_model_lock()) {
         return;
     }
     ui_music_process_pending_toggle_locked(&s_model);
     ui_update_burn_rom_prompt_locked(&s_model);
-    snapshot = s_model;
+    ++s_ui_runtime_stats.process_calls;
+    if (music_polled) ++s_ui_runtime_stats.music_polls;
     should_render = s_model.dirty || s_model.motion_dirty || s_model.content_dirty || s_model.chrome_dirty ||
                     s_model.music_player_dirty || s_model.music_progress_dirty ||
                     ui_anim_active_for_page(&s_model) || s_anim.page != s_model.page ||
                     s_anim.page_changed;
-    snapshot.motion_dirty = s_model.motion_dirty;
-    snapshot.content_dirty = s_model.content_dirty;
-    snapshot.chrome_dirty = s_model.chrome_dirty;
-    snapshot.music_player_dirty = s_model.music_player_dirty;
-    snapshot.music_progress_dirty = s_model.music_progress_dirty;
-    s_model.dirty = false;
-    s_model.motion_dirty = false;
-    s_model.content_dirty = false;
-    s_model.chrome_dirty = false;
-    s_model.music_player_dirty = false;
-    s_model.music_progress_dirty = false;
+    if (should_render) {
+        snapshot = s_model;
+        ++s_ui_runtime_stats.render_calls;
+        s_model.dirty = false;
+        s_model.motion_dirty = false;
+        s_model.content_dirty = false;
+        s_model.chrome_dirty = false;
+        s_model.music_player_dirty = false;
+        s_model.music_progress_dirty = false;
+    }
     xSemaphoreGive(s_model_lock);
 
     if (should_render) {
@@ -8773,7 +8779,37 @@ void ui_set_status_text(const char *text)
     if (!ui_take_model_lock()) {
         return;
     }
-    snprintf(s_model.status_text, sizeof(s_model.status_text), "%s", safe_text);
-    ui_mark_chrome_dirty(&s_model);
+    if (strcmp(s_model.status_text, safe_text) != 0) {
+        snprintf(s_model.status_text, sizeof(s_model.status_text), "%s", safe_text);
+        ui_mark_chrome_dirty(&s_model);
+    }
+    xSemaphoreGive(s_model_lock);
+}
+
+void ui_get_runtime_stats(ui_runtime_stats_t *out)
+{
+    if (out == NULL) return;
+    memset(out, 0, sizeof(*out));
+    if (!ui_take_model_lock()) return;
+    *out = s_ui_runtime_stats;
+    out->model_bytes = sizeof(s_model);
+    out->page = s_model.page;
+    out->selected = (s_model.page == UI_PAGE_FILES || s_model.page == UI_PAGE_MUSIC_FILES)
+        ? s_model.file_selected : s_model.selected;
+    out->item_count = ui_page_item_count(&s_model);
+    snprintf(out->status, sizeof(out->status), "%s", s_model.status_text);
+    if (s_model.page == UI_PAGE_ROOT) {
+        const ui_menu_item_t *item = ui_home_item_at(s_model.selected);
+        if (item != NULL) snprintf(out->selection, sizeof(out->selection), "%s", ui_tr(item->title));
+    } else if (s_model.page == UI_PAGE_FILES || s_model.page == UI_PAGE_MUSIC_FILES) {
+        ui_file_entry_t entry;
+        if (ui_current_file_locked(&s_model, &entry))
+            snprintf(out->selection, sizeof(out->selection), "%s", entry.name);
+    } else {
+        char hint[96] = {0};
+        if (s_model.page == UI_PAGE_TF) ui_fill_tf_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
+        else if (s_model.page == UI_PAGE_BURN_ROM) ui_fill_burn_rom_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
+        else if (s_model.page == UI_PAGE_SYSTEM) ui_fill_system_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
+    }
     xSemaphoreGive(s_model_lock);
 }
