@@ -1331,7 +1331,7 @@ esp_err_t burner_tf_write_exact(int fd, const uint8_t *src, size_t bytes)
         }
     }
     write_elapsed_us = (uint64_t)esp_timer_get_time();
-    if (offset == bytes && write_elapsed_us > write_start_us) {
+    if (offset == bytes && write_elapsed_us > 0u) {
         burner_status_record_dump_write((uint32_t)bytes, write_elapsed_us - write_start_us);
     }
 

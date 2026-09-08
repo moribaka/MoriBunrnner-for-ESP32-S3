@@ -355,6 +355,9 @@ static int find_pattern(
         return -1;
     }
 
+    bool masked = mask != NULL && mask_len == pattern_len;
+    size_t anchor = 0;
+    while (masked && anchor < pattern_len && mask[anchor] != 0) ++anchor;
     while (base < total) {
         size_t want = total - base;
         size_t got;
@@ -373,15 +376,19 @@ static int find_pattern(
             progress_cb(progress_kind, progress, "scanning", NULL);
         }
         for (i = 0U; i + pattern_len <= carry + got; ++i) {
-            bool matched = true;
-            size_t pattern_index;
-            for (pattern_index = 0U; pattern_index < pattern_len; ++pattern_index) {
-                if (mask != NULL && mask_len == pattern_len && mask[pattern_index] != 0U) {
-                    continue;
-                }
-                if (buffer[i + pattern_index] != pattern[pattern_index]) {
-                    matched = false;
-                    break;
+            if (anchor < pattern_len) {
+                const unsigned char *hit = memchr(buffer + i + anchor, pattern[anchor],
+                                                  carry + got - pattern_len - i + 1U);
+                if (hit == NULL) break;
+                i = (size_t)(hit - buffer) - anchor;
+            }
+            bool matched = !masked ? memcmp(buffer + i, pattern, pattern_len) == 0 : true;
+            if (masked) {
+                for (size_t pattern_index = 0; pattern_index < pattern_len; ++pattern_index) {
+                    if (mask[pattern_index] == 0 && buffer[i + pattern_index] != pattern[pattern_index]) {
+                        matched = false;
+                        break;
+                    }
                 }
             }
             if (matched) {
@@ -416,9 +423,13 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
     size_t max_len = 0, carry = 0;
     uint32_t offset = 0;
     bool any_found = false;
+    unsigned char prefixes[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])];
+    size_t prefix_count = 0;
     if (fp == NULL || found_out == NULL) return -1;
     for (size_t i = 0; i < set_count; ++i) {
         found_out[i] = false;
+        unsigned char first = s_generated_patch_sets[i].identifier[0];
+        if (memchr(prefixes, first, prefix_count) == NULL) prefixes[prefix_count++] = first;
         if (s_generated_patch_sets[i].identifier_len > max_len)
             max_len = s_generated_patch_sets[i].identifier_len;
     }
@@ -432,20 +443,22 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
         size_t got = patch_debug_read(buffer + carry, 1, want, fp);
         if (got != want) { free(buffer); return -1; }
         size_t span = carry + got;
-        for (size_t index = 0; index < set_count; ++index) {
-            const unsigned char *pattern = s_generated_patch_sets[index].identifier;
-            size_t length = s_generated_patch_sets[index].identifier_len;
-            if (found_out[index] || length > span) continue;
+        for (size_t group = 0; group < prefix_count; ++group) {
             size_t start = 0;
-            while (start + length <= span) {
-                const unsigned char *hit = memchr(buffer + start, pattern[0], span - length - start + 1);
+            while (start < span) {
+                const unsigned char *hit = memchr(buffer + start, prefixes[group], span - start);
                 if (hit == NULL) break;
-                if (memcmp(hit, pattern, length) == 0) {
-                    found_out[index] = true;
-                    any_found = true;
-                    break;
+                size_t position = (size_t)(hit - buffer);
+                for (size_t index = 0; index < set_count; ++index) {
+                    const sram_patch_set_t *set = &s_generated_patch_sets[index];
+                    if (found_out[index] || set->identifier[0] != prefixes[group] ||
+                        set->identifier_len > span - position) continue;
+                    if (memcmp(hit, set->identifier, set->identifier_len) == 0) {
+                        found_out[index] = true;
+                        any_found = true;
+                    }
                 }
-                start = (size_t)(hit - buffer) + 1;
+                start = position + 1;
             }
         }
         offset += (uint32_t)got;
@@ -462,9 +475,9 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
 
 static int read_at(FILE *fp, uint32_t offset, void *data, size_t len)
 {
-    if (fp == NULL || data == NULL || fseek(fp, (long)offset, SEEK_SET) != 0) {
-        return -1;
-    }
+    if (fp == NULL || data == NULL) return -1;
+    long position = ftell(fp);
+    if (position < 0 || ((uint32_t)position != offset && fseek(fp, (long)offset, SEEK_SET) != 0)) return -1;
     return patch_debug_read(data, 1U, len, fp) == len ? 0 : -1;
 }
 
@@ -1112,11 +1125,11 @@ int burner_save_gba_patch_file(
         if (count > PATCH_SCAN_BYTES) count = PATCH_SCAN_BYTES;
         size_t available = offset < plan->source_size ? plan->source_size - offset : 0;
         if (available > count) available = count;
-        memset(buffer, 0xFF, count);
         if (available && patch_debug_read(buffer, 1, available, in) != available) {
             set_error(error_msg, error_msg_len, "read source ROM failed");
             goto done;
         }
+        if (available < count) memset(buffer + available, 0xFF, count - available);
         burner_apply_gba_patch_plan(buffer, count, offset, plan);
         if (fwrite(buffer, 1, count, out) != count) {
             set_error(error_msg, error_msg_len, "write patched ROM failed (check TF free space)");

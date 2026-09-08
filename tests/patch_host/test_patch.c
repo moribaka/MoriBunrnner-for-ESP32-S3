@@ -36,8 +36,43 @@ static bool export_progress(uint32_t done, uint32_t total, void *ctx)
     return done < export_cancel_after;
 }
 
+static void test_search_against_reference(void)
+{
+    uint32_t random = 0x4D4F5249;
+    for (unsigned trial = 0; trial < 48; ++trial) {
+        unsigned char bytes[257], pattern[5], mask[5];
+        for (size_t i = 0; i < sizeof(bytes); ++i) {
+            random = random * 1664525U + 1013904223U;
+            bytes[i] = (unsigned char)(random >> 24);
+        }
+        for (size_t i = 0; i < sizeof(pattern); ++i) {
+            pattern[i] = bytes[240 + i];
+            mask[i] = trial % 4 == 2 ? 1 : trial % 4 == 1 ? (i != 3) : (i == 4);
+        }
+        bool masked = trial % 4 != 0;
+        if (trial % 3 != 0) memcpy(bytes + (trial * 37) % 253, pattern, sizeof(pattern));
+        else memset(pattern, 0xFE, sizeof(pattern));
+        uint32_t expected = UINT32_MAX;
+        for (size_t i = 0; i + sizeof(pattern) <= sizeof(bytes); ++i) {
+            bool matches = true;
+            for (size_t j = 0; j < sizeof(pattern); ++j)
+                if ((!masked || mask[j] == 0) && bytes[i + j] != pattern[j]) matches = false;
+            if (matches) { expected = (uint32_t)i; break; }
+        }
+        FILE *fp = rom_file(sizeof(bytes));
+        put(fp, 0, bytes, sizeof(bytes));
+        uint32_t actual = UINT32_MAX;
+        int result = find_pattern(fp, sizeof(bytes), pattern, sizeof(pattern), mask,
+            masked ? sizeof(mask) : 0, &actual, NULL, BURNER_GBA_PATCH_PROGRESS_SRAM, 0, 100);
+        assert(result == (expected == UINT32_MAX ? 1 : 0));
+        assert(actual == expected);
+        fclose(fp);
+    }
+}
+
 int main(void)
 {
+    test_search_against_reference();
     /* Pattern overlap and wildcard masks must work across read boundaries. */
     FILE *fp = rom_file(3 * PATCH_SCAN_BYTES);
     const unsigned char pattern[] = {0x91, 0x82, 0x73, 0x64, 0x55};
