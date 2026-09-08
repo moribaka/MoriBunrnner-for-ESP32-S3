@@ -106,7 +106,7 @@
 #define BURNER_GBA_TITLE_LEN 12u
 #define BURNER_MBC5_TITLE_OFFSET 0x134u
 #define BURNER_MBC5_TITLE_LEN 16u
-#define TF_IO_CHUNK_SIZE 2048
+#include "burner_io_config.h"
 #define BURN_TF_STDIO_BUFFER_BYTES (128U * 1024U)
 #define WEB_HTTPD_STACK_SIZE 16384
 #define WEB_HTTPD_CORE_ID 0
@@ -157,6 +157,8 @@ typedef struct {
     char esc_name[TF_PATH_LEN_MAX * 2 + 8];
     char esc_child[TF_PATH_LEN_MAX * 2 + 8];
     char line[TF_PATH_LEN_MAX * 4 + 128];
+    char batch[8192];
+    size_t batch_used;
 } burner_tf_list_buf_t;
 
 /* SPI burn path: ESP32-S3 SPI2 master -> AG32 CPLD core (Bacon compatible). */

@@ -1,5 +1,7 @@
 #include "ws_server_internal.h"
 
+static uint64_t s_last_ui_notify_us;
+
 bool burner_status_tracks_speed(burner_state_t state)
 {
     return (state == BURNER_STATE_RECEIVING || state == BURNER_STATE_BURNING);
@@ -950,6 +952,8 @@ void burner_status_update(
     char ui_message[96];
     burner_state_t prev_state;
     uint32_t prev_total;
+    uint64_t now_us = (uint64_t)esp_timer_get_time();
+    bool notify_ui;
 
     if (s_status_lock == NULL) {
         return;
@@ -958,23 +962,28 @@ void burner_status_update(
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
     prev_state = s_status.state;
     prev_total = s_status.total_bytes;
+    bool message_changed = message != NULL && strcmp(s_status.message, message) != 0;
+    notify_ui = s_last_ui_notify_us == 0 || state != prev_state || total != prev_total ||
+                message_changed || now_us - s_last_ui_notify_us >= BURNER_UI_NOTIFY_INTERVAL_US || progress >= 100;
+    if (notify_ui) s_last_ui_notify_us = now_us;
     s_status.state = state;
     s_status.progress = progress;
     s_status.processed_bytes = processed;
     s_status.total_bytes = total;
     burner_status_speed_update_locked(prev_state, prev_total, processed, total);
 
-    if (message != NULL) {
+    if (message_changed) {
         snprintf(s_status.message, sizeof(s_status.message), "%s", message);
     }
-    if (rom_name != NULL) {
+    if (rom_name != NULL && strcmp(s_status.rom_name, rom_name) != 0) {
         snprintf(s_status.rom_name, sizeof(s_status.rom_name), "%s", rom_name);
     }
-    if (rom_path != NULL) {
+    if (rom_path != NULL && strcmp(s_status.rom_path, rom_path) != 0) {
         snprintf(s_status.rom_path, sizeof(s_status.rom_path), "%s", rom_path);
     }
     xSemaphoreGive(s_status_lock);
 
+    if (!notify_ui) return;
     ui_set_burn_progress(progress, processed, total);
     if (message != NULL && message[0] != '\0') {
         snprintf(ui_message, sizeof(ui_message), "burner %s: %s", burner_state_to_str(state), message);

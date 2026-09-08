@@ -8764,7 +8764,9 @@ void ui_set_burn_progress(int progress, uint32_t processed, uint32_t total)
         s_model.erase_done_sectors = 0;
         s_model.erase_total_sectors = 0;
     }
-    ui_mark_content_dirty(&s_model);
+    if (s_model.page == UI_PAGE_TASK_STATUS || s_model.page == UI_PAGE_TASK_RESULT ||
+        s_model.page == UI_PAGE_BURN_ROM || s_model.page == UI_PAGE_BURN_SAVE)
+        ui_mark_content_dirty(&s_model);
     xSemaphoreGive(s_model_lock);
 }
 

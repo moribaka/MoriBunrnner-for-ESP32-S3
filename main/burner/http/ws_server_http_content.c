@@ -234,6 +234,22 @@ static bool burner_tf_list_entries_append(
     return true;
 }
 
+/* Batch list rows so hundreds of short entries do not each create a network
+ * chunk. This changes transport framing only, not the JSON payload/order. */
+static esp_err_t burner_tf_list_append_json(httpd_req_t *req, burner_tf_list_buf_t *bufs, const char *text)
+{
+    size_t length = strlen(text);
+    if (bufs->batch_used + length > sizeof(bufs->batch)) {
+        esp_err_t err = httpd_resp_send_chunk(req, bufs->batch, bufs->batch_used);
+        if (err != ESP_OK) return err;
+        bufs->batch_used = 0;
+    }
+    if (length > sizeof(bufs->batch)) return httpd_resp_send_chunk(req, text, length);
+    memcpy(bufs->batch + bufs->batch_used, text, length);
+    bufs->batch_used += length;
+    return ESP_OK;
+}
+
 esp_err_t burner_tf_list_handler(httpd_req_t *req)
 {
     char path_arg[TF_PATH_LEN_MAX] = {0};
@@ -354,7 +370,7 @@ esp_err_t burner_tf_list_handler(httpd_req_t *req)
         qsort(entries.items, entries.count, sizeof(entries.items[0]), burner_tf_list_entry_compare);
     }
 
-    send_err = httpd_resp_sendstr_chunk(req, bufs->head);
+    send_err = burner_tf_list_append_json(req, bufs, bufs->head);
     for (size_t i = 0; send_err == ESP_OK && i < entries.count; ++i) {
         const burner_tf_list_entry_t *item = &entries.items[i];
 
@@ -380,15 +396,15 @@ esp_err_t burner_tf_list_handler(httpd_req_t *req)
             continue;
         }
 
-        send_err = httpd_resp_sendstr_chunk(req, bufs->line);
+        send_err = burner_tf_list_append_json(req, bufs, bufs->line);
         first = false;
     }
 
     free(entries.items);
+    if (send_err == ESP_OK) send_err = burner_tf_list_append_json(req, bufs, "]}");
+    if (send_err == ESP_OK && bufs->batch_used > 0)
+        send_err = httpd_resp_send_chunk(req, bufs->batch, bufs->batch_used);
     free(bufs);
-    if (send_err == ESP_OK) {
-        send_err = httpd_resp_sendstr_chunk(req, "]}");
-    }
     if (send_err == ESP_OK) {
         send_err = httpd_resp_send_chunk(req, NULL, 0);
     }
