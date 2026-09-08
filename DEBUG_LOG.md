@@ -90,3 +90,11 @@ gcc -std=c11 -O2 -I tests/patch_host/stubs tests/patch_host/test_patch.c -o .tmp
 - 为免电池 IRQ/存档钩子扫描、WAITCNT 扫描增加实际分块进度；SRAM 完成后立即显示完成。
 - 将免电池的“无空间或不支持入口”拆成明确的入口读取失败、入口不支持、无足够空白空间三类错误。
 - 本批提交后编译上板，核实实际失败原因；同时单独验证 SRAM + WAITCNT 可完成。
+
+### 第八批：WAITCNT 保留大读取窗口，移出任务栈
+
+- 第七批提交 `a137bc6` 编译与刷机通过；黄金太阳 1 实机明确返回：`ROM has no blank space for batteryless payload and save`（17822ms）。入口检查通过，是当前算法未找到足够空白区域。
+- SRAM + WAITCNT 已在实机成功完成：47394ms，4 个 SRAM 操作、15 个 WAITCNT 操作。
+- 观察到 4KB WAITCNT 窗口产生大量 seek/read，改为堆分配 32KB 窗口；所有正常、I/O 失败和容量超限分支均释放，继续避免原来的 32KB 栈溢出。
+- 跨块 WAITCNT 测试改为覆盖真实 32KB 窗口边界。
+- 不修改免电池的兼容性与空间分配规则，不盲目把“分析结束”当成“免电池补丁成功”。

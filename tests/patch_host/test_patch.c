@@ -57,18 +57,18 @@ int main(void)
     assert(!found[0] && found[10]);
     fclose(fp);
 
-    /* A Thumb literal reference straddles the smaller WAITCNT read window. */
-    fp = rom_file(8192);
+    /* A Thumb literal reference straddles the heap-backed WAITCNT read window. */
+    fp = rom_file(2 * PATCH_SCAN_BYTES);
     const unsigned char thumb_ldr[] = {0x00, 0x48};
     const unsigned char waitcnt[] = {0x04, 0x02, 0x00, 0x04};
-    put(fp, 4094, thumb_ldr, sizeof(thumb_ldr));
-    put(fp, 4096, waitcnt, sizeof(waitcnt));
-    put(fp, 6144, waitcnt, sizeof(waitcnt)); /* No instruction references this one. */
+    put(fp, PATCH_SCAN_BYTES - 2, thumb_ldr, sizeof(thumb_ldr));
+    put(fp, PATCH_SCAN_BYTES, waitcnt, sizeof(waitcnt));
+    put(fp, PATCH_SCAN_BYTES + 8192, waitcnt, sizeof(waitcnt)); /* Unreferenced literal. */
     uint32_t offsets[4];
     size_t count;
-    assert(collect_waitcnt_offsets(fp, 8192, offsets, 4, &count, NULL, NULL) == 0);
-    assert(count == 1 && offsets[0] == 4096);
-    assert(collect_waitcnt_offsets(fp, 8192, offsets, 0, &count, NULL, NULL) == -2);
+    assert(collect_waitcnt_offsets(fp, 2 * PATCH_SCAN_BYTES, offsets, 4, &count, NULL, NULL) == 0);
+    assert(count == 1 && offsets[0] == PATCH_SCAN_BYTES);
+    assert(collect_waitcnt_offsets(fp, 2 * PATCH_SCAN_BYTES, offsets, 0, &count, NULL, NULL) == -2);
     fclose(fp);
 
     /* Word-aligned burn windows must equal one full apply, including a split SRAM patch. */

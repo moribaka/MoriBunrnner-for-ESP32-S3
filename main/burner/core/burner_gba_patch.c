@@ -580,21 +580,23 @@ static int collect_waitcnt_offsets(
     size_t capacity,
     size_t *count_out, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
 {
-    unsigned char chunk[4096]; /* WAITCNT words and chunks remain 4-byte aligned. */
     uint32_t offset = 0U;
     size_t count = 0U;
 
     if (count_out == NULL) {
         return -1;
     }
+    unsigned char *chunk = malloc(PATCH_SCAN_BYTES);
+    if (chunk == NULL) return -1;
     while (offset + 4U <= total) {
         size_t want = total - offset;
         size_t i;
-        if (want > sizeof(chunk)) {
-            want = sizeof(chunk);
+        if (want > PATCH_SCAN_BYTES) {
+            want = PATCH_SCAN_BYTES;
         }
         want &= ~((size_t)3U);
         if (read_at(fp, offset, chunk, want) != 0) {
+            free(chunk);
             return -1;
         }
         for (i = 0U; i + 4U <= want; i += 4U) {
@@ -604,6 +606,7 @@ static int collect_waitcnt_offsets(
             if (has_thumb_ldr_pc(fp, (offset + (uint32_t)i) / 4U, total) ||
                 has_arm_ldr_pc(fp, (offset + (uint32_t)i) / 4U, total)) {
                 if (count >= capacity) {
+                    free(chunk);
                     return -2;
                 }
                 offsets[count++] = offset + (uint32_t)i;
@@ -613,6 +616,7 @@ static int collect_waitcnt_offsets(
         patch_scan_progress(progress_cb, progress_ctx, BURNER_GBA_PATCH_PROGRESS_WAITCNT,
                             offset, total, 0, 99, "scanning literal references");
     }
+    free(chunk);
     *count_out = count;
     return 0;
 }
