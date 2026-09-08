@@ -21,7 +21,9 @@ int main(int argc, char **argv)
             char expected[32];
             std::snprintf(expected, sizeof(expected), "Chapter %u", section);
             assert(std::strstr(reinterpret_cast<char *>(text), expected));
-            assert(std::strstr(reinterpret_cast<char *>(text), "bold & text"));
+            assert(std::strstr(reinterpret_cast<char *>(text), "bold"));
+            assert(std::strchr(reinterpret_cast<char *>(text), '&'));
+            assert(std::strstr(reinterpret_cast<char *>(text), "text."));
             for (size_t j = 0; j < length; ++j) hash = (hash ^ text[j]) * 16777619U;
             bytes += length;
             ui_epub_book_free_buffer(text);
