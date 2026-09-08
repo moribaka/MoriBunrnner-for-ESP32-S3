@@ -95,4 +95,3 @@ size_t music_pcm_convert_frame_to_stereo16(
 
     return frame_count * sizeof(int16_t) * 2U;
 }
-
