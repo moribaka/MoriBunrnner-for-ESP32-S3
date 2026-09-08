@@ -5,6 +5,13 @@
 #include "ui.h"
 
 static const ui_text_entry_t s_ui_text_zh_extra[] = {
+    {"Patch and save ROM", "打补丁并保存ROM"},
+    {"Save ROM", "保存ROM"},
+    {"building patch plan", "正在生成补丁"},
+    {"saving patched ROM", "正在保存补丁ROM"},
+    {"patched ROM saved", "补丁ROM已保存"},
+    {"patch export cancelled", "已取消保存ROM"},
+    {"select at least one patch", "请至少选择一项补丁"},
     {"A pause/resume  L/R prev/next", "A\u64ad\u653e/\u6682\u505c  L/R\u4e0a\u4e00\u9996/\u4e0b\u4e00\u9996"},
     {"A play/pause  B back", "A\u64ad\u653e/\u6682\u505c  B\u8fd4\u56de"},
     {"Select list  A confirm/pause  B back", "Select\u5217\u8868  A\u786e\u8ba4/\u6682\u505c  B\u8fd4\u56de"},

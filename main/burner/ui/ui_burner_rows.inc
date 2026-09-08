@@ -34,10 +34,13 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         } else if (index == 2U) {
             snprintf(title, title_len, "%s", ui_tr("Latency patch"));
             snprintf(hint, hint_len, "%s", s_gba_waitcnt_patch ? ui_tr("Yes") : ui_tr("No"));
-        } else {
+        } else if (index == 3U) {
             snprintf(title, title_len, "%s", ui_tr("Batteryless patch"));
             snprintf(hint, hint_len, "%s", s_gba_save_patch_choice != 1U ? ui_tr("Disabled") :
                                                     (s_gba_batteryless_patch ? ui_tr("Yes") : ui_tr("No")));
+         } else {
+            snprintf(title, title_len, "%s", ui_tr("Patch and save ROM"));
+            if (hint_len > 0) hint[0] = '\0';
         }
         return;
     }
@@ -408,7 +411,7 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
         return;
     }
     if (index == UI_TASK_BURN_PROGRESS_ROW) {
-        snprintf(title, title_len, "%s", ui_tr("Burn"));
+        snprintf(title, title_len, "%s", ui_tr(model->patch_export ? "Save ROM" : "Burn"));
         snprintf(hint, hint_len, "%d%%", model->burn_progress);
         return;
     }

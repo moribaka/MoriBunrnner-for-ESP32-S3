@@ -126,7 +126,7 @@
 #define UI_SYSTEM_ITEM_COUNT 5
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
-#define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 4
+#define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 5
 #define UI_BURN_ROM_RECIPE_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
@@ -316,6 +316,7 @@ typedef enum {
     UI_FILE_ACTION_VERIFY_SAVE,
     UI_FILE_ACTION_WRITE_GBA_SAVE_NEW,
     UI_FILE_ACTION_VERIFY_GBA_SAVE_NEW,
+    UI_FILE_ACTION_PATCH_SAVE,
 } ui_file_action_t;
 
 typedef enum {
@@ -440,6 +441,7 @@ typedef struct {
     uint32_t erase_done_sectors;
     uint32_t erase_total_sectors;
     uint64_t burn_elapsed_us;
+    bool patch_export;
     bool gba_patch_sram;
     bool gba_patch_batteryless;
     bool gba_patch_waitcnt;
@@ -3316,6 +3318,8 @@ static ui_file_action_t ui_file_action_for_kind(ui_file_kind_t kind, uint8_t ind
 static const char *ui_file_action_label(ui_file_action_t action)
 {
     switch (action) {
+        case UI_FILE_ACTION_PATCH_SAVE:
+            return ui_tr("Patch and save ROM");
         case UI_FILE_ACTION_BURN_PSRAM:
             return ui_tr("Burn via PSRAM");
         case UI_FILE_ACTION_BURN_PIPELINE:
@@ -4671,20 +4675,13 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
         return;
     }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
-        !ui_gba_sram_patch_selectable() && count == UI_BURN_ROM_WRITE_PATH_ITEM_COUNT) {
-        /* SRAM is not a valid target for this ROM; keep it visible but skip it. */
-        if (model->selected == 1U) {
-            model->selected = (delta > 0) ? 2U : 0U;
-            ui_mark_motion_dirty(model);
-            return;
-        }
-        if (delta > 0) {
-            model->selected = (model->selected == 0U) ? 2U :
-                              (model->selected == 2U) ? 3U : 0U;
-        } else if (delta < 0) {
-            model->selected = (model->selected == 0U) ? 3U :
-                              (model->selected == 3U) ? 2U : 0U;
-        }
+        !ui_gba_sram_patch_selectable()) {
+        /* Skip unavailable SRAM while retaining every subsequent action. */
+        uint16_t next = model->selected;
+        do { next = delta > 0 ? (uint16_t)((next + 1U) % count) :
+                              (uint16_t)((next + count - 1U) % count); } while (next == 1U);
+        model->selected = next;
+        model->scroll = ui_scroll_for_selected_rows(next, model->scroll, count, ui_burn_rom_visible_rows());
         ui_mark_motion_dirty(model);
         return;
     }
@@ -5037,7 +5034,7 @@ static esp_err_t ui_prepare_last_file_action_locked(
             want_save ? ui_tr("selected file is not save") : ui_tr("selected file is not ROM"));
         return ESP_ERR_INVALID_STATE;
     }
-    if (s_file_start_active) {
+    if (s_file_start_active || burner_task_is_running_snapshot()) {
         ui_set_status_locked(model, ui_tr("task starting"));
         return ESP_ERR_INVALID_STATE;
     }
@@ -5054,6 +5051,12 @@ static esp_err_t ui_prepare_last_file_action_locked(
         return ESP_ERR_INVALID_STATE;
     }
 
+    if (action == UI_FILE_ACTION_PATCH_SAVE &&
+        (selected_kind != UI_FILE_KIND_ROM_GBA ||
+         (!s_gba_sram_patch && !s_gba_waitcnt_patch && !s_gba_batteryless_patch))) {
+        ui_set_status_locked(model, ui_tr("select at least one patch"));
+        return ESP_ERR_INVALID_STATE;
+    }
     request = (ui_file_start_request_t *)calloc(1, sizeof(*request));
     if (request == NULL) {
         ui_set_status_locked(model, ui_tr("no memory"));
@@ -5103,7 +5106,13 @@ static esp_err_t ui_prepare_last_file_action_locked(
     model->erase_done_sectors = 0;
     model->erase_total_sectors = 0;
     model->burn_elapsed_us = 0;
-    ui_set_status_locked(model, ui_tr("starting burn task"));
+    model->patch_export = action == UI_FILE_ACTION_PATCH_SAVE;
+    model->gba_patch_sram = request->gba_sram_patch;
+    model->gba_patch_batteryless = request->gba_batteryless_patch;
+    model->gba_patch_waitcnt = request->gba_waitcnt_patch;
+    memset(model->gba_patch_progress, 0, sizeof(model->gba_patch_progress));
+    memset(model->gba_patch_message, 0, sizeof(model->gba_patch_message));
+    ui_set_status_locked(model, ui_tr(model->patch_export ? "building patch plan" : "starting burn task"));
     *request_out = request;
     return ESP_OK;
 }
@@ -5402,7 +5411,7 @@ static void ui_select_locked(
                     s_gba_waitcnt_patch = !s_gba_waitcnt_patch;
                     ui_set_status_locked(model, s_gba_waitcnt_patch ? ui_tr("Latency patch: yes") : ui_tr("Latency patch: no"));
                     ui_mark_content_dirty(model);
-                } else {
+                } else if (model->selected == 3U) {
                     if (s_gba_save_patch_choice != 1U) {
                         ui_set_status_locked(model, ui_tr("Batteryless patch disabled"));
                         return;
@@ -5410,6 +5419,8 @@ static void ui_select_locked(
                     s_gba_batteryless_patch = !s_gba_batteryless_patch;
                     ui_set_status_locked(model, s_gba_batteryless_patch ? ui_tr("Batteryless patch: yes") : ui_tr("Batteryless patch: no"));
                     ui_mark_content_dirty(model);
+                 } else if (model->selected == 4U && s_cart_mode == BURNER_CART_MODE_GBA) {
+                    (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_PATCH_SAVE, start_request);
                 }
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_SIZE) {
                 uint32_t dump_size_mib = ui_burn_dump_size_for_index(model->selected);
@@ -6500,6 +6511,7 @@ static void ui_issue_pending_task_cancel(void)
     }
 
     (void)burner_cancel_request();
+    (void)burner_gba_patch_debug_cancel();
 
     if (!ui_take_model_lock()) {
         return;
@@ -7530,7 +7542,7 @@ static void ui_px_draw_task_progress_row(const ui_model_t *model, uint16_t row)
     int32_t y;
     int32_t x = UI_LIST_TEXT_X;
     int32_t w = UI_CANVAS_W - UI_LIST_BAR_W - 12;
-    const char *label = ui_tr("Burn");
+    const char *label = ui_tr(model != NULL && model->patch_export ? "Save ROM" : "Burn");
     int32_t label_w = ui_px_text_width(label) + 6;
     int32_t percent_w = ui_px_text_width("100%");
     int32_t percent_x;
@@ -8739,6 +8751,7 @@ void ui_show_burn_task_status_with_patches(
     s_model.erase_done_sectors = 0;
     s_model.erase_total_sectors = 0;
     s_model.burn_elapsed_us = 0;
+    s_model.patch_export = false;
     s_model.gba_patch_sram = sram_patch;
     s_model.gba_patch_batteryless = batteryless_patch;
     s_model.gba_patch_waitcnt = waitcnt_patch;

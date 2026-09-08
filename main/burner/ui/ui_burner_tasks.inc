@@ -174,6 +174,7 @@ static esp_err_t ui_prepare_file_action_locked(ui_model_t *model, ui_file_start_
     model->erase_done_sectors = 0;
     model->erase_total_sectors = 0;
     model->burn_elapsed_us = 0;
+    model->patch_export = false;
     model->gba_patch_sram = request->gba_sram_patch;
     model->gba_patch_batteryless = request->gba_batteryless_patch;
     model->gba_patch_waitcnt = request->gba_waitcnt_patch;
@@ -229,6 +230,67 @@ static void ui_finish_file_start_task(
     xSemaphoreGive(s_model_lock);
 }
 
+typedef struct {
+    const ui_file_start_request_t *request;
+    int64_t last_update;
+} ui_patch_save_context_t;
+
+static void ui_patch_save_analysis_progress(burner_gba_patch_progress_kind_t kind,
+    int progress, const char *message, void *ctx)
+{
+    (void)ctx;
+    if (burner_cancel_is_requested() || usb_msc_tf_in_use_by_host())
+        (void)burner_gba_patch_debug_cancel();
+    ui_set_gba_patch_progress((int)kind, progress, message);
+}
+
+static bool ui_patch_save_write_progress(uint32_t done, uint32_t total, void *ctx)
+{
+    ui_patch_save_context_t *context = ctx;
+    if (burner_cancel_is_requested() || usb_msc_tf_in_use_by_host()) return false;
+    int64_t now = esp_timer_get_time();
+    if (done == 0 || done == total || now - context->last_update >= 200000) {
+        context->last_update = now;
+        burner_status_update(BURNER_STATE_RECEIVING, total ? (int)((uint64_t)done * 100 / total) : 0,
+            done, total, ui_tr("saving patched ROM"), context->request->name, NULL);
+    }
+    return true;
+}
+
+static esp_err_t ui_save_patched_rom(const ui_file_start_request_t *request, char *error, size_t error_len)
+{
+    char full_path[BURNER_FILE_PATH_LEN] = {0};
+    char output[BURNER_FILE_PATH_LEN] = {0};
+    burner_gba_patch_report_t report = {0};
+    ui_patch_save_context_t context = {.request = request};
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    burner_cancel_reset();
+    burner_status_update(BURNER_STATE_RECEIVING, 0, 0, request->size,
+                         ui_tr("building patch plan"), request->name, request->path);
+    if (card == NULL || usb_msc_tf_in_use_by_host()) {
+        snprintf(error, error_len, "%s", ui_tr("TF not available"));
+    } else if (!burner_build_full_path(request->path, full_path, sizeof(full_path))) {
+        snprintf(error, error_len, "%s", "invalid ROM path");
+    } else {
+        err = burner_save_gba_patch_file(full_path, request->gba_sram_patch, request->gba_waitcnt_patch,
+            request->gba_batteryless_patch, output, sizeof(output), &report, error, error_len,
+            ui_patch_save_analysis_progress, ui_patch_save_write_progress, &context);
+    }
+    burner_gba_patch_debug_t state;
+    burner_gba_patch_debug_snapshot(&state);
+    bool cancelled = err != ESP_OK && (state.cancel_requested || burner_cancel_is_requested());
+    if (err == ESP_OK) {
+        const char *name = strrchr(output, '/');
+        burner_status_update(BURNER_STATE_DONE, 100, report.output_size, report.output_size,
+                             ui_tr("patched ROM saved"), name ? name + 1 : output, output);
+        ESP_LOGI(UI_TAG, "Patched ROM saved: %s (%" PRIu32 " bytes)", output, report.output_size);
+    } else {
+        burner_status_update(cancelled ? BURNER_STATE_CANCELLED : BURNER_STATE_ERROR, 0, 0, 0,
+            cancelled ? ui_tr("patch export cancelled") : error, request->name, request->path);
+    }
+    return err;
+}
+
 static void ui_start_file_action_task(void *param)
 {
     ui_file_start_request_t *request = (ui_file_start_request_t *)param;
@@ -273,6 +335,9 @@ static void ui_start_file_action_task(void *param)
         burner_write_path_to_str(request->write_path));
 
     switch (request->action) {
+        case UI_FILE_ACTION_PATCH_SAVE:
+            err = ui_save_patched_rom(request, error_msg, sizeof(error_msg));
+            break;
         case UI_FILE_ACTION_BURN_PSRAM:
         case UI_FILE_ACTION_BURN_PIPELINE:
         case UI_FILE_ACTION_BURN_DIRECT:
@@ -349,7 +414,8 @@ static void ui_start_file_action_task(void *param)
     }
 
     ESP_LOGI(UI_TAG, "LCD file action task stack free min=%u bytes", (unsigned)uxTaskGetStackHighWaterMark2(NULL));
-    ui_finish_file_start_task(request, err, &result, error_msg);
+    if (request->action != UI_FILE_ACTION_PATCH_SAVE)
+        ui_finish_file_start_task(request, err, &result, error_msg);
     free(request);
     if (perf_lock_acquired) {
         power_manager_perf_lock_release("ui_file_start");
@@ -416,6 +482,7 @@ static void ui_set_task_page_starting(const char *text, uint32_t total, ui_page_
     s_model.erase_done_sectors = 0;
     s_model.erase_total_sectors = 0;
     s_model.burn_elapsed_us = 0;
+    s_model.patch_export = false;
     s_model.gba_patch_sram = false;
     s_model.gba_patch_batteryless = false;
     s_model.gba_patch_waitcnt = false;
