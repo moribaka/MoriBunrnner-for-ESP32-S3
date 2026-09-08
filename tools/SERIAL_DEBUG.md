@@ -18,12 +18,16 @@ not change the application's path encoding.
 | `patch sb /sdcard/game.gba` | Build SRAM and batteryless plans |
 | `patch sbw /sdcard/game.gba` | Include WAITCNT analysis |
 | `patch w /sdcard/game.gba` | Analyze WAITCNT only |
+| `patch-save sbw /sdcard/game.gba` | Apply the selected patches and save a new sibling `game.patched.gba`; add a number if it already exists |
 | `cancel` | Request cooperative cancellation of the current patch plan, including one started by the UI/web |
 | `reboot` | Restart the device |
 
 Patch commands run in a separate task and **only build an in-memory plan**.
-They do not write the source ROM or erase/program the cartridge. Only one
-production patch plan can run at a time. Cancellation is checked at file-read
+They do not write the source ROM or erase/program the cartridge. `patch-save`
+does write a new ROM file and reports `save_progress` and the final output path.
+It removes incomplete output on failure/cancellation. The same operation is
+available at the bottom of the GBA burn/patch menu as “打补丁并保存ROM”. Only one
+production patch plan/export can run at a time. Cancellation is checked at file-read
 boundaries; it cannot interrupt a blocked SD driver operation or undo a burn.
 `offset` is the latest read position, not an overall percentage; each new
 pattern scan starts at zero and `read_bytes` accumulates across passes.

@@ -37,7 +37,7 @@ def run(args):
         next_status = time.monotonic() + 2
         pending = bytearray()
         terminal = {
-            "status": "status", "ls": "ls_done", "patch": "patch_done",
+            "status": "status", "ls": "ls_done", "patch": "patch_done", "patch-save": "patch_done",
             "cancel": "cancel", "help": "help", "reboot": "reboot",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:

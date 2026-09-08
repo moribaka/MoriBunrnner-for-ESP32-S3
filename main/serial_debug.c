@@ -28,7 +28,7 @@ static bool s_job_running;
 
 typedef struct {
     char path[304];
-    bool sram, waitcnt, batteryless;
+    bool sram, waitcnt, batteryless, save_output;
 } debug_patch_job_t;
 
 static void reply(cJSON *json)
@@ -83,15 +83,39 @@ static void status(void)
     reply(json);
 }
 
+static bool save_progress(uint32_t done, uint32_t total, void *ctx)
+{
+    int *last_percent = ctx;
+    if (usb_msc_tf_in_use_by_host()) return false;
+    int percent = total ? (int)((uint64_t)done * 100 / total) : 0;
+    if (percent != *last_percent) {
+        *last_percent = percent;
+        cJSON *json = event("save_progress");
+        if (json != NULL) {
+            cJSON_AddNumberToObject(json, "percent", percent);
+            cJSON_AddNumberToObject(json, "done", done);
+            cJSON_AddNumberToObject(json, "total", total);
+        }
+        reply(json);
+    }
+    return true;
+}
+
 static void patch_worker(void *arg)
 {
     debug_patch_job_t *job = arg;
-    burner_gba_patch_plan_t *plan = heap_caps_calloc(1, sizeof(*plan), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    burner_gba_patch_plan_t *plan = job->save_output ? NULL :
+        heap_caps_calloc(1, sizeof(*plan), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     burner_gba_patch_report_t report = {0};
     char error[128] = "no memory for patch plan";
     int64_t start = esp_timer_get_time();
     int result = ESP_ERR_NO_MEM;
-    if (plan != NULL) {
+    char saved_path[304] = {0};
+    int last_percent = -1;
+    if (job->save_output) {
+        result = burner_save_gba_patch_file(job->path, job->sram, job->waitcnt, job->batteryless,
+            saved_path, sizeof(saved_path), &report, error, sizeof(error), NULL, save_progress, &last_percent);
+    } else if (plan != NULL) {
         result = burner_build_gba_patch_plan(job->path, job->sram, job->waitcnt, job->batteryless,
                                             plan, &report, error, sizeof(error), NULL, NULL);
     }
@@ -105,6 +129,7 @@ static void patch_worker(void *arg)
         cJSON_AddBoolToObject(json, "batteryless", report.batteryless_patched);
         cJSON_AddNumberToObject(json, "waitcnt_count", report.waitcnt_count);
         cJSON_AddNumberToObject(json, "output_size", report.output_size);
+        if (saved_path[0]) cJSON_AddStringToObject(json, "output_path", saved_path);
         if (plan != NULL && result == ESP_OK) {
             cJSON_AddNumberToObject(json, "sram_ops", plan->sram_count);
             cJSON_AddNumberToObject(json, "irq_ops", plan->batteryless_irq_count);
@@ -140,7 +165,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ls /sdcard/path | patch FLAGS /sdcard/file.gba | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT; patch only analyzes, does not write ROM/cart");
+        message("help", "status | ls /sdcard/path | patch FLAGS /sdcard/file.gba | patch-save FLAGS /sdcard/file.gba | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT; patch analyzes; patch-save writes a new ROM file");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {
@@ -164,8 +189,9 @@ static void dispatch(char *line)
         message("ls_done", count == 256 ? "limit reached (256)" : "complete");
         return;
     }
-    if (strncmp(line, "patch ", 6) == 0) {
-        char *flags = line + 6;
+    if (strncmp(line, "patch ", 6) == 0 || strncmp(line, "patch-save ", 11) == 0) {
+        bool export_file = strncmp(line, "patch-save ", 11) == 0;
+        char *flags = line + (export_file ? 11 : 6);
         char *path = strchr(flags, ' ');
         if (path == NULL) { message("error", "usage: patch sbw /sdcard/file.gba"); return; }
         *path++ = '\0';
@@ -178,6 +204,7 @@ static void dispatch(char *line)
         debug_patch_job_t *job = calloc(1, sizeof(*job));
         if (job == NULL) { message("error", "no memory"); return; }
         snprintf(job->path, sizeof(job->path), "%s", path);
+        job->save_output = export_file;
         job->batteryless = strchr(flags, 'b') != NULL;
         job->sram = strchr(flags, 's') != NULL || job->batteryless;
         job->waitcnt = strchr(flags, 'w') != NULL;
@@ -193,7 +220,7 @@ static void dispatch(char *line)
             s_job_running = false;
             portEXIT_CRITICAL(&s_job_lock);
             message("error", "cannot start patch worker");
-        } else message("patch_started", "analysis only");
+        } else message("patch_started", export_file ? "patch and save new ROM" : "analysis only");
         return;
     }
     message("error", "unknown command; use help");

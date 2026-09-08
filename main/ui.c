@@ -5419,7 +5419,7 @@ static void ui_select_locked(
                     s_gba_batteryless_patch = !s_gba_batteryless_patch;
                     ui_set_status_locked(model, s_gba_batteryless_patch ? ui_tr("Batteryless patch: yes") : ui_tr("Batteryless patch: no"));
                     ui_mark_content_dirty(model);
-                 } else if (model->selected == 4U && s_cart_mode == BURNER_CART_MODE_GBA) {
+                } else if (model->selected == 4U && s_cart_mode == BURNER_CART_MODE_GBA) {
                     (void)ui_prepare_last_file_action_locked(model, UI_FILE_ACTION_PATCH_SAVE, start_request);
                 }
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_SIZE) {
