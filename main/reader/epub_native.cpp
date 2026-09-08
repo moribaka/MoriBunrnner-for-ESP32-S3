@@ -259,9 +259,23 @@ public:
             // Decompress directly into the string instead of allocating and
             // copying another full uncompressed chapter.
             out->resize(static_cast<size_t>(stat.m_uncomp_size));
-            char empty = 0;
-            void *destination = out->empty() ? static_cast<void *>(&empty) : &(*out)[0];
-            ok = mz_zip_reader_extract_to_mem(&archive_, file_index, destination, out->size(), 0U) != 0;
+            // miniz's extract_to_mem keeps its large inflator on the stack.
+            // The iterator owns that state on the heap, fitting the UI task.
+            mz_zip_reader_extract_iter_state *iterator =
+                mz_zip_reader_extract_iter_new(&archive_, file_index, 0U);
+            ok = iterator != nullptr;
+            size_t done = 0;
+            while (ok && done < out->size()) {
+                size_t got = mz_zip_reader_extract_iter_read(iterator, &(*out)[done], out->size() - done);
+                if (got == 0) { ok = false; break; }
+                done += got;
+            }
+            if (iterator != nullptr) {
+                char extra;
+                if (ok && mz_zip_reader_extract_iter_read(iterator, &extra, 1) != 0) ok = false;
+                bool complete = mz_zip_reader_extract_iter_free(iterator) != 0;
+                ok = ok && complete;
+            }
         }
         archive_.m_pIO_opaque = nullptr;
         fclose(file); // Keep only the index; do not hold TF handles between reads.

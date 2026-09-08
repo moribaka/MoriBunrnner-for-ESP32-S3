@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include "../../main/reader/epub_native.h"
 
 int main(int argc, char **argv)
@@ -34,6 +35,16 @@ int main(int argc, char **argv)
     assert(hash == 0xF1333AC3U && bytes == 218348);
     assert(ui_epub_book_index_build_count(book) == 1);
     assert(!ui_epub_book_load_section_text(book, 32, &text, &length));
+    ui_epub_book_close(book);
+    std::string path(argv[1]);
+    size_t slash = path.find_last_of("/\\");
+    std::string root = slash == std::string::npos ? "" : path.substr(0, slash + 1);
+    assert(ui_epub_book_open((root + "epub-empty.epub").c_str(), &book));
+    assert(ui_epub_book_load_section_text(book, 0, &text, &length) && length == 0);
+    ui_epub_book_free_buffer(text);
+    ui_epub_book_close(book);
+    assert(ui_epub_book_open((root + "epub-bad-crc.epub").c_str(), &book));
+    assert(!ui_epub_book_load_section_text(book, 1, &text, &length));
     ui_epub_book_close(book);
     assert(!ui_epub_book_open("missing-epub-test.epub", &book));
     std::printf("EPUB verified: bytes=%zu hash=%08x\n", bytes, hash);
