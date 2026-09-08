@@ -43,6 +43,25 @@ int main(void)
     assert(offset == PATCH_SCAN_BYTES - 2);
     fclose(fp);
 
+    /* Hook search sees SRAM overlays, keeps block overlap, and ignores
+     * unaligned lookalikes while collecting different hook types together. */
+    fp = rom_file(2 * BATTERYLESS_SCAN_CHUNK_BYTES);
+    const unsigned char other_hook[] = {0xA1, 0xB2, 0xC3, 0xD4};
+    put(fp, 1, pattern, sizeof(pattern));
+    put(fp, BATTERYLESS_SCAN_CHUNK_BYTES + 100, pattern, sizeof(pattern));
+    burner_gba_patch_plan_t hook_plan = {0};
+    hook_plan.sram_count = 1;
+    hook_plan.sram[0].offset = BATTERYLESS_SCAN_CHUNK_BYTES - 2;
+    hook_plan.sram[0].length = sizeof(other_hook);
+    memcpy(hook_plan.sram[0].data, other_hook, sizeof(other_hook));
+    plan_scan_pattern_t hook_patterns[] = {{pattern, sizeof(pattern), 4}, {other_hook, sizeof(other_hook), 2}};
+    uint32_t hook_offsets[2];
+    assert(stream_find_plan_patterns(fp, 2 * BATTERYLESS_SCAN_CHUNK_BYTES, &hook_plan,
+                                    hook_patterns, 2, hook_offsets, NULL, NULL) == 0);
+    assert(hook_offsets[0] == BATTERYLESS_SCAN_CHUNK_BYTES + 100);
+    assert(hook_offsets[1] == BATTERYLESS_SCAN_CHUNK_BYTES - 2);
+    fclose(fp);
+
     /* All identifiers are found in one read pass, including cross-block names.
      * A higher-priority type late in the ROM must not lose to an earlier one. */
     fp = rom_file(3 * PATCH_ANALYSIS_CHUNK_BYTES);

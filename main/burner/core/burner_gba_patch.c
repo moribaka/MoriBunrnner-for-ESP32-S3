@@ -146,72 +146,62 @@ static void patch_scan_progress(burner_gba_patch_progress_cb_t cb, void *ctx,
     cb(kind, progress, message, ctx);
 }
 
-static int stream_find_plan_pattern(
-    FILE *fp,
-    uint32_t total,
-    const burner_gba_patch_plan_t *plan,
-    const unsigned char *pattern,
-    size_t pattern_len,
-    uint32_t stride,
-    uint32_t start_offset,
-    uint32_t *offset_out,
-    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx, int progress_begin, int progress_end)
-{
-    unsigned char *buffer;
-    size_t carry = 0U;
-    uint32_t base;
+typedef struct {
+    const unsigned char *bytes;
+    size_t length;
+    uint32_t stride;
+} plan_scan_pattern_t;
 
-    if (fp == NULL || pattern == NULL || pattern_len == 0U || offset_out == NULL ||
-        start_offset > total || total < pattern_len) {
-        return -1;
+/* Collect each hook's first occurrence in one patched-ROM pass. The caller
+ * still selects in signature-table order, independent of file order. */
+static int stream_find_plan_patterns(FILE *fp, uint32_t total,
+    const burner_gba_patch_plan_t *plan, const plan_scan_pattern_t *patterns,
+    size_t pattern_count, uint32_t *offsets,
+    burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
+{
+    size_t max_len = 0, carry = 0;
+    uint32_t base = 0;
+    for (size_t index = 0; index < pattern_count; ++index) {
+        offsets[index] = UINT32_MAX;
+        if (patterns[index].length > max_len) max_len = patterns[index].length;
     }
-    buffer = (unsigned char *)malloc(BATTERYLESS_SCAN_CHUNK_BYTES + pattern_len - 1U);
-    if (buffer == NULL) {
-        return -2;
-    }
-    base = 0U;
-    if (fseek(fp, 0L, SEEK_SET) != 0) {
-        free(buffer);
-        return -1;
-    }
+    if (max_len == 0 || fp == NULL) return -1;
+    unsigned char *buffer = malloc(BATTERYLESS_SCAN_CHUNK_BYTES + max_len - 1);
+    if (buffer == NULL) return -2;
+    if (fseek(fp, 0, SEEK_SET) != 0) { free(buffer); return -1; }
     while (base < total) {
         size_t want = total - base;
-        size_t got;
-        size_t span;
-
         if (want > BATTERYLESS_SCAN_CHUNK_BYTES) want = BATTERYLESS_SCAN_CHUNK_BYTES;
-        got = patch_debug_read(buffer + carry, 1U, want, fp);
-        if (got != want) {
-            free(buffer);
-            return -1;
-        }
-        if (plan != NULL) {
-            burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
-        }
-        patch_scan_progress(progress_cb, progress_ctx, BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
-                            base + (uint32_t)got, total, progress_begin, progress_end, "finding save hook");
-        span = carry + got;
-        for (size_t i = 0U; i + pattern_len <= span; ++i) {
-            uint32_t position = base - (uint32_t)carry + (uint32_t)i;
-            if (position < start_offset || (stride > 1U && (position % stride) != 0U)) continue;
-            if (memcmp(buffer + i, pattern, pattern_len) == 0) {
-                *offset_out = position;
-                free(buffer);
-                return 0;
+        size_t got = patch_debug_read(buffer + carry, 1, want, fp);
+        if (got != want) { free(buffer); return -1; }
+        if (plan != NULL) burner_apply_gba_patch_plan(buffer + carry, got, base, plan);
+        size_t span = carry + got;
+        for (size_t index = 0; index < pattern_count; ++index) {
+            const plan_scan_pattern_t *pattern = &patterns[index];
+            if (offsets[index] != UINT32_MAX || pattern->length > span || pattern->length == 0) continue;
+            size_t start = 0;
+            while (start + pattern->length <= span) {
+                const unsigned char *hit = memchr(buffer + start, pattern->bytes[0], span - pattern->length - start + 1);
+                if (hit == NULL) break;
+                uint32_t position = base - (uint32_t)carry + (uint32_t)(hit - buffer);
+                if ((pattern->stride <= 1 || position % pattern->stride == 0) &&
+                    memcmp(hit, pattern->bytes, pattern->length) == 0) {
+                    offsets[index] = position;
+                    break;
+                }
+                start = (size_t)(hit - buffer) + 1;
             }
         }
-        if (pattern_len > 1U) {
-            size_t keep = span;
-            if (keep > pattern_len - 1U) keep = pattern_len - 1U;
-            memmove(buffer, buffer + span - keep, keep);
-            carry = keep;
-        } else {
-            carry = 0U;
-        }
         base += (uint32_t)got;
+        patch_scan_progress(progress_cb, progress_ctx, BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
+                            base, total, 45, 95, "finding save hooks");
+        if (offsets[0] != UINT32_MAX) break;
+        carry = span < max_len - 1 ? span : max_len - 1;
+        memmove(buffer, buffer + span - carry, carry);
+        if ((base & 0x3FFFFU) == 0) vTaskDelay(1);
     }
     free(buffer);
-    return 1;
+    return 0;
 }
 
 static int stream_collect_plan_pattern(
@@ -842,15 +832,25 @@ static int build_gba_patch_plan_impl(
             {write_flash2, sizeof(write_flash2), 24U, 0x10000U, false},
             {write_flash3, sizeof(write_flash3), 24U, 0x20000U, false},
         };
+        enum { HOOK_COUNT = sizeof(hooks) / sizeof(hooks[0]) };
+        plan_scan_pattern_t hook_patterns[HOOK_COUNT + 1];
+        uint32_t hook_offsets[HOOK_COUNT + 1];
+        for (size_t index = 0; index < HOOK_COUNT; ++index) {
+            hook_patterns[index] = (plan_scan_pattern_t){hooks[index].signature,
+                hooks[index].signature_len, hooks[index].arm ? 4U : 2U};
+        }
+        hook_patterns[HOOK_COUNT] = (plan_scan_pattern_t){write_eeprom_v111, sizeof(write_eeprom_v111), 2U};
+        patch_debug_phase("batteryless_hook", "all save hooks (one pass)");
+        int hook_result = stream_find_plan_patterns(fp, total, plan, hook_patterns,
+            HOOK_COUNT + 1, hook_offsets, progress_cb, progress_ctx);
+        if (hook_result != 0) {
+            fclose(fp);
+            set_error(error_msg, error_msg_len, "batteryless hook scan failed");
+            return hook_result == -2 ? ESP_ERR_NO_MEM : ESP_FAIL;
+        }
         for (size_t hook_index = 0U; hook_index < sizeof(hooks) / sizeof(hooks[0]) && !found_hook; ++hook_index) {
-            char label[32];
-            snprintf(label, sizeof(label), "hook %u", (unsigned)hook_index);
-            patch_debug_phase("batteryless_hook", label);
-            uint32_t pos = 0U;
-            int scan_result = stream_find_plan_pattern(
-                fp, total, plan, hooks[hook_index].signature, hooks[hook_index].signature_len,
-                hooks[hook_index].arm ? 4U : 2U, 0U, &pos, progress_cb, progress_ctx,
-                45 + (int)hook_index * 6, 51 + (int)hook_index * 6);
+            uint32_t pos = hook_offsets[hook_index];
+            int scan_result = pos == UINT32_MAX ? 1 : 0;
             if (scan_result == 0) {
                 burner_gba_patch_write_t *hook = &plan->batteryless_writes[plan->batteryless_write_count++];
                 const unsigned char *thunk = hooks[hook_index].arm ? arm_thunk : thumb_thunk;
@@ -875,10 +875,8 @@ static int build_gba_patch_plan_impl(
             }
         }
         if (!found_hook) {
-            patch_debug_phase("batteryless_hook", "EEPROM_V111");
-            uint32_t pos = 0U;
-            int scan_result = stream_find_plan_pattern(fp, total, plan, write_eeprom_v111,
-                                                       sizeof(write_eeprom_v111), 2U, 0U, &pos, progress_cb, progress_ctx, 87, 95);
+            uint32_t pos = hook_offsets[HOOK_COUNT];
+            int scan_result = pos == UINT32_MAX ? 1 : 0;
             if (scan_result == 0) {
                 burner_gba_patch_write_t *thunk = &plan->batteryless_writes[plan->batteryless_write_count++];
                 burner_gba_patch_write_t *target = &plan->batteryless_writes[plan->batteryless_write_count++];
