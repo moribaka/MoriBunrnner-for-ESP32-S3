@@ -1362,11 +1362,6 @@ static void burner_tf_prefetch_task(void *arg)
             memset(ctx->dst + ctx->read_len, 0xFF, ctx->bytes - ctx->read_len);
             ctx->read_len = ctx->bytes;
         }
-        if (ctx->read_len < ctx->bytes && ferror(ctx->fp) == 0 && feof(ctx->fp) != 0 &&
-            s_tf_reader_source_size != 0u) {
-            memset(ctx->dst + ctx->read_len, 0xFF, ctx->bytes - ctx->read_len);
-            ctx->read_len = ctx->bytes;
-        }
         read_elapsed_us = (uint64_t)esp_timer_get_time() - read_start_us;
         ctx->err = (ctx->read_len == ctx->bytes) ? ESP_OK : ESP_FAIL;
         if (ctx->err == ESP_OK && ctx->read_len > 0u && read_elapsed_us > 0u) {

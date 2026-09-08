@@ -14,7 +14,6 @@
 #define PATCH_SCAN_BYTES (32U * 1024U)
 #define PATCH_ANALYSIS_CHUNK_BYTES PATCH_SCAN_BYTES
 #define PATCH_WAITCNT_ADDRESS 0x04000204U
-#define BATTERYLESS_MARKER "<3 from Maniac"
 #define BATTERYLESS_MIN_ROM (0x400000U)
 #define BATTERYLESS_MAX_ROM (32U * 1024U * 1024U)
 #define BATTERYLESS_SAVE_RESERVE 0x40000U
@@ -461,14 +460,6 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
     return 0;
 }
 
-static int write_pattern(FILE *fp, uint32_t total, uint32_t offset, const unsigned char *data, size_t len)
-{
-    if (fp == NULL || data == NULL || offset > total || len > (size_t)(total - offset) || fseek(fp, (long)offset, SEEK_SET) != 0) {
-        return -1;
-    }
-    return fwrite(data, 1U, len, fp) == len ? 0 : -1;
-}
-
 static int read_at(FILE *fp, uint32_t offset, void *data, size_t len)
 {
     if (fp == NULL || data == NULL || fseek(fp, (long)offset, SEEK_SET) != 0) {
@@ -547,43 +538,6 @@ static bool has_arm_ldr_pc(FILE *fp, uint32_t target_word, uint32_t total)
     return false;
 }
 
-static int apply_waitcnt(FILE *fp, uint32_t total, uint32_t *count_out)
-{
-    unsigned char chunk[4096]; /* Fits the 16 KiB UI worker stack. */
-    uint32_t offset = 0U;
-    uint32_t count = 0U;
-
-    while (offset + 4U <= total) {
-        size_t want = total - offset;
-        size_t i;
-        if (want > sizeof(chunk)) {
-            want = sizeof(chunk);
-        }
-        want &= ~((size_t)3U);
-        if (read_at(fp, offset, chunk, want) != 0) {
-            return -1;
-        }
-        for (i = 0U; i + 4U <= want; i += 4U) {
-            if (read_u32(chunk + i) != PATCH_WAITCNT_ADDRESS) {
-                continue;
-            }
-            if (has_thumb_ldr_pc(fp, (offset + (uint32_t)i) / 4U, total) ||
-                has_arm_ldr_pc(fp, (offset + (uint32_t)i) / 4U, total)) {
-                static const unsigned char zero[4] = {0, 0, 0, 0};
-                if (write_pattern(fp, total, offset + (uint32_t)i, zero, sizeof(zero)) != 0) {
-                    return -1;
-                }
-                ++count;
-            }
-        }
-        offset += (uint32_t)want;
-    }
-    if (count_out != NULL) {
-        *count_out = count;
-    }
-    return 0;
-}
-
 static int collect_waitcnt_offsets(
     FILE *fp,
     uint32_t total,
@@ -647,7 +601,6 @@ static int build_gba_patch_plan_impl(
     FILE *fp = NULL;
     uint32_t total = 0U;
     int selected_set = -1;
-    bool all_sram_replacements_present = true;
     size_t i;
 
     if (plan == NULL || input_path == NULL) {
@@ -655,7 +608,6 @@ static int build_gba_patch_plan_impl(
         return ESP_ERR_INVALID_ARG;
     }
     memset(plan, 0, sizeof(*plan));
-    (void)apply_batteryless;
     if (report != NULL) {
         memset(report, 0, sizeof(*report));
     }
@@ -721,7 +673,6 @@ static int build_gba_patch_plan_impl(
                         (int)(35U + (i * 60U + 30U) / set->patch_count),
                         (int)(35U + ((i + 1U) * 60U) / set->patch_count));
                     if (replacement_result == 0) continue;
-                    all_sram_replacements_present = false;
                     fclose(fp);
                     set_error(error_msg, error_msg_len, replacement_result < 0 ?
                         "SRAM replacement scan failed" : "sram patch patterns incomplete");
@@ -736,9 +687,6 @@ static int build_gba_patch_plan_impl(
                 plan->sram[plan->sram_count].length = (uint16_t)patch->replace_len;
                 memcpy(plan->sram[plan->sram_count].data, patch->replace, patch->replace_len);
                 plan->sram_count++;
-            }
-            if (all_sram_replacements_present && plan->sram_count == 0U && report != NULL) {
-                report->sram_patched = false;
             }
             if (report != NULL) {
                 report->sram_patched = plan->sram_count != 0U;
@@ -884,8 +832,7 @@ static int build_gba_patch_plan_impl(
         }
         for (size_t hook_index = 0U; hook_index < sizeof(hooks) / sizeof(hooks[0]) && !found_hook; ++hook_index) {
             uint32_t pos = hook_offsets[hook_index];
-            int scan_result = pos == UINT32_MAX ? 1 : 0;
-            if (scan_result == 0) {
+            if (pos != UINT32_MAX) {
                 burner_gba_patch_write_t *hook = &plan->batteryless_writes[plan->batteryless_write_count++];
                 const unsigned char *thunk = hooks[hook_index].arm ? arm_thunk : thumb_thunk;
                 size_t thunk_len = hooks[hook_index].arm ? sizeof(arm_thunk) : sizeof(thumb_thunk);
@@ -898,20 +845,11 @@ static int build_gba_patch_plan_impl(
                 plan->batteryless_save_size = hooks[hook_index].save_size;
                 patch_write_le32(plan->payload + 8U, hooks[hook_index].save_size);
                 found_hook = true;
-            } else if (scan_result == -2) {
-                fclose(fp);
-                set_error(error_msg, error_msg_len, "batteryless scan memory failed");
-                return ESP_ERR_NO_MEM;
-            } else if (scan_result < 0) {
-                fclose(fp);
-                set_error(error_msg, error_msg_len, "batteryless hook scan failed");
-                return ESP_FAIL;
             }
         }
         if (!found_hook) {
             uint32_t pos = hook_offsets[HOOK_COUNT];
-            int scan_result = pos == UINT32_MAX ? 1 : 0;
-            if (scan_result == 0) {
+            if (pos != UINT32_MAX) {
                 burner_gba_patch_write_t *thunk = &plan->batteryless_writes[plan->batteryless_write_count++];
                 burner_gba_patch_write_t *target = &plan->batteryless_writes[plan->batteryless_write_count++];
                 thunk->offset = pos + 12U;
@@ -923,10 +861,6 @@ static int build_gba_patch_plan_impl(
                 plan->batteryless_save_size = 0x2000U;
                 patch_write_le32(plan->payload + 8U, 0x2000U);
                 found_hook = true;
-            } else if (scan_result == -2) {
-                fclose(fp);
-                set_error(error_msg, error_msg_len, "batteryless scan memory failed");
-                return ESP_ERR_NO_MEM;
             }
         }
         if (plan->batteryless_irq_count == 0U || !found_hook) {
@@ -1224,99 +1158,6 @@ done:
     return result;
 }
 
-static int copy_file(const char *input_path, const char *tmp_path, uint32_t *size_out)
-{
-    FILE *in = NULL;
-    FILE *out = NULL;
-    unsigned char *buffer = NULL;
-    uint32_t total = 0U;
-    size_t got;
-    int result = -1;
-
-    in = fopen(input_path, "rb");
-    out = fopen(tmp_path, "wb");
-    if (in == NULL || out == NULL) {
-        goto done;
-    }
-    if (file_size(in, &total) != 0 || total == 0U) {
-        goto done;
-    }
-    buffer = (unsigned char *)malloc(PATCH_SCAN_BYTES);
-    if (buffer == NULL) {
-        goto done;
-    }
-    while ((got = patch_debug_read(buffer, 1U, PATCH_SCAN_BYTES, in)) > 0U) {
-        if (fwrite(buffer, 1U, got, out) != got) {
-            goto done;
-        }
-    }
-    if (ferror(in) != 0 || fflush(out) != 0) {
-        goto done;
-    }
-    if (size_out != NULL) {
-        *size_out = total;
-    }
-    result = 0;
-done:
-    free(buffer);
-    if (in != NULL) fclose(in);
-    if (out != NULL) fclose(out);
-    return result;
-}
-
-static int apply_sram_set(FILE *fp, uint32_t total, const sram_patch_set_t *set, burner_gba_patch_progress_cb_t progress_cb)
-{
-    uint32_t offsets[16] = {0};
-    bool all_markers = true;
-    bool all_replacements = true;
-    size_t i;
-
-    if (set == NULL || set->patch_count > sizeof(offsets) / sizeof(offsets[0])) {
-        return -1;
-    }
-    for (i = 0U; i < set->patch_count; ++i) {
-        int marker_result = find_pattern(
-            fp,
-            total,
-            set->patches[i].marker,
-            set->patches[i].marker_len,
-            set->patches[i].marker_mask,
-            set->patches[i].marker_mask_len,
-            &offsets[i],
-            progress_cb,
-            BURNER_GBA_PATCH_PROGRESS_SRAM,
-            (int)((i * 100U) / (set->patch_count * 2U)),
-            (int)(((i * 2U + 1U) * 100U) / (set->patch_count * 2U)));
-        uint32_t replacement_offset = 0U;
-        int replacement_result = find_pattern(
-            fp,
-            total,
-            set->patches[i].replace,
-            set->patches[i].replace_len,
-            NULL,
-            0U,
-            &replacement_offset,
-            progress_cb,
-            BURNER_GBA_PATCH_PROGRESS_SRAM,
-            (int)(((i * 2U + 1U) * 100U) / (set->patch_count * 2U)),
-            (int)(((i + 1U) * 100U) / set->patch_count));
-        if (marker_result != 0) all_markers = false;
-        if (replacement_result != 0) all_replacements = false;
-    }
-    if (!all_markers && all_replacements) {
-        return 2; /* already patched */
-    }
-    if (!all_markers) {
-        return 1;
-    }
-    for (i = 0U; i < set->patch_count; ++i) {
-        if (write_pattern(fp, total, offsets[i], set->patches[i].replace, set->patches[i].replace_len) != 0) {
-            return -1;
-        }
-    }
-    return 0;
-}
-
 bool burner_gba_rom_has_sram_patch_target(const char *input_path)
 {
     FILE *fp;
@@ -1343,36 +1184,6 @@ bool burner_gba_rom_has_sram_patch_target(const char *input_path)
     return any_found;
 }
 
-bool burner_gba_rom_has_batteryless_patch_target(const char *input_path)
-{
-    FILE *fp;
-    uint32_t total = 0U;
-    unsigned char *buffer = NULL;
-    size_t marker_len = sizeof(BATTERYLESS_MARKER) - 1U;
-    bool found = false;
-
-    if (input_path == NULL) {
-        return false;
-    }
-    fp = fopen(input_path, "rb");
-    if (fp == NULL || file_size(fp, &total) != 0 || total < marker_len) {
-        if (fp != NULL) fclose(fp);
-        return false;
-    }
-    buffer = (unsigned char *)malloc(total);
-    if (buffer != NULL && patch_debug_read(buffer, 1U, total, fp) == total) {
-        for (size_t i = 0U; i + marker_len <= total; ++i) {
-            if (memcmp(buffer + i, BATTERYLESS_MARKER, marker_len) == 0) {
-                found = true;
-                break;
-            }
-        }
-    }
-    free(buffer);
-    fclose(fp);
-    return found;
-}
-
 static uint32_t patch_read_le32(const unsigned char *p)
 {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
@@ -1384,438 +1195,4 @@ static void patch_write_le32(unsigned char *p, uint32_t v)
     p[1] = (unsigned char)(v >> 8);
     p[2] = (unsigned char)(v >> 16);
     p[3] = (unsigned char)(v >> 24);
-}
-
-static int apply_batteryless_patch(FILE *fp, uint32_t *total_io, uint32_t *save_size_out, char *error_msg, size_t error_msg_len, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
-{
-    static const unsigned char old_irq[] = {0xFC, 0x7F, 0x00, 0x03};
-    static const unsigned char new_irq[] = {0xF4, 0x7F, 0x00, 0x03};
-    static const unsigned char write_sram[] = {0x30,0xB5,0x05,0x1C,0x0C,0x1C,0x13,0x1C,0x0B,0x4A,0x10,0x88,0x0B,0x49,0x08,0x40};
-    static const unsigned char write_sram2[] = {0x80,0xB5,0x83,0xB0,0x6F,0x46,0x38,0x60,0x79,0x60,0xBA,0x60,0x09,0x48,0x09,0x49};
-    static const unsigned char write_sram_arm[] = {0x04,0xC0,0x90,0xE4,0x01,0xC0,0xC1,0xE4,0x2C,0xC4,0xA0,0xE1,0x01,0xC0,0xC1,0xE4};
-    static const unsigned char write_eeprom[] = {0x70,0xB5,0x00,0x04,0x0A,0x1C,0x40,0x0B,0xE0,0x21,0x09,0x05,0x41,0x18,0x07,0x31,0x00,0x23,0x10,0x78};
-    static const unsigned char write_flash[] = {0x70,0xB5,0x00,0x03,0x0A,0x1C,0xE0,0x21,0x09,0x05,0x41,0x18,0x01,0x23,0x1B,0x03};
-    static const unsigned char write_flash2[] = {0x7C,0xB5,0x90,0xB0,0x00,0x03,0x0A,0x1C,0xE0,0x21,0x09,0x05,0x09,0x18,0x01,0x23};
-    static const unsigned char write_flash3[] = {0xF0,0xB5,0x90,0xB0,0x0F,0x1C,0x00,0x04,0x04,0x0C,0x03,0x48,0x00,0x68,0x40,0x89};
-    static const unsigned char write_eeprom_v111[] = {0x0A,0x88,0x80,0x21,0x09,0x06,0x0A,0x43,0x02,0x60,0x07,0x48,0x00,0x47,0x00,0x00};
-    static const unsigned char thumb_thunk[] = {0x00,0x4B,0x18,0x47};
-    static const unsigned char arm_thunk[] = {0x00,0x30,0x9F,0xE5,0x13,0xFF,0x2F,0xE1};
-    static const unsigned char eeprom_v111_thunk[] = {0x07,0x49,0x08,0x47};
-    FILE *payload_fp = NULL;
-    unsigned char *rom = NULL;
-    unsigned char *payload = NULL;
-    uint32_t total;
-    uint32_t rom_size;
-    uint32_t payload_len;
-    uint32_t payload_base = 0;
-    bool found_space = false;
-    bool found_irq = false;
-    bool found_sram = false;
-
-    if (fp == NULL || total_io == NULL) return -1;
-    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 0, "reading", progress_ctx);
-    total = *total_io;
-    payload_fp = fopen("/assets/bl_payload.bin", "rb");
-    if (payload_fp == NULL) payload_fp = fopen("assets/bl_payload.bin", "rb");
-    if (payload_fp == NULL || file_size(payload_fp, &payload_len) != 0 || payload_len < 32U) {
-        set_error(error_msg, error_msg_len, "batteryless payload is unavailable");
-        if (payload_fp != NULL) fclose(payload_fp);
-        return -1;
-    }
-    payload = (unsigned char *)malloc(payload_len);
-    rom_size = (total + 0x3FFFFU) & ~0x3FFFFU;
-    if (rom_size < BATTERYLESS_MIN_ROM) rom_size = BATTERYLESS_MIN_ROM;
-    /* The batteryless patch needs a full-ROM working copy. Keep it in PSRAM so
-     * combining it with SRAM and waitcnt patches does not exhaust internal RAM. */
-    rom = (unsigned char *)heap_caps_malloc(rom_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (payload == NULL || rom == NULL) {
-        set_error(error_msg, error_msg_len, "not enough memory for batteryless patch");
-        goto fail;
-    }
-    if (patch_debug_read(payload, 1U, payload_len, payload_fp) != payload_len || fseek(fp, 0L, SEEK_SET) != 0) {
-        set_error(error_msg, error_msg_len, "batteryless patch read failed");
-        goto fail;
-    }
-    {
-        uint32_t read_done = 0U;
-        while (read_done < total) {
-            size_t chunk = total - read_done;
-            if (chunk > PATCH_SCAN_BYTES) chunk = PATCH_SCAN_BYTES;
-            if (patch_debug_read(rom + read_done, 1U, chunk, fp) != chunk) {
-                set_error(error_msg, error_msg_len, "batteryless patch read failed");
-                goto fail;
-            }
-            read_done += (uint32_t)chunk;
-            if (progress_cb != NULL) {
-                progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
-                            (int)(((uint64_t)read_done * 20U) / total),
-                            "reading",
-                            progress_ctx);
-            }
-            vTaskDelay(1);
-        }
-    }
-    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 25, "scanning", progress_ctx);
-    for (uint32_t i = 0U; i + (sizeof(BATTERYLESS_MARKER) - 1U) <= total; ++i) {
-        if (memcmp(rom + i, BATTERYLESS_MARKER, sizeof(BATTERYLESS_MARKER) - 1U) == 0) {
-            if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 100, "already patched", progress_ctx);
-            fclose(payload_fp);
-            free(payload);
-            heap_caps_free(rom);
-            *total_io = total;
-            if (save_size_out != NULL) *save_size_out = 0x8000U;
-            return 0;
-        }
-        if (progress_cb != NULL && (i & 0xFFFFU) == 0U) {
-            progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
-                        25 + (int)(((uint64_t)i * 10U) / total),
-                        "scanning",
-                        progress_ctx);
-        }
-    }
-    memset(rom + total, 0xFF, rom_size - total);
-    {
-        uint32_t candidate_total = (rom_size >= 0x40000U + payload_len) ?
-                                    (uint32_t)(((uint64_t)rom_size - 0x40000U - payload_len) / 0x40000U + 1U) : 0U;
-        uint32_t candidate_index = 0U;
-        for (int64_t candidate = (int64_t)rom_size - 0x40000 - payload_len; candidate >= 0; candidate -= 0x40000) {
-        bool blank = true;
-        uint32_t span = 0x40000U + payload_len;
-        for (uint32_t i = 0; i < span; ++i) {
-            if (rom[(uint32_t)candidate + i] != 0xFFU && rom[(uint32_t)candidate + i] != 0x00U) { blank = false; break; }
-            if (progress_cb != NULL && (i & 0xFFFFU) == 0U && candidate_total > 0U) {
-                int progress = 35 + (int)((((uint64_t)candidate_index * span + i) * 20U) /
-                                          ((uint64_t)candidate_total * span));
-                progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, progress, "finding space", progress_ctx);
-            }
-        }
-        if (blank) { payload_base = (uint32_t)candidate; found_space = true; break; }
-        candidate_index++;
-        vTaskDelay(1);
-        }
-    }
-    if (!found_space || rom_size < 4U || rom[3] != 0xEAU) {
-        set_error(error_msg, error_msg_len, "ROM has no batteryless payload space or unsupported entrypoint");
-        goto fail;
-    }
-    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 55, "hooking", progress_ctx);
-    memcpy(rom + payload_base, payload, payload_len);
-    patch_write_le32(rom + payload_base + 8U, 0x8000U);
-    patch_write_le32(rom + payload_base, 0x08000000U + 8U + ((patch_read_le32(rom) & 0x00FFFFFFU) << 2));
-    patch_write_le32(rom, 0xEA000000U | (((0x08000000U + payload_base + patch_read_le32(payload + 12U)) - 0x08000008U) >> 2));
-    for (uint32_t i = 0; i + sizeof(old_irq) <= rom_size; i += 4U) {
-        if (memcmp(rom + i, old_irq, sizeof(old_irq)) == 0) { memcpy(rom + i, new_irq, sizeof(new_irq)); found_irq = true; }
-        if (progress_cb != NULL && (i & 0xFFFFU) == 0U) {
-            progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
-                        55 + (int)(((uint64_t)i * 10U) / rom_size),
-                        "hooking",
-                        progress_ctx);
-        }
-    }
-    /* These signatures are the routines emitted by the SRAM patchers. */
-    const struct {
-        const unsigned char *signature;
-        size_t signature_len;
-        uint32_t payload_offset;
-        uint32_t save_size;
-        bool arm;
-    } hooks[] = {
-        {write_sram, sizeof(write_sram), 16U, 0x8000U, false},
-        {write_sram2, sizeof(write_sram2), 16U, 0x8000U, false},
-        {write_sram_arm, sizeof(write_sram_arm), 16U, 0x8000U, true},
-        {write_eeprom, sizeof(write_eeprom), 20U, 0x2000U, false},
-        {write_flash, sizeof(write_flash), 24U, 0x10000U, false},
-        {write_flash2, sizeof(write_flash2), 24U, 0x10000U, false},
-        {write_flash3, sizeof(write_flash3), 24U, 0x20000U, false},
-    };
-    for (size_t hook = 0U; hook < sizeof(hooks) / sizeof(hooks[0]); ++hook) {
-        const size_t stride = hooks[hook].arm ? 4U : 2U;
-        const size_t thunk_len = hooks[hook].arm ? sizeof(arm_thunk) : sizeof(thumb_thunk);
-        const unsigned char *thunk = hooks[hook].arm ? arm_thunk : thumb_thunk;
-        const size_t target_offset = hooks[hook].arm ? 8U : 4U;
-        for (uint32_t i = 0U; i + hooks[hook].signature_len <= total; i += (uint32_t)stride) {
-            if (memcmp(rom + i, hooks[hook].signature, hooks[hook].signature_len) != 0) {
-                continue;
-            }
-            memcpy(rom + i, thunk, thunk_len);
-            patch_write_le32(rom + i + target_offset, 0x08000000U + payload_base + patch_read_le32(payload + hooks[hook].payload_offset));
-            patch_write_le32(rom + payload_base + 8U, hooks[hook].save_size);
-            found_sram = true;
-            break;
-        }
-        if (found_sram) {
-            break;
-        }
-    }
-    if (!found_sram) {
-        /* EEPROM v1.1.1 needs a post-hook at the function epilogue. */
-        for (uint32_t i = 0U; i + 48U <= total; i += 2U) {
-            if (memcmp(rom + i, write_eeprom_v111, sizeof(write_eeprom_v111)) == 0) {
-                memcpy(rom + i + 12U, eeprom_v111_thunk, sizeof(eeprom_v111_thunk));
-                patch_write_le32(rom + i + 44U, 0x08000000U + payload_base + patch_read_le32(payload + 28U));
-                patch_write_le32(rom + payload_base + 8U, 0x2000U);
-                found_sram = true;
-                break;
-            }
-        }
-    }
-    if (!found_irq || !found_sram) {
-        set_error(error_msg, error_msg_len, "ROM save hook is unsupported for batteryless patch");
-        goto fail;
-    }
-    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 85, "writing", progress_ctx);
-    if (fclose(payload_fp) != 0) {
-        payload_fp = NULL;
-        set_error(error_msg, error_msg_len, "batteryless payload close failed");
-        goto fail;
-    }
-    payload_fp = NULL;
-    if (fseek(fp, 0L, SEEK_SET) != 0 || ftruncate(fileno(fp), (off_t)rom_size) != 0) {
-        set_error(error_msg, error_msg_len, "batteryless patch write failed");
-        goto fail;
-    }
-    {
-        uint32_t write_done = 0U;
-        while (write_done < rom_size) {
-            size_t chunk = rom_size - write_done;
-            if (chunk > PATCH_SCAN_BYTES) chunk = PATCH_SCAN_BYTES;
-            if (fwrite(rom + write_done, 1U, chunk, fp) != chunk) {
-                set_error(error_msg, error_msg_len, "batteryless patch write failed");
-                goto fail;
-            }
-            write_done += (uint32_t)chunk;
-            if (progress_cb != NULL) {
-                progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS,
-                            85 + (int)(((uint64_t)write_done * 15U) / rom_size),
-                            "writing",
-                            progress_ctx);
-            }
-            vTaskDelay(1);
-        }
-        if (fflush(fp) != 0) {
-            set_error(error_msg, error_msg_len, "batteryless patch write failed");
-            goto fail;
-        }
-    }
-    *total_io = rom_size;
-    if (save_size_out != NULL) *save_size_out = 0x8000U;
-    if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_BATTERYLESS, 100, "done", progress_ctx);
-    free(payload); heap_caps_free(rom);
-    return 0;
-fail:
-    if (payload_fp != NULL) fclose(payload_fp);
-    free(payload); heap_caps_free(rom);
-    return -1;
-}
-
-int burner_prepare_gba_patch_file(
-    const char *input_path,
-    bool apply_sram_patch,
-    bool apply_waitcnt_patch,
-    bool apply_batteryless,
-    char *output_path,
-    size_t output_path_len,
-    burner_gba_patch_report_t *report,
-    char *error_msg,
-    size_t error_msg_len,
-    burner_gba_patch_progress_cb_t progress_cb,
-    void *progress_ctx)
-{
-    char tmp_path[BURNER_FILE_PATH_LEN + 32U] = {0};
-    char patched_path[BURNER_FILE_PATH_LEN + 32U] = {0};
-    FILE *fp = NULL;
-    FILE *input_fp = NULL;
-    uint32_t total = 0U;
-    bool did_sram = false;
-    bool did_batteryless = false;
-    bool did_normalize = false;
-    uint32_t waitcnt_count = 0U;
-    int selected_set = -1;
-    size_t i;
-
-    if (report != NULL) memset(report, 0, sizeof(*report));
-    if (input_path == NULL || output_path == NULL || output_path_len == 0U) {
-        set_error(error_msg, error_msg_len, "invalid patch input");
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (snprintf(tmp_path, sizeof(tmp_path), "%s.patching", input_path) >= (int)sizeof(tmp_path) ||
-        snprintf(patched_path, sizeof(patched_path), "%s.patched.gba", input_path) >= (int)sizeof(patched_path)) {
-        set_error(error_msg, error_msg_len, "patch path too long");
-        return ESP_ERR_INVALID_SIZE;
-    }
-    input_fp = fopen(input_path, "rb");
-    if (input_fp == NULL || file_size(input_fp, &total) != 0 || total == 0U) {
-        if (input_fp != NULL) fclose(input_fp);
-        set_error(error_msg, error_msg_len, "open rom for patch scan failed");
-        return ESP_FAIL;
-    }
-    if (!apply_sram_patch && !apply_waitcnt_patch && !apply_batteryless && (total & 1U) == 0U) {
-        fclose(input_fp);
-        input_fp = NULL;
-        snprintf(output_path, output_path_len, "%s", input_path);
-        if (report != NULL) report->output_size = total;
-        return ESP_OK;
-    }
-    if (apply_sram_patch && !apply_waitcnt_patch && !apply_batteryless) {
-        bool has_sram_identifier = false;
-        for (i = 0U; i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
-            uint32_t identifier_offset = 0U;
-            if (find_pattern(
-                    input_fp,
-                    total,
-                    s_generated_patch_sets[i].identifier,
-                    s_generated_patch_sets[i].identifier_len,
-                    NULL,
-                    0U,
-                    &identifier_offset,
-                    NULL,
-                    BURNER_GBA_PATCH_PROGRESS_SRAM,
-                    0,
-                    100) == 0) {
-                has_sram_identifier = true;
-                break;
-            }
-        }
-        fclose(input_fp);
-        input_fp = NULL;
-        if (!has_sram_identifier && (total & 1U) == 0U) {
-            snprintf(output_path, output_path_len, "%s", input_path);
-            if (report != NULL) report->output_size = total;
-            return ESP_OK;
-        }
-    } else {
-        fclose(input_fp);
-        input_fp = NULL;
-    }
-    if (copy_file(input_path, tmp_path, &total) != 0) {
-        unlink(tmp_path);
-        set_error(error_msg, error_msg_len, "copy rom for patch failed");
-        return ESP_FAIL;
-    }
-    fp = fopen(tmp_path, "r+b");
-    if (fp == NULL || file_size(fp, &total) != 0) {
-        if (fp != NULL) fclose(fp);
-        unlink(tmp_path);
-        set_error(error_msg, error_msg_len, "open patch copy failed");
-        return ESP_FAIL;
-    }
-
-    if (progress_cb != NULL) {
-        if (apply_sram_patch) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 0, "analyzing", progress_ctx);
-        if (apply_waitcnt_patch) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 0, "waiting", progress_ctx);
-    }
-
-    for (i = 0U; apply_sram_patch && i < sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]); ++i) {
-        uint32_t identifier_offset = 0U;
-        if (find_pattern(
-                fp,
-                total,
-                s_generated_patch_sets[i].identifier,
-                s_generated_patch_sets[i].identifier_len,
-                NULL,
-                0U,
-                &identifier_offset,
-                NULL,
-                BURNER_GBA_PATCH_PROGRESS_SRAM,
-                0,
-                100) == 0) {
-            selected_set = (int)i;
-            break;
-        }
-    }
-    if (selected_set >= 0) {
-        if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 50, "patching", progress_ctx);
-        int patch_result = apply_sram_set(fp, total, &s_generated_patch_sets[selected_set], progress_cb);
-        if (patch_result < 0) {
-            set_error(error_msg, error_msg_len, "sram patch write failed");
-            fclose(fp);
-            unlink(tmp_path);
-            return ESP_FAIL;
-        }
-        if (patch_result == 1) {
-            set_error(error_msg, error_msg_len, "sram patch patterns incomplete");
-            fclose(fp);
-            unlink(tmp_path);
-            return ESP_ERR_NOT_SUPPORTED;
-        }
-        did_sram = patch_result == 0;
-        if (progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 100, "done", progress_ctx);
-        if (report != NULL) snprintf(report->patch_name, sizeof(report->patch_name), "%s", s_generated_patch_sets[selected_set].name);
-    } else if (apply_sram_patch && progress_cb != NULL) {
-        progress_cb(BURNER_GBA_PATCH_PROGRESS_SRAM, 100, "skipped", progress_ctx);
-    }
-    /* The batteryless patch expects the save routine after SRAM patching. */
-    if (apply_batteryless) {
-        uint32_t batteryless_size = 0U;
-        if (apply_batteryless_patch(fp, &total, &batteryless_size, error_msg, error_msg_len, progress_cb, progress_ctx) != 0) {
-            fclose(fp);
-            unlink(tmp_path);
-            return ESP_ERR_NOT_SUPPORTED;
-        }
-        did_batteryless = true;
-        if (report != NULL) report->batteryless_save_size = batteryless_size;
-    }
-    if ((total & 1U) != 0U) {
-        static const unsigned char padding = 0U;
-        if (total == UINT32_MAX) {
-            set_error(error_msg, error_msg_len, "rom file too large");
-            fclose(fp);
-            unlink(tmp_path);
-            return ESP_ERR_INVALID_SIZE;
-        }
-        if (fseek(fp, 0L, SEEK_END) != 0 || fwrite(&padding, 1U, 1U, fp) != 1U) {
-            set_error(error_msg, error_msg_len, "append gba padding to patch copy failed");
-            fclose(fp);
-            unlink(tmp_path);
-            return ESP_FAIL;
-        }
-        ++total;
-        did_normalize = true;
-    }
-    if (apply_waitcnt_patch && progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 0, "analyzing", progress_ctx);
-    if (apply_waitcnt_patch && progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 50, "patching", progress_ctx);
-    if (apply_waitcnt_patch && apply_waitcnt(fp, total, &waitcnt_count) != 0) {
-        set_error(error_msg, error_msg_len, "waitcnt patch failed");
-        fclose(fp);
-        unlink(tmp_path);
-        return ESP_FAIL;
-    }
-    if (apply_waitcnt_patch && progress_cb != NULL) progress_cb(BURNER_GBA_PATCH_PROGRESS_WAITCNT, 100, "done", progress_ctx);
-    if (fflush(fp) != 0 || fclose(fp) != 0) {
-        unlink(tmp_path);
-        set_error(error_msg, error_msg_len, "flush patch copy failed");
-        return ESP_FAIL;
-    }
-    fp = NULL;
-
-    if (!did_sram && !did_batteryless && waitcnt_count == 0U && !did_normalize) {
-        unlink(tmp_path);
-        snprintf(output_path, output_path_len, "%s", input_path);
-        if (report != NULL) {
-            report->output_size = total;
-            report->waitcnt_count = 0U;
-        }
-        return ESP_OK;
-    }
-    unlink(patched_path);
-    if (rename(tmp_path, patched_path) != 0) {
-        unlink(tmp_path);
-        set_error(error_msg, error_msg_len, "commit patched rom failed");
-        return ESP_FAIL;
-    }
-    if (strlen(patched_path) + 1U > output_path_len) {
-        unlink(patched_path);
-        set_error(error_msg, error_msg_len, "patched path buffer too small");
-        return ESP_ERR_INVALID_SIZE;
-    }
-    snprintf(output_path, output_path_len, "%s", patched_path);
-    if (report != NULL) {
-        report->created_copy = true;
-        report->sram_patched = did_sram;
-        report->batteryless_patched = did_batteryless;
-        report->waitcnt_patched = waitcnt_count > 0U;
-        report->waitcnt_count = waitcnt_count;
-        report->output_size = total;
-    }
-    return ESP_OK;
 }

@@ -1077,7 +1077,6 @@ static const char *ui_selected_gb_mapper_label(void);
 static void ui_push_current_page_locked(const ui_model_t *model);
 static bool ui_page_is_icon_grid(ui_page_t page);
 static bool ui_icon_page_config_for_page(ui_page_t page, ui_icon_page_config_t *config_out);
-static bool ui_icon_page_item_at(ui_page_t page, uint16_t index, const ui_menu_item_t **item_out);
 static uint16_t ui_icon_page_move_selection(uint16_t selected, uint16_t count, uint8_t cols, uint8_t rows, int dx, int dy);
 static bool ui_file_page_is_book_scope(const ui_model_t *model);
 static bool ui_reader_text_file_supported_name(const char *name);
@@ -1550,17 +1549,6 @@ static bool ui_icon_page_config_for_page(ui_page_t page, ui_icon_page_config_t *
     if (config_out != NULL) {
         *config_out = config;
     }
-    return true;
-}
-
-static bool ui_icon_page_item_at(ui_page_t page, uint16_t index, const ui_menu_item_t **item_out)
-{
-    ui_icon_page_config_t config = {0};
-
-    if (item_out == NULL || !ui_icon_page_config_for_page(page, &config) || index >= config.count) {
-        return false;
-    }
-    *item_out = &config.items[index];
     return true;
 }
 

@@ -357,22 +357,6 @@ static void ui_format_gba_d0d1_text(const burner_status_t *status, char *out, si
     }
 }
 
-static void ui_format_u64_size(uint64_t bytes, char *out, size_t out_len)
-{
-    if (out == NULL || out_len == 0U) {
-        return;
-    }
-    if (bytes >= 1024ULL * 1024ULL * 1024ULL) {
-        snprintf(out, out_len, "%.1f GB", (double)bytes / (1024.0 * 1024.0 * 1024.0));
-    } else if (bytes >= 1024ULL * 1024ULL) {
-        snprintf(out, out_len, "%.1f MB", (double)bytes / (1024.0 * 1024.0));
-    } else if (bytes >= 1024ULL) {
-        snprintf(out, out_len, "%.1f KB", (double)bytes / 1024.0);
-    } else {
-        snprintf(out, out_len, "%" PRIu64 " B", bytes);
-    }
-}
-
 static void ui_format_elapsed(uint64_t elapsed_us, char *out, size_t out_len)
 {
     uint64_t seconds = elapsed_us / 1000000ULL;
@@ -386,23 +370,6 @@ static void ui_format_elapsed(uint64_t elapsed_us, char *out, size_t out_len)
         snprintf(out, out_len, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64, hours, minutes % 60ULL, seconds % 60ULL);
     } else {
         snprintf(out, out_len, "%02" PRIu64 ":%02" PRIu64, minutes, seconds % 60ULL);
-    }
-}
-
-static void ui_format_uptime(uint64_t uptime_ms, char *out, size_t out_len)
-{
-    uint64_t seconds = uptime_ms / 1000ULL;
-    uint64_t hours = seconds / 3600ULL;
-    uint64_t minutes = (seconds / 60ULL) % 60ULL;
-    uint64_t secs = seconds % 60ULL;
-
-    if (out == NULL || out_len == 0U) {
-        return;
-    }
-    if (hours > 99ULL) {
-        snprintf(out, out_len, "%" PRIu64 "d %02" PRIu64 "h", hours / 24ULL, hours % 24ULL);
-    } else {
-        snprintf(out, out_len, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64, hours, minutes, secs);
     }
 }
 
