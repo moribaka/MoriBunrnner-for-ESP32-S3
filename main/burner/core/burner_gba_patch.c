@@ -94,7 +94,7 @@ static size_t patch_debug_read(void *buffer, size_t size, size_t count, FILE *fp
     if (cancelled) return 0;
     long position = tracked ? ftell(fp) : 0;
     int64_t started = tracked ? esp_timer_get_time() : 0;
-    size_t got = burner_file_read(buffer, size, count, fp);
+    size_t got = fread(buffer, size, count, fp);
     int64_t elapsed = tracked ? esp_timer_get_time() - started : 0;
     if (tracked) {
         portENTER_CRITICAL(&s_patch_debug_lock);
@@ -626,7 +626,7 @@ static int build_gba_patch_plan_impl(
     if (report != NULL) {
         memset(report, 0, sizeof(*report));
     }
-    fp = fopen(input_path, "rb");
+    fp = burner_file_open_read(input_path);
     if (fp == NULL || file_size(fp, &total) != 0 || total == 0U) {
         if (fp != NULL) fclose(fp);
         set_error(error_msg, error_msg_len, "open rom for patch plan failed");
@@ -1072,7 +1072,7 @@ int burner_save_gba_patch_file(
         plan, report, error_msg, error_msg_len, progress_cb, progress_ctx);
     if (result != ESP_OK || patch_debug_cancelled()) goto done;
     result = ESP_FAIL;
-    in = fopen(input_path, "rb");
+    in = burner_file_open_read(input_path);
     uint32_t source_size = 0;
     if (in == NULL || file_size(in, &source_size) != 0 || source_size != plan->source_size) {
         set_error(error_msg, error_msg_len, "source ROM changed or cannot be read");
@@ -1183,7 +1183,7 @@ bool burner_gba_rom_has_sram_patch_target(const char *input_path)
     if (input_path == NULL) {
         return false;
     }
-    fp = fopen(input_path, "rb");
+    fp = burner_file_open_read(input_path);
     if (fp == NULL || file_size(fp, &total) != 0) {
         if (fp != NULL) fclose(fp);
         return false;

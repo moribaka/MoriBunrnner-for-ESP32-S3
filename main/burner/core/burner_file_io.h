@@ -1,34 +1,16 @@
 #pragma once
 
-#include <stdint.h>
 #include <stdio.h>
-#include <string.h>
-#include "esp_heap_caps.h"
-#include "esp_memory_utils.h"
 
-/* S3 SDMMC cannot DMA into PSRAM: a direct fread there falls back to one
- * 512-byte command per sector. An internal buffer keeps multi-sector reads.
- * Keep allocation local: patch scans and burner readers can run on either core. */
-static inline size_t burner_file_read(void *dst, size_t size, size_t count, FILE *fp)
+/* Newlib's small default FILE buffer splits sequential ROM reads into tiny
+ * FatFS requests. A 16 KiB buffer allows SDMMC multi-sector transfers; stdio
+ * owns and frees it on fclose. Allocation failure keeps the default buffer. */
+static inline FILE *burner_file_open_read(const char *path)
 {
-    if (size == 0 || count == 0) return 0;
-    if (count > SIZE_MAX / size) return 0;
-    size_t bytes = size * count;
-    if (bytes < 4096 || (esp_ptr_dma_capable(dst) && ((uintptr_t)dst & 3u) == 0))
-        return fread(dst, size, count, fp);
-
-    const size_t capacity = 16u * 1024u;
-    unsigned char *dma = heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-    if (dma == NULL) return fread(dst, size, count, fp);
-    size_t copied = 0;
-    while (copied < bytes) {
-        size_t chunk = bytes - copied;
-        if (chunk > capacity) chunk = capacity;
-        size_t got = fread(dma, 1, chunk, fp);
-        memcpy((unsigned char *)dst + copied, dma, got);
-        copied += got;
-        if (got != chunk) break;
+    FILE *fp = fopen(path, "rb");
+    if (fp != NULL && setvbuf(fp, NULL, _IOFBF, 16u * 1024u) != 0) {
+        fclose(fp);
+        fp = fopen(path, "rb");
     }
-    heap_caps_free(dma);
-    return copied / size;
+    return fp;
 }

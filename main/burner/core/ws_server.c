@@ -11,6 +11,7 @@
 #define BURNER_BATTERYLESS_MARKER "<3 from Maniac"
 #define BURNER_BATTERYLESS_SEARCH_BYTES 0x2000u
 #include "burner_io_config.h"
+#include "burner_file_io.h"
 
 #include "burner_tf_list_types.h"
 

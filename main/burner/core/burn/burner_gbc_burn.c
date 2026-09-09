@@ -116,7 +116,7 @@ static esp_err_t burner_run_write_job_mbc5(const burner_task_param_t *job)
             job->rom_path);
         return ESP_ERR_INVALID_SIZE;
     }
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -794,7 +794,7 @@ static esp_err_t burner_run_verify_rom_job_mbc5(const burner_task_param_t *job)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -1149,7 +1149,7 @@ esp_err_t burner_run_write_ram_job(const burner_task_param_t *job)
     }
     ram_enabled = true;
 
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -1473,7 +1473,7 @@ esp_err_t burner_run_verify_ram_job(const burner_task_param_t *job)
     }
     ram_enabled = true;
 
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,

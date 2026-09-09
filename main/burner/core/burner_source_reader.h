@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "esp_err.h"
-#include "burner_file_io.h"
 
 /* source_size==0 is strict reading. Otherwise FF padding is permitted only
  * after the declared source EOF; truncation inside the source is an error. */
@@ -27,7 +26,7 @@ static inline esp_err_t burner_source_read_exact(FILE *fp, uint8_t *dst, size_t 
             from_file = source_size - (uint32_t)position;
         }
     }
-    if (from_file && burner_file_read(dst, 1, from_file, fp) != from_file) return ESP_FAIL;
+    if (from_file && fread(dst, 1, from_file, fp) != from_file) return ESP_FAIL;
     if (ferror(fp)) return ESP_FAIL;
     if (from_file < bytes) memset(dst + from_file, 0xFF, bytes - from_file);
     return ESP_OK;

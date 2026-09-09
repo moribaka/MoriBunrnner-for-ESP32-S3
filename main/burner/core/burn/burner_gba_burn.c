@@ -406,7 +406,7 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
         return (err == ESP_OK) ? ESP_ERR_INVALID_SIZE : err;
     }
 
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -1039,7 +1039,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
             "GBA Intel PSRAM policy: fixed %uMB window, erase+prefetch then program",
             (unsigned)psram_window_mb);
     }
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,
@@ -1942,7 +1942,7 @@ static esp_err_t burner_run_verify_rom_job_gba(const burner_task_param_t *job)
             job->rom_path);
     }
 
-    fp = fopen(job->rom_path, "rb");
+    fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
             BURNER_STATE_ERROR,
