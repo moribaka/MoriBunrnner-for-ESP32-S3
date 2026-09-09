@@ -445,6 +445,9 @@ static void arm_request(void)
 int main(void)
 {
     board_init();
+    SYS_DisableNJTRST();
+    SYS_DisableJTDI();
+    SYS_DisableJTDO();
     cart_release();
     if (REG32(MCU_REG_IDENTITY) != 0x3155434du) {
         while (1) { }
