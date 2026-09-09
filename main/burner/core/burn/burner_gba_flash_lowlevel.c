@@ -37,12 +37,14 @@ static esp_err_t burner_bacon_gba_amd_wait_program_complete(
         if (err != ESP_OK) {
             return err;
         }
-        err = burner_bacon_rom_read_u16(last_word_addr, &status1);
+        err = s_gba_amd_poll_pair_enabled
+            ? burner_bacon_rom_read_u16_pair(last_word_addr, &status1, &status2)
+            : burner_bacon_rom_read_u16(last_word_addr, &status1);
         if (err != ESP_OK) {
             return err;
         }
         if (burner_gba_amd_status_matches_dq7(status1, expected_data)) {
-            err = burner_bacon_rom_read_u16(last_word_addr, &status2);
+            err = s_gba_amd_poll_pair_enabled ? ESP_OK : burner_bacon_rom_read_u16(last_word_addr, &status2);
             if (err != ESP_OK) {
                 return err;
             }
@@ -54,7 +56,10 @@ static esp_err_t burner_bacon_gba_amd_wait_program_complete(
             }
         }
         if ((status1 & 0x0020u) != 0u) {
-            err = burner_bacon_rom_read_u16(last_word_addr, &status2);
+            /* If DQ7 initially matched but its confirmation did not, the
+             * original algorithm requires a third sample for the DQ5 race. */
+            err = (!s_gba_amd_poll_pair_enabled || burner_gba_amd_status_matches_dq7(status1, expected_data))
+                ? burner_bacon_rom_read_u16(last_word_addr, &status2) : ESP_OK;
             if (err != ESP_OK) {
                 return err;
             }

@@ -1016,6 +1016,9 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     if (burner_gba_gbx_is_active()) {
         return burner_run_write_job_gba_gbx(job);
     }
+    burner_spi_lock_take();
+    burner_gba_check_poll_pair();
+    burner_spi_lock_give();
     if (intel_active && job->write_path == BURNER_WRITE_PATH_PSRAM) {
         psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
         psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);

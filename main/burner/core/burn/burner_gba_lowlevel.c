@@ -583,6 +583,50 @@ static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_val
     return ESP_OK;
 }
 
+static bool s_gba_amd_poll_pair_enabled;
+
+/* Two complete read cycles, including RD/CS release, in one SPI transaction.
+ * Each cycle sets the same address; the second sample must not auto-increment. */
+static esp_err_t burner_bacon_rom_read_u16_pair(uint32_t word_addr, uint16_t *first, uint16_t *second)
+{
+    uint8_t tx[20] = {
+        0xFF, 0, 0, 0, 0x3B, 0x29, 0xAB, 0, 0, 0x3F,
+        0xFF, 0, 0, 0, 0x3B, 0x29, 0xAB, 0, 0, 0x3F
+    };
+    uint8_t rx[20] = {0};
+    if (first == NULL || second == NULL) return ESP_ERR_INVALID_ARG;
+    for (size_t base = 0; base < sizeof(tx); base += 10) {
+        tx[base + 1] = (uint8_t)word_addr;
+        tx[base + 2] = (uint8_t)(word_addr >> 8);
+        tx[base + 3] = (uint8_t)(word_addr >> 16);
+    }
+    esp_err_t err = burner_spi_transfer_cs_legacy(BURNER_SPI_CS_MODE_0, tx, rx, sizeof(tx));
+    if (err == ESP_OK) {
+        *first = (uint16_t)(rx[7] | ((uint16_t)rx[8] << 8));
+        *second = (uint16_t)(rx[17] | ((uint16_t)rx[18] << 8));
+    }
+    return err;
+}
+
+static void burner_gba_check_poll_pair(void)
+{
+    static const uint32_t addresses[] = {0, 0x55, 0x2AA, 0x555};
+    s_gba_amd_poll_pair_enabled = false;
+    if (s_cart_ctx.gba_cmdset != BURNER_NOR_CMDSET_AMD ||
+        s_gba_amd_runtime_profile != BURNER_GBA_AMD_RUNTIME_STANDARD) return;
+    for (size_t i = 0; i < sizeof(addresses) / sizeof(addresses[0]); ++i) {
+        uint16_t expected, first, second;
+        if (burner_bacon_rom_read_u16(addresses[i], &expected) != ESP_OK ||
+            burner_bacon_rom_read_u16_pair(addresses[i], &first, &second) != ESP_OK ||
+            first != expected || second != expected) {
+            ESP_LOGW(BURNER_TAG, "GBA paired polling check failed; retaining individual status reads");
+            return;
+        }
+    }
+    s_gba_amd_poll_pair_enabled = true;
+    ESP_LOGI(BURNER_TAG, "GBA paired polling: 4 read-only address checks passed");
+}
+
 static esp_err_t burner_bacon_rom_read_u16_batched(uint32_t start_word_addr, uint8_t *out, size_t word_count)
 {
     if (out == NULL || word_count == 0u) {
