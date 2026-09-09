@@ -1,4 +1,5 @@
 #include "burner_gba_patch.h"
+#include "burner_file_io.h"
 #include "esp_err.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -93,7 +94,7 @@ static size_t patch_debug_read(void *buffer, size_t size, size_t count, FILE *fp
     if (cancelled) return 0;
     long position = tracked ? ftell(fp) : 0;
     int64_t started = tracked ? esp_timer_get_time() : 0;
-    size_t got = fread(buffer, size, count, fp);
+    size_t got = burner_file_read(buffer, size, count, fp);
     int64_t elapsed = tracked ? esp_timer_get_time() - started : 0;
     if (tracked) {
         portENTER_CRITICAL(&s_patch_debug_lock);
