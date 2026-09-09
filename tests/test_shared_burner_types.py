@@ -1,0 +1,31 @@
+"""Prevent divergent C layouts for globals shared across burner translation units."""
+from pathlib import Path
+import re
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class SharedBurnerTypes(unittest.TestCase):
+    def test_shared_layouts_have_one_definition(self):
+        consumers = [ROOT / "main/burner/core/ws_server.c", ROOT / "main/burner/core/ws_server_internal.h"]
+        for name, header in [("burner_status_t", "burner_status_types.h"),
+                             ("burner_tf_list_buf_t", "burner_tf_list_types.h")]:
+            for consumer in consumers:
+                text = consumer.read_text(encoding="utf-8")
+                self.assertIn(f'#include "{header}"', text)
+                self.assertNotRegex(text, rf'\}}\s*{name}\s*;')
+            definitions = []
+            for path in (ROOT / "main").rglob("*"):
+                if path.suffix in (".c", ".h"):
+                    if re.search(rf'\}}\s*{name}\s*;', path.read_text(encoding="utf-8")):
+                        definitions.append(path.name)
+            self.assertEqual(definitions, [header])
+
+    def test_status_preserves_mapper_field_before_file_fields(self):
+        text = (ROOT / "main/burner/core/burner_status_types.h").read_text()
+        self.assertLess(text.index("probe_mapper_name["), text.index("rom_name["))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -149,17 +149,7 @@
 #define SYSTEM_DEPLOY_STAGE_SETTING_REL SYSTEM_DEPLOY_STAGE_REL "/.setting"
 #define SYSTEM_DEPLOY_REL_MAX_LEN 180U
 
-typedef struct {
-    char esc_path[TF_PATH_LEN_MAX * 2 + 8];
-    char head[TF_PATH_LEN_MAX * 2 + 72];
-    char child_rel[TF_PATH_LEN_MAX];
-    char child_full[TF_PATH_LEN_MAX + 64];
-    char esc_name[TF_PATH_LEN_MAX * 2 + 8];
-    char esc_child[TF_PATH_LEN_MAX * 2 + 8];
-    char line[TF_PATH_LEN_MAX * 4 + 128];
-    char batch[8192];
-    size_t batch_used;
-} burner_tf_list_buf_t;
+#include "burner_tf_list_types.h"
 
 /* SPI burn path: ESP32-S3 SPI2 master -> AG32 CPLD core (Bacon compatible). */
 #define BURNER_SPI_ENABLE 1
@@ -489,92 +479,7 @@ typedef struct {
     uint32_t pre_erased_sector_addr;
 } burner_gba_sector_erase_ctx_t;
 
-typedef struct {
-    burner_state_t state;
-    int progress;
-    uint32_t total_bytes;
-    uint32_t processed_bytes;
-    uint64_t speed_start_us;
-    uint64_t speed_warmup_until_us;
-    uint64_t speed_last_us;
-    uint32_t speed_start_bytes;
-    uint32_t speed_last_bytes;
-    uint32_t speed_current_bps;
-    uint32_t speed_avg_bps;
-    uint32_t speed_min_bps;
-    uint32_t speed_max_bps;
-    bool write_speed_manual;
-    uint64_t task_start_us;
-    uint64_t task_elapsed_us;
-    uint32_t erase_sector_count;
-    uint32_t erase_sector_size;
-    uint32_t erase_phase_total_sectors;
-    uint32_t erase_phase_done_sectors;
-    uint32_t erase_phase_total_bytes;
-    uint32_t erase_phase_done_bytes;
-    uint64_t erase_start_us;
-    uint64_t erase_elapsed_us;
-    uint64_t write_start_us;
-    uint64_t write_elapsed_us;
-    uint32_t tf_to_psram_speed_current_bps;
-    uint32_t tf_to_psram_speed_avg_bps;
-    uint32_t tf_to_psram_speed_min_bps;
-    uint32_t tf_to_psram_speed_max_bps;
-    uint32_t dump_read_speed_current_bps;
-    uint32_t dump_read_speed_avg_bps;
-    uint32_t dump_read_speed_min_bps;
-    uint32_t dump_read_speed_max_bps;
-    uint32_t dump_write_speed_current_bps;
-    uint32_t dump_write_speed_avg_bps;
-    uint32_t dump_write_speed_min_bps;
-    uint32_t dump_write_speed_max_bps;
-    uint32_t mbc5_buffer_write_ok_count;
-    uint32_t mbc5_buffer_fallback_count;
-    uint32_t write_speed_total_bytes;
-    uint64_t write_speed_total_us;
-    uint32_t tf_to_psram_total_bytes;
-    uint64_t tf_to_psram_total_us;
-    uint32_t dump_read_total_bytes;
-    uint64_t dump_read_total_us;
-    uint32_t dump_write_total_bytes;
-    uint64_t dump_write_total_us;
-    uint64_t dump_wait_total_us;
-    uint64_t dump_finalize_total_us;
-    uint32_t verify_sample_addr;
-    uint8_t verify_sample_file_byte;
-    uint8_t verify_sample_cart_byte;
-    bool verify_sample_valid;
-    bool verify_sample_equal;
-    burner_cart_mode_t probe_cart_mode;
-    bool probe_valid;
-    bool probe_cfi_ok;
-    bool probe_gba_multi;
-    bool probe_gba_force_multi;
-    bool probe_gba_d0d1_known;
-    bool probe_gba_d0d1_swapped;
-    burner_gba_save_type_t probe_gba_save_type;
-    uint32_t probe_gba_save_size;
-    bool probe_gba_save_detected;
-    uint32_t probe_gba_batteryless_save_address;
-    uint32_t probe_gba_batteryless_save_size;
-    bool probe_gba_batteryless_region_found;
-    bool probe_gba_batteryless_data_present;
-    burner_gba_sram_patch_kind_t probe_gba_sram_patch_kind;
-    bool probe_gba_sram_patch_scanned;
-    bool probe_gba_sram_patch_detected;
-    uint32_t probe_device_size;
-    uint32_t probe_sector_size;
-    uint16_t probe_buffer_write_bytes;
-    uint8_t probe_id[8];
-    char probe_chip_name[48];
-    char rom_name[BURNER_FILE_NAME_LEN];
-    char rom_path[BURNER_FILE_PATH_LEN];
-    char message[96];
-    bool chip_erase_ui_active;
-    bool erase_phase_planned;
-    bool erase_phase_active;
-    bool cancel_requested;
-} burner_status_t;
+#include "burner_status_types.h"
 
 typedef struct {
     char safe_name[BURNER_FILE_NAME_LEN];
