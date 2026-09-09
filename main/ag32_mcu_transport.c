@@ -48,8 +48,11 @@ static esp_err_t read_transport_status(uint8_t *flags)
     if (response[0] != AG32_MCU_STATUS_PREFIX0
         || response[1] != AG32_MCU_STATUS_PREFIX1
         || response[2] != AG32_MCU_STATUS_VERSION) {
+        ESP_LOGW(AG32_MCU_TAG, "MCU status raw=%02x%02x%02x%02x",
+            response[0], response[1], response[2], response[3]);
         return ESP_ERR_NOT_FOUND;
     }
+    ESP_LOGI(AG32_MCU_TAG, "MCU status flags=0x%02x", response[3]);
     if (flags != NULL) *flags = response[3];
     return (response[3] & AG32_MCU_STATUS_MODE) != 0u
         ? ESP_OK : ESP_ERR_INVALID_STATE;
@@ -158,13 +161,27 @@ static esp_err_t command_in_active_mode(
     if (err != ESP_OK) goto out;
     err = wait_response_ready(timeout_ms != 0u ? timeout_ms : AG32_MCU_DEFAULT_TIMEOUT_MS);
     if (err != ESP_OK) goto out;
+    esp_rom_delay_us(20u);
     err = burner_spi_transfer_cs(
         BURNER_SPI_CS_MODE_1, response_wire, response_wire, response_wire_size);
     if (err != ESP_OK) goto out;
-    err = status_to_esp(ag32_mcu_decode_response(
-        response_wire + 4u, response_wire_size - 4u, &response));
+    ag32_mcu_status_t decode_status = ag32_mcu_decode_response(
+        response_wire + 4u, response_wire_size - 4u, &response);
+    if (decode_status != AG32_MCU_STATUS_OK) {
+        ESP_LOGW(AG32_MCU_TAG,
+            "MCU response decode=%u raw=%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x",
+            (unsigned)decode_status,
+            response_wire[0], response_wire[1], response_wire[2], response_wire[3],
+            response_wire[4], response_wire[5], response_wire[6], response_wire[7],
+            response_wire[8], response_wire[9], response_wire[10], response_wire[11],
+            response_wire[12], response_wire[13], response_wire[14], response_wire[15],
+            response_wire[16], response_wire[17], response_wire[18], response_wire[19]);
+    }
+    err = status_to_esp(decode_status);
     if (err != ESP_OK) goto out;
     if (response.sequence != request.sequence || response.opcode != request.opcode) {
+        ESP_LOGW(AG32_MCU_TAG, "MCU response mismatch seq=%" PRIu32 "/%" PRIu32 " opcode=%02x/%02x",
+            response.sequence, request.sequence, response.opcode, request.opcode);
         err = ESP_ERR_INVALID_RESPONSE;
         goto out;
     }

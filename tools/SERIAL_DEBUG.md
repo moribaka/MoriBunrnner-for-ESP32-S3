@@ -13,6 +13,12 @@ not change the application's path encoding.
 | Command | Behavior |
 | --- | --- |
 | `status` | Firmware version, uptime, heap, active patch phase, file offset, total bytes read, I/O time and result |
+| `ag32-link [auto|legacy|mcu]` | Query or persist the ESP32-to-AG32 transport preference |
+| `ag32-ping` | Negotiate MCU protocol capability without accessing the cartridge bus |
+| `ag32-probe` | Probe AG32 over the board SWD path and then restore 40 MHz SPI |
+| `ag32-batch-check PATH` | Validate an AG32 batch on TF without programming it |
+| `ag32-batch PATH` | Program and verify an AG32 batch through onboard SWD; this is destructive |
+| `ag32-batch-status` | Report the current or last AG32 batch job result |
 | `ui` | UI processing/render counts, metadata polls, directory cache hits and selected item |
 | `key up` / `key a` / `key b` | Send a normal UI key press; also supports down/left/right/menu/panel/vol+/vol- |
 | `epub /sdcard/book.epub` | Read up to 32 chapters forward/backward and report text hash and ZIP index builds |

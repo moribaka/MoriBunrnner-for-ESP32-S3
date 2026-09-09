@@ -75,7 +75,9 @@ module bacon_mode_guard_tb;
         if (mcu_mode !== 1'b0) $fatal(1, "near-match entered MCU mode");
 
         mode_bytes(64'h4d4f5249324d4355);
-        if (mcu_mode !== 1'b1) $fatal(1, "entry magic did not enter MCU mode");
+        if (mcu_mode !== 1'b1)
+            $fatal(1, "entry magic did not enter MCU mode toggle=%b sync=%b bits=%0d shift=%h",
+                dut.enter_toggle, dut.enter_sync, dut.mode_bit_count, dut.mode_shift);
 
         read_status(status);
         if (status !== 32'ha7320103)

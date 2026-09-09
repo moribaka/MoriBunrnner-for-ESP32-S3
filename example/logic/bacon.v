@@ -236,15 +236,14 @@ module bacon_mode_guard(
     localparam [63:0] ENTER_MAGIC = 64'h4d4f5249324d4355; // MORI2MCU
     localparam [63:0] EXIT_MAGIC  = 64'h4d4f5249324c4547; // MORI2LEG
 
-    reg [2:0] sck_sync;
-    reg [2:0] mosi_sync;
-    reg [2:0] idle_sync;
-    reg [63:0] mode_shift;
-    reg [6:0] mode_bit_count;
+    reg [63:0] mode_shift = 64'd0;
+    reg [6:0] mode_bit_count = 7'd0;
+    reg enter_toggle = 1'b0;
+    reg exit_toggle = 1'b0;
+    reg [2:0] enter_sync;
+    reg [2:0] exit_sync;
     reg [5:0] status_bit_count;
 
-    wire sampled_sck_rise = !sck_sync[2] && sck_sync[1];
-    wire mode_channel_idle = idle_sync[2];
     wire status_selected = !spi_cs0 && !spi_cs1;
     wire [31:0] status_word = {
         8'ha7,
@@ -257,41 +256,41 @@ module bacon_mode_guard(
         mcu_mode
     };
 
-    always @(posedge sys_clock or negedge resetn) begin
+    always @(posedge spi_sck or negedge resetn) begin
         if (!resetn) begin
-            sck_sync <= 3'b000;
-            mosi_sync <= 3'b000;
-            idle_sync <= 3'b000;
+            mode_shift <= 64'd0;
+            mode_bit_count <= 7'd0;
+            enter_toggle <= 1'b0;
+            exit_toggle <= 1'b0;
+        end else if (!(spi_cs0 && spi_cs1)) begin
+            mode_shift <= 64'd0;
+            mode_bit_count <= 7'd0;
         end else begin
-            sck_sync <= {sck_sync[1:0], spi_sck};
-            mosi_sync <= {mosi_sync[1:0], spi_mosi};
-            idle_sync <= {idle_sync[1:0], spi_cs0 && spi_cs1};
+            mode_shift <= {mode_shift[62:0], spi_mosi};
+            if (mode_bit_count == 7'd63) begin
+                mode_bit_count <= 7'd0;
+                if ({mode_shift[62:0], spi_mosi} == ENTER_MAGIC)
+                    enter_toggle <= ~enter_toggle;
+                else if ({mode_shift[62:0], spi_mosi} == EXIT_MAGIC)
+                    exit_toggle <= ~exit_toggle;
+            end else begin
+                mode_bit_count <= mode_bit_count + 7'd1;
+            end
         end
     end
 
     always @(posedge sys_clock or negedge resetn) begin
         if (!resetn) begin
+            enter_sync <= 3'b000;
+            exit_sync <= 3'b000;
             mcu_mode <= 1'b0;
-            mode_shift <= 64'd0;
-            mode_bit_count <= 7'd0;
-        end else if (force_legacy) begin
-            mcu_mode <= 1'b0;
-            mode_shift <= 64'd0;
-            mode_bit_count <= 7'd0;
-        end else if (!mode_channel_idle) begin
-            mode_shift <= 64'd0;
-            mode_bit_count <= 7'd0;
-        end else if (sampled_sck_rise) begin
-            mode_shift <= {mode_shift[62:0], mosi_sync[2]};
-            if (mode_bit_count == 7'd63) begin
-                mode_bit_count <= 7'd0;
-                if ({mode_shift[62:0], mosi_sync[2]} == ENTER_MAGIC)
-                    mcu_mode <= 1'b1;
-                else if ({mode_shift[62:0], mosi_sync[2]} == EXIT_MAGIC)
-                    mcu_mode <= 1'b0;
-            end else begin
-                mode_bit_count <= mode_bit_count + 7'd1;
-            end
+        end else begin
+            enter_sync <= {enter_sync[1:0], enter_toggle};
+            exit_sync <= {exit_sync[1:0], exit_toggle};
+            if (force_legacy || (exit_sync[2] != exit_sync[1]))
+                mcu_mode <= 1'b0;
+            else if (enter_sync[2] != enter_sync[1])
+                mcu_mode <= 1'b1;
         end
     end
 
@@ -792,11 +791,11 @@ module bacon_spi_stream_core(
     reg [31:0] rx_word;
     reg [7:0] rx_shift;
     reg [31:0] tx_word;
-    reg [7:0] tx_shift;
+    reg [5:0] tx_native_bit_count;
 
     wire sck_rise = !sck_reg[2] && sck_reg[1];
 
-    assign miso = tx_shift[7];
+    assign miso = tx_word[31 - tx_native_bit_count];
 
     always @(posedge sys_clock or negedge resetn) begin
         if (!resetn) begin
@@ -861,24 +860,23 @@ module bacon_spi_stream_core(
             tx_ready <= 1'b1;
     end
 
+    /* Keep the word in the sys_clock/AHB domain and only advance a native
+     * SPI bit index. This avoids writing the same data register from two
+     * unrelated clocks while keeping MISO stable for the 40 MHz sampler. */
     always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn)
-            tx_shift <= 8'd0;
-        else if (!tx_en)
-            tx_shift <= 8'd0;
-        else if (csn_reg[2] || (!csn_reg[2] && sck_rise && sck_count[2:0] == 3'd7))
-            tx_shift <= tx_word[7:0];
-        else if (!csn_reg[2] && sck_rise)
-            tx_shift <= {tx_shift[6:0], tx_shift[7]};
+        if (!resetn) begin
+            tx_word <= 32'd0;
+        end else if (csn_reg[2] || (!csn_reg[2] && sck_rise && sck_count == 5'd30))
+            tx_word <= {tx_data[7:0], tx_data[15:8], tx_data[23:16], tx_data[31:24]};
     end
 
-    always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn)
-            tx_word <= 32'd0;
-        else if (csn_reg[2] || (!csn_reg[2] && sck_rise && sck_count == 5'd30))
-            tx_word <= tx_data;
-        else if (!csn_reg[2] && sck_rise && sck_count[2:0] == 3'd0)
-            tx_word <= {tx_word[7:0], tx_word[31:8]};
+    always @(posedge sck or posedge csn or negedge resetn) begin
+        if (!resetn || csn)
+            tx_native_bit_count <= 6'd0;
+        else if (tx_native_bit_count == 6'd31)
+            tx_native_bit_count <= 6'd0;
+        else
+            tx_native_bit_count <= tx_native_bit_count + 6'd1;
     end
 endmodule
 

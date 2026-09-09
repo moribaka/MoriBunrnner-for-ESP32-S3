@@ -210,6 +210,43 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "ag32-ping") == 0) {
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "burner or AG32 batch job is running");
+            return;
+        }
+        uint8_t payload[16] = {0};
+        size_t payload_size = 0u;
+        uint32_t capabilities = 0u;
+        bool used_mcu = false;
+        burner_spi_lock_take();
+        esp_err_t err = ag32_mcu_try_command_locked(
+            0u, AG32_MCU_CMD_PING, 0u,
+            NULL, 0u, payload, sizeof(payload), &payload_size,
+            100u, &capabilities, &used_mcu);
+        burner_spi_lock_give();
+        cJSON *json = event("ag32_ping");
+        if (json != NULL) {
+            cJSON_AddBoolToObject(json, "ok", err == ESP_OK && used_mcu);
+            cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
+            cJSON_AddBoolToObject(json, "used_mcu", used_mcu);
+            cJSON_AddStringToObject(json, "preference",
+                ag32_mcu_link_preference_name(ag32_mcu_link_get_preference()));
+            cJSON_AddStringToObject(json, "active",
+                ag32_mcu_link_active_name(ag32_mcu_link_get_active()));
+            cJSON_AddNumberToObject(json, "capabilities", capabilities);
+            cJSON_AddNumberToObject(json, "protocol_version",
+                payload_size >= 4u ? ag32_mcu_read_le32(payload) : 0u);
+            cJSON_AddNumberToObject(json, "max_payload",
+                payload_size >= 8u ? ag32_mcu_read_le32(payload + 4u) : 0u);
+            cJSON_AddNumberToObject(json, "ag32_clock_hz",
+                payload_size >= 12u ? ag32_mcu_read_le32(payload + 8u) : 0u);
+            cJSON_AddNumberToObject(json, "identity",
+                payload_size >= 16u ? ag32_mcu_read_le32(payload + 12u) : 0u);
+        }
+        reply(json);
+        return;
+    }
     if (strcmp(line, "ag32-link") == 0) {
         cJSON *json = event("ag32_link");
         if (json != NULL) {
@@ -447,7 +484,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-link [auto|legacy|mcu] | ag32-probe | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-link [auto|legacy|mcu] | ag32-ping | ag32-probe | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {

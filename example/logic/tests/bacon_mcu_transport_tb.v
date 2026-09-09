@@ -201,6 +201,7 @@ module bacon_mcu_transport_tb;
         ahb_write(32'h6002_0014, 32'd3);
         ahb_write(32'h6002_0000, 32'h0000_0004);
         if (!response_ready) $fatal(1, "response was not published");
+        #100;
 
         spi_cs0 = 1'b1;
         spi_cs1 = 1'b0;
@@ -226,6 +227,7 @@ module bacon_mcu_transport_tb;
         ahb_write(32'h6002_0010, 32'h2000_0020);
         ahb_write(32'h6002_0014, 32'd3);
         ahb_write(32'h6002_0000, 32'h0000_0004);
+        #100;
 
         spi_cs0 = 1'b1;
         spi_cs1 = 1'b0;
