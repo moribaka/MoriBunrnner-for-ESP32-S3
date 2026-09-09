@@ -882,6 +882,7 @@ gbx_write_done:
 esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job)
 {
     esp_err_t err;
+    const char *stage = "spi init";
     bool powered = false;
     bool intel_active;
     bool erase_every_sector;
@@ -900,6 +901,7 @@ esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job)
         return err;
     }
     powered = true;
+    stage = "prepare cartridge";
     burner_spi_lock_take();
     err = burner_spi_prepare_burn_gba(job);
     burner_spi_lock_give();
@@ -908,6 +910,7 @@ esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job)
     }
 
     /* FlashGBX has profile-specific erase commands; leave it to its normal writer. */
+    stage = "validate geometry";
     if (burner_gba_gbx_is_active() || !burner_nor_geometry_is_valid(&s_cart_ctx.geometry)) {
         err = burner_gba_gbx_is_active() ? ESP_ERR_NOT_SUPPORTED : ESP_ERR_INVALID_SIZE;
         goto preerase_done;
@@ -932,6 +935,7 @@ esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job)
         job->rom_name,
         job->rom_path);
     burner_status_mark_erase_begin();
+    stage = "erase range";
     err = burner_run_gba_range_erase(
         job->addr_begin,
         addr_end,
@@ -942,6 +946,11 @@ esp_err_t burner_run_gba_preerase_job(const burner_task_param_t *job)
     burner_status_mark_erase_end();
 
 preerase_done:
+    ESP_LOGI(BURNER_TAG, "GBA preerase result: stage=%s result=%s (0x%x) internal_free=%u largest=%u stack_free=%u",
+        stage, esp_err_to_name(err), (unsigned)err,
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+        (unsigned)uxTaskGetStackHighWaterMark2(NULL));
     if (powered) {
         burner_spi_lock_take();
         burner_bacon_restore_3v3_power();

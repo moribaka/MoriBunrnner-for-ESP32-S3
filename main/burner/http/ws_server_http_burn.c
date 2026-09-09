@@ -1009,15 +1009,18 @@ esp_err_t burner_start_write_from_tf(
         if (err == ESP_OK) {
             preerase_done = true;
         } else if (err != ESP_ERR_NOT_SUPPORTED) {
+            char failure[96];
+            snprintf(failure, sizeof(failure), "gba pre-erase failed: %s (0x%x)", esp_err_to_name(err), (unsigned)err);
             burner_status_update(
                 BURNER_STATE_ERROR,
                 0,
                 0,
                 effective_size,
-                "gba pre-erase failed",
+                failure,
                 safe_name,
                 full_path);
-            return burner_start_error(err, "gba pre-erase failed", error_msg, error_msg_len);
+            if (patch_plan != NULL) heap_caps_free(patch_plan);
+            return burner_start_error(err, failure, error_msg, error_msg_len);
         }
     }
 
