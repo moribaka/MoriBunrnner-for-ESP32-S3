@@ -213,7 +213,7 @@ static void dispatch(char *line)
             FILE *fp = mode < 2 ? fopen(line + 9, "rb") : NULL;
             int fd = mode == 2 ? open(line + 9, O_RDONLY) : -1;
             if ((mode < 2 && !fp) || (mode == 2 && fd < 0)) break;
-            if (mode == 1) setvbuf(fp, NULL, _IONBF, 0);
+            if (mode == 1) setvbuf(fp, NULL, _IOFBF, 16384);
             size_t total = 0;
             uint32_t sum = 0;
             int64_t started = esp_timer_get_time();
@@ -228,7 +228,7 @@ static void dispatch(char *line)
             if (fp) fclose(fp);
             if (fd >= 0) close(fd);
             cJSON *json = event("tf_bench_sample");
-            cJSON_AddStringToObject(json, "mode", mode == 0 ? "buffered" : mode == 1 ? "unbuffered" : "posix");
+            cJSON_AddStringToObject(json, "mode", mode == 0 ? "buffered" : mode == 1 ? "buffered16k" : "posix");
             cJSON_AddNumberToObject(json, "bytes", total);
             cJSON_AddNumberToObject(json, "sum", sum);
             cJSON_AddNumberToObject(json, "elapsed_ms", elapsed / 1000);
