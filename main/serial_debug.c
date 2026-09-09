@@ -200,6 +200,44 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strncmp(line, "tf-bench ", 9) == 0) {
+        burner_gba_patch_debug_t patch;
+        burner_gba_patch_debug_snapshot(&patch);
+        if (!local_path(line + 9) || usb_msc_tf_in_use_by_host() ||
+            burner_task_is_running_snapshot() || patch.running) {
+            message("error", "invalid path or TF busy"); return;
+        }
+        uint8_t *buf = heap_caps_malloc(16384, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+        if (!buf) { message("error", "no DMA memory"); return; }
+        for (int mode = 0; mode < 3; ++mode) {
+            FILE *fp = mode < 2 ? fopen(line + 9, "rb") : NULL;
+            int fd = mode == 2 ? open(line + 9, O_RDONLY) : -1;
+            if ((mode < 2 && !fp) || (mode == 2 && fd < 0)) break;
+            if (mode == 1) setvbuf(fp, NULL, _IONBF, 0);
+            size_t total = 0;
+            uint32_t sum = 0;
+            int64_t started = esp_timer_get_time();
+            while (total < 1024u * 1024u && !usb_msc_tf_in_use_by_host()) {
+                int got = mode < 2 ? (int)fread(buf, 1, 16384, fp) : (int)read(fd, buf, 16384);
+                if (got <= 0) break;
+                for (int i = 0; i < got; ++i) sum += buf[i];
+                total += got;
+                vTaskDelay(1);
+            }
+            int64_t elapsed = esp_timer_get_time() - started;
+            if (fp) fclose(fp);
+            if (fd >= 0) close(fd);
+            cJSON *json = event("tf_bench_sample");
+            cJSON_AddStringToObject(json, "mode", mode == 0 ? "buffered" : mode == 1 ? "unbuffered" : "posix");
+            cJSON_AddNumberToObject(json, "bytes", total);
+            cJSON_AddNumberToObject(json, "sum", sum);
+            cJSON_AddNumberToObject(json, "elapsed_ms", elapsed / 1000);
+            reply(json);
+        }
+        heap_caps_free(buf);
+        message("tf_bench_done", "read-only comparison finished");
+        return;
+    }
     if (strncmp(line, "epub ", 5) == 0) {
         if (!local_path(line + 5) || usb_msc_tf_in_use_by_host()) { message("error", "invalid path or TF busy"); return; }
         char *path = strdup(line + 5);
@@ -273,7 +311,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {

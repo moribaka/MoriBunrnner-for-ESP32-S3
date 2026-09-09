@@ -41,6 +41,7 @@ def run(args):
             "cancel": "cancel", "help": "help", "reboot": "reboot",
             "ui": "ui", "key": "key",
             "epub": "epub_done", "play": "play",
+            "tf-bench": "tf_bench_done",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:
             pending.extend(port.read(4096))
