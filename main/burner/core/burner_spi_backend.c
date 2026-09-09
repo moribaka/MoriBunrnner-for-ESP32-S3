@@ -607,6 +607,7 @@ esp_err_t burner_spi_init(void)
     }
 
     burner_reset_cart_probe_state();
+    ag32_mcu_link_invalidate();
     s_mcu_spi_ready = true;
     if (s_mcu_spi != NULL) {
         int actual_khz = 0;

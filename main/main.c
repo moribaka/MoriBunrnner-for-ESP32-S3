@@ -429,7 +429,8 @@ static const char s_default_burn_config_ini[] =
     "gba_fixed_erase_window=1\n"
     "erase_core=cpu1\n"
     "tf_core=cpu1\n"
-    "psram_core=cpu1\n";
+    "psram_core=cpu1\n"
+    "ag32_link=auto\n";
 
 typedef struct {
     const char *key;

@@ -42,6 +42,8 @@
 #include "ip5306.h"
 #include "lcd_display.h"
 #include "mcu_debug.h"
+#include "ag32_mcu_transport.h"
+#include "ag32_mcu_protocol.h"
 #include "pin_map.h"
 #include "tca9555.h"
 #include "ui.h"

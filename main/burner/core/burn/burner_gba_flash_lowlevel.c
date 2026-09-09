@@ -267,6 +267,37 @@ static esp_err_t burner_bacon_gba_rom_program(
     }
 
     program_start_us = burner_gba_diag_now_us();
+    if (!intel_cmdset
+        && !burner_gba_gbx_is_active()
+        && s_gba_amd_runtime_profile == BURNER_GBA_AMD_RUNTIME_STANDARD
+        && s_cart_ctx.gba_cmd_addr_mode == BURNER_GBA_CMD_ADDR_WORD
+        && s_cart_ctx.gba_cmd_data_lane == BURNER_GBA_CMD_DATA_LOW
+        && !s_cart_ctx.d0d1_swapped) {
+        size_t accelerated = 0u;
+        bool used_mcu = false;
+        while (accelerated < len) {
+            size_t chunk = len - accelerated;
+            if (chunk > AG32_MCU_MAX_PAYLOAD_SIZE - 6u)
+                chunk = AG32_MCU_MAX_PAYLOAD_SIZE - 6u;
+            chunk &= ~(size_t)1u;
+            err = ag32_mcu_try_program_locked(
+                AG32_MCU_CMD_ROM_PROGRAM,
+                (byte_addr + (uint32_t)accelerated) >> 1u,
+                buffer_write_bytes,
+                buf + accelerated,
+                chunk,
+                BURNER_ROM_POLL_TIMEOUT_MS,
+                &used_mcu);
+            if (!used_mcu) break;
+            if (err != ESP_OK) return err;
+            accelerated += chunk;
+        }
+        if (used_mcu) {
+            burner_gba_chis_diag_add_program_lowlevel(
+                burner_gba_diag_now_us() - program_start_us);
+            return ESP_OK;
+        }
+    }
     while (i < len) {
         err = burner_cancel_poll();
         if (err != ESP_OK) {

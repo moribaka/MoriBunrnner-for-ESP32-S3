@@ -45,13 +45,38 @@ static int parse_memory(const uint8_t *data, size_t size, char *error, size_t er
     return result;
 }
 
+static void assert_payload_matches(
+    const char *batch_path,
+    const ag32_batch_record_t *record,
+    const char *payload_path)
+{
+    FILE *batch = fopen(batch_path, "rb");
+    FILE *payload = fopen(payload_path, "rb");
+    uint8_t batch_buf[4096];
+    uint8_t payload_buf[4096];
+    uint32_t compared = 0u;
+    assert(batch != NULL && payload != NULL);
+    assert(fseek(batch, (long)record->payload_offset, SEEK_SET) == 0);
+    while (compared < record->payload_size) {
+        size_t chunk = record->payload_size - compared;
+        if (chunk > sizeof(batch_buf)) chunk = sizeof(batch_buf);
+        assert(fread(batch_buf, 1u, chunk, batch) == chunk);
+        assert(fread(payload_buf, 1u, chunk, payload) == chunk);
+        assert(memcmp(batch_buf, payload_buf, chunk) == 0);
+        compared += (uint32_t)chunk;
+    }
+    assert(fgetc(payload) == EOF);
+    fclose(payload);
+    fclose(batch);
+}
+
 int main(int argc, char **argv)
 {
     ag32_batch_manifest_t manifest;
     char error[160];
     FILE *file;
 
-    assert(argc == 2);
+    assert(argc == 2 || argc == 4);
     file = fopen(argv[1], "rb");
     assert(file != NULL);
     assert(ag32_batch_parse(file, &manifest, error, sizeof(error)) == 0);
@@ -64,6 +89,10 @@ int main(int argc, char **argv)
     assert(manifest.records[1].kind == AG32_BATCH_RECORD_FLASH);
     assert(manifest.records[2].address == AG32_FLASH_BASE);
     assert(manifest.file_size == manifest.payload_bytes + manifest.record_count * AG32_BATCH_HEADER_SIZE);
+    if (argc == 4) {
+        assert_payload_matches(argv[1], &manifest.records[1], argv[2]);
+        assert_payload_matches(argv[1], &manifest.records[2], argv[3]);
+    }
 
     uint8_t *batch = malloc(manifest.file_size);
     assert(batch != NULL);

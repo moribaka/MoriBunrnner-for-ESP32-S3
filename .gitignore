@@ -36,6 +36,8 @@
 /sdkconfig.old
 /compile_commands.json
 *.log
+*.out
+/tests/*/*.exe
 Thumbs.db
 
 # FPGA project generated output
@@ -54,3 +56,4 @@ Thumbs.db
 /example/logic/example_board.inc
 /example/logic/example_board.v
 /example/logic/example_board_routed.v
+/example/logic/*_tmpl.v

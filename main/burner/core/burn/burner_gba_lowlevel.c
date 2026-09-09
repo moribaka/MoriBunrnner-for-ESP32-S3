@@ -3,6 +3,11 @@
 static esp_err_t burner_bacon_rom_write_u16(uint32_t word_addr, uint16_t value)
 {
     uint8_t seq[11];
+    bool used_mcu = false;
+    esp_err_t mcu_err = ag32_mcu_try_write_locked(
+        AG32_MCU_CAP_GBA_ROM, AG32_MCU_CMD_ROM_WRITE,
+        word_addr, &value, sizeof(value), &used_mcu);
+    if (used_mcu) return mcu_err;
 
     seq[0] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
     seq[1] = (uint8_t)(word_addr & 0xFFu);
@@ -322,6 +327,11 @@ static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, 
     if (buf == NULL || len == 0u || (len & 0x1u) != 0u) {
         return ESP_ERR_INVALID_ARG;
     }
+    bool used_mcu = false;
+    err = ag32_mcu_try_read_locked(
+        AG32_MCU_CAP_GBA_ROM, AG32_MCU_CMD_ROM_READ,
+        addr_byte >> 1u, buf, len, &used_mcu);
+    if (used_mcu) return err;
     read_len_word = len / 2u;
     chunk_len_limit = BURNER_SPI_STREAM_CHUNK_BYTES;
     if (chunk_len_limit == 0u || chunk_len_limit > BURNER_SPI_MAX_XFER) {
@@ -449,6 +459,12 @@ static esp_err_t burner_bacon_rom_verify_read_packed_hoststyle(uint32_t addr_byt
         return ESP_ERR_INVALID_ARG;
     }
 
+    bool used_mcu = false;
+    err = ag32_mcu_try_read_locked(
+        AG32_MCU_CAP_GBA_ROM, AG32_MCU_CMD_ROM_READ,
+        addr_byte >> 1u, buf, len, &used_mcu);
+    if (used_mcu) return err;
+
     read_len_word = len / 2u;
     chunk_len_limit = BURNER_SPI_STREAM_CHUNK_BYTES;
     if (chunk_len_limit == 0u || chunk_len_limit > BURNER_SPI_MAX_XFER) {
@@ -563,6 +579,12 @@ static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_val
     if (out_value == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    bool used_mcu = false;
+    err = ag32_mcu_try_read_locked(
+        AG32_MCU_CAP_GBA_ROM, AG32_MCU_CMD_ROM_READ,
+        word_addr, out_value, sizeof(*out_value), &used_mcu);
+    if (used_mcu) return err;
 
     tx_seq[0] = burner_bacon_option_byte0(3, true, true, true, true, true, true);
     tx_seq[1] = (uint8_t)(word_addr & 0xFFu);

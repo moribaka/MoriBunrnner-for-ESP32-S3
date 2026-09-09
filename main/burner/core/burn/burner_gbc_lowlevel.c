@@ -33,6 +33,12 @@ static esp_err_t burner_bacon_gbc_write(uint16_t addr, const uint8_t *buf, size_
         return ESP_ERR_INVALID_ARG;
     }
 
+    bool used_mcu = false;
+    err = ag32_mcu_try_write_locked(
+        AG32_MCU_CAP_GBC_ROM, AG32_MCU_CMD_GBC_WRITE,
+        addr, buf, len, &used_mcu);
+    if (used_mcu) return err;
+
     /* Host CartAdapter_bacon.cs: spi_cs=2 + optionByte2 stream. */
     seq_len = 4u + 4u * len;
     if (seq_len > BURNER_SPI_MAX_XFER) {
@@ -75,6 +81,12 @@ static esp_err_t burner_bacon_gbc_read(uint16_t addr, uint8_t *buf, size_t len)
     if (buf == NULL || len == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    bool used_mcu = false;
+    err = ag32_mcu_try_read_locked(
+        AG32_MCU_CAP_GBC_ROM, AG32_MCU_CMD_GBC_READ,
+        addr, buf, len, &used_mcu);
+    if (used_mcu) return err;
 
     /* Host CartAdapter_bacon.cs: spi_cs=2 + optionByte2 stream. */
     seq_len = 4u + 3u * len;
@@ -137,6 +149,12 @@ static esp_err_t burner_bacon_gbc_read_stream_hoststyle(uint16_t addr, uint8_t *
     if (buf == NULL || len == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    bool used_mcu = false;
+    err = ag32_mcu_try_read_locked(
+        AG32_MCU_CAP_GBC_ROM, AG32_MCU_CMD_GBC_READ,
+        addr, buf, len, &used_mcu);
+    if (used_mcu) return err;
 
     chunk_len_limit = BURNER_SPI_STREAM_CHUNK_BYTES;
     if (chunk_len_limit == 0u || chunk_len_limit > BURNER_SPI_MAX_XFER) {
@@ -231,6 +249,12 @@ static esp_err_t burner_bacon_ram_write(uint16_t addr, const uint8_t *buf, size_
     if (buf == NULL || len == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    bool used_mcu = false;
+    err = ag32_mcu_try_write_locked(
+        AG32_MCU_CAP_GBA_RAM, AG32_MCU_CMD_RAM_WRITE,
+        addr, buf, len, &used_mcu);
+    if (used_mcu) return err;
 
     seq_len = len * 6u;
     if (seq_len > BURNER_SPI_MAX_XFER) {

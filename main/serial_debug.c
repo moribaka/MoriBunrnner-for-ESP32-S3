@@ -25,6 +25,7 @@
 #include "reader/epub_native.h"
 #include "music/music_player.h"
 #include "ag32_batch_programmer.h"
+#include "ag32_mcu_transport.h"
 #include "mcu_debug.h"
 
 static TaskHandle_t s_console;
@@ -85,6 +86,13 @@ static void status(void)
     cJSON_AddNumberToObject(json, "read_ms", patch.read_us / 1000);
     cJSON_AddNumberToObject(json, "elapsed_ms", patch.elapsed_ms);
     cJSON_AddNumberToObject(json, "result", patch.result);
+    cJSON_AddStringToObject(json, "ag32_link",
+        ag32_mcu_link_preference_name(ag32_mcu_link_get_preference()));
+    cJSON_AddStringToObject(json, "ag32_link_active",
+        ag32_mcu_link_active_name(ag32_mcu_link_get_active()));
+    cJSON_AddNumberToObject(json, "ag32_capabilities", ag32_mcu_link_capabilities());
+    cJSON_AddBoolToObject(json, "ag32_capabilities_known",
+        ag32_mcu_link_capabilities_known());
     reply(json);
 }
 
@@ -202,6 +210,49 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "ag32-link") == 0) {
+        cJSON *json = event("ag32_link");
+        if (json != NULL) {
+            cJSON_AddStringToObject(json, "preference",
+                ag32_mcu_link_preference_name(ag32_mcu_link_get_preference()));
+            cJSON_AddStringToObject(json, "active",
+                ag32_mcu_link_active_name(ag32_mcu_link_get_active()));
+            cJSON_AddNumberToObject(json, "capabilities", ag32_mcu_link_capabilities());
+            cJSON_AddBoolToObject(json, "capabilities_known",
+                ag32_mcu_link_capabilities_known());
+        }
+        reply(json);
+        return;
+    }
+    if (strncmp(line, "ag32-link ", 10) == 0) {
+        ag32_link_preference_t next;
+        ag32_link_preference_t previous = ag32_mcu_link_get_preference();
+        if (!ag32_mcu_link_parse_preference(line + 10, &next)) {
+            message("error", "ag32-link must be auto/legacy/mcu");
+            return;
+        }
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "burner or AG32 batch job is running");
+            return;
+        }
+        ag32_mcu_link_set_preference(next);
+        esp_err_t err = burner_save_burn_config();
+        if (err != ESP_OK) {
+            ag32_mcu_link_set_preference(previous);
+            message("error", esp_err_to_name(err));
+            return;
+        }
+        cJSON *json = event("ag32_link");
+        if (json != NULL) {
+            cJSON_AddBoolToObject(json, "ok", true);
+            cJSON_AddStringToObject(json, "preference",
+                ag32_mcu_link_preference_name(next));
+            cJSON_AddStringToObject(json, "active",
+                ag32_mcu_link_active_name(ag32_mcu_link_get_active()));
+        }
+        reply(json);
+        return;
+    }
     if (strcmp(line, "ag32-probe") == 0) {
         mcu_debug_probe_result_t probe = {0};
         uint32_t device_id = 0u;
@@ -396,7 +447,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-probe | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-link [auto|legacy|mcu] | ag32-probe | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {
