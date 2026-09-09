@@ -286,6 +286,17 @@ static void burner_gba_chis_diag_log_summary(esp_err_t err)
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.tf_read_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_total_us),
         avg_once_bytes);
+    ESP_LOGI(BURNER_TAG,
+        "GBA program profile: calls=%" PRIu32 " build=%" PRIu32 "ms spi=%" PRIu32
+        "ms entry=%" PRIu32 "ms poll=%" PRIu32 "ms reset=%" PRIu32
+        "ms prefetch_wait=%" PRIu32 "ms",
+        s_gba_chis_diag.program_once_calls,
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_build_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_spi_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_entry_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_done_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_reset_us),
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us));
     s_gba_chis_diag.active = false;
 }
 
