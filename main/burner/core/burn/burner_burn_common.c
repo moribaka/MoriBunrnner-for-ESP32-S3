@@ -1,3 +1,5 @@
+#include "../burner_source_reader.h"
+
 /* Burn pipeline helpers shared by MBC5/GBC and GBA job paths. */
 
 static void burner_emit_progress_cb(int progress, uint32_t processed)
@@ -1271,8 +1273,6 @@ void burner_tf_reader_set_source_size(uint32_t source_size)
 
 static esp_err_t burner_tf_read_exact(FILE *fp, uint8_t *dst, size_t bytes)
 {
-    size_t read_len;
-
     if (fp == NULL || dst == NULL || bytes == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -1285,15 +1285,7 @@ static esp_err_t burner_tf_read_exact(FILE *fp, uint8_t *dst, size_t bytes)
         return ESP_ERR_INVALID_STATE;
     }
 
-    read_len = fread(dst, 1, bytes, fp);
-    if (read_len < bytes && ferror(fp) == 0 && feof(fp) != 0 &&
-        s_tf_reader_source_size != 0u) {
-        memset(dst + read_len, 0xFF, bytes - read_len);
-        read_len = bytes;
-    }
-    if (read_len != bytes) return ESP_FAIL;
-
-    return ESP_OK;
+    return burner_source_read_exact(fp, dst, bytes, s_tf_reader_source_size);
 }
 
 esp_err_t burner_tf_write_exact(int fd, const uint8_t *src, size_t bytes)
@@ -1356,14 +1348,9 @@ static void burner_tf_prefetch_task(void *arg)
         ctx->err = ESP_ERR_INVALID_STATE;
     } else {
         read_start_us = (uint64_t)esp_timer_get_time();
-        ctx->read_len = fread(ctx->dst, 1, ctx->bytes, ctx->fp);
-        if (ctx->read_len < ctx->bytes && ferror(ctx->fp) == 0 && feof(ctx->fp) != 0 &&
-            s_tf_reader_source_size != 0u) {
-            memset(ctx->dst + ctx->read_len, 0xFF, ctx->bytes - ctx->read_len);
-            ctx->read_len = ctx->bytes;
-        }
+        ctx->err = burner_tf_read_exact(ctx->fp, ctx->dst, ctx->bytes);
+        ctx->read_len = ctx->err == ESP_OK ? ctx->bytes : 0;
         read_elapsed_us = (uint64_t)esp_timer_get_time() - read_start_us;
-        ctx->err = (ctx->read_len == ctx->bytes) ? ESP_OK : ESP_FAIL;
         if (ctx->err == ESP_OK && ctx->read_len > 0u && read_elapsed_us > 0u) {
             burner_status_record_tf_to_psram_copy((uint32_t)ctx->read_len, read_elapsed_us);
             burner_gba_chis_diag_add_tf_read(read_elapsed_us);
@@ -1680,8 +1667,8 @@ static void burner_tf_reader_task(void *arg)
             continue;
         }
 
-        ctx->read_len = fread(ctx->dst, 1, ctx->bytes, ctx->fp);
-        ctx->err = (ctx->read_len == ctx->bytes) ? ESP_OK : ESP_FAIL;
+        ctx->err = burner_tf_read_exact(ctx->fp, ctx->dst, ctx->bytes);
+        ctx->read_len = ctx->err == ESP_OK ? ctx->bytes : 0;
         xSemaphoreGive(ctx->done);
     }
 

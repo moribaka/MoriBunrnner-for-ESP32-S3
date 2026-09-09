@@ -1030,13 +1030,16 @@ esp_err_t burner_start_write_from_tf(
         err = burner_apply_mbc5_slot_limit(false, slot, write_size, &addr_begin, &effective_size);
     }
     if (err == ESP_ERR_INVALID_SIZE) {
+        if (patch_plan != NULL) heap_caps_free(patch_plan);
         return burner_start_error(err, "rom file exceeds selected slot range", error_msg, error_msg_len);
     }
     if (err != ESP_OK) {
+        if (patch_plan != NULL) heap_caps_free(patch_plan);
         return burner_start_error(err, "invalid slot query", error_msg, error_msg_len);
     }
 
     if (((uint64_t)addr_begin + (uint64_t)effective_size) > UINT32_MAX) {
+        if (patch_plan != NULL) heap_caps_free(patch_plan);
         return burner_start_error(ESP_ERR_INVALID_SIZE, "requested write range too large", error_msg, error_msg_len);
     }
 
@@ -1045,6 +1048,7 @@ esp_err_t burner_start_write_from_tf(
     }
     if (err != ESP_OK) {
         if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
+            if (patch_plan != NULL) heap_caps_free(patch_plan);
             return burner_start_error(
                 err,
                 "gba card looks like read-only retail rom; writing is blocked",
@@ -1057,6 +1061,7 @@ esp_err_t burner_start_write_from_tf(
             "read %s nor size failed: %s",
             (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
             esp_err_to_name(err));
+        if (patch_plan != NULL) heap_caps_free(patch_plan);
         return burner_start_error(err, probe_err, error_msg, error_msg_len);
     }
     available_size = (addr_begin < device_size) ? (device_size - addr_begin) : 0u;
@@ -1070,6 +1075,7 @@ esp_err_t burner_start_write_from_tf(
             effective_size,
             available_size,
             device_size);
+        if (patch_plan != NULL) heap_caps_free(patch_plan);
         return burner_start_error(ESP_ERR_INVALID_SIZE, size_err, error_msg, error_msg_len);
     }
 
