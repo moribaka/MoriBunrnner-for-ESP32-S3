@@ -7664,18 +7664,19 @@ static void ui_px_draw_task_patch_row(const ui_model_t *model, uint16_t row, int
     char percent[12] = {0};
 
     if (model == NULL || kind < 0 || kind >= 3) return;
+    const char *label = ui_tr(labels[kind]);
     progress = model->gba_patch_progress[kind];
     if (progress < 0) progress = 0;
     if (progress > 100) progress = 100;
     y = UI_LIST_HEADER_H + (int32_t)row * UI_LIST_LINE_H;
-    label_w = ui_px_text_width(labels[kind]) + 6;
+    label_w = ui_px_text_width(label) + 6;
     percent_x = x + w - percent_w;
     bar_x = x + label_w;
     bar_w = percent_x - bar_x - 4;
     if (bar_w < 24) bar_w = 24;
     fill_w = (bar_w * progress) / 100;
     if (progress > 0 && fill_w < 1) fill_w = 1;
-    ui_px_text(x, y + 4, labels[kind], true);
+    ui_px_text(x, y + 4, label, true);
     ui_px_frame(bar_x, y + 4, bar_w, 7, true);
     if (fill_w > 0) ui_px_box(bar_x + 1, y + 5, fill_w > bar_w - 2 ? bar_w - 2 : fill_w, 5, true);
     snprintf(percent, sizeof(percent), "%d%%", progress);
@@ -8816,7 +8817,8 @@ void ui_set_gba_patch_progress(int kind, int progress, const char *message)
     if (progress > 100) progress = 100;
     if (!ui_take_model_lock()) return;
     s_model.gba_patch_progress[kind] = progress;
-    snprintf(s_model.gba_patch_message[kind], sizeof(s_model.gba_patch_message[kind]), "%s", message != NULL ? message : "");
+    ui_utf8_safe_copy(s_model.gba_patch_message[kind], sizeof(s_model.gba_patch_message[kind]),
+                     message != NULL ? ui_tr(message) : "");
     ui_mark_content_dirty(&s_model);
     xSemaphoreGive(s_model_lock);
 }

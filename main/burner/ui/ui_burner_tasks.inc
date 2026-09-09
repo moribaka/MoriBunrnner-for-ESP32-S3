@@ -224,7 +224,7 @@ static void ui_finish_file_start_task(
             sizeof(s_model.status_text),
             "%s%.72s",
             ui_tr("start failed: "),
-            msg);
+            ui_tr(msg));
         ESP_LOGW(UI_TAG, "LCD file action start failed (%s): %s", label, msg);
     }
     xSemaphoreGive(s_model_lock);
