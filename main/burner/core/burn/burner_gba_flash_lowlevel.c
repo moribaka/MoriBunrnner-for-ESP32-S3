@@ -74,7 +74,9 @@ static esp_err_t burner_bacon_gba_amd_wait_program_complete(
             }
             return ESP_ERR_TIMEOUT;
         }
-        esp_rom_delay_us(BURNER_ROM_POLL_INTERVAL_US);
+        /* Paired polling has already performed two complete bus read cycles.
+         * Check ready sooner without changing any RD/WR or SPI timing. */
+        esp_rom_delay_us(s_gba_amd_poll_pair_enabled ? 20u : BURNER_ROM_POLL_INTERVAL_US);
         burner_task_yield_if_due();
     }
 
