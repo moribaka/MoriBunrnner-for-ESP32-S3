@@ -6,6 +6,12 @@ idf_component_register(SRCS  "serial_debug.c" "wifi_manager.c" "file_system.c" "
 # cartridge GPIO/SPI timing code in ws_server.c and its included driver files.
 target_sources(${COMPONENT_LIB} PRIVATE "burner/core/burner_gba_patch.c")
 set_source_files_properties("burner/core/burner_gba_patch.c" PROPERTIES COMPILE_OPTIONS "-O2")
+
+# Optimize the command construction / polling hot path. Bus clocks, explicit
+# timing delays, flash completion checks and assertion settings stay configured
+# by the existing drivers; retain debug symbols for hardware diagnostics.
+set_source_files_properties("burner/core/ws_server.c" "burner/core/burner_spi_backend.c"
+    PROPERTIES COMPILE_OPTIONS "-O2")
 target_sources(${COMPONENT_LIB} PRIVATE "music/pcm_convert.c")
 set_source_files_properties("music/pcm_convert.c" PROPERTIES COMPILE_OPTIONS "-O2")
 

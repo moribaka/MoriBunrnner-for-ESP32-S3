@@ -464,3 +464,4 @@ ESP-IDF 编译通过，烧录写入哈希校验通过；主机回归测试全部
 - bffc51c实测SRAM扫描28238ms，编程约529KB/s、预取额外等待8141ms；DMA中转单独改善有限，继续定位stdio缓冲是否把大读拆小。
 - 串口增加只读 `tf-bench PATH`：每种方式最多读1MiB，比较默认fread、无缓冲fread和POSIX read的耗时及字节和，不擦写TF或卡带。
 - 默认fread读1MiB耗时1095ms；无缓冲fread在当前newlib实现中反而极慢，25秒主机等待超时。移除该实验，改为16KiB stdio缓冲与POSIX read对照；通过刷机重启结束只读实验。
+- 烧录热路径此前随全项目使用Debug的-Og。仅为ws_server.c及SPI后端启用-O2，保留调试符号、断言、40MHz SPI、160MHz CPU以及原有延时/Flash完成检测；后续用全量读回和同ROM测速验证。
