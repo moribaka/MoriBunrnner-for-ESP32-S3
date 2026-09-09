@@ -154,7 +154,18 @@ static void burner_task(void *param)
     } else {
         burner_status_t snap;
         burner_status_snapshot(&snap);
-        if (snap.state != BURNER_STATE_ERROR && snap.state != BURNER_STATE_CANCELLED) {
+        if (err == ESP_ERR_INVALID_STATE && burner_cancel_is_requested()) {
+            /* Lower-level I/O reports cancellation with INVALID_STATE and
+             * may already have published its generic operation error. */
+            burner_status_update(
+                BURNER_STATE_CANCELLED,
+                burner_calc_progress_percent_u64(snap.processed_bytes, snap.total_bytes),
+                snap.processed_bytes,
+                snap.total_bytes,
+                "task cancelled",
+                job->rom_name,
+                job->rom_path);
+        } else if (snap.state != BURNER_STATE_ERROR && snap.state != BURNER_STATE_CANCELLED) {
             if (burner_cancel_is_requested()) {
                 burner_status_update(
                     BURNER_STATE_CANCELLED,
