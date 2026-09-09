@@ -567,7 +567,7 @@ static esp_err_t burner_bacon_gba_rom_program(
     return ESP_OK;
 }
 
-static esp_err_t burner_bacon_gba_program_block(
+static esp_err_t burner_bacon_gba_program_block_locked(
     const uint8_t *data,
     size_t len,
     uint32_t offset,
@@ -650,6 +650,20 @@ static esp_err_t burner_bacon_gba_program_block(
     }
 
     return ESP_OK;
+}
+
+/* Caller owns s_spi_lock. Keep the IDF bus acquired across the command/poll
+ * transactions in this block, avoiding thousands of bus and PM lock cycles.
+ * Release on every return, including cancellation and a flash/SPI error. */
+static esp_err_t burner_bacon_gba_program_block(
+    const uint8_t *data, size_t len, uint32_t offset, bool is_multi_card, bool prepare_sectors)
+{
+    if (!s_mcu_spi_ready || s_mcu_spi == NULL) return ESP_ERR_INVALID_STATE;
+    esp_err_t err = spi_device_acquire_bus(s_mcu_spi, portMAX_DELAY);
+    if (err != ESP_OK) return err;
+    err = burner_bacon_gba_program_block_locked(data, len, offset, is_multi_card, prepare_sectors);
+    spi_device_release_bus(s_mcu_spi);
+    return err;
 }
 
 esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card)
