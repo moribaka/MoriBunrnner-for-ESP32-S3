@@ -9,6 +9,14 @@ set_source_files_properties("burner/core/burner_gba_patch.c" PROPERTIES COMPILE_
 target_sources(${COMPONENT_LIB} PRIVATE "music/pcm_convert.c")
 set_source_files_properties("music/pcm_convert.c" PROPERTIES COMPILE_OPTIONS "-O2")
 
+# Fail every firmware build if shared burner layouts are copied back into the
+# defining source instead of being compiled against the common declarations.
+add_custom_target(check_burner_shared_types
+    COMMAND ${PYTHON} "${PROJECT_DIR}/tests/test_shared_burner_types.py"
+    WORKING_DIRECTORY "${PROJECT_DIR}"
+    VERBATIM)
+add_dependencies(${COMPONENT_LIB} check_burner_shared_types)
+
 set(WEB_ASSETS_SOURCE_DIR "${PROJECT_DIR}/assets")
 set(WEB_ASSETS_STAGE_DIR "${CMAKE_BINARY_DIR}/web_assets")
 set(WEB_MAIN_HTML_FILE "${PROJECT_DIR}/.web/main.html")
