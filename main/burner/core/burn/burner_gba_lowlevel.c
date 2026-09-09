@@ -60,6 +60,7 @@ typedef struct {
     uint32_t erase_calls;
     uint32_t programmed_bytes;
     uint32_t program_once_bytes;
+    uint32_t skipped_ff_bytes;
     uint64_t erase_us;
     uint64_t prefetch_wait_us;
     uint64_t tf_read_us;
@@ -289,14 +290,15 @@ static void burner_gba_chis_diag_log_summary(esp_err_t err)
     ESP_LOGI(BURNER_TAG,
         "GBA program profile: calls=%" PRIu32 " build=%" PRIu32 "ms spi=%" PRIu32
         "ms entry=%" PRIu32 "ms poll=%" PRIu32 "ms reset=%" PRIu32
-        "ms prefetch_wait=%" PRIu32 "ms",
+        "ms prefetch_wait=%" PRIu32 "ms skipped_ff=%" PRIu32 "B",
         s_gba_chis_diag.program_once_calls,
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_build_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_spi_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_entry_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_wait_done_us),
         burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.program_once_reset_us),
-        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us));
+        burner_gba_chis_diag_us_to_ms(s_gba_chis_diag.prefetch_wait_us),
+        s_gba_chis_diag.skipped_ff_bytes);
     s_gba_chis_diag.active = false;
 }
 

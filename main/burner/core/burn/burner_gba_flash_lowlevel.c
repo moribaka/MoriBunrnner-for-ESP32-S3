@@ -413,6 +413,21 @@ static esp_err_t burner_bacon_gba_rom_program(
                 write_len = write_words * 2u;
             }
 
+            /* NOR programming only clears bits: an all-FF source buffer has
+             * nothing to program. Erase policy and the full ROM length remain
+             * unchanged; inspect every source byte, never sample here. */
+            if (s_gba_amd_runtime_profile == BURNER_GBA_AMD_RUNTIME_STANDARD) {
+                bool all_ff = false;
+                err = burner_buffer_all_ff(buf + i, write_len, &all_ff);
+                if (err != ESP_OK) return err;
+                if (all_ff) {
+                    s_gba_chis_diag.skipped_ff_bytes += (uint32_t)write_len;
+                    i += write_len;
+                    burner_task_yield_if_due();
+                    continue;
+                }
+            }
+
             seq_len = 57u + 5u * write_words;
             if (seq_len > BURNER_SPI_MAX_XFER) {
                 return ESP_ERR_INVALID_SIZE;
