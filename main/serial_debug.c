@@ -24,6 +24,8 @@
 #include "ui.h"
 #include "reader/epub_native.h"
 #include "music/music_player.h"
+#include "ag32_batch_programmer.h"
+#include "mcu_debug.h"
 
 static TaskHandle_t s_console;
 static portMUX_TYPE s_job_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -200,11 +202,91 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "ag32-probe") == 0) {
+        mcu_debug_probe_result_t probe = {0};
+        uint32_t device_id = 0u;
+        bool spi_mode = false;
+        bool session_open = false;
+        bool halted = false;
+        esp_err_t err = burner_spi_swd_restore_blocked()
+            ? ESP_ERR_INVALID_STATE : burner_spi_enter_swd_mode();
+        if (err == ESP_OK) {
+            spi_mode = true;
+            err = mcu_debug_session_begin(&probe.idcode);
+            session_open = err == ESP_OK;
+        }
+        if (err == ESP_OK) {
+            err = mcu_debug_halt();
+            halted = err == ESP_OK;
+        }
+        if (err == ESP_OK) {
+            err = mcu_debug_read_memory32(0x03000100u, &device_id);
+        }
+        if (halted) {
+            esp_err_t resume_err = mcu_debug_resume();
+            if (err == ESP_OK) err = resume_err;
+        }
+        if (session_open) {
+            mcu_debug_session_end();
+        }
+        if (spi_mode) {
+            esp_err_t restore_err = burner_spi_leave_swd_mode(true);
+            if (err == ESP_OK) err = restore_err;
+        }
+        probe.status = err == ESP_OK ? MCU_DEBUG_PROBE_OK : MCU_DEBUG_PROBE_IO_ERROR;
+        cJSON *json = event("ag32_probe");
+        if (json != NULL) {
+            cJSON_AddBoolToObject(json, "ok", err == ESP_OK);
+            cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
+            cJSON_AddStringToObject(json, "status", mcu_debug_probe_status_str(probe.status));
+            cJSON_AddNumberToObject(json, "dp_idcode", probe.idcode);
+            cJSON_AddNumberToObject(json, "device_id", device_id);
+        }
+        reply(json);
+        return;
+    }
+    if (strncmp(line, "ag32-batch ", 11) == 0) {
+        esp_err_t err = ag32_batch_program_start(line + 11);
+        message(err == ESP_OK ? "ag32_batch_started" : "error", esp_err_to_name(err));
+        return;
+    }
+    if (strncmp(line, "ag32-batch-check ", 17) == 0) {
+        uint32_t records = 0u;
+        uint32_t bytes = 0u;
+        char validation_error[160] = {0};
+        esp_err_t err = ag32_batch_validate_path(
+            line + 17, &records, &bytes, validation_error, sizeof(validation_error));
+        cJSON *json = event("ag32_batch_check");
+        if (json != NULL) {
+            cJSON_AddBoolToObject(json, "ok", err == ESP_OK);
+            cJSON_AddStringToObject(json, "error", err == ESP_OK ? "" : validation_error);
+            cJSON_AddNumberToObject(json, "records", records);
+            cJSON_AddNumberToObject(json, "payload_bytes", bytes);
+        }
+        reply(json);
+        return;
+    }
+    if (strcmp(line, "ag32-batch-status") == 0) {
+        ag32_batch_job_status_t status;
+        ag32_batch_program_status(&status);
+        cJSON *json = event("ag32_batch_status");
+        if (json != NULL) {
+            cJSON_AddStringToObject(json, "state", ag32_batch_job_state_name(status.state));
+            cJSON_AddStringToObject(json, "phase", status.phase);
+            cJSON_AddStringToObject(json, "message", status.message);
+            cJSON_AddNumberToObject(json, "processed", status.processed);
+            cJSON_AddNumberToObject(json, "total", status.total);
+            cJSON_AddNumberToObject(json, "device_id", status.report.device_id);
+            cJSON_AddBoolToObject(json, "recovery_required", burner_spi_swd_restore_blocked());
+        }
+        reply(json);
+        return;
+    }
     if (strncmp(line, "tf-bench ", 9) == 0) {
         burner_gba_patch_debug_t patch;
         burner_gba_patch_debug_snapshot(&patch);
         if (!local_path(line + 9) || usb_msc_tf_in_use_by_host() ||
-            burner_task_is_running_snapshot() || patch.running) {
+            ag32_batch_program_is_running() || burner_task_is_running_snapshot() || patch.running) {
             message("error", "invalid path or TF busy"); return;
         }
         uint8_t *buf = heap_caps_malloc(16384, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
@@ -217,7 +299,8 @@ static void dispatch(char *line)
             size_t total = 0;
             uint32_t sum = 0;
             int64_t started = esp_timer_get_time();
-            while (total < 1024u * 1024u && !usb_msc_tf_in_use_by_host()) {
+            while (total < 1024u * 1024u && !usb_msc_tf_in_use_by_host()
+                && !ag32_batch_program_is_running()) {
                 int got = mode < 2 ? (int)fread(buf, 1, 16384, fp) : (int)read(fd, buf, 16384);
                 if (got <= 0) break;
                 for (int i = 0; i < got; ++i) sum += buf[i];
@@ -239,7 +322,8 @@ static void dispatch(char *line)
         return;
     }
     if (strncmp(line, "epub ", 5) == 0) {
-        if (!local_path(line + 5) || usb_msc_tf_in_use_by_host()) { message("error", "invalid path or TF busy"); return; }
+        if (!local_path(line + 5) || usb_msc_tf_in_use_by_host()
+            || ag32_batch_program_is_running()) { message("error", "invalid path or TF busy"); return; }
         char *path = strdup(line + 5);
         if (path == NULL) { message("error", "no memory"); return; }
         portENTER_CRITICAL(&s_job_lock);
@@ -258,7 +342,8 @@ static void dispatch(char *line)
     }
     if (strncmp(line, "play ", 5) == 0) {
         struct stat st;
-        if (!local_path(line + 5) || usb_msc_tf_in_use_by_host() || stat(line + 5, &st) != 0 ||
+        if (!local_path(line + 5) || usb_msc_tf_in_use_by_host()
+            || ag32_batch_program_is_running() || stat(line + 5, &st) != 0 ||
             !S_ISREG(st.st_mode) || st.st_size <= 0 || (uint64_t)st.st_size > UINT32_MAX) {
             message("error", "invalid audio path or TF busy"); return;
         }
@@ -311,12 +396,13 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-probe | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {
         const char *path = line + 3;
-        if (!local_path(path) || usb_msc_tf_in_use_by_host()) { message("error", "invalid path or TF owned by USB host"); return; }
+        if (!local_path(path) || usb_msc_tf_in_use_by_host()
+            || ag32_batch_program_is_running()) { message("error", "invalid path or TF busy"); return; }
         DIR *dir = opendir(path);
         if (dir == NULL) { message("error", "cannot open directory"); return; }
         struct dirent *entry;
@@ -344,7 +430,8 @@ static void dispatch(char *line)
         if (*flags == '\0' || strspn(flags, "sbw") != strlen(flags) || !local_path(path)) {
             message("error", "invalid flags/path"); return;
         }
-        if (usb_msc_tf_in_use_by_host() || burner_task_is_running_snapshot()) {
+        if (usb_msc_tf_in_use_by_host() || ag32_batch_program_is_running()
+            || burner_task_is_running_snapshot()) {
             message("error", "TF or burner busy"); return;
         }
         debug_patch_job_t *job = calloc(1, sizeof(*job));

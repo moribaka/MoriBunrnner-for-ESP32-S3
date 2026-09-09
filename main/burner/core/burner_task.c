@@ -1,4 +1,5 @@
 #include "ws_server_internal.h"
+#include "ag32_batch_programmer.h"
 #include "lvgl_port.h"
 #include "power_manager.h"
 
@@ -245,6 +246,17 @@ task_done:
     }
 }
 
+static void burner_set_starting(bool starting)
+{
+    if (s_status_lock != NULL) {
+        xSemaphoreTake(s_status_lock, portMAX_DELAY);
+        s_burn_starting = starting;
+        xSemaphoreGive(s_status_lock);
+    } else {
+        s_burn_starting = starting;
+    }
+}
+
 esp_err_t burner_start_task_ex(
     burner_job_mode_t mode,
     burner_cart_mode_t cart_mode,
@@ -281,10 +293,14 @@ esp_err_t burner_start_task_ex(
 
     if (s_status_lock != NULL) {
         xSemaphoreTake(s_status_lock, portMAX_DELAY);
-        is_busy = (s_burn_task != NULL);
+        is_busy = s_burn_starting || (s_burn_task != NULL)
+            || ag32_batch_program_is_running();
+        if (!is_busy) s_burn_starting = true;
         xSemaphoreGive(s_status_lock);
     } else {
-        is_busy = (s_burn_task != NULL);
+        is_busy = s_burn_starting || (s_burn_task != NULL)
+            || ag32_batch_program_is_running();
+        if (!is_busy) s_burn_starting = true;
     }
 
     if (is_busy) {
@@ -295,6 +311,7 @@ esp_err_t burner_start_task_ex(
 
     job = (burner_task_param_t *)calloc(1, sizeof(*job));
     if (job == NULL) {
+        burner_set_starting(false);
         return ESP_ERR_NO_MEM;
     }
 
@@ -378,9 +395,11 @@ esp_err_t burner_start_task_ex(
             (unsigned)psram_largest);
         free(job);
         s_burn_task = NULL;
+        burner_set_starting(false);
         return ESP_FAIL;
     }
 
+    burner_set_starting(false);
     return ESP_OK;
 }
 

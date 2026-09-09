@@ -404,10 +404,10 @@ bool burner_task_is_running_snapshot(void)
 
     if (s_status_lock != NULL) {
         xSemaphoreTake(s_status_lock, portMAX_DELAY);
-        is_busy = (s_burn_task != NULL);
+        is_busy = s_burn_starting || (s_burn_task != NULL);
         xSemaphoreGive(s_status_lock);
     } else {
-        is_busy = (s_burn_task != NULL);
+        is_busy = s_burn_starting || (s_burn_task != NULL);
     }
     return is_busy;
 }

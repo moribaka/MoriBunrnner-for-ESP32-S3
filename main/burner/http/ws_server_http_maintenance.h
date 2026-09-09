@@ -6,6 +6,9 @@
 esp_err_t burner_web_main_upload_handler(httpd_req_t *req);
 esp_err_t burner_web_upload_handler(httpd_req_t *req);
 esp_err_t burner_mcu_probe_handler(httpd_req_t *req);
+esp_err_t burner_mcu_batch_start_handler(httpd_req_t *req);
+esp_err_t burner_mcu_batch_check_handler(httpd_req_t *req);
+esp_err_t burner_mcu_batch_status_handler(httpd_req_t *req);
 esp_err_t burner_cart_id_debug_handler(httpd_req_t *req);
 esp_err_t burner_cart_id_handler(httpd_req_t *req);
 esp_err_t burner_cart_unlock_ppb_handler(httpd_req_t *req);

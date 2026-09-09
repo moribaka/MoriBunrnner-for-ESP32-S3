@@ -4,6 +4,7 @@
 
 #include "esp_check.h"
 #include "esp_log.h"
+#include "ag32_batch_programmer.h"
 #include "file_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -154,13 +155,21 @@ esp_err_t usb_msc_tf_set_enabled(bool enabled)
     }
 
     if (enabled) {
+        s_usb_msc_enabled = true;
+        if (ag32_batch_program_is_running()) {
+            s_usb_msc_enabled = false;
+            xSemaphoreGive(s_usb_msc_lock);
+            return ESP_ERR_INVALID_STATE;
+        }
         err = usb_msc_install_locked();
+        if (err != ESP_OK) {
+            s_usb_msc_enabled = false;
+        }
     } else {
         err = usb_msc_uninstall_locked();
-    }
-
-    if (err == ESP_OK) {
-        s_usb_msc_enabled = enabled;
+        if (err == ESP_OK) {
+            s_usb_msc_enabled = false;
+        }
     }
 
     xSemaphoreGive(s_usb_msc_lock);

@@ -434,6 +434,24 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_mcu_probe_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t mcu_batch_start_uri = {
+        .uri = "/api/mcu/batch",
+        .method = HTTP_POST,
+        .handler = burner_mcu_batch_start_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t mcu_batch_check_uri = {
+        .uri = "/api/mcu/batch/check",
+        .method = HTTP_GET,
+        .handler = burner_mcu_batch_check_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t mcu_batch_status_uri = {
+        .uri = "/api/mcu/batch/status",
+        .method = HTTP_GET,
+        .handler = burner_mcu_batch_status_handler,
+        .user_ctx = NULL,
+    };
     httpd_uri_t static_uri = {
         .uri = "/*",
         .method = HTTP_GET,
@@ -825,6 +843,21 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &mcu_probe_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &mcu_batch_start_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &mcu_batch_check_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &mcu_batch_status_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;

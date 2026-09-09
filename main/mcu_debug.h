@@ -8,11 +8,11 @@
 
 /*
  * SWD debug path switch.
- * 0: disabled (current hardware uses GPIO1 as SPI CS1 for dual-CS Bacon mode)
- * 1: enable SWD probe implementation
+ * SWD and Bacon CS1 share GPIO1. Callers must suspend the cartridge SPI
+ * backend before opening an SWD session.
  */
 #ifndef MORI_SWD_ENABLE
-#define MORI_SWD_ENABLE 0
+#define MORI_SWD_ENABLE 1
 #endif
 
 typedef enum {
@@ -57,6 +57,15 @@ typedef struct {
 } mcu_debug_probe_options_t;
 
 esp_err_t mcu_debug_init(void);
+esp_err_t mcu_debug_session_begin(uint32_t *dp_idcode);
+void mcu_debug_session_end(void);
+esp_err_t mcu_debug_halt(void);
+esp_err_t mcu_debug_resume(void);
+esp_err_t mcu_debug_system_reset(void);
+esp_err_t mcu_debug_read_memory16(uint32_t address, uint16_t *value);
+esp_err_t mcu_debug_write_memory16(uint32_t address, uint16_t value);
+esp_err_t mcu_debug_read_memory32(uint32_t address, uint32_t *value);
+esp_err_t mcu_debug_write_memory32(uint32_t address, uint32_t value);
 void mcu_debug_get_default_probe_options(mcu_debug_probe_options_t *out);
 esp_err_t mcu_debug_probe_idcode(mcu_debug_probe_result_t *out);
 esp_err_t mcu_debug_probe_idcode_with_opts(

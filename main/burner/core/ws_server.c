@@ -2,6 +2,7 @@
 
 #include "esp_attr.h"
 
+#include "ag32_batch_programmer.h"
 #include "mori_system_settings.h"
 
 #define BURN_MBC5_ROM_BANK_BYTES (16U * 1024U)
@@ -54,6 +55,7 @@ httpd_handle_t s_httpd = NULL;
 SemaphoreHandle_t s_status_lock = NULL;
 SemaphoreHandle_t s_spi_lock = NULL;
 TaskHandle_t s_burn_task = NULL;
+bool s_burn_starting = false;
 TaskHandle_t s_bacon_idle_task = NULL;
 spi_device_handle_t s_mcu_spi = NULL;
 bool s_mcu_spi_ready = false;
@@ -2846,6 +2848,10 @@ esp_err_t burner_ensure_rom_dir(void)
 
 esp_err_t burner_reject_if_tf_busy(httpd_req_t *req)
 {
+    if (ag32_batch_program_is_running()) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        return httpd_resp_sendstr(req, "TF storage is reserved by the AG32 batch update.");
+    }
     if (usb_msc_tf_in_use_by_host()) {
         httpd_resp_set_status(req, "503 Service Unavailable");
         return httpd_resp_sendstr(

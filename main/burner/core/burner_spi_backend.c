@@ -2,6 +2,9 @@
 
 #include "esp_memory_utils.h"
 
+static bool s_swd_mode;
+static volatile bool s_swd_restore_blocked;
+
 uint8_t burner_bacon_option_byte0(
     uint8_t batch_size,
     bool dir_a,
@@ -542,6 +545,9 @@ esp_err_t burner_spi_init(void)
         .post_cb = NULL,
     };
 
+    if (s_swd_mode) {
+        return ESP_ERR_INVALID_STATE;
+    }
     if (s_mcu_spi_ready && s_mcu_spi != NULL) {
         burner_bacon_mark_activity_locked();
         return ESP_OK;
@@ -636,4 +642,73 @@ esp_err_t burner_spi_init(void)
     }
     return ESP_OK;
 #endif
+}
+
+esp_err_t burner_spi_enter_swd_mode(void)
+{
+#if BURNER_SPI_ENABLE
+    burner_spi_lock_take();
+    s_swd_mode = true;
+    burner_spi_release_cs();
+    if (s_mcu_spi != NULL) {
+        esp_err_t err = spi_bus_remove_device(s_mcu_spi);
+        if (err != ESP_OK) {
+            s_swd_mode = false;
+            burner_spi_lock_give();
+            return err;
+        }
+        s_mcu_spi = NULL;
+    }
+    if (s_mcu_spi_ready) {
+        esp_err_t err = spi_bus_free(BURNER_SPI_HOST);
+        if (err != ESP_OK) {
+            s_mcu_spi_ready = false;
+            burner_spi_lock_give();
+            return err;
+        }
+    }
+    s_mcu_spi_ready = false;
+    gpio_set_direction(MORI_PIN_MCU_SPI_CS1, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(MORI_PIN_MCU_SPI_CS1, GPIO_FLOATING);
+    gpio_set_direction(MORI_PIN_MCU_SWCLK, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(MORI_PIN_MCU_SWCLK, GPIO_FLOATING);
+    return ESP_OK;
+#else
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+esp_err_t burner_spi_leave_swd_mode(bool restore_spi)
+{
+#if BURNER_SPI_ENABLE
+    esp_err_t err = ESP_OK;
+    if (restore_spi && !s_swd_restore_blocked) {
+        s_swd_mode = false;
+        err = burner_spi_init();
+        if (err != ESP_OK) {
+            s_swd_mode = true;
+            s_swd_restore_blocked = true;
+        }
+    }
+    burner_spi_lock_give();
+    return err;
+#else
+    (void)restore_spi;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+void burner_spi_block_swd_restore(void)
+{
+    s_swd_restore_blocked = true;
+}
+
+void burner_spi_allow_swd_restore(void)
+{
+    s_swd_restore_blocked = false;
+}
+
+bool burner_spi_swd_restore_blocked(void)
+{
+    return s_swd_restore_blocked;
 }

@@ -2548,6 +2548,8 @@
             uploadXHR: null,
             firmwareUploadXHR: null,
             firmwareCancelPending: false,
+            ag32BatchBusy: false,
+            ag32BatchPollTimer: null,
             systemDeployBusy: false,
             systemDeployCancelPending: false,
             uploadCancelPending: false,
@@ -6631,6 +6633,28 @@
 
                 <div class="card animate-in">
                     <div class="card-header">
+                        <h3 class="card-title">AG32 Batch 更新</h3>
+                    </div>
+                    <div style="padding: 16px;">
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <input type="file" id="ag32BatchFile" accept=".bin,application/octet-stream" style="display: none;" onchange="prepareAg32Batch(this.files[0])">
+                            <button class="btn btn-warning" id="ag32BatchSelectBtn" onclick="document.getElementById('ag32BatchFile').click()">选择 Batch</button>
+                            <span id="ag32BatchFileName" style="color: var(--text-secondary); font-size: 14px;"></span>
+                        </div>
+                        <div id="ag32BatchProgress" class="hidden" style="margin-top: 16px;">
+                            <div class="progress-info" style="margin-bottom: 8px;">
+                                <span id="ag32BatchStatus">空闲</span>
+                                <span id="ag32BatchPercent">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="ag32BatchBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card animate-in">
+                    <div class="card-header">
                         <h3 class="card-title">📥 系统部署</h3>
                     </div>
                     <div style="padding: 16px;">
@@ -6772,7 +6796,7 @@
                         <h3 class="card-title">🧱 GBX 缓存</h3>
                     </div>
                     <div style="padding: 16px;">
-                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">当 FlashGBX 配置更新、识别结果异常，或者需要刷新 `.gbx/gbx_cache.bin` 时，在这里重建缓存。</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">当 FlashGBX 配置更新、识别结果异常，或者需要刷新 \`.gbx/gbx_cache.bin\` 时，在这里重建缓存。</p>
                         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                             <button class="btn" onclick="rebuildGbxCache()">🧱 重建 GBX 缓存</button>
                         </div>
@@ -6818,6 +6842,7 @@
             refreshBurnCoreConfig();
             setFirmwareCancelUi(Boolean(state.firmwareUploadXHR), state.firmwareCancelPending);
             setSystemDeployCancelUi(state.systemDeployBusy, state.systemDeployCancelPending);
+            refreshAg32BatchStatus();
         }
 
         // API 调用封装
@@ -9544,6 +9569,100 @@
                 }
             } catch (error) {
                 console.error('加载亮度失败:', error);
+            }
+        }
+
+        function updateAg32BatchUi(status) {
+            const progress = document.getElementById('ag32BatchProgress');
+            const statusEl = document.getElementById('ag32BatchStatus');
+            const percentEl = document.getElementById('ag32BatchPercent');
+            const bar = document.getElementById('ag32BatchBar');
+            const button = document.getElementById('ag32BatchSelectBtn');
+            if (!progress) return;
+            progress.classList.remove('hidden');
+            const total = Number(status.total || 0);
+            const processed = Number(status.processed || 0);
+            const percent = total > 0 ? Math.min(100, Math.round(processed * 100 / total)) : 0;
+            if (statusEl) statusEl.textContent = status.message || status.phase || status.state;
+            if (percentEl) percentEl.textContent = percent + '%';
+            if (bar) bar.style.width = percent + '%';
+            state.ag32BatchBusy = status.state === 'running';
+            if (button) button.disabled = state.ag32BatchBusy;
+        }
+
+        async function refreshAg32BatchStatus() {
+            clearTimeout(state.ag32BatchPollTimer);
+            try {
+                const response = await fetch('/api/mcu/batch/status');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const status = await response.json();
+                const wasBusy = state.ag32BatchBusy;
+                updateAg32BatchUi(status);
+                if (status.state === 'running') {
+                    state.ag32BatchPollTimer = setTimeout(refreshAg32BatchStatus, 500);
+                } else if (wasBusy) {
+                    state.ag32BatchBusy = false;
+                    showToast(status.state === 'success' ? 'AG32 Batch 更新完成' : 'AG32 Batch 更新失败',
+                        status.state === 'success' ? 'success' : 'error');
+                }
+            } catch (error) {
+                console.error('AG32 batch status failed:', error);
+                if (state.ag32BatchBusy) {
+                    state.ag32BatchPollTimer = setTimeout(refreshAg32BatchStatus, 1000);
+                }
+            }
+        }
+
+        async function startAg32BatchUpdate(path) {
+            closeModal();
+            const response = await fetch('/api/mcu/batch?path=' + encodeURIComponent(path), { method: 'POST' });
+            const text = await response.text();
+            if (!response.ok) throw new Error(text || ('HTTP ' + response.status));
+            state.ag32BatchBusy = true;
+            updateAg32BatchUi({ state: 'running', phase: 'queued', message: 'AG32 Batch 更新已启动', processed: 0, total: 0 });
+            clearTimeout(state.ag32BatchPollTimer);
+            state.ag32BatchPollTimer = setTimeout(refreshAg32BatchStatus, 250);
+        }
+
+        async function prepareAg32Batch(file) {
+            if (!file || state.ag32BatchBusy) return;
+            const input = document.getElementById('ag32BatchFile');
+            const name = document.getElementById('ag32BatchFileName');
+            const path = '/sdcard/.tmp/ag32_update.bin';
+            if (name) name.textContent = file.name;
+            updateAg32BatchUi({ state: 'running', phase: 'upload', message: '正在上传并校验 Batch', processed: 0, total: file.size });
+            try {
+                const upload = await fetch('/api/tf/upload?dir=.tmp&name=ag32_update.bin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/octet-stream' },
+                    body: file
+                });
+                if (!upload.ok) throw new Error(await upload.text());
+                const checkResponse = await fetch('/api/mcu/batch/check?path=' + encodeURIComponent(path));
+                const check = await checkResponse.json();
+                if (!checkResponse.ok || !check.ok) throw new Error(check.message || 'Batch 校验失败');
+                updateAg32BatchUi({ state: 'idle', message: 'Batch 校验通过', processed: file.size, total: file.size });
+                showModal('确认更新 AG32', `
+                    <div style="display: grid; gap: 10px;">
+                        <div><strong>${escapeHtml(file.name)}</strong></div>
+                        <div>记录数：${Number(check.records)}</div>
+                        <div>有效载荷：${formatSize(Number(check.payload_bytes))}</div>
+                        <div style="color: var(--accent-warning);">确认后将擦除并重写 AG32 MCU 与 CPLD 配置。</div>
+                    </div>
+                `, async () => {
+                    try {
+                        await startAg32BatchUpdate(path);
+                    } catch (error) {
+                        updateAg32BatchUi({ state: 'failed', message: error.message, processed: 0, total: 0 });
+                        showToast('AG32 Batch 启动失败', 'error');
+                    }
+                });
+            } catch (error) {
+                state.ag32BatchBusy = false;
+                updateAg32BatchUi({ state: 'failed', message: error.message, processed: 0, total: 0 });
+                showToast('AG32 Batch 校验失败', 'error');
+            } finally {
+                if (input) input.value = '';
             }
         }
 

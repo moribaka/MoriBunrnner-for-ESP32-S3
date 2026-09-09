@@ -1,5 +1,6 @@
 #include "ws_server_http_maintenance.h"
 #include "ws_server_http_device.h"
+#include "ag32_batch_programmer.h"
 
 static const char *burner_http_cart_mode_name(burner_cart_mode_t cart_mode)
 {
@@ -282,9 +283,18 @@ esp_err_t burner_mcu_probe_handler(httpd_req_t *req)
     esp_err_t err;
 
     (void)req;
+    if (burner_spi_swd_restore_blocked()) {
+        return httpd_resp_send_custom_err(
+            req, "409 Conflict", "AG32 update recovery is required; probe cannot resume the target");
+    }
     mcu_debug_get_default_probe_options(&opts);
 
-    err = mcu_debug_probe_idcode_with_opts(&opts, &probe);
+    err = burner_spi_enter_swd_mode();
+    if (err == ESP_OK) {
+        err = mcu_debug_probe_idcode_with_opts(&opts, &probe);
+        esp_err_t restore_err = burner_spi_leave_swd_mode(true);
+        if (err == ESP_OK) err = restore_err;
+    }
 
     if (err != ESP_OK) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "probe execution failed");
@@ -317,6 +327,82 @@ esp_err_t burner_mcu_probe_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 #endif
+}
+
+esp_err_t burner_mcu_batch_start_handler(httpd_req_t *req)
+{
+    char path[304] = {0};
+    if (!burner_get_query_arg(req, "path", path, sizeof(path), true)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing or invalid path");
+    }
+    esp_err_t err = ag32_batch_program_start(path);
+    if (err == ESP_ERR_INVALID_STATE) {
+        return httpd_resp_send_custom_err(req, "409 Conflict", "burner, TF, or AG32 update is busy");
+    }
+    if (err != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, esp_err_to_name(err));
+    }
+    return burner_send_json(req, "{\"ok\":true,\"state\":\"running\"}");
+}
+
+esp_err_t burner_mcu_batch_check_handler(httpd_req_t *req)
+{
+    char path[304] = {0};
+    char validation_error[160] = {0};
+    char message_escaped[321] = {0};
+    char response[480];
+    uint32_t records = 0u;
+    uint32_t payload_bytes = 0u;
+    if (!burner_get_query_arg(req, "path", path, sizeof(path), true)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing or invalid path");
+    }
+    esp_err_t err = ag32_batch_validate_path(
+        path, &records, &payload_bytes, validation_error, sizeof(validation_error));
+    const char *message = err == ESP_OK ? "valid AG32 batch" : validation_error;
+    if (!burner_json_escape(message, message_escaped, sizeof(message_escaped))) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "validation message too large");
+    }
+    int length = snprintf(
+        response,
+        sizeof(response),
+        "{\"ok\":%s,\"records\":%" PRIu32 ",\"payload_bytes\":%" PRIu32 ",\"message\":\"%s\"}",
+        err == ESP_OK ? "true" : "false", records, payload_bytes, message_escaped);
+    if (length < 0 || length >= (int)sizeof(response)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "validation response too large");
+    }
+    return burner_send_json(req, response);
+}
+
+esp_err_t burner_mcu_batch_status_handler(httpd_req_t *req)
+{
+    ag32_batch_job_status_t status;
+    char response[1400];
+    char path_escaped[609] = {0};
+    char phase_escaped[49] = {0};
+    char message_escaped[321] = {0};
+    ag32_batch_program_status(&status);
+    if (!burner_json_escape(status.path, path_escaped, sizeof(path_escaped))
+        || !burner_json_escape(status.phase, phase_escaped, sizeof(phase_escaped))
+        || !burner_json_escape(status.message, message_escaped, sizeof(message_escaped))) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "status value too large");
+    }
+    int length = snprintf(
+        response,
+        sizeof(response),
+        "{\"ok\":true,\"state\":\"%s\",\"path\":\"%s\",\"phase\":\"%s\","
+        "\"message\":\"%s\",\"processed\":%" PRIu32 ",\"total\":%" PRIu32 ","
+        "\"dp_idcode\":\"0x%08" PRIx32 "\",\"device_id\":\"0x%08" PRIx32 "\","
+        "\"records\":%" PRIu32 ",\"programmed\":%" PRIu32 ",\"verified\":%" PRIu32 ","
+        "\"destructive_started\":%s,\"recovery_required\":%s}",
+        ag32_batch_job_state_name(status.state), path_escaped, phase_escaped, message_escaped,
+        status.processed, status.total, status.report.dp_idcode, status.report.device_id,
+        status.report.record_count, status.report.programmed_bytes, status.report.verified_bytes,
+        status.report.destructive_started ? "true" : "false",
+        burner_spi_swd_restore_blocked() ? "true" : "false");
+    if (length < 0 || length >= (int)sizeof(response)) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "status encode failed");
+    }
+    return burner_send_json(req, response);
 }
 
 esp_err_t burner_cart_unlock_ppb_handler(httpd_req_t *req)

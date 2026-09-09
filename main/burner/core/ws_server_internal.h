@@ -625,6 +625,7 @@ extern httpd_handle_t s_httpd;
 extern SemaphoreHandle_t s_status_lock;
 extern SemaphoreHandle_t s_spi_lock;
 extern TaskHandle_t s_burn_task;
+extern bool s_burn_starting;
 extern TaskHandle_t s_bacon_idle_task;
 extern spi_device_handle_t s_mcu_spi;
 extern bool s_mcu_spi_ready;
@@ -718,6 +719,11 @@ void burner_status_update(
     const char *rom_name,
     const char *rom_path);
 esp_err_t burner_spi_init(void);
+esp_err_t burner_spi_enter_swd_mode(void);
+esp_err_t burner_spi_leave_swd_mode(bool restore_spi);
+void burner_spi_block_swd_restore(void);
+void burner_spi_allow_swd_restore(void);
+bool burner_spi_swd_restore_blocked(void);
 void burner_task_yield_if_due(void);
 void burner_spi_lock_take(void);
 void burner_spi_lock_give(void);
