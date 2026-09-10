@@ -1,0 +1,39 @@
+{
+  "captured_at": "2026-09-10T16:33:22.4666773+08:00",
+  "current_operation": "tf upload complete",
+  "current_processed": 492638,
+  "current_total": 492638,
+  "preference": "auto",
+  "active": "cpld",
+  "write_path": "psram",
+  "spi_hz": 40000000,
+  "cart_sleeping": true,
+  "artifacts": [
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\example\\moriburnner_ag32_batch.bin",
+      "Hash": "94EFE7052DF14813D0829E175BA520F8EE8B5C2B2C6D5A68E17C2604A43B3907"
+    },
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\build\\moriburnner.bin",
+      "Hash": "B929E5E380181DAB21C9FC90EC30E8B87F0FF4A832C10705799AA1C7B5C31E19"
+    },
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\release\\moriburnner_ag32_cpld_94efe705_hwtest.zip",
+      "Hash": "864D1396C1456A73DD47C51C76838FC37C81AC7A44A1C49F369D1D4FF14E9D71"
+    }
+  ],
+  "last_confirmed_auto_verification": {
+    "source": "HTTP snapshot captured before the subsequent TF web-page upload",
+    "state": "done",
+    "processed": 33554432,
+    "total": 33554432,
+    "task_ms": 23342,
+    "message": "verify finished",
+    "preference": "auto",
+    "active": "cpld",
+    "write_path": "psram",
+    "spi_hz": 40000000
+  },
+  "card_restored_from": "/sdcard/ROM_OUTPUT/cpld_before_20260910.gba",
+  "note": "The later TF web upload replaces the generic API progress counters; it does not modify cartridge data."
+}

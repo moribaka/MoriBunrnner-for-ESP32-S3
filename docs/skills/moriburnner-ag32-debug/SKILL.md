@@ -1,6 +1,6 @@
 ---
 name: moriburnner-ag32-debug
-description: Flash and debug the MoriBurnner ESP32-S3 controller and its AG32 companion through onboard SWD, then validate the 40 MHz Bacon/MCU SPI transport. Use for real-board firmware flashing, AG32 batch updates, serial diagnostics, or protocol bring-up.
+description: Flash and debug the MoriBurnner ESP32-S3 controller and its AG32 companion through onboard SWD, then validate the 40 MHz Bacon/CPLD SPI transport. Use for real-board firmware flashing, AG32 batch updates, serial diagnostics, or protocol bring-up.
 metadata:
   short-description: ESP32 to AG32 hardware flash/debug
 ---
@@ -106,9 +106,30 @@ the preserved cartridge backup. Select `ag32-link cpld` explicitly for its
 benchmark. Current pure-CPLD builds omit the experimental MCU transport via
 ENABLE_MCU_TRANSPORT=0; MCU PING is therefore not an applicable readiness test.
 
+The board-qualified BSC1 return path presents the next MISO bit after the
+master's rising-edge sample, matching original Bacon. Falling-edge launch
+produced intermittent BA CE / FA CE status corruption at40MHz. Keep the
+testbench's master-edge sampling semantics; MISO_DELAY_NS=14 is a useful
+characterization budget, not a measured board delay. Require full readback,
+not one successful short probe, before declaring this fault resolved.
+
+ESP direct RX DMA requires word-aligned, DMA-capable storage and a TX buffer
+that does not overlap RX. The CPLD driver uses a separate zero TX clock buffer
+and ROM CRC32; retain the existing scratch-buffer path for incompatible RX
+storage. Do not use an in-place TX/RX DMA optimization on Bacon command bytes.
+
 ## Build evidence
 
 For CPLD/interface changes, use the `chisflash-ag32-batch` flow: `pio prelogic`, AG32 release build, `quartus_sh -t af_quartus.tcl`, Supra `af_run.tcl` with `MODE QUARTUS`, `FLOW ALL`, seed 42, `FITTING timing_more`, `EFFORT highest`, then `pio buildbatch`. Record actual logic/tile/LUT/register/BRAM/PLL/pin counts and setup/hold margins. MCU-only builds may reuse the routed CPLD when matching source/settings and bitstream hashes are recorded before and after compilation/packaging.
+
+The active project disables Quartus PHYSICAL_SYNTHESIS_COMBO_LOGIC speed
+replication: it targets a proxy Cyclone floorplan and previously expanded
+the netlist into AG32 routing congestion. Area optimization and full Supra
+timing flow remain enabled. The archived build QSF records the local vendor
+primitive-library path; reproduce that local setting when needed and keep
+machine-specific paths out of the active committed QSF. Board-tested batches
+can still have a documented negative setup margin; consult the current
+project report rather than describing them as timing-qualified releases.
 
 ## Cartridge measurements
 
