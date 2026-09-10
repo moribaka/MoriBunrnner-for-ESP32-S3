@@ -38,8 +38,7 @@ Command values `A0`, `A2`, and `F0` through `FC` retain the Beggar programmer's
 operation meanings. Their transport framing, CRC enforcement, address flags,
 and error responses are new and are not wire-compatible with its USB CDC
 packet format. `PING` reports protocol version/capabilities. `RAW_BACON_EXEC`
-is the compatibility command for operations not yet promoted to a high-level
-MCU command (reserved, not implemented). The currently implemented cartridge
+is reserved and currently unsupported. The currently implemented cartridge
 commands are power A0, read/write F5/F6/F7/F8/FA/FB, and standard AMD buffered
 program F4/FC. Other declared opcodes are not advertised as working commands.
 

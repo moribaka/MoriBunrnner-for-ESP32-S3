@@ -1,0 +1,40 @@
+2026-09-10 10:03:46 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-10 10:03:46 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-10 10:03:46 I (1275) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-10 10:03:46 I (1284) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-10 10:03:46 I (1291) main: timezone configured: CST-8
+2026-09-10 10:03:46 I (1295) main: boot step: mount assets
+2026-09-10 10:03:46 I (1390) assets: mounted /assets: total=1438481 used=763291
+2026-09-10 10:03:46 I (1391) main: boot step: mount sdcard
+2026-09-10 10:03:46 I (1443) SDCARD: SD card mounted
+2026-09-10 10:03:46 I (1444) SDCARD: Total: 59638MB
+2026-09-10 10:03:46 W (1640) main: repaired legacy lang_zh_cn.ini
+2026-09-10 10:03:46 I (3488) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=3v3 settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=mcu
+2026-09-10 10:03:46 I (3494) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-10 10:03:46 I (3505) main: UI language=1 (zh)
+2026-09-10 10:03:46 I (3513) main: boot step: init i2c peripherals
+2026-09-10 10:03:46 W (3514) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-10 10:03:46 I (3524) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-10 10:03:46 I (3532) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-10 10:03:46 I (3535) power_manager: detected AXP209 at 0x34
+2026-09-10 10:03:46 I (3539) main: AXP209 power manager ready at 0x34
+2026-09-10 10:03:46 I (3544) tca9555: TCA9555 ready at 0x20
+2026-09-10 10:03:46 I (3552) main: tca9555.ini apply=0, skip register apply
+2026-09-10 10:03:46 I (3554) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-10 10:03:46 I (3558) tca9555: IRQ enabled on GPIO 17
+2026-09-10 10:03:46 I (3560) main: boot step: init usb msc manager
+2026-09-10 10:03:46 I (3565) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-10 10:03:46 I (3570) main: USB MSC manager ready, pass-through default is disabled
+2026-09-10 10:03:46 I (3577) main: boot step: init nvs
+2026-09-10 10:03:46 I (3608) main: boot step: init mcu debug
+2026-09-10 10:03:46 I (3609) main: boot step: init lvgl/display
+2026-09-10 10:03:46 I (3852) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-10 10:03:46 I (3853) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-10 10:03:46 I (3857) lvgl_port: using single LVGL draw buffer (20 I (90093) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 10:03:46 I (90095) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 10:03:46 I (90098) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 10:03:46 I (90107) ag32_mcu_link: MCU protocol v1 capabilities=0x000000fe
+2026-09-10 10:03:46 
+2026-09-10 10:03:46 @mori {"event":"ag32_ping","ok":true,"error":"ESP_OK","used_mcu":true,"preference":"mcu","active":"mcu","capabilities":254,"protocol_version":1,"max_payload":8192,"ag32_clock_hz":150000000,"identity":827671373}
+2026-09-10 10:03:47 
+2026-09-10 10:03:47 @mori {"event":"ag32_stream_test","ok":true,"error":"ESP_OK","passes":100,"bytes_each_direction":131590,"elapsed_ms":225.561}

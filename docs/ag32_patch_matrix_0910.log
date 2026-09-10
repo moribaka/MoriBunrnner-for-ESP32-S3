@@ -1,0 +1,959 @@
+2026-09-10 08:58:34  (381733) burner_web: PSRAM auto window: free=7557276 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 08:58:34 I (381735) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 08:58:34 I (381938) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 08:58:34 I (381939) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 08:58:34 I (381941) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 08:58:34 I (381952) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 08:58:34 I (381958) burner_web: GBA ReadID trace begin t=380738389us
+2026-09-10 08:58:34 I (381963) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5101us (0.005101s)
+2026-09-10 08:58:34 I (381972) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8458us (0.008458s)
+2026-09-10 08:58:34 I (381980) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8035us (0.008035s)
+2026-09-10 08:58:34 I (381988) burner_web: GBA ReadID trace read addr=0x000 data=0x0001 dt=8014us (0.008014s)
+2026-09-10 08:58:34 I (381996) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7830us (0.007830s)
+2026-09-10 08:58:34 I (382004) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=8074us (0.008074s)
+2026-09-10 08:58:34 I (382012) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7843us (0.007843s)
+2026-09-10 08:58:34 I (382020) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7983us (0.007983s)
+2026-09-10 08:58:34 I (382027) burner_web: GBA ReadID trace end status=ESP_OK total=69086us (0.069086s)
+2026-09-10 08:58:34 I (382035) burner_web: GBA word-address probe @40000000Hz try=1 id=01 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 08:58:34 I (382044) burner_web: GBA Intel ReadID trace begin t=380824411us
+2026-09-10 08:58:34 I (382049) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5272us (0.005272s)
+2026-09-10 08:58:34 I (382059) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=9068us (0.009068s)
+2026-09-10 08:58:34 I (382067) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8303us (0.008303s)
+2026-09-10 08:58:34 I (382076) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8765us (0.008765s)
+2026-09-10 08:58:34 I (382084) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8228us (0.008228s)
+2026-09-10 08:58:34 I (382092)
+2026-09-10 08:58:34 @mori {"event":"patch_started","message":"analysis only"}
+2026-09-10 08:58:36 
+2026-09-10 08:58:36 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":629953,"internal_free":66479,"internal_largest":31744,"psram_free":7515620,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":7798784,"total":33554432,"passes":2,"read_bytes":7798784,"read_ms":1040,"elapsed_ms":2045,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 08:58:38 
+2026-09-10 08:58:38 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":631994,"internal_free":66435,"internal_largest":31744,"psram_free":7515620,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":16089088,"total":33554432,"passes":2,"read_bytes":16089088,"read_ms":2089,"elapsed_ms":4086,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 08:58:40 
+2026-09-10 08:58:40 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":634024,"internal_free":66479,"internal_largest":31744,"psram_free":7515620,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":24739840,"total":33554432,"passes":2,"read_bytes":24739840,"read_ms":2983,"elapsed_ms":6116,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 08:58:42 
+2026-09-10 08:58:42 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":636066,"internal_free":66479,"internal_largest":31744,"psram_free":7515620,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_marker","detail":"CreateFlash512-3","offset":196608,"total":33554432,"passes":5,"read_bytes":34996224,"read_ms":4029,"elapsed_ms":8158,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 08:58:42 
+2026-09-10 08:58:42 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":8363,"save_type":"FLASH512","sram":true,"batteryless":false,"waitcnt_count":0,"output_size":33554432,"sram_ops":5,"irq_ops":0,"payload_offset":0}
+2026-09-10 09:08:17 987414) httpd_txrx: httpd_resp_send_err: 404 Not Found - verify file not found
+2026-09-10 09:08:17 E (987423) httpd_txrx: httpd_resp_send_err: error calling setsockopt : 22
+2026-09-10 09:08:17 W (987424) httpd_uri: httpd_uri: uri handler execution failed
+2026-09-10 09:08:17 I (1015355) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 09:08:17 I (1015558) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 09:08:17 I (1015559) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 09:08:17 I (1015564) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 09:08:17 I (1015573) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 09:08:17 I (1015579) burner_web: GBA ReadID trace begin t=1014358804us
+2026-09-10 09:08:17 I (1015585) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=6271us (0.006271s)
+2026-09-10 09:08:17 I (1015593) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8167us (0.008167s)
+2026-09-10 09:08:17 I (1015601) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8128us (0.008128s)
+2026-09-10 09:08:17 I (1015609) burner_web: GBA ReadID trace read addr=0x000 data=0x0001 dt=8257us (0.008257s)
+2026-09-10 09:08:17 I (1015617) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7710us (0.007710s)
+2026-09-10 09:08:17 I (1015625) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7862us (0.007862s)
+2026-09-10 09:08:17 I (1015633) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=8391us (0.008391s)
+2026-09-10 09:08:17 I (1015641) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7958us (0.007958s)
+2026-09-10 09:08:17 I (1015648) burner_web: GBA ReadID trace end status=ESP_OK total=69786us (0.069786s)
+2026-09-10 09:08:17 I (1015658) burner_web: GBA word-address probe @40000000Hz try=1 id=01 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 09:08:17 I (1015665) burner_web: GBA Intel ReadID trace begin t=1014445601us
+2026-09-10 09:08:17 I (1015672) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=6621us (0.006621s)
+2026-09-10 09:08:17 I (1015681) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8962us (0.008962s)
+2026-09-10 09:08:17 I (1015689) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8240us (0.008240s)
+2026-09-10 09:08:17 I (1015698) burner_web: GBA Intel ReadID trace read add
+2026-09-10 09:08:17 @mori {"event":"patch_started","message":"patch and save new ROM"}
+2026-09-10 09:08:19 
+2026-09-10 09:08:19 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1213157,"internal_free":58543,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":8126464,"total":33554432,"passes":2,"read_bytes":8126464,"read_ms":996,"elapsed_ms":2049,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:21 
+2026-09-10 09:08:21 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1215203,"internal_free":58543,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":16285696,"total":33554432,"passes":2,"read_bytes":16285696,"read_ms":1876,"elapsed_ms":4096,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:23 
+2026-09-10 09:08:23 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1217249,"internal_free":58543,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":26116096,"total":33554432,"passes":2,"read_bytes":26116096,"read_ms":2866,"elapsed_ms":6141,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:25 
+2026-09-10 09:08:25 @mori {"event":"save_progress","percent":0,"done":0,"total":33554432}
+2026-09-10 09:08:25 
+2026-09-10 09:08:25 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1219294,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":65536,"total":33554432,"passes":8,"read_bytes":36503552,"read_ms":3816,"elapsed_ms":8186,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:26 
+2026-09-10 09:08:26 @mori {"event":"save_progress","percent":1,"done":360448,"total":33554432}
+2026-09-10 09:08:27 
+2026-09-10 09:08:27 @mori {"event":"save_progress","percent":2,"done":688128,"total":33554432}
+2026-09-10 09:08:27 
+2026-09-10 09:08:27 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1221336,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":720896,"total":33554432,"passes":8,"read_bytes":37158912,"read_ms":4247,"elapsed_ms":10228,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:28 
+2026-09-10 09:08:28 @mori {"event":"save_progress","percent":3,"done":1015808,"total":33554432}
+2026-09-10 09:08:29 
+2026-09-10 09:08:29 @mori {"event":"save_progress","percent":4,"done":1343488,"total":33554432}
+2026-09-10 09:08:29 
+2026-09-10 09:08:29 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1223369,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":1376256,"total":33554432,"passes":8,"read_bytes":37814272,"read_ms":4734,"elapsed_ms":12262,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:30 
+2026-09-10 09:08:30 @mori {"event":"save_progress","percent":5,"done":1703936,"total":33554432}
+2026-09-10 09:08:31 
+2026-09-10 09:08:31 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1225413,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":1966080,"total":33554432,"passes":8,"read_bytes":38404096,"read_ms":5007,"elapsed_ms":14305,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:31 
+2026-09-10 09:08:31 @mori {"event":"save_progress","percent":6,"done":2031616,"total":33554432}
+2026-09-10 09:08:33 
+2026-09-10 09:08:33 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1227449,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":2326528,"total":33554432,"passes":8,"read_bytes":38764544,"read_ms":5115,"elapsed_ms":16341,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:33 
+2026-09-10 09:08:33 @mori {"event":"save_progress","percent":7,"done":2359296,"total":33554432}
+2026-09-10 09:08:35 
+2026-09-10 09:08:35 @mori {"event":"save_progress","percent":8,"done":2686976,"total":33554432}
+2026-09-10 09:08:35 
+2026-09-10 09:08:35 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1229497,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":2785280,"total":33554432,"passes":8,"read_bytes":39223296,"read_ms":5450,"elapsed_ms":18389,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:36 
+2026-09-10 09:08:36 @mori {"event":"save_progress","percent":9,"done":3047424,"total":33554432}
+2026-09-10 09:08:37 
+2026-09-10 09:08:37 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1231539,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":3375104,"total":33554432,"passes":8,"read_bytes":39813120,"read_ms":5964,"elapsed_ms":20431,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:37 
+2026-09-10 09:08:37 @mori {"event":"save_progress","percent":10,"done":3375104,"total":33554432}
+2026-09-10 09:08:38 
+2026-09-10 09:08:38 @mori {"event":"save_progress","percent":11,"done":3702784,"total":33554432}
+2026-09-10 09:08:39 
+2026-09-10 09:08:39 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1233574,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":3997696,"total":33554432,"passes":8,"read_bytes":40435712,"read_ms":6440,"elapsed_ms":22466,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:39 
+2026-09-10 09:08:39 @mori {"event":"save_progress","percent":12,"done":4030464,"total":33554432}
+2026-09-10 09:08:40 
+2026-09-10 09:08:40 @mori {"event":"save_progress","percent":13,"done":4390912,"total":33554432}
+2026-09-10 09:08:41 
+2026-09-10 09:08:41 @mori {"event":"save_progress","percent":14,"done":4718592,"total":33554432}
+2026-09-10 09:08:41 
+2026-09-10 09:08:41 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1235617,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":4751360,"total":33554432,"passes":8,"read_bytes":41189376,"read_ms":6739,"elapsed_ms":24509,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:42 
+2026-09-10 09:08:42 @mori {"event":"save_progress","percent":15,"done":5046272,"total":33554432}
+2026-09-10 09:08:43 
+2026-09-10 09:08:43 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1237650,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":5373952,"total":33554432,"passes":8,"read_bytes":41811968,"read_ms":7215,"elapsed_ms":26542,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:43 
+2026-09-10 09:08:43 @mori {"event":"save_progress","percent":16,"done":5373952,"total":33554432}
+2026-09-10 09:08:45 
+2026-09-10 09:08:45 @mori {"event":"save_progress","percent":17,"done":5734400,"total":33554432}
+2026-09-10 09:08:45 
+2026-09-10 09:08:45 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1239696,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":5963776,"total":33554432,"passes":8,"read_bytes":42401792,"read_ms":7716,"elapsed_ms":28588,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:46 
+2026-09-10 09:08:46 @mori {"event":"save_progress","percent":18,"done":6062080,"total":33554432}
+2026-09-10 09:08:47 
+2026-09-10 09:08:47 @mori {"event":"save_progress","percent":19,"done":6389760,"total":33554432}
+2026-09-10 09:08:47 
+2026-09-10 09:08:47 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1241737,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":6553600,"total":33554432,"passes":8,"read_bytes":42991616,"read_ms":8245,"elapsed_ms":30629,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:48 
+2026-09-10 09:08:48 @mori {"event":"save_progress","percent":20,"done":6717440,"total":33554432}
+2026-09-10 09:08:49 
+2026-09-10 09:08:49 @mori {"event":"save_progress","percent":21,"done":7077888,"total":33554432}
+2026-09-10 09:08:49 
+2026-09-10 09:08:49 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1243781,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":7176192,"total":33554432,"passes":8,"read_bytes":43614208,"read_ms":8896,"elapsed_ms":32673,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:50 
+2026-09-10 09:08:50 @mori {"event":"save_progress","percent":22,"done":7405568,"total":33554432}
+2026-09-10 09:08:50 I (1246021) burner_web: bacon idle timeout reached, cartridge power rails off
+2026-09-10 09:08:51 
+2026-09-10 09:08:51 @mori {"event":"save_progress","percent":23,"done":7733248,"total":33554432}
+2026-09-10 09:08:51 
+2026-09-10 09:08:51 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1245828,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":7766016,"total":33554432,"passes":8,"read_bytes":44204032,"read_ms":9292,"elapsed_ms":34720,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:52 
+2026-09-10 09:08:52 @mori {"event":"save_progress","percent":24,"done":8060928,"total":33554432}
+2026-09-10 09:08:53 
+2026-09-10 09:08:53 @mori {"event":"save_progress","percent":25,"done":8388608,"total":33554432}
+2026-09-10 09:08:54 
+2026-09-10 09:08:54 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1247870,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":8486912,"total":33554432,"passes":8,"read_bytes":44924928,"read_ms":9702,"elapsed_ms":36762,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:54 
+2026-09-10 09:08:54 @mori {"event":"save_progress","percent":26,"done":8749056,"total":33554432}
+2026-09-10 09:08:56 
+2026-09-10 09:08:56 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1249908,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":9076736,"total":33554432,"passes":8,"read_bytes":45514752,"read_ms":10336,"elapsed_ms":38800,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:56 
+2026-09-10 09:08:56 @mori {"event":"save_progress","percent":27,"done":9076736,"total":33554432}
+2026-09-10 09:08:57 
+2026-09-10 09:08:57 @mori {"event":"save_progress","percent":28,"done":9404416,"total":33554432}
+2026-09-10 09:08:58 
+2026-09-10 09:08:58 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1251946,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":9666560,"total":33554432,"passes":8,"read_bytes":46104576,"read_ms":10837,"elapsed_ms":40838,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:08:58 
+2026-09-10 09:08:58 @mori {"event":"save_progress","percent":29,"done":9732096,"total":33554432}
+2026-09-10 09:08:59 
+2026-09-10 09:08:59 @mori {"event":"save_progress","percent":30,"done":10092544,"total":33554432}
+2026-09-10 09:09:00 
+2026-09-10 09:09:00 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1253994,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":10223616,"total":33554432,"passes":8,"read_bytes":46661632,"read_ms":11355,"elapsed_ms":42886,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:01 
+2026-09-10 09:09:01 @mori {"event":"save_progress","percent":31,"done":10420224,"total":33554432}
+2026-09-10 09:09:02 
+2026-09-10 09:09:02 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1256029,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":10518528,"total":33554432,"passes":8,"read_bytes":46956544,"read_ms":11647,"elapsed_ms":44921,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:03 
+2026-09-10 09:09:03 @mori {"event":"save_progress","percent":32,"done":10747904,"total":33554432}
+2026-09-10 09:09:04 
+2026-09-10 09:09:04 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1258082,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":10846208,"total":33554432,"passes":8,"read_bytes":47284224,"read_ms":11921,"elapsed_ms":46974,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:05 
+2026-09-10 09:09:05 @mori {"event":"save_progress","percent":33,"done":11075584,"total":33554432}
+2026-09-10 09:09:06 
+2026-09-10 09:09:06 @mori {"event":"save_progress","percent":34,"done":11436032,"total":33554432}
+2026-09-10 09:09:06 
+2026-09-10 09:09:06 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1260124,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":11501568,"total":33554432,"passes":8,"read_bytes":47939584,"read_ms":12281,"elapsed_ms":49016,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:07 
+2026-09-10 09:09:07 @mori {"event":"save_progress","percent":35,"done":11763712,"total":33554432}
+2026-09-10 09:09:08 
+2026-09-10 09:09:08 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1262169,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":12058624,"total":33554432,"passes":8,"read_bytes":48496640,"read_ms":12850,"elapsed_ms":51060,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:08 
+2026-09-10 09:09:08 @mori {"event":"save_progress","percent":36,"done":12091392,"total":33554432}
+2026-09-10 09:09:09 
+2026-09-10 09:09:09 @mori {"event":"save_progress","percent":37,"done":12419072,"total":33554432}
+2026-09-10 09:09:10 
+2026-09-10 09:09:10 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1264204,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":12648448,"total":33554432,"passes":8,"read_bytes":49086464,"read_ms":13465,"elapsed_ms":53096,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:10 
+2026-09-10 09:09:10 @mori {"event":"save_progress","percent":38,"done":12779520,"total":33554432}
+2026-09-10 09:09:12 
+2026-09-10 09:09:12 @mori {"event":"save_progress","percent":39,"done":13107200,"total":33554432}
+2026-09-10 09:09:12 
+2026-09-10 09:09:12 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1266266,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":13238272,"total":33554432,"passes":8,"read_bytes":49676288,"read_ms":14084,"elapsed_ms":55158,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:13 
+2026-09-10 09:09:13 @mori {"event":"save_progress","percent":40,"done":13434880,"total":33554432}
+2026-09-10 09:09:14 
+2026-09-10 09:09:14 @mori {"event":"save_progress","percent":41,"done":13762560,"total":33554432}
+2026-09-10 09:09:14 
+2026-09-10 09:09:14 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1268311,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":13795328,"total":33554432,"passes":8,"read_bytes":50233344,"read_ms":14686,"elapsed_ms":57203,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:15 
+2026-09-10 09:09:15 @mori {"event":"save_progress","percent":42,"done":14123008,"total":33554432}
+2026-09-10 09:09:16 
+2026-09-10 09:09:16 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1270339,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":14352384,"total":33554432,"passes":8,"read_bytes":50790400,"read_ms":15228,"elapsed_ms":59231,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:16 
+2026-09-10 09:09:16 @mori {"event":"save_progress","percent":43,"done":14450688,"total":33554432}
+2026-09-10 09:09:17 
+2026-09-10 09:09:17 @mori {"event":"save_progress","percent":44,"done":14778368,"total":33554432}
+2026-09-10 09:09:18 
+2026-09-10 09:09:18 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1272381,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":14974976,"total":33554432,"passes":8,"read_bytes":51412992,"read_ms":15740,"elapsed_ms":61273,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:18 
+2026-09-10 09:09:18 @mori {"event":"save_progress","percent":45,"done":15106048,"total":33554432}
+2026-09-10 09:09:19 
+2026-09-10 09:09:19 @mori {"event":"save_progress","percent":46,"done":15466496,"total":33554432}
+2026-09-10 09:09:20 
+2026-09-10 09:09:20 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1274406,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":15597568,"total":33554432,"passes":8,"read_bytes":52035584,"read_ms":16288,"elapsed_ms":63298,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:21 
+2026-09-10 09:09:21 @mori {"event":"save_progress","percent":47,"done":15794176,"total":33554432}
+2026-09-10 09:09:22 
+2026-09-10 09:09:22 @mori {"event":"save_progress","percent":48,"done":16121856,"total":33554432}
+2026-09-10 09:09:22 
+2026-09-10 09:09:22 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1276461,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":16154624,"total":33554432,"passes":8,"read_bytes":52592640,"read_ms":16812,"elapsed_ms":65353,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:23 
+2026-09-10 09:09:23 @mori {"event":"save_progress","percent":49,"done":16449536,"total":33554432}
+2026-09-10 09:09:24 
+2026-09-10 09:09:24 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1278520,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":16777216,"total":33554432,"passes":8,"read_bytes":53215232,"read_ms":17354,"elapsed_ms":67412,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:24 
+2026-09-10 09:09:24 @mori {"event":"save_progress","percent":50,"done":16777216,"total":33554432}
+2026-09-10 09:09:25 
+2026-09-10 09:09:25 @mori {"event":"save_progress","percent":51,"done":17137664,"total":33554432}
+2026-09-10 09:09:26 
+2026-09-10 09:09:26 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1280563,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":17399808,"total":33554432,"passes":8,"read_bytes":53837824,"read_ms":17866,"elapsed_ms":69455,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:26 
+2026-09-10 09:09:26 @mori {"event":"save_progress","percent":52,"done":17465344,"total":33554432}
+2026-09-10 09:09:27 
+2026-09-10 09:09:27 @mori {"event":"save_progress","percent":53,"done":17793024,"total":33554432}
+2026-09-10 09:09:28 
+2026-09-10 09:09:28 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1282617,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":18055168,"total":33554432,"passes":8,"read_bytes":54493184,"read_ms":18341,"elapsed_ms":71509,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:28 
+2026-09-10 09:09:28 @mori {"event":"save_progress","percent":54,"done":18120704,"total":33554432}
+2026-09-10 09:09:30 
+2026-09-10 09:09:30 @mori {"event":"save_progress","percent":55,"done":18481152,"total":33554432}
+2026-09-10 09:09:30 
+2026-09-10 09:09:30 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1284673,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":18644992,"total":33554432,"passes":8,"read_bytes":55083008,"read_ms":18794,"elapsed_ms":73565,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:31 
+2026-09-10 09:09:31 @mori {"event":"save_progress","percent":56,"done":18808832,"total":33554432}
+2026-09-10 09:09:32 
+2026-09-10 09:09:32 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1286705,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":18939904,"total":33554432,"passes":8,"read_bytes":55377920,"read_ms":19140,"elapsed_ms":75597,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:34 
+2026-09-10 09:09:34 @mori {"event":"save_progress","percent":57,"done":19136512,"total":33554432}
+2026-09-10 09:09:34 
+2026-09-10 09:09:34 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1288753,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":19267584,"total":33554432,"passes":8,"read_bytes":55705600,"read_ms":19480,"elapsed_ms":77645,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:35 
+2026-09-10 09:09:35 @mori {"event":"save_progress","percent":58,"done":19464192,"total":33554432}
+2026-09-10 09:09:36 
+2026-09-10 09:09:36 @mori {"event":"save_progress","percent":59,"done":19824640,"total":33554432}
+2026-09-10 09:09:36 
+2026-09-10 09:09:36 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1290793,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":19857408,"total":33554432,"passes":8,"read_bytes":56295424,"read_ms":19984,"elapsed_ms":79685,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:37 
+2026-09-10 09:09:37 @mori {"event":"save_progress","percent":60,"done":20152320,"total":33554432}
+2026-09-10 09:09:38 
+2026-09-10 09:09:38 @mori {"event":"save_progress","percent":61,"done":20480000,"total":33554432}
+2026-09-10 09:09:38 
+2026-09-10 09:09:38 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1292831,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":20512768,"total":33554432,"passes":8,"read_bytes":56950784,"read_ms":20403,"elapsed_ms":81723,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:39 
+2026-09-10 09:09:39 @mori {"event":"save_progress","percent":62,"done":20807680,"total":33554432}
+2026-09-10 09:09:40 
+2026-09-10 09:09:40 @mori {"event":"save_progress","percent":63,"done":21168128,"total":33554432}
+2026-09-10 09:09:41 
+2026-09-10 09:09:41 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1294870,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":21168128,"total":33554432,"passes":8,"read_bytes":57606144,"read_ms":20946,"elapsed_ms":83762,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:42 
+2026-09-10 09:09:42 @mori {"event":"save_progress","percent":64,"done":21495808,"total":33554432}
+2026-09-10 09:09:42 
+2026-09-10 09:09:42 @mori {"event":"save_progress","percent":65,"done":21823488,"total":33554432}
+2026-09-10 09:09:43 
+2026-09-10 09:09:43 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1296926,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":21889024,"total":33554432,"passes":8,"read_bytes":58327040,"read_ms":21493,"elapsed_ms":85818,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:43 
+2026-09-10 09:09:43 @mori {"event":"save_progress","percent":66,"done":22151168,"total":33554432}
+2026-09-10 09:09:44 
+2026-09-10 09:09:44 @mori {"event":"save_progress","percent":67,"done":22511616,"total":33554432}
+2026-09-10 09:09:45 
+2026-09-10 09:09:45 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1298959,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":22577152,"total":33554432,"passes":8,"read_bytes":59015168,"read_ms":21891,"elapsed_ms":87851,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:45 
+2026-09-10 09:09:45 @mori {"event":"save_progress","percent":68,"done":22839296,"total":33554432}
+2026-09-10 09:09:46 
+2026-09-10 09:09:46 @mori {"event":"save_progress","percent":69,"done":23166976,"total":33554432}
+2026-09-10 09:09:47 
+2026-09-10 09:09:47 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1301003,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":23232512,"total":33554432,"passes":8,"read_bytes":59670528,"read_ms":22297,"elapsed_ms":89895,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:47 
+2026-09-10 09:09:47 @mori {"event":"save_progress","percent":70,"done":23494656,"total":33554432}
+2026-09-10 09:09:48 
+2026-09-10 09:09:48 @mori {"event":"save_progress","percent":71,"done":23855104,"total":33554432}
+2026-09-10 09:09:49 
+2026-09-10 09:09:49 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1303050,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":24150016,"total":33554432,"passes":8,"read_bytes":60588032,"read_ms":22475,"elapsed_ms":91942,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:49 
+2026-09-10 09:09:49 @mori {"event":"save_progress","percent":72,"done":24182784,"total":33554432}
+2026-09-10 09:09:50 
+2026-09-10 09:09:50 @mori {"event":"save_progress","percent":73,"done":24510464,"total":33554432}
+2026-09-10 09:09:50 
+2026-09-10 09:09:50 @mori {"event":"save_progress","percent":74,"done":24838144,"total":33554432}
+2026-09-10 09:09:51 
+2026-09-10 09:09:51 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1305102,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":24969216,"total":33554432,"passes":8,"read_bytes":61407232,"read_ms":22726,"elapsed_ms":93994,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:51 
+2026-09-10 09:09:51 @mori {"event":"save_progress","percent":75,"done":25165824,"total":33554432}
+2026-09-10 09:09:52 
+2026-09-10 09:09:52 @mori {"event":"save_progress","percent":76,"done":25526272,"total":33554432}
+2026-09-10 09:09:53 
+2026-09-10 09:09:53 @mori {"event":"save_progress","percent":77,"done":25853952,"total":33554432}
+2026-09-10 09:09:53 
+2026-09-10 09:09:53 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1307147,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":25853952,"total":33554432,"passes":8,"read_bytes":62291968,"read_ms":22908,"elapsed_ms":96039,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:54 
+2026-09-10 09:09:54 @mori {"event":"save_progress","percent":78,"done":26181632,"total":33554432}
+2026-09-10 09:09:54 
+2026-09-10 09:09:54 @mori {"event":"save_progress","percent":79,"done":26509312,"total":33554432}
+2026-09-10 09:09:55 
+2026-09-10 09:09:55 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1309190,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":26640384,"total":33554432,"passes":8,"read_bytes":63078400,"read_ms":23399,"elapsed_ms":98083,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:55 
+2026-09-10 09:09:55 @mori {"event":"save_progress","percent":80,"done":26869760,"total":33554432}
+2026-09-10 09:09:57 
+2026-09-10 09:09:57 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1311231,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":27131904,"total":33554432,"passes":8,"read_bytes":63569920,"read_ms":23697,"elapsed_ms":100123,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:57 
+2026-09-10 09:09:57 @mori {"event":"save_progress","percent":81,"done":27197440,"total":33554432}
+2026-09-10 09:09:59 
+2026-09-10 09:09:59 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1313285,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":27492352,"total":33554432,"passes":8,"read_bytes":63930368,"read_ms":23880,"elapsed_ms":102177,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:09:59 
+2026-09-10 09:09:59 @mori {"event":"save_progress","percent":82,"done":27525120,"total":33554432}
+2026-09-10 09:10:00 
+2026-09-10 09:10:00 @mori {"event":"save_progress","percent":83,"done":27852800,"total":33554432}
+2026-09-10 09:10:01 
+2026-09-10 09:10:01 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1315322,"internal_free":57883,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":28114944,"total":33554432,"passes":8,"read_bytes":64552960,"read_ms":24019,"elapsed_ms":104214,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:01 
+2026-09-10 09:10:01 @mori {"event":"save_progress","percent":84,"done":28213248,"total":33554432}
+2026-09-10 09:10:02 
+2026-09-10 09:10:02 @mori {"event":"save_progress","percent":85,"done":28540928,"total":33554432}
+2026-09-10 09:10:03 
+2026-09-10 09:10:03 @mori {"event":"save_progress","percent":86,"done":28868608,"total":33554432}
+2026-09-10 09:10:03 
+2026-09-10 09:10:03 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1317364,"internal_free":57839,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":28934144,"total":33554432,"passes":8,"read_bytes":65372160,"read_ms":24299,"elapsed_ms":106256,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:04 
+2026-09-10 09:10:04 @mori {"event":"save_progress","percent":87,"done":29196288,"total":33554432}
+2026-09-10 09:10:05 
+2026-09-10 09:10:05 @mori {"event":"save_progress","percent":88,"done":29556736,"total":33554432}
+2026-09-10 09:10:05 
+2026-09-10 09:10:05 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1319405,"internal_free":57323,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":29720576,"total":33554432,"passes":8,"read_bytes":66158592,"read_ms":24624,"elapsed_ms":108298,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:05 
+2026-09-10 09:10:05 @mori {"event":"save_progress","percent":89,"done":29884416,"total":33554432}
+2026-09-10 09:10:06 
+2026-09-10 09:10:06 @mori {"event":"save_progress","percent":90,"done":30212096,"total":33554432}
+2026-09-10 09:10:07 
+2026-09-10 09:10:07 @mori {"event":"save_progress","percent":91,"done":30539776,"total":33554432}
+2026-09-10 09:10:07 
+2026-09-10 09:10:07 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1321440,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":30572544,"total":33554432,"passes":8,"read_bytes":67010560,"read_ms":24913,"elapsed_ms":110332,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:08 
+2026-09-10 09:10:08 @mori {"event":"save_progress","percent":92,"done":30900224,"total":33554432}
+2026-09-10 09:10:09 
+2026-09-10 09:10:09 @mori {"event":"save_progress","percent":93,"done":31227904,"total":33554432}
+2026-09-10 09:10:09 
+2026-09-10 09:10:09 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1323482,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":31260672,"total":33554432,"passes":8,"read_bytes":67698688,"read_ms":25252,"elapsed_ms":112374,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:10 
+2026-09-10 09:10:10 @mori {"event":"save_progress","percent":94,"done":31555584,"total":33554432}
+2026-09-10 09:10:11 
+2026-09-10 09:10:11 @mori {"event":"save_progress","percent":95,"done":31883264,"total":33554432}
+2026-09-10 09:10:11 
+2026-09-10 09:10:11 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1325517,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":31916032,"total":33554432,"passes":8,"read_bytes":68354048,"read_ms":25694,"elapsed_ms":114409,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:12 
+2026-09-10 09:10:12 @mori {"event":"save_progress","percent":96,"done":32243712,"total":33554432}
+2026-09-10 09:10:13 
+2026-09-10 09:10:13 @mori {"event":"save_progress","percent":97,"done":32571392,"total":33554432}
+2026-09-10 09:10:13 
+2026-09-10 09:10:13 @mori {"event":"status","version":"v2.32-91-g490b25e-dirty","uptime_ms":1327565,"internal_free":57367,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched.gba","offset":32735232,"total":33554432,"passes":8,"read_bytes":69173248,"read_ms":25930,"elapsed_ms":116457,"result":0,"ag32_link":"legacy","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 09:10:13 
+2026-09-10 09:10:13 @mori {"event":"save_progress","percent":98,"done":32899072,"total":33554432}
+2026-09-10 09:10:14 
+2026-09-10 09:10:14 @mori {"event":"save_progress","percent":99,"done":33226752,"total":33554432}
+2026-09-10 09:10:15 
+2026-09-10 09:10:15 @mori {"event":"save_progress","percent":100,"done":33554432,"total":33554432}
+2026-09-10 09:10:15 
+2026-09-10 09:10:15 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":118332,"save_type":"FLASH512","sram":true,"batteryless":false,"waitcnt_count":0,"output_size":33554432,"output_path":"/sdcard/地球冒险3.patched.gba"}
+2026-09-10 09:47:23 
+2026-09-10 09:47:23 @mori {"event":"patch_started","message":"patch and save new ROM"}
+2026-09-10 09:47:25 
+2026-09-10 09:47:25 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1159146,"internal_free":58671,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":8028160,"total":33554432,"passes":2,"read_bytes":8028160,"read_ms":1004,"elapsed_ms":2045,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:28 
+2026-09-10 09:47:28 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1161183,"internal_free":58627,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":16285696,"total":33554432,"passes":2,"read_bytes":16285696,"read_ms":1868,"elapsed_ms":4082,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:30 
+2026-09-10 09:47:30 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1163235,"internal_free":58627,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":26116096,"total":33554432,"passes":2,"read_bytes":26116096,"read_ms":2857,"elapsed_ms":6134,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:32 
+2026-09-10 09:47:32 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1165265,"internal_free":58627,"internal_largest":31744,"psram_free":7491812,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":1310720,"total":33554432,"passes":8,"read_bytes":37758976,"read_ms":3907,"elapsed_ms":8164,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:34 
+2026-09-10 09:47:34 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1167282,"internal_free":58671,"internal_largest":31744,"psram_free":7491812,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":15138816,"total":33554432,"passes":8,"read_bytes":51619328,"read_ms":5471,"elapsed_ms":10181,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:36 
+2026-09-10 09:47:36 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1169320,"internal_free":58671,"internal_largest":31744,"psram_free":7491812,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":32833536,"total":33554432,"passes":8,"read_bytes":69314048,"read_ms":7058,"elapsed_ms":12219,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:36 
+2026-09-10 09:47:36 @mori {"event":"save_progress","percent":0,"done":0,"total":33554432}
+2026-09-10 09:47:37 
+2026-09-10 09:47:37 @mori {"event":"save_progress","percent":1,"done":360448,"total":33554432}
+2026-09-10 09:47:37 
+2026-09-10 09:47:37 @mori {"event":"save_progress","percent":2,"done":688128,"total":33554432}
+2026-09-10 09:47:38 
+2026-09-10 09:47:38 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1171368,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":851968,"total":33554432,"passes":9,"read_bytes":70957568,"read_ms":7430,"elapsed_ms":14267,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:38 
+2026-09-10 09:47:38 @mori {"event":"save_progress","percent":3,"done":1015808,"total":33554432}
+2026-09-10 09:47:39 
+2026-09-10 09:47:39 @mori {"event":"save_progress","percent":4,"done":1343488,"total":33554432}
+2026-09-10 09:47:40 
+2026-09-10 09:47:40 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1173409,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":1638400,"total":33554432,"passes":9,"read_bytes":71744000,"read_ms":7591,"elapsed_ms":16308,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:40 
+2026-09-10 09:47:40 @mori {"event":"save_progress","percent":5,"done":1703936,"total":33554432}
+2026-09-10 09:47:42 
+2026-09-10 09:47:42 @mori {"event":"save_progress","percent":6,"done":2031616,"total":33554432}
+2026-09-10 09:47:42 
+2026-09-10 09:47:42 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1175453,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":2064384,"total":33554432,"passes":9,"read_bytes":72169984,"read_ms":7713,"elapsed_ms":18352,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:43 
+2026-09-10 09:47:43 @mori {"event":"save_progress","percent":7,"done":2359296,"total":33554432}
+2026-09-10 09:47:43 
+2026-09-10 09:47:43 @mori {"event":"save_progress","percent":8,"done":2686976,"total":33554432}
+2026-09-10 09:47:44 
+2026-09-10 09:47:44 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1177500,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":2883584,"total":33554432,"passes":9,"read_bytes":72989184,"read_ms":8178,"elapsed_ms":20399,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:44 
+2026-09-10 09:47:44 @mori {"event":"save_progress","percent":9,"done":3047424,"total":33554432}
+2026-09-10 09:47:45 
+2026-09-10 09:47:45 @mori {"event":"save_progress","percent":10,"done":3375104,"total":33554432}
+2026-09-10 09:47:46 
+2026-09-10 09:47:46 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1179540,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":3670016,"total":33554432,"passes":9,"read_bytes":73775616,"read_ms":8995,"elapsed_ms":22439,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:46 
+2026-09-10 09:47:46 @mori {"event":"save_progress","percent":11,"done":3702784,"total":33554432}
+2026-09-10 09:47:47 
+2026-09-10 09:47:47 @mori {"event":"save_progress","percent":12,"done":4030464,"total":33554432}
+2026-09-10 09:47:48 
+2026-09-10 09:47:48 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1181579,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":4292608,"total":33554432,"passes":9,"read_bytes":74398208,"read_ms":9633,"elapsed_ms":24478,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:48 
+2026-09-10 09:47:48 @mori {"event":"save_progress","percent":13,"done":4390912,"total":33554432}
+2026-09-10 09:47:49 
+2026-09-10 09:47:49 @mori {"event":"save_progress","percent":14,"done":4718592,"total":33554432}
+2026-09-10 09:47:50 
+2026-09-10 09:47:50 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1183623,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":5046272,"total":33554432,"passes":9,"read_bytes":75151872,"read_ms":9963,"elapsed_ms":26522,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:50 
+2026-09-10 09:47:50 @mori {"event":"save_progress","percent":15,"done":5046272,"total":33554432}
+2026-09-10 09:47:51 
+2026-09-10 09:47:51 @mori {"event":"save_progress","percent":16,"done":5373952,"total":33554432}
+2026-09-10 09:47:52 
+2026-09-10 09:47:52 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1185669,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":5701632,"total":33554432,"passes":9,"read_bytes":75807232,"read_ms":10505,"elapsed_ms":28568,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:52 
+2026-09-10 09:47:52 @mori {"event":"save_progress","percent":17,"done":5734400,"total":33554432}
+2026-09-10 09:47:53 
+2026-09-10 09:47:53 @mori {"event":"save_progress","percent":18,"done":6062080,"total":33554432}
+2026-09-10 09:47:54 
+2026-09-10 09:47:54 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1187719,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":6258688,"total":33554432,"passes":9,"read_bytes":76364288,"read_ms":11052,"elapsed_ms":30618,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:54 
+2026-09-10 09:47:54 @mori {"event":"save_progress","percent":19,"done":6389760,"total":33554432}
+2026-09-10 09:47:55 
+2026-09-10 09:47:55 @mori {"event":"save_progress","percent":20,"done":6717440,"total":33554432}
+2026-09-10 09:47:56 
+2026-09-10 09:47:56 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1189754,"internal_free":57459,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":6848512,"total":33554432,"passes":9,"read_bytes":76954112,"read_ms":11671,"elapsed_ms":32653,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:57 
+2026-09-10 09:47:57 @mori {"event":"save_progress","percent":21,"done":7077888,"total":33554432}
+2026-09-10 09:47:58 
+2026-09-10 09:47:58 @mori {"event":"save_progress","percent":22,"done":7405568,"total":33554432}
+2026-09-10 09:47:58 
+2026-09-10 09:47:58 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1191791,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":7471104,"total":33554432,"passes":9,"read_bytes":77576704,"read_ms":12286,"elapsed_ms":34690,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:47:59 
+2026-09-10 09:47:59 @mori {"event":"save_progress","percent":23,"done":7733248,"total":33554432}
+2026-09-10 09:48:00 
+2026-09-10 09:48:00 @mori {"event":"save_progress","percent":24,"done":8060928,"total":33554432}
+2026-09-10 09:48:00 
+2026-09-10 09:48:00 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1193840,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":8257536,"total":33554432,"passes":9,"read_bytes":78363136,"read_ms":12546,"elapsed_ms":36739,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:01 
+2026-09-10 09:48:01 @mori {"event":"save_progress","percent":25,"done":8388608,"total":33554432}
+2026-09-10 09:48:02 
+2026-09-10 09:48:02 @mori {"event":"save_progress","percent":26,"done":8749056,"total":33554432}
+2026-09-10 09:48:02 
+2026-09-10 09:48:02 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1195885,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":8847360,"total":33554432,"passes":9,"read_bytes":78952960,"read_ms":13124,"elapsed_ms":38784,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:03 
+2026-09-10 09:48:03 @mori {"event":"save_progress","percent":27,"done":9076736,"total":33554432}
+2026-09-10 09:48:04 
+2026-09-10 09:48:04 @mori {"event":"save_progress","percent":28,"done":9404416,"total":33554432}
+2026-09-10 09:48:04 
+2026-09-10 09:48:04 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1197935,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":9437184,"total":33554432,"passes":9,"read_bytes":79542784,"read_ms":13750,"elapsed_ms":40834,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:05 
+2026-09-10 09:48:05 @mori {"event":"save_progress","percent":29,"done":9732096,"total":33554432}
+2026-09-10 09:48:06 
+2026-09-10 09:48:06 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1200007,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":9961472,"total":33554432,"passes":9,"read_bytes":80067072,"read_ms":14288,"elapsed_ms":42906,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:07 
+2026-09-10 09:48:07 @mori {"event":"save_progress","percent":30,"done":10092544,"total":33554432}
+2026-09-10 09:48:08 
+2026-09-10 09:48:08 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1202045,"internal_free":57459,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":10256384,"total":33554432,"passes":9,"read_bytes":80361984,"read_ms":14626,"elapsed_ms":44944,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:09 
+2026-09-10 09:48:09 @mori {"event":"save_progress","percent":31,"done":10420224,"total":33554432}
+2026-09-10 09:48:10 
+2026-09-10 09:48:10 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1204080,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":10551296,"total":33554432,"passes":9,"read_bytes":80656896,"read_ms":14941,"elapsed_ms":46979,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:11 
+2026-09-10 09:48:11 @mori {"event":"save_progress","percent":32,"done":10747904,"total":33554432}
+2026-09-10 09:48:12 
+2026-09-10 09:48:12 @mori {"event":"save_progress","percent":33,"done":11075584,"total":33554432}
+2026-09-10 09:48:12 
+2026-09-10 09:48:12 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1206126,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":11141120,"total":33554432,"passes":9,"read_bytes":81246720,"read_ms":15527,"elapsed_ms":49025,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:13 
+2026-09-10 09:48:13 @mori {"event":"save_progress","percent":34,"done":11436032,"total":33554432}
+2026-09-10 09:48:14 
+2026-09-10 09:48:14 @mori {"event":"save_progress","percent":35,"done":11763712,"total":33554432}
+2026-09-10 09:48:15 
+2026-09-10 09:48:15 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1208181,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":11894784,"total":33554432,"passes":9,"read_bytes":82000384,"read_ms":15975,"elapsed_ms":51080,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:15 
+2026-09-10 09:48:15 @mori {"event":"save_progress","percent":36,"done":12091392,"total":33554432}
+2026-09-10 09:48:16 
+2026-09-10 09:48:16 @mori {"event":"save_progress","percent":37,"done":12419072,"total":33554432}
+2026-09-10 09:48:17 
+2026-09-10 09:48:17 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1210216,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":12451840,"total":33554432,"passes":9,"read_bytes":82557440,"read_ms":16525,"elapsed_ms":53115,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:18 
+2026-09-10 09:48:18 @mori {"event":"save_progress","percent":38,"done":12779520,"total":33554432}
+2026-09-10 09:48:19 
+2026-09-10 09:48:19 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1212254,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":13041664,"total":33554432,"passes":9,"read_bytes":83147264,"read_ms":17152,"elapsed_ms":55153,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:19 
+2026-09-10 09:48:19 @mori {"event":"save_progress","percent":39,"done":13107200,"total":33554432}
+2026-09-10 09:48:20 
+2026-09-10 09:48:20 @mori {"event":"save_progress","percent":40,"done":13434880,"total":33554432}
+2026-09-10 09:48:21 
+2026-09-10 09:48:21 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1214298,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":13631488,"total":33554432,"passes":9,"read_bytes":83737088,"read_ms":17788,"elapsed_ms":57197,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:21 
+2026-09-10 09:48:21 @mori {"event":"save_progress","percent":41,"done":13762560,"total":33554432}
+2026-09-10 09:48:22 
+2026-09-10 09:48:22 @mori {"event":"save_progress","percent":42,"done":14123008,"total":33554432}
+2026-09-10 09:48:23 
+2026-09-10 09:48:23 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1216330,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":14188544,"total":33554432,"passes":9,"read_bytes":84294144,"read_ms":18408,"elapsed_ms":59229,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:23 
+2026-09-10 09:48:23 @mori {"event":"save_progress","percent":43,"done":14450688,"total":33554432}
+2026-09-10 09:48:25 
+2026-09-10 09:48:25 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1218361,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":14778368,"total":33554432,"passes":9,"read_bytes":84883968,"read_ms":19012,"elapsed_ms":61260,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:25 
+2026-09-10 09:48:25 @mori {"event":"save_progress","percent":44,"done":14778368,"total":33554432}
+2026-09-10 09:48:26 
+2026-09-10 09:48:26 @mori {"event":"save_progress","percent":45,"done":15106048,"total":33554432}
+2026-09-10 09:48:27 
+2026-09-10 09:48:27 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1220383,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":15335424,"total":33554432,"passes":9,"read_bytes":85441024,"read_ms":19564,"elapsed_ms":63282,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:27 
+2026-09-10 09:48:27 @mori {"event":"save_progress","percent":46,"done":15466496,"total":33554432}
+2026-09-10 09:48:28 
+2026-09-10 09:48:28 @mori {"event":"save_progress","percent":47,"done":15794176,"total":33554432}
+2026-09-10 09:48:29 
+2026-09-10 09:48:29 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1222416,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":15925248,"total":33554432,"passes":9,"read_bytes":86030848,"read_ms":20192,"elapsed_ms":65315,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:29 
+2026-09-10 09:48:29 @mori {"event":"save_progress","percent":48,"done":16121856,"total":33554432}
+2026-09-10 09:48:31 
+2026-09-10 09:48:31 @mori {"event":"save_progress","percent":49,"done":16449536,"total":33554432}
+2026-09-10 09:48:31 
+2026-09-10 09:48:31 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1224453,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":16482304,"total":33554432,"passes":9,"read_bytes":86587904,"read_ms":20779,"elapsed_ms":67352,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:32 
+2026-09-10 09:48:32 @mori {"event":"save_progress","percent":50,"done":16777216,"total":33554432}
+2026-09-10 09:48:33 
+2026-09-10 09:48:33 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1226476,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":17039360,"total":33554432,"passes":9,"read_bytes":87144960,"read_ms":21449,"elapsed_ms":69375,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:33 
+2026-09-10 09:48:33 @mori {"event":"save_progress","percent":51,"done":17137664,"total":33554432}
+2026-09-10 09:48:34 
+2026-09-10 09:48:34 @mori {"event":"save_progress","percent":52,"done":17465344,"total":33554432}
+2026-09-10 09:48:35 
+2026-09-10 09:48:35 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1228512,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":17661952,"total":33554432,"passes":9,"read_bytes":87767552,"read_ms":21961,"elapsed_ms":71411,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:35 
+2026-09-10 09:48:35 @mori {"event":"save_progress","percent":53,"done":17793024,"total":33554432}
+2026-09-10 09:48:36 
+2026-09-10 09:48:36 @mori {"event":"save_progress","percent":54,"done":18120704,"total":33554432}
+2026-09-10 09:48:37 
+2026-09-10 09:48:37 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1230553,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":18251776,"total":33554432,"passes":9,"read_bytes":88357376,"read_ms":22561,"elapsed_ms":73452,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:38 
+2026-09-10 09:48:38 @mori {"event":"save_progress","percent":55,"done":18481152,"total":33554432}
+2026-09-10 09:48:39 
+2026-09-10 09:48:39 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1232580,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":18579456,"total":33554432,"passes":9,"read_bytes":88685056,"read_ms":22957,"elapsed_ms":75479,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:41 
+2026-09-10 09:48:41 @mori {"event":"save_progress","percent":56,"done":18808832,"total":33554432}
+2026-09-10 09:48:41 
+2026-09-10 09:48:41 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1234608,"internal_free":57459,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":18874368,"total":33554432,"passes":9,"read_bytes":88979968,"read_ms":23286,"elapsed_ms":77507,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:42 
+2026-09-10 09:48:42 @mori {"event":"save_progress","percent":57,"done":19136512,"total":33554432}
+2026-09-10 09:48:43 
+2026-09-10 09:48:43 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1236636,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":19398656,"total":33554432,"passes":9,"read_bytes":89504256,"read_ms":23686,"elapsed_ms":79535,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:43 
+2026-09-10 09:48:43 @mori {"event":"save_progress","percent":58,"done":19464192,"total":33554432}
+2026-09-10 09:48:44 
+2026-09-10 09:48:44 @mori {"event":"save_progress","percent":59,"done":19824640,"total":33554432}
+2026-09-10 09:48:45 
+2026-09-10 09:48:45 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1238668,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":20054016,"total":33554432,"passes":9,"read_bytes":90159616,"read_ms":24140,"elapsed_ms":81567,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:45 
+2026-09-10 09:48:45 @mori {"event":"save_progress","percent":60,"done":20152320,"total":33554432}
+2026-09-10 09:48:46 
+2026-09-10 09:48:46 @mori {"event":"save_progress","percent":61,"done":20480000,"total":33554432}
+2026-09-10 09:48:47 
+2026-09-10 09:48:47 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1240698,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":20676608,"total":33554432,"passes":9,"read_bytes":90782208,"read_ms":24626,"elapsed_ms":83597,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:47 
+2026-09-10 09:48:47 @mori {"event":"save_progress","percent":62,"done":20807680,"total":33554432}
+2026-09-10 09:48:49 
+2026-09-10 09:48:49 @mori {"event":"save_progress","percent":63,"done":21168128,"total":33554432}
+2026-09-10 09:48:49 
+2026-09-10 09:48:49 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1242726,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":21299200,"total":33554432,"passes":9,"read_bytes":91404800,"read_ms":25261,"elapsed_ms":85625,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:50 
+2026-09-10 09:48:50 @mori {"event":"save_progress","percent":64,"done":21495808,"total":33554432}
+2026-09-10 09:48:51 
+2026-09-10 09:48:51 @mori {"event":"save_progress","percent":65,"done":21823488,"total":33554432}
+2026-09-10 09:48:51 
+2026-09-10 09:48:51 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1244753,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":21921792,"total":33554432,"passes":9,"read_bytes":92027392,"read_ms":25815,"elapsed_ms":87653,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:52 
+2026-09-10 09:48:52 @mori {"event":"save_progress","percent":66,"done":22151168,"total":33554432}
+2026-09-10 09:48:53 
+2026-09-10 09:48:53 @mori {"event":"save_progress","percent":67,"done":22511616,"total":33554432}
+2026-09-10 09:48:53 
+2026-09-10 09:48:53 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1246792,"internal_free":57459,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":22740992,"total":33554432,"passes":9,"read_bytes":92846592,"read_ms":26109,"elapsed_ms":89691,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:53 
+2026-09-10 09:48:53 @mori {"event":"save_progress","percent":68,"done":22839296,"total":33554432}
+2026-09-10 09:48:54 
+2026-09-10 09:48:54 @mori {"event":"save_progress","percent":69,"done":23166976,"total":33554432}
+2026-09-10 09:48:55 
+2026-09-10 09:48:55 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1248831,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":23461888,"total":33554432,"passes":9,"read_bytes":93567488,"read_ms":26483,"elapsed_ms":91730,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:55 
+2026-09-10 09:48:55 @mori {"event":"save_progress","percent":70,"done":23494656,"total":33554432}
+2026-09-10 09:48:56 
+2026-09-10 09:48:56 @mori {"event":"save_progress","percent":71,"done":23855104,"total":33554432}
+2026-09-10 09:48:57 
+2026-09-10 09:48:57 @mori {"event":"save_progress","percent":72,"done":24182784,"total":33554432}
+2026-09-10 09:48:57 
+2026-09-10 09:48:57 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1250875,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":24281088,"total":33554432,"passes":9,"read_bytes":94386688,"read_ms":26711,"elapsed_ms":93774,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:48:58 
+2026-09-10 09:48:58 @mori {"event":"save_progress","percent":73,"done":24510464,"total":33554432}
+2026-09-10 09:48:59 
+2026-09-10 09:48:59 @mori {"event":"save_progress","percent":74,"done":24838144,"total":33554432}
+2026-09-10 09:48:59 
+2026-09-10 09:48:59 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1252921,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":25034752,"total":33554432,"passes":9,"read_bytes":95140352,"read_ms":27015,"elapsed_ms":95820,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:00 
+2026-09-10 09:49:00 @mori {"event":"save_progress","percent":75,"done":25165824,"total":33554432}
+2026-09-10 09:49:00 
+2026-09-10 09:49:00 @mori {"event":"save_progress","percent":76,"done":25526272,"total":33554432}
+2026-09-10 09:49:01 
+2026-09-10 09:49:01 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1254964,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":25722880,"total":33554432,"passes":9,"read_bytes":95828480,"read_ms":27477,"elapsed_ms":97863,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:01 
+2026-09-10 09:49:01 @mori {"event":"save_progress","percent":77,"done":25853952,"total":33554432}
+2026-09-10 09:49:03 
+2026-09-10 09:49:03 @mori {"event":"save_progress","percent":78,"done":26181632,"total":33554432}
+2026-09-10 09:49:03 
+2026-09-10 09:49:03 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1257000,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":26378240,"total":33554432,"passes":9,"read_bytes":96483840,"read_ms":27902,"elapsed_ms":99899,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:04 
+2026-09-10 09:49:04 @mori {"event":"save_progress","percent":79,"done":26509312,"total":33554432}
+2026-09-10 09:49:05 
+2026-09-10 09:49:05 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1259042,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":26869760,"total":33554432,"passes":9,"read_bytes":96975360,"read_ms":28126,"elapsed_ms":101941,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:05 
+2026-09-10 09:49:05 @mori {"event":"save_progress","percent":80,"done":26869760,"total":33554432}
+2026-09-10 09:49:07 
+2026-09-10 09:49:07 @mori {"event":"save_progress","percent":81,"done":27197440,"total":33554432}
+2026-09-10 09:49:07 
+2026-09-10 09:49:07 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1261077,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":27197440,"total":33554432,"passes":9,"read_bytes":97303040,"read_ms":28325,"elapsed_ms":103976,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:09 
+2026-09-10 09:49:09 @mori {"event":"save_progress","percent":82,"done":27525120,"total":33554432}
+2026-09-10 09:49:09 
+2026-09-10 09:49:09 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1263124,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":27787264,"total":33554432,"passes":9,"read_bytes":97892864,"read_ms":28612,"elapsed_ms":106023,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:10 
+2026-09-10 09:49:10 @mori {"event":"save_progress","percent":83,"done":27852800,"total":33554432}
+2026-09-10 09:49:10 
+2026-09-10 09:49:10 @mori {"event":"save_progress","percent":84,"done":28213248,"total":33554432}
+2026-09-10 09:49:11 
+2026-09-10 09:49:11 @mori {"event":"save_progress","percent":85,"done":28540928,"total":33554432}
+2026-09-10 09:49:11 
+2026-09-10 09:49:11 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1265172,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":28606464,"total":33554432,"passes":9,"read_bytes":98712064,"read_ms":28842,"elapsed_ms":108071,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:12 
+2026-09-10 09:49:12 @mori {"event":"save_progress","percent":86,"done":28868608,"total":33554432}
+2026-09-10 09:49:13 
+2026-09-10 09:49:13 @mori {"event":"save_progress","percent":87,"done":29196288,"total":33554432}
+2026-09-10 09:49:14 
+2026-09-10 09:49:14 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1267212,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":29392896,"total":33554432,"passes":9,"read_bytes":99498496,"read_ms":29214,"elapsed_ms":110111,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:14 
+2026-09-10 09:49:14 @mori {"event":"save_progress","percent":88,"done":29556736,"total":33554432}
+2026-09-10 09:49:15 
+2026-09-10 09:49:15 @mori {"event":"save_progress","percent":89,"done":29884416,"total":33554432}
+2026-09-10 09:49:16 
+2026-09-10 09:49:16 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1269259,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":30146560,"total":33554432,"passes":9,"read_bytes":100252160,"read_ms":29514,"elapsed_ms":112158,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:16 
+2026-09-10 09:49:16 @mori {"event":"save_progress","percent":90,"done":30212096,"total":33554432}
+2026-09-10 09:49:16 
+2026-09-10 09:49:16 @mori {"event":"save_progress","percent":91,"done":30539776,"total":33554432}
+2026-09-10 09:49:17 
+2026-09-10 09:49:17 @mori {"event":"save_progress","percent":92,"done":30900224,"total":33554432}
+2026-09-10 09:49:18 
+2026-09-10 09:49:18 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1271310,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":31064064,"total":33554432,"passes":9,"read_bytes":101169664,"read_ms":29690,"elapsed_ms":114209,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:18 
+2026-09-10 09:49:18 @mori {"event":"save_progress","percent":93,"done":31227904,"total":33554432}
+2026-09-10 09:49:19 
+2026-09-10 09:49:19 @mori {"event":"save_progress","percent":94,"done":31555584,"total":33554432}
+2026-09-10 09:49:20 
+2026-09-10 09:49:20 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1273345,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":31883264,"total":33554432,"passes":9,"read_bytes":101988864,"read_ms":29970,"elapsed_ms":116244,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:20 
+2026-09-10 09:49:20 @mori {"event":"save_progress","percent":95,"done":31883264,"total":33554432}
+2026-09-10 09:49:21 
+2026-09-10 09:49:21 @mori {"event":"save_progress","percent":96,"done":32243712,"total":33554432}
+2026-09-10 09:49:22 
+2026-09-10 09:49:22 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1275390,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":32505856,"total":33554432,"passes":9,"read_bytes":102611456,"read_ms":30365,"elapsed_ms":118289,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:22 
+2026-09-10 09:49:22 @mori {"event":"save_progress","percent":97,"done":32571392,"total":33554432}
+2026-09-10 09:49:23 
+2026-09-10 09:49:23 @mori {"event":"save_progress","percent":98,"done":32899072,"total":33554432}
+2026-09-10 09:49:24 
+2026-09-10 09:49:24 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1277441,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/地球冒险3.patched-1.gba","offset":33193984,"total":33554432,"passes":9,"read_bytes":103299584,"read_ms":30824,"elapsed_ms":120340,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:49:24 
+2026-09-10 09:49:24 @mori {"event":"save_progress","percent":99,"done":33226752,"total":33554432}
+2026-09-10 09:49:25 
+2026-09-10 09:49:25 @mori {"event":"save_progress","percent":100,"done":33554432,"total":33554432}
+2026-09-10 09:49:25 
+2026-09-10 09:49:25 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":121526,"save_type":"FLASH512","sram":true,"batteryless":false,"waitcnt_count":14,"output_size":33554432,"output_path":"/sdcard/地球冒险3.patched-1.gba"}
+2026-09-10 09:50:12 
+2026-09-10 09:50:12 @mori {"event":"patch_started","message":"patch and save new ROM"}
+2026-09-10 09:50:14 
+2026-09-10 09:50:14 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1327623,"internal_free":58235,"internal_largest":31744,"psram_free":7490788,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":8814592,"total":9256960,"passes":2,"read_bytes":8814592,"read_ms":902,"elapsed_ms":2056,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:16 
+2026-09-10 09:50:16 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1329662,"internal_free":58235,"internal_largest":31744,"psram_free":7456996,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"batteryless_irq","detail":"IRQ literals","offset":2293760,"total":9256960,"passes":9,"read_bytes":13977788,"read_ms":2046,"elapsed_ms":4095,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:18 
+2026-09-10 09:50:18 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1331706,"internal_free":58235,"internal_largest":31744,"psram_free":7456996,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"batteryless_hook","detail":"all save hooks (one pass)","offset":1572864,"total":9256960,"passes":10,"read_bytes":22513852,"read_ms":3055,"elapsed_ms":6139,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:20 
+2026-09-10 09:50:20 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1333751,"internal_free":58235,"internal_largest":31744,"psram_free":7456996,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"batteryless_hook","detail":"all save hooks (one pass)","offset":5439488,"total":9256960,"passes":10,"read_bytes":26380476,"read_ms":3481,"elapsed_ms":8184,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:22 
+2026-09-10 09:50:22 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1335799,"internal_free":58235,"internal_largest":31744,"psram_free":7456996,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"batteryless_hook","detail":"all save hooks (one pass)","offset":9175040,"total":9256960,"passes":10,"read_bytes":30116028,"read_ms":3933,"elapsed_ms":10233,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:24 
+2026-09-10 09:50:24 @mori {"event":"save_progress","percent":0,"done":0,"total":9699328}
+2026-09-10 09:50:24 
+2026-09-10 09:50:24 @mori {"event":"save_progress","percent":1,"done":98304,"total":9699328}
+2026-09-10 09:50:24 
+2026-09-10 09:50:24 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1337841,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":163840,"total":9699328,"passes":12,"read_bytes":39626428,"read_ms":5243,"elapsed_ms":12274,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:24 
+2026-09-10 09:50:24 @mori {"event":"save_progress","percent":2,"done":196608,"total":9699328}
+2026-09-10 09:50:25 
+2026-09-10 09:50:25 @mori {"event":"save_progress","percent":3,"done":294912,"total":9699328}
+2026-09-10 09:50:25 
+2026-09-10 09:50:25 @mori {"event":"save_progress","percent":4,"done":393216,"total":9699328}
+2026-09-10 09:50:25 
+2026-09-10 09:50:25 @mori {"event":"save_progress","percent":5,"done":491520,"total":9699328}
+2026-09-10 09:50:25 
+2026-09-10 09:50:25 @mori {"event":"save_progress","percent":6,"done":589824,"total":9699328}
+2026-09-10 09:50:26 
+2026-09-10 09:50:26 @mori {"event":"save_progress","percent":7,"done":688128,"total":9699328}
+2026-09-10 09:50:26 
+2026-09-10 09:50:26 @mori {"event":"save_progress","percent":8,"done":786432,"total":9699328}
+2026-09-10 09:50:26 
+2026-09-10 09:50:26 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1339874,"internal_free":57459,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":819200,"total":9699328,"passes":12,"read_bytes":40281788,"read_ms":5723,"elapsed_ms":14307,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:26 
+2026-09-10 09:50:26 @mori {"event":"save_progress","percent":9,"done":884736,"total":9699328}
+2026-09-10 09:50:27 
+2026-09-10 09:50:27 @mori {"event":"save_progress","percent":10,"done":983040,"total":9699328}
+2026-09-10 09:50:27 
+2026-09-10 09:50:27 @mori {"event":"save_progress","percent":11,"done":1081344,"total":9699328}
+2026-09-10 09:50:27 
+2026-09-10 09:50:27 @mori {"event":"save_progress","percent":12,"done":1179648,"total":9699328}
+2026-09-10 09:50:27 
+2026-09-10 09:50:27 @mori {"event":"save_progress","percent":13,"done":1277952,"total":9699328}
+2026-09-10 09:50:27 
+2026-09-10 09:50:27 @mori {"event":"save_progress","percent":14,"done":1376256,"total":9699328}
+2026-09-10 09:50:28 
+2026-09-10 09:50:28 @mori {"event":"save_progress","percent":15,"done":1474560,"total":9699328}
+2026-09-10 09:50:28 
+2026-09-10 09:50:28 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1341911,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":1572864,"total":9699328,"passes":12,"read_bytes":41035452,"read_ms":5958,"elapsed_ms":16344,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:28 
+2026-09-10 09:50:28 @mori {"event":"save_progress","percent":16,"done":1572864,"total":9699328}
+2026-09-10 09:50:29 
+2026-09-10 09:50:29 @mori {"event":"save_progress","percent":17,"done":1671168,"total":9699328}
+2026-09-10 09:50:29 
+2026-09-10 09:50:29 @mori {"event":"save_progress","percent":18,"done":1769472,"total":9699328}
+2026-09-10 09:50:30 
+2026-09-10 09:50:30 @mori {"event":"save_progress","percent":19,"done":1867776,"total":9699328}
+2026-09-10 09:50:30 
+2026-09-10 09:50:30 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1343952,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":1933312,"total":9699328,"passes":12,"read_bytes":41395900,"read_ms":6068,"elapsed_ms":18385,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:30 
+2026-09-10 09:50:30 @mori {"event":"save_progress","percent":20,"done":1966080,"total":9699328}
+2026-09-10 09:50:31 
+2026-09-10 09:50:31 @mori {"event":"save_progress","percent":21,"done":2064384,"total":9699328}
+2026-09-10 09:50:32 
+2026-09-10 09:50:32 @mori {"event":"save_progress","percent":22,"done":2162688,"total":9699328}
+2026-09-10 09:50:32 
+2026-09-10 09:50:32 @mori {"event":"save_progress","percent":23,"done":2260992,"total":9699328}
+2026-09-10 09:50:32 
+2026-09-10 09:50:32 @mori {"event":"save_progress","percent":24,"done":2359296,"total":9699328}
+2026-09-10 09:50:32 
+2026-09-10 09:50:32 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1345986,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":2359296,"total":9699328,"passes":12,"read_bytes":41821884,"read_ms":6270,"elapsed_ms":20419,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:33 
+2026-09-10 09:50:33 @mori {"event":"save_progress","percent":25,"done":2424832,"total":9699328}
+2026-09-10 09:50:33 
+2026-09-10 09:50:33 @mori {"event":"save_progress","percent":26,"done":2523136,"total":9699328}
+2026-09-10 09:50:33 
+2026-09-10 09:50:33 @mori {"event":"save_progress","percent":27,"done":2621440,"total":9699328}
+2026-09-10 09:50:33 
+2026-09-10 09:50:33 @mori {"event":"save_progress","percent":28,"done":2719744,"total":9699328}
+2026-09-10 09:50:34 
+2026-09-10 09:50:34 @mori {"event":"save_progress","percent":29,"done":2818048,"total":9699328}
+2026-09-10 09:50:34 
+2026-09-10 09:50:34 @mori {"event":"save_progress","percent":30,"done":2916352,"total":9699328}
+2026-09-10 09:50:34 
+2026-09-10 09:50:34 @mori {"event":"save_progress","percent":31,"done":3014656,"total":9699328}
+2026-09-10 09:50:34 
+2026-09-10 09:50:34 @mori {"event":"save_progress","percent":32,"done":3112960,"total":9699328}
+2026-09-10 09:50:34 
+2026-09-10 09:50:34 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1348013,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":3145728,"total":9699328,"passes":12,"read_bytes":42608316,"read_ms":6594,"elapsed_ms":22446,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:34 
+2026-09-10 09:50:34 @mori {"event":"save_progress","percent":33,"done":3211264,"total":9699328}
+2026-09-10 09:50:35 
+2026-09-10 09:50:35 @mori {"event":"save_progress","percent":34,"done":3309568,"total":9699328}
+2026-09-10 09:50:35 
+2026-09-10 09:50:35 @mori {"event":"save_progress","percent":35,"done":3407872,"total":9699328}
+2026-09-10 09:50:35 
+2026-09-10 09:50:35 @mori {"event":"save_progress","percent":36,"done":3506176,"total":9699328}
+2026-09-10 09:50:35 
+2026-09-10 09:50:35 @mori {"event":"save_progress","percent":37,"done":3604480,"total":9699328}
+2026-09-10 09:50:36 
+2026-09-10 09:50:36 @mori {"event":"save_progress","percent":38,"done":3702784,"total":9699328}
+2026-09-10 09:50:36 
+2026-09-10 09:50:36 @mori {"event":"save_progress","percent":39,"done":3801088,"total":9699328}
+2026-09-10 09:50:36 
+2026-09-10 09:50:36 @mori {"event":"save_progress","percent":40,"done":3899392,"total":9699328}
+2026-09-10 09:50:36 
+2026-09-10 09:50:36 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1350044,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":3997696,"total":9699328,"passes":12,"read_bytes":43460284,"read_ms":6807,"elapsed_ms":24477,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:36 
+2026-09-10 09:50:36 @mori {"event":"save_progress","percent":41,"done":3997696,"total":9699328}
+2026-09-10 09:50:37 
+2026-09-10 09:50:37 @mori {"event":"save_progress","percent":42,"done":4096000,"total":9699328}
+2026-09-10 09:50:37 
+2026-09-10 09:50:37 @mori {"event":"save_progress","percent":43,"done":4194304,"total":9699328}
+2026-09-10 09:50:37 
+2026-09-10 09:50:37 @mori {"event":"save_progress","percent":44,"done":4292608,"total":9699328}
+2026-09-10 09:50:37 
+2026-09-10 09:50:37 @mori {"event":"save_progress","percent":45,"done":4390912,"total":9699328}
+2026-09-10 09:50:38 
+2026-09-10 09:50:38 @mori {"event":"save_progress","percent":46,"done":4489216,"total":9699328}
+2026-09-10 09:50:38 
+2026-09-10 09:50:38 @mori {"event":"save_progress","percent":47,"done":4587520,"total":9699328}
+2026-09-10 09:50:38 
+2026-09-10 09:50:38 @mori {"event":"save_progress","percent":48,"done":4685824,"total":9699328}
+2026-09-10 09:50:38 
+2026-09-10 09:50:38 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1352079,"internal_free":58003,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":4718592,"total":9699328,"passes":12,"read_bytes":44181180,"read_ms":7181,"elapsed_ms":26512,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:39 
+2026-09-10 09:50:39 @mori {"event":"save_progress","percent":49,"done":4784128,"total":9699328}
+2026-09-10 09:50:39 
+2026-09-10 09:50:39 @mori {"event":"save_progress","percent":50,"done":4849664,"total":9699328}
+2026-09-10 09:50:39 
+2026-09-10 09:50:39 @mori {"event":"save_progress","percent":51,"done":4947968,"total":9699328}
+2026-09-10 09:50:39 
+2026-09-10 09:50:39 @mori {"event":"save_progress","percent":52,"done":5046272,"total":9699328}
+2026-09-10 09:50:40 
+2026-09-10 09:50:40 @mori {"event":"save_progress","percent":53,"done":5144576,"total":9699328}
+2026-09-10 09:50:40 
+2026-09-10 09:50:40 @mori {"event":"save_progress","percent":54,"done":5242880,"total":9699328}
+2026-09-10 09:50:40 
+2026-09-10 09:50:40 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1354112,"internal_free":57975,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":5308416,"total":9699328,"passes":12,"read_bytes":44771004,"read_ms":7723,"elapsed_ms":28545,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:40 
+2026-09-10 09:50:40 @mori {"event":"save_progress","percent":55,"done":5341184,"total":9699328}
+2026-09-10 09:50:41 
+2026-09-10 09:50:41 @mori {"event":"save_progress","percent":56,"done":5439488,"total":9699328}
+2026-09-10 09:50:41 
+2026-09-10 09:50:41 @mori {"event":"save_progress","percent":57,"done":5537792,"total":9699328}
+2026-09-10 09:50:41 
+2026-09-10 09:50:41 @mori {"event":"save_progress","percent":58,"done":5636096,"total":9699328}
+2026-09-10 09:50:42 
+2026-09-10 09:50:42 @mori {"event":"save_progress","percent":59,"done":5734400,"total":9699328}
+2026-09-10 09:50:42 
+2026-09-10 09:50:42 @mori {"event":"save_progress","percent":60,"done":5832704,"total":9699328}
+2026-09-10 09:50:42 
+2026-09-10 09:50:42 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1356143,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":5898240,"total":9699328,"passes":12,"read_bytes":45360828,"read_ms":8369,"elapsed_ms":30576,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:42 
+2026-09-10 09:50:42 @mori {"event":"save_progress","percent":61,"done":5931008,"total":9699328}
+2026-09-10 09:50:43 
+2026-09-10 09:50:43 @mori {"event":"save_progress","percent":62,"done":6029312,"total":9699328}
+2026-09-10 09:50:43 
+2026-09-10 09:50:43 @mori {"event":"save_progress","percent":63,"done":6127616,"total":9699328}
+2026-09-10 09:50:43 
+2026-09-10 09:50:43 @mori {"event":"save_progress","percent":64,"done":6225920,"total":9699328}
+2026-09-10 09:50:44 
+2026-09-10 09:50:44 @mori {"event":"save_progress","percent":65,"done":6324224,"total":9699328}
+2026-09-10 09:50:44 
+2026-09-10 09:50:44 @mori {"event":"save_progress","percent":66,"done":6422528,"total":9699328}
+2026-09-10 09:50:44 
+2026-09-10 09:50:44 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1358177,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":6488064,"total":9699328,"passes":12,"read_bytes":45950652,"read_ms":9001,"elapsed_ms":32610,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:44 
+2026-09-10 09:50:44 @mori {"event":"save_progress","percent":67,"done":6520832,"total":9699328}
+2026-09-10 09:50:45 
+2026-09-10 09:50:45 @mori {"event":"save_progress","percent":68,"done":6619136,"total":9699328}
+2026-09-10 09:50:45 
+2026-09-10 09:50:45 @mori {"event":"save_progress","percent":69,"done":6717440,"total":9699328}
+2026-09-10 09:50:46 
+2026-09-10 09:50:46 @mori {"event":"save_progress","percent":70,"done":6815744,"total":9699328}
+2026-09-10 09:50:46 
+2026-09-10 09:50:46 @mori {"event":"save_progress","percent":71,"done":6914048,"total":9699328}
+2026-09-10 09:50:46 
+2026-09-10 09:50:46 @mori {"event":"save_progress","percent":72,"done":7012352,"total":9699328}
+2026-09-10 09:50:47 
+2026-09-10 09:50:47 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1360191,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":7045120,"total":9699328,"passes":12,"read_bytes":46507708,"read_ms":9619,"elapsed_ms":34624,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:47 
+2026-09-10 09:50:47 @mori {"event":"save_progress","percent":73,"done":7110656,"total":9699328}
+2026-09-10 09:50:47 
+2026-09-10 09:50:47 @mori {"event":"save_progress","percent":74,"done":7208960,"total":9699328}
+2026-09-10 09:50:47 
+2026-09-10 09:50:47 @mori {"event":"save_progress","percent":75,"done":7274496,"total":9699328}
+2026-09-10 09:50:48 
+2026-09-10 09:50:48 @mori {"event":"save_progress","percent":76,"done":7372800,"total":9699328}
+2026-09-10 09:50:48 
+2026-09-10 09:50:48 @mori {"event":"save_progress","percent":77,"done":7471104,"total":9699328}
+2026-09-10 09:50:48 
+2026-09-10 09:50:48 @mori {"event":"save_progress","percent":78,"done":7569408,"total":9699328}
+2026-09-10 09:50:49 
+2026-09-10 09:50:49 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1362224,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":7602176,"total":9699328,"passes":12,"read_bytes":47064764,"read_ms":10238,"elapsed_ms":36657,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:49 
+2026-09-10 09:50:49 @mori {"event":"save_progress","percent":79,"done":7667712,"total":9699328}
+2026-09-10 09:50:49 
+2026-09-10 09:50:49 @mori {"event":"save_progress","percent":80,"done":7766016,"total":9699328}
+2026-09-10 09:50:49 
+2026-09-10 09:50:49 @mori {"event":"save_progress","percent":81,"done":7864320,"total":9699328}
+2026-09-10 09:50:50 
+2026-09-10 09:50:50 @mori {"event":"save_progress","percent":82,"done":7962624,"total":9699328}
+2026-09-10 09:50:50 
+2026-09-10 09:50:50 @mori {"event":"save_progress","percent":83,"done":8060928,"total":9699328}
+2026-09-10 09:50:50 
+2026-09-10 09:50:50 @mori {"event":"save_progress","percent":84,"done":8159232,"total":9699328}
+2026-09-10 09:50:51 
+2026-09-10 09:50:51 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1364269,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":8192000,"total":9699328,"passes":12,"read_bytes":47654588,"read_ms":10869,"elapsed_ms":38702,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:51 
+2026-09-10 09:50:51 @mori {"event":"save_progress","percent":85,"done":8257536,"total":9699328}
+2026-09-10 09:50:51 
+2026-09-10 09:50:51 @mori {"event":"save_progress","percent":86,"done":8355840,"total":9699328}
+2026-09-10 09:50:51 
+2026-09-10 09:50:51 @mori {"event":"save_progress","percent":87,"done":8454144,"total":9699328}
+2026-09-10 09:50:52 
+2026-09-10 09:50:52 @mori {"event":"save_progress","percent":88,"done":8552448,"total":9699328}
+2026-09-10 09:50:52 
+2026-09-10 09:50:52 @mori {"event":"save_progress","percent":89,"done":8650752,"total":9699328}
+2026-09-10 09:50:52 
+2026-09-10 09:50:52 @mori {"event":"save_progress","percent":90,"done":8749056,"total":9699328}
+2026-09-10 09:50:53 
+2026-09-10 09:50:53 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1366303,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":8781824,"total":9699328,"passes":12,"read_bytes":48244412,"read_ms":11511,"elapsed_ms":40736,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:53 
+2026-09-10 09:50:53 @mori {"event":"save_progress","percent":91,"done":8847360,"total":9699328}
+2026-09-10 09:50:53 
+2026-09-10 09:50:53 @mori {"event":"save_progress","percent":92,"done":8945664,"total":9699328}
+2026-09-10 09:50:53 
+2026-09-10 09:50:53 @mori {"event":"save_progress","percent":93,"done":9043968,"total":9699328}
+2026-09-10 09:50:54 
+2026-09-10 09:50:54 @mori {"event":"save_progress","percent":94,"done":9142272,"total":9699328}
+2026-09-10 09:50:54 
+2026-09-10 09:50:54 @mori {"event":"save_progress","percent":95,"done":9240576,"total":9699328}
+2026-09-10 09:50:54 
+2026-09-10 09:50:54 @mori {"event":"save_progress","percent":96,"done":9338880,"total":9699328}
+2026-09-10 09:50:55 
+2026-09-10 09:50:55 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1368346,"internal_free":57487,"internal_largest":31744,"psram_free":7524584,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"saving_rom","detail":"/sdcard/黄金太阳1 开启的封印.patched-2.gba","offset":9338880,"total":9699328,"passes":12,"read_bytes":48719548,"read_ms":12010,"elapsed_ms":42779,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:50:55 
+2026-09-10 09:50:55 @mori {"event":"save_progress","percent":97,"done":9437184,"total":9699328}
+2026-09-10 09:50:55 
+2026-09-10 09:50:55 @mori {"event":"save_progress","percent":98,"done":9535488,"total":9699328}
+2026-09-10 09:50:55 
+2026-09-10 09:50:55 @mori {"event":"save_progress","percent":99,"done":9633792,"total":9699328}
+2026-09-10 09:50:55 
+2026-09-10 09:50:55 @mori {"event":"save_progress","percent":100,"done":9699328,"total":9699328}
+2026-09-10 09:50:55 
+2026-09-10 09:50:55 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":43683,"save_type":"FLASH_V123","sram":true,"batteryless":true,"waitcnt_count":15,"output_size":9699328,"output_path":"/sdcard/黄金太阳1 开启的封印.patched-2.gba"}
+2026-09-10 09:51:48 
+2026-09-10 09:51:48 @mori {"event":"patch_started","message":"analysis only"}
+2026-09-10 09:51:50 
+2026-09-10 09:51:50 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1423539,"internal_free":66119,"internal_largest":31744,"psram_free":7515620,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"sram_identifier","detail":"all save types (one pass)","offset":9240576,"total":16777216,"passes":2,"read_bytes":9240576,"read_ms":881,"elapsed_ms":2038,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:51:52 
+2026-09-10 09:51:52 @mori {"event":"status","version":"v2.32-94-g8ba66a4-dirty","uptime_ms":1425578,"internal_free":66163,"internal_largest":31744,"psram_free":7516644,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":4587520,"total":16777216,"passes":3,"read_bytes":21366272,"read_ms":1943,"elapsed_ms":4077,"result":0,"ag32_link":"mcu","ag32_link_active":"mcu","ag32_capabilities":254,"ag32_capabilities_known":true}
+2026-09-10 09:51:53 
+2026-09-10 09:51:53 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":5408,"save_type":"","sram":false,"batteryless":false,"waitcnt_count":3,"output_size":16777216,"sram_ops":0,"irq_ops":0,"payload_offset":0}

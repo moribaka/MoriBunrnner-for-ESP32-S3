@@ -114,4 +114,35 @@ MCU-only batch SHA256
 MCU8852 bytes, payload108924 bytes. CPLD/source/pin/SDC hashes were identical
 before and after MCU build; full route reuse is deliberate. CPLD SHA256
 A317B768F7ADC1EEAE0A676FB1919D3677B8E526C4DA339713F55FAFD340EDE2.
-This optimized MCU is not yet board-qualified at this checkpoint.
+This optimized MCU passed the final six-case matrix and full readback checks
+under the documented board conditions. MCU PSRAM program time decreased
+100837→63835ms, burn task184600→140852ms; full32MiB verify53393→33397ms.
+
+## Final validation and restoration
+
+See `AG32_实机测试对比_20260910.md` for the complete table. Legacy and MCU,
+each with direct/PSRAM/pipeline, all wrote and verified32MiB successfully.
+Pipeline serial erase summary counts only the initial synchronous erase;
+the comparison uses HTTP cumulative erase time instead.
+
+Mother3 SRAM+WAITCNT also passed CHISLINK/pipeline:149880ms burn,
+33190ms full verify. Golden Sun1 SRAM+WAITCNT+batteryless expanded9256960→
+9699328 bytes. Its first write's head diagnostic compared the original file
+against the patched branch and failed (sourceEE vs patchedE5 at byte0).
+Independent full readback matched the exported image. Applied the task's
+patch plan to the head diagnostic expectation, rebuilt/flashed ESP32, then
+repeated the burn successfully:40173ms burn and10152ms full verify.
+Kirby USA patch analysis found3 WAITCNT operations, no new SRAM operations;
+this third ROM was not burned.
+
+Known scope: full verification uses the existing canonical hoststyle reader.
+One legacy pipeline head diagnostic reported a mismatch from the additional
+standard reader while hoststyle matched; no change or universal qualification
+of that experimental alternate reader is claimed. Physical tests were GBA,
+not GB/GBC hardware or gameplay/save persistence validation.
+
+Final ESP code commit3685b52; flashed app SHA256
+07FAB5F02A29E092698DAC5C717332C579B0B250B16656FDF35791F8E73F6AB9.
+Cold-start PING and100 raw echo passes succeeded. Restored the original first
+32MiB from the retained TF baseline with all patch flags disabled;138979ms
+burn and33389ms full verification passed. All hardware jobs ended normally.
