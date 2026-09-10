@@ -6,11 +6,37 @@ Use an exported patched ROM as --verify-rom when testing runtime patches.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 import time
+import threading
 import urllib.parse
 import urllib.request
+
+
+def capture_serial(port_name, path, stop, reports):
+    import serial
+    port = serial.Serial()
+    port.port, port.baudrate, port.timeout = port_name, 115200, 0.2
+    port.dtr = port.rts = False
+    try:
+        port.open()
+        with path.open("a", encoding="utf-8") as output:
+            while not stop.is_set():
+                line = port.readline().decode("utf-8", errors="replace")
+                if line:
+                    output.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line)
+                    output.flush()
+                    if any(marker in line for marker in ("summary:", "program profile:", "panic", "abort")):
+                        print(line.rstrip(), flush=True)
+                    match = re.search(r"GBA \S+ summary: err=(\S+) total=(\d+)ms bytes=(\d+)/(\d+) erase=(\d+)ms tf=(\d+)ms program=(\d+)ms", line)
+                    if match:
+                        reports.append(dict(zip(("error", "total_ms", "programmed", "total_bytes",
+                            "erase_ms", "tf_ms", "program_ms"),
+                            (match[1], *(int(match[i]) for i in range(2, 8))))))
+    finally:
+        port.close()
 
 
 def request(base, path, params=None, method="GET"):
@@ -70,14 +96,24 @@ def main():
     parser.add_argument("--batteryless", action="store_true")
     parser.add_argument("--timeout", type=float, default=1800)
     parser.add_argument("--results", required=True)
+    parser.add_argument("--port", help="Optional sole-owner serial capture during this run")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     result = {"configuration": vars(args), "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    stop = threading.Event()
+    capture = None
+    reports = []
+    if args.port:
+        log_path = Path(args.results).with_suffix(".serial.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        capture = threading.Thread(target=capture_serial, args=(args.port, log_path, stop, reports))
+        capture.start()
     try:
         current = request(args.url, "/api/status")
         if current["state"] in ("burning", "receiving"):
             raise RuntimeError("A cartridge job is already active")
-        if request(args.url, "/api/mcu/batch/status")["state"] == "running":
+        result["ag32_firmware"] = request(args.url, "/api/mcu/batch/status")
+        if result["ag32_firmware"]["state"] == "running":
             raise RuntimeError("An AG32 firmware update is already active")
         request(args.url, "/api/burn/core_config", {"ag32_link": args.link}, "POST")
         result["spi"] = request(args.url, "/api/spi/config")
@@ -90,6 +126,11 @@ def main():
             result["ok"] = result["verify"]["ok"]
     except Exception as error:
         result.update(ok=False, error=str(error))
+    finally:
+        stop.set()
+        if capture:
+            capture.join()
+        result["program_reports"] = reports
     path = Path(args.results)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as output:

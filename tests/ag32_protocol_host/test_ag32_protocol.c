@@ -84,6 +84,11 @@ static void test_response(void)
 
 int main(void)
 {
+    assert(ag32_mcu_crc32(NULL, 0) == 0);
+    assert(ag32_mcu_crc32("123456789", 9) == 0xcbf43926u);
+    uint8_t bulk[8192];
+    for (size_t i = 0; i < sizeof(bulk); ++i) bulk[i] = (uint8_t)(i * 73 + i / 7);
+    assert(ag32_mcu_crc32(bulk, sizeof(bulk)) == 0x7838d009u); /* Python zlib oracle */
     assert(ag32_mcu_frame_wire_size(0u) == 32u);
     assert(ag32_mcu_frame_wire_size(1u) == 36u);
     assert(ag32_mcu_frame_wire_size(4u) == 36u);

@@ -59,9 +59,11 @@ static uint8_t s_stream_opcode;
 static uint16_t s_stream_buffer_bytes;
 static uint32_t s_stream_address, s_stream_remaining, s_stream_timeout;
 
-static void cart_delay(void)
+static inline __attribute__((always_inline)) void cart_delay(void)
 {
-    UTIL_IdleCycle(CART_BUS_DELAY_CYCLES);
+    // Preserve the minimum 24-cycle bus guard without repeatedly reading
+    // and comparing a 64-bit mcycle counter on the RV32 hot path.
+    __asm__ volatile (".rept %c0\n\tnop\n\t.endr" :: "i" (CART_BUS_DELAY_CYCLES) : "memory");
 }
 
 static void cart_write_control(uint32_t control)

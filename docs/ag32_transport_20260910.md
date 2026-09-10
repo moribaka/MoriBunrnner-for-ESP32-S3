@@ -83,5 +83,35 @@ from complete external I/O timing qualification. User constraint coverage83%.
   verification is slower (53.4s vs33.9s); do not claim speedup from protocol
   overhead reduction alone.
 
-32MiB erase/program comparisons remain pending. The test ROM Mother3 was
-analyzed: FLASH512, five SRAM patch operations, output remains33554432 bytes.
+## First full burn passes
+
+Mother3: FLASH512, five SRAM patch operations, output33554432 bytes. Expected
+image exported independently as `/sdcard/地球冒险3.patched.gba`. Runtime burn
+reads the original ROM and applies the plan; full verify uses this exported
+image (and the existing common header-checksum policy).
+
+| Transport / path | Erase (s) | Program calls (s) | Burn task (s) | Full verify (s) | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| MCU stream / PSRAM, initial | 82.360 | 100.837 | 184.600 | 53.420 | All32MiB match |
+| Legacy Bacon / PSRAM | 73.475 | 61.788 | 136.250 | 33.603 | All32MiB match |
+
+Erase is forced for all256 sectors. NOR erase timing varies between runs.
+TF prefetch overlaps erase, so cumulative component times need not add to
+wall time. `write_time_ms` in the existing HTTP API counts TF/phase time and
+is NOT the NOR program counter; use serial `GBA CHIS summary program=...`.
+The benchmark helper captures that summary into `program_reports`.
+
+## Bounded MCU hot-path optimization
+
+Preserved the24-cycle minimum cartridge delay but replaced repeated64-bit
+mcycle reads/comparisons with24 inline NOPs. Changed CRC32 from eight bitwise
+iterations per byte to two16-entry-table lookups. No SPI/MCU clock changes.
+CRC host validation includes the standard123456789 vector and an8192-byte
+pattern checked against Python zlib (0x7838d009).
+
+MCU-only batch SHA256
+689E8C76E5C72F5E9A08CA25973B8888AAEBF6DF3256048EC9D0CBC89C5B0331.
+MCU8852 bytes, payload108924 bytes. CPLD/source/pin/SDC hashes were identical
+before and after MCU build; full route reuse is deliberate. CPLD SHA256
+A317B768F7ADC1EEAE0A676FB1919D3677B8E526C4DA339713F55FAFD340EDE2.
+This optimized MCU is not yet board-qualified at this checkpoint.
