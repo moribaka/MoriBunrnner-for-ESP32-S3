@@ -677,7 +677,6 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
 
         for (uint32_t attempt = 0u; attempt < 2u; ++attempt) {
             uint64_t erase_start_us;
-            uint64_t program_start_us;
             uint64_t program_elapsed_us;
 
             if (attempt > 0u) {
@@ -756,11 +755,11 @@ static esp_err_t burner_run_write_job_gba_gbx(const burner_task_param_t *job)
                 job->rom_name,
                 job->rom_path);
 
-            program_start_us = burner_gba_diag_now_us();
             burner_spi_lock_take();
+            burner_status_mark_write_begin();
             err = burner_gba_gbx_program_block(sector_buf, sector_bytes, sector_addr, is_multi_card, false);
+            program_elapsed_us = burner_status_mark_write_end();
             burner_spi_lock_give();
-            program_elapsed_us = burner_gba_diag_now_us() - program_start_us;
             if (err == ESP_OK) {
                 burner_status_record_write_sample((uint32_t)sector_bytes, program_elapsed_us);
                 break;
@@ -1530,7 +1529,6 @@ gba_stage_erase_done:
                 size_t chunk_limit = burner_gba_program_chunk_limit_bytes();
                 uint32_t write_addr = addr_begin + processed + (uint32_t)stage_off;
                 uint32_t now_processed;
-                uint64_t program_sample_start_us;
                 uint64_t program_sample_elapsed_us;
                 int progress;
 
@@ -1552,16 +1550,16 @@ gba_stage_erase_done:
                         burner_write_path_to_str(job->write_path));
                 }
 
-                program_sample_start_us = burner_gba_diag_now_us();
                 burner_spi_lock_take();
+                burner_status_mark_write_begin();
                 err = burner_bacon_gba_program_block(
                     psram_stage_buf + stage_off,
                     chunk_bytes,
                     write_addr,
                     burner_is_gba_multi_card(job),
                     should_erase && use_pipeline_stage && !intel_active);
+                program_sample_elapsed_us = burner_status_mark_write_end();
                 burner_spi_lock_give();
-                program_sample_elapsed_us = burner_gba_diag_now_us() - program_sample_start_us;
                 if (err != ESP_OK) {
                     char program_err_msg[96];
                     (void)snprintf(
@@ -1610,7 +1608,6 @@ gba_stage_erase_done:
             uint32_t processed_before = processed;
             uint64_t tf_read_start_us;
             uint64_t tf_read_elapsed_us;
-            uint64_t program_sample_start_us;
             uint64_t program_sample_elapsed_us;
             int progress;
 
@@ -1658,16 +1655,16 @@ gba_stage_erase_done:
             }
             (void)burner_gba_apply_header_checksum_fix(buf, chunk_bytes, processed, processed == 0u);
 
-            program_sample_start_us = burner_gba_diag_now_us();
             burner_spi_lock_take();
+            burner_status_mark_write_begin();
             err = burner_bacon_gba_program_block(
                 buf,
                 chunk_bytes,
                 write_addr,
                 burner_is_gba_multi_card(job),
                 false);
+            program_sample_elapsed_us = burner_status_mark_write_end();
             burner_spi_lock_give();
-            program_sample_elapsed_us = burner_gba_diag_now_us() - program_sample_start_us;
             if (err != ESP_OK) {
                 char program_err_msg[96];
                 (void)snprintf(

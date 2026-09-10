@@ -479,7 +479,6 @@ mbc5_stage_erase_done:
             while (stage_off < stage_bytes) {
                 size_t chunk_bytes = stage_bytes - stage_off;
                 uint32_t now_processed;
-                uint64_t program_sample_start_us;
                 uint64_t program_sample_elapsed_us;
                 int progress;
 
@@ -487,14 +486,14 @@ mbc5_stage_erase_done:
                     chunk_bytes = program_chunk_bytes;
                 }
 
-                program_sample_start_us = (uint64_t)esp_timer_get_time();
                 burner_spi_lock_take();
+                burner_status_mark_write_begin();
                 err = burner_bacon_mbc5_program_block(
                     psram_stage_buf + stage_off,
                     chunk_bytes,
                     addr_begin + processed + (uint32_t)stage_off);
+                program_sample_elapsed_us = burner_status_mark_write_end();
                 burner_spi_lock_give();
-                program_sample_elapsed_us = (uint64_t)esp_timer_get_time() - program_sample_start_us;
                 if (err != ESP_OK) {
                     char program_err_msg[96];
                     (void)snprintf(
@@ -537,7 +536,6 @@ mbc5_stage_erase_done:
     } else {
         while (processed < job->total_bytes) {
             size_t chunk_bytes = (size_t)(job->total_bytes - processed);
-            uint64_t program_sample_start_us;
             uint64_t program_sample_elapsed_us;
             int progress;
 
@@ -567,11 +565,11 @@ mbc5_stage_erase_done:
                 goto write_done;
             }
 
-            program_sample_start_us = (uint64_t)esp_timer_get_time();
             burner_spi_lock_take();
+            burner_status_mark_write_begin();
             err = burner_bacon_mbc5_program_block(buf, chunk_bytes, addr_begin + processed);
+            program_sample_elapsed_us = burner_status_mark_write_end();
             burner_spi_lock_give();
-            program_sample_elapsed_us = (uint64_t)esp_timer_get_time() - program_sample_start_us;
             if (err != ESP_OK) {
                 char program_err_msg[96];
                 (void)snprintf(

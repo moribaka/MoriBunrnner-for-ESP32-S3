@@ -1,0 +1,360 @@
+2026-09-10 20:57:58 I (120877) burner_web: PSRAM auto window: free=7555748 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 20:57:58 I (120893) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 20:57:58 I (120896) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 20:57:58 I (121101) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 20:57:58 I (121103) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 20:57:58 I (121108) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 20:57:58 I (121116) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 20:57:58 I (121122) burner_web: GBA ReadID trace begin t=119905981us
+2026-09-10 20:57:58 I (121126) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=4201us (0.004201s)
+2026-09-10 20:57:58 I (121134) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8483us (0.008483s)
+2026-09-10 20:57:58 I (121143) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8711us (0.008711s)
+2026-09-10 20:57:58 I (121151) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=8156us (0.008156s)
+2026-09-10 20:57:58 I (121161) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=9642us (0.009642s)
+2026-09-10 20:57:58 I (121167) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=6136us (0.006136s)
+2026-09-10 20:57:58 I (121174) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7151us (0.007151s)
+2026-09-10 20:57:58 I (121184) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=9650us (0.009650s)
+2026-09-10 20:57:58 I (121191) burner_web: GBA ReadID trace end status=ESP_OK total=69299us (0.069299s)
+2026-09-10 20:57:58 I (121199) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:57:58 I (121207) burner_web: GBA Intel ReadID trace begin t=119991042us
+2026-09-10 20:57:58 I (121213) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=6194us (0.006194s)
+2026-09-10 20:57:58 I (121221) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=7863us (0.007863s)
+2026-09-10 20:57:58 I (121231) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=10204us (0.010204s)
+2026-09-10 20:57:58 I (121239) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=7825us (0.007825s)
+2026-09-10 20:57:58 I (121246) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=7547us (0.007547s)
+2026-09-10 20:57:58 I (121257) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=10405us (0.010405s)
+2026-09-10 20:57:58 I (121263) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=6329us (0.006329s)
+2026-09-10 20:57:58 I (121274) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=10963us (0.010963s)
+2026-09-10 20:57:58 I (121282) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=7367us (0.007367s)
+2026-09-10 20:57:58 I (121289) burner_web: GBA Intel ReadID trace end status=ESP_OK total=82109us (0.082109s)
+2026-09-10 20:57:58 I (121299) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 20:57:58 I (121321) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 20:57:58 I (121326) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:57:58 I (121330) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 20:57:59 I (121450) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 20:57:59 I (121453) burner_web: GBA psram erase window policy: fixed window=4MB
+2026-09-10 20:57:59 I (121655) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 20:57:59 I (121657) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 20:57:59 I (121659) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 20:57:59 I (121670) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 20:57:59 I (121675) burner_web: GBA ReadID trace begin t=120459693us
+2026-09-10 20:57:59 I (121681) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5236us (0.005236s)
+2026-09-10 20:57:59 I (121689) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8457us (0.008457s)
+2026-09-10 20:57:59 I (121697) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7914us (0.007914s)
+2026-09-10 20:57:59 I (121705) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7776us (0.007776s)
+2026-09-10 20:57:59 I (121713) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7865us (0.007865s)
+2026-09-10 20:57:59 I (121721) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7880us (0.007880s)
+2026-09-10 20:57:59 I (121729) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7920us (0.007920s)
+2026-09-10 20:57:59 I (121736) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7898us (0.007898s)
+2026-09-10 20:57:59 I (121744) burner_web: GBA ReadID trace end status=ESP_OK total=68884us (0.068884s)
+2026-09-10 20:57:59 I (121752) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:57:59 I (121761) burner_web: GBA Intel ReadID trace begin t=120545434us
+2026-09-10 20:57:59 I (121767) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5414us (0.005414s)
+2026-09-10 20:57:59 I (121775) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8815us (0.008815s)
+2026-09-10 20:57:59 I (121784) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8615us (0.008615s)
+2026-09-10 20:57:59 I (121793) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8482us (0.008482s)
+2026-09-10 20:57:59 I (121801) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8335us (0.008335s)
+2026-09-10 20:57:59 I (121809) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8468us (0.008468s)
+2026-09-10 20:57:59 I (121818) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8370us (0.008370s)
+2026-09-10 20:57:59 I (121826) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8510us (0.008510s)
+2026-09-10 20:57:59 I (121835) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8376us (0.008376s)
+2026-09-10 20:57:59 I (121843) burner_web: GBA Intel ReadID trace end status=ESP_OK total=82011us (0.082011s)
+2026-09-10 20:57:59 I (121851) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 20:57:59 I (121871) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 20:57:59 I (121875) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:57:59 I (121880) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 20:57:59 I (121899) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 20:57:59 I (121909) burner_web: GBA AMD runtime commands: standard AMD source=none
+2026-09-10 20:57:59 I (121914) burner_web: GBA prepared: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-10 20:57:59 I (121936) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 20:57:59 I (121946) burner_web: GBA paired polling: 4 read-only address checks passed
+2026-09-10 20:57:59 I (121954) burner_web: GBA burn erase policy: force erase for all write paths
+2026-09-10 20:57:59 I (121958) burner_web: GBA write stage: addr=0x00000000 bytes=4194304 processed=0/33554432 path=psram erase=yes
+2026-09-10 20:57:59 I (121969) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:04 I (126843) burner_web: GBA program chunk: addr=0x00000000 bytes=65536 processed=0/33554432 path=psram
+2026-09-10 20:58:06 I (129232) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:13 I (136379) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:21 I (143562) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:28 I (150777) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:35 I (158305) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:43 I (165890) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:51 I (173492) burner_web: GBA write stage: addr=0x01C00000 bytes=4194304 processed=29360128/33554432 path=psram erase=yes
+2026-09-10 20:58:51 I (173495) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-10 20:58:58 I (180651) burner_web: GBA program chunk: addr=0x01FF0000 bytes=65536 processed=33488896/33554432 path=psram
+2026-09-10 20:58:58 W (180695) burner_web: GBA post-write header diag: hoststyle=match standard=mismatch addr=0x00000000 len=512 swapped=0
+2026-09-10 20:58:58 W (180697) burner_web: GBA post-write standard mismatch @0x00000002 file=00 cart=2E
+2026-09-10 20:58:58 I (180704) burner_web: GBA CHIS summary: err=ESP_OK total=58758ms bytes=33554432/33554432 erase=38559ms tf=9149ms program=19916ms avg_once=0B
+2026-09-10 20:58:58 I (180715) burner_web: GBA program profile: calls=0 build=0ms spi=0ms entry=0ms poll=0ms reset=0ms prefetch_wait=0ms skipped_ff=0B
+2026-09-10 20:58:58 I (180830) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=burn finished
+2026-09-10 20:58:58 I (180832) power_manager: CPU perf lock released by burn_task
+2026-09-10 20:58:58 I (180835) burner_web: burn_task stack free min=8864 bytes
+2026-09-10 20:58:58 I (181312) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 20:58:59 I (181514) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 20:58:59 I (181516) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 20:58:59 I (181518) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 20:58:59 I (181528) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 20:58:59 I (181535) burner_web: GBA ReadID trace begin t=180318797us
+2026-09-10 20:58:59 I (181540) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5324us (0.005324s)
+2026-09-10 20:58:59 I (181548) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8289us (0.008289s)
+2026-09-10 20:58:59 I (181556) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7752us (0.007752s)
+2026-09-10 20:58:59 I (181564) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=8199us (0.008199s)
+2026-09-10 20:58:59 I (181572) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7665us (0.007665s)
+2026-09-10 20:58:59 I (181580) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=8124us (0.008124s)
+2026-09-10 20:58:59 I (181588) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7890us (0.007890s)
+2026-09-10 20:58:59 I (181596) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7934us (0.007934s)
+2026-09-10 20:58:59 I (181603) burner_web: GBA ReadID trace end status=ESP_OK total=68839us (0.068839s)
+2026-09-10 20:58:59 I (181612) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:58:59 I (181620) burner_web: GBA Intel ReadID trace begin t=180404509us
+2026-09-10 20:58:59 I (181626) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5450us (0.005450s)
+2026-09-10 20:58:59 I (181635) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8986us (0.008986s)
+2026-09-10 20:58:59 I (181643) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8647us (0.008647s)
+2026-09-10 20:58:59 I (181652) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8251us (0.008251s)
+2026-09-10 20:58:59 I (181660) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8554us (0.008554s)
+2026-09-10 20:58:59 I (181668) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8248us (0.008248s)
+2026-09-10 20:58:59 I (181677) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8639us (0.008639s)
+2026-09-10 20:58:59 I (181686) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8470us (0.008470s)
+2026-09-10 20:58:59 I (181694) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8291us (0.008291s)
+2026-09-10 20:58:59 I (181702) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81869us (0.081869s)
+2026-09-10 20:58:59 I (181710) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 20:58:59 I (181730) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 20:58:59 I (181733) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:58:59 I (181738) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 20:58:59 I (181758) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 20:58:59 I (181767) burner_web: GBA AMD runtime commands: standard AMD source=none
+2026-09-10 20:58:59 I (181773) burner_web: GBA prepared: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-10 20:58:59 I (181795) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 20:59:22 I (204758) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 20:59:22 I (204760) power_manager: CPU perf lock released by burn_task
+2026-09-10 20:59:22 I (204763) burner_web: burn_task stack free min=11808 bytes
+2026-09-10 20:59:23 I (205624) burner_web: PSRAM auto window: free=7556116 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 20:59:23 I (205833) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 20:59:23 I (205834) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 20:59:23 I (205836) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 20:59:23 I (205852) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 20:59:23 I (205857) burner_web: GBA ReadID trace begin t=204640810us
+2026-09-10 20:59:23 I (205858) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=1299us (0.001299s)
+2026-09-10 20:59:23 I (205867) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=9409us (0.009409s)
+2026-09-10 20:59:23 I (205876) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8452us (0.008452s)
+2026-09-10 20:59:23 I (205884) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7765us (0.007765s)
+2026-09-10 20:59:23 I (205892) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=8206us (0.008206s)
+2026-09-10 20:59:23 I (205898) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=6166us (0.006166s)
+2026-09-10 20:59:23 I (205908) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=10088us (0.010088s)
+2026-09-10 20:59:23 I (205915) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=6772us (0.006772s)
+2026-09-10 20:59:23 I (205923) burner_web: GBA ReadID trace end status=ESP_OK total=66036us (0.066036s)
+2026-09-10 20:59:23 I (205932) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:59:23 I (205939) burner_web: GBA Intel ReadID trace begin t=204722842us
+2026-09-10 20:59:23 I (205946) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=6978us (0.006978s)
+2026-09-10 20:59:23 I (205954) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8767us (0.008767s)
+2026-09-10 20:59:23 I (205964) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=9208us (0.009208s)
+2026-09-10 20:59:23 I (205970) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=6618us (0.006618s)
+2026-09-10 20:59:23 I (205980) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=9545us (0.009545s)
+2026-09-10 20:59:23 I (205988) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=7967us (0.007967s)
+2026-09-10 20:59:23 I (205996) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8572us (0.008572s)
+2026-09-10 20:59:23 I (206006) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=9552us (0.009552s)
+2026-09-10 20:59:23 I (206013) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=7259us (0.007259s)
+2026-09-10 20:59:23 I (206021) burner_web: GBA Intel ReadID trace end status=ESP_OK total=82660us (0.082660s)
+2026-09-10 20:59:23 I (206029) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 20:59:23 I (206056) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 20:59:23 I (206062) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:59:23 I (206064) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 20:59:23 I (206186) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 20:59:23 I (206389) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 20:59:23 I (206390) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 20:59:24 I (206392) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 20:59:24 I (206403) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 20:59:24 I (206409) burner_web: GBA ReadID trace begin t=205193254us
+2026-09-10 20:59:24 I (206414) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5169us (0.005169s)
+2026-09-10 20:59:24 I (206423) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8697us (0.008697s)
+2026-09-10 20:59:24 I (206431) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7800us (0.007800s)
+2026-09-10 20:59:24 I (206439) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7944us (0.007944s)
+2026-09-10 20:59:24 I (206446) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7698us (0.007698s)
+2026-09-10 20:59:24 I (206455) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=8167us (0.008167s)
+2026-09-10 20:59:24 I (206462) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7895us (0.007895s)
+2026-09-10 20:59:24 I (206470) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7961us (0.007961s)
+2026-09-10 20:59:24 I (206478) burner_web: GBA ReadID trace end status=ESP_OK total=69109us (0.069109s)
+2026-09-10 20:59:24 I (206486) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:59:24 I (206495) burner_web: GBA Intel ReadID trace begin t=205279263us
+2026-09-10 20:59:24 I (206501) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5467us (0.005467s)
+2026-09-10 20:59:24 I (206509) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8934us (0.008934s)
+2026-09-10 20:59:24 I (206518) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8343us (0.008343s)
+2026-09-10 20:59:24 I (206526) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8636us (0.008636s)
+2026-09-10 20:59:24 I (206535) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8537us (0.008537s)
+2026-09-10 20:59:24 I (206543) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8217us (0.008217s)
+2026-09-10 20:59:24 I (206552) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8347us (0.008347s)
+2026-09-10 20:59:24 I (206560) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8784us (0.008784s)
+2026-09-10 20:59:24 I (206568) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8082us (0.008082s)
+2026-09-10 20:59:24 I (206577) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81794us (0.081794s)
+2026-09-10 20:59:24 I (206585) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 20:59:24 I (206604) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 20:59:24 I (206608) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 20:59:24 I (206613) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 20:59:24 I (206632) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 20:59:24 I (206641) burner_web: GBA AMD runtime commands: standard AMD source=none
+2026-09-10 20:59:24 I (206647) burner_web: GBA prepared: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-10 20:59:24 I (206668) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 20:59:24 I (206679) burner_web: GBA paired polling: 4 read-only address checks passed
+2026-09-10 20:59:24 I (206687) burner_web: GBA burn erase policy: force erase for all write paths
+2026-09-10 20:59:24 I (206692) burner_web: GBA erase timeout budget: bytes=33554432 timeout=300000ms
+2026-09-10 21:00:02 I (245236) burner_web: GBA program chunk: addr=0x00000000 bytes=65536 processed=0/33554432 path=direct
+2026-09-10 21:00:28 I (270808) burner_web: GBA program chunk: addr=0x01FF0000 bytes=65536 processed=33488896/33554432 path=direct
+2026-09-10 21:00:28 W (270863) burner_web: GBA post-write header diag: hoststyle=match standard=mismatch addr=0x00000000 len=512 swapped=0
+2026-09-10 21:00:28 W (270865) burner_web: GBA post-write standard mismatch @0x00000002 file=00 cart=2E
+2026-09-10 21:00:28 I (270871) burner_web: GBA CHIS summary: err=ESP_OK total=64192ms bytes=33554432/33554432 erase=38544ms tf=5063ms program=20140ms avg_once=0B
+2026-09-10 21:00:28 I (270883) burner_web: GBA program profile: calls=0 build=0ms spi=0ms entry=0ms poll=0ms reset=0ms prefetch_wait=0ms skipped_ff=0B
+2026-09-10 21:00:28 I (270996) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=burn finished
+2026-09-10 21:00:28 I (270998) power_manager: CPU perf lock released by burn_task
+2026-09-10 21:00:28 I (271001) burner_web: burn_task stack free min=8872 bytes
+2026-09-10 21:00:29 I (271632) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 21:00:29 I (271834) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 21:00:29 I (271835) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 21:00:29 I (271837) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 21:00:29 I (271848) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 21:00:29 I (271854) burner_web: GBA ReadID trace begin t=270638286us
+2026-09-10 21:00:29 I (271859) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5209us (0.005209s)
+2026-09-10 21:00:29 I (271868) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8449us (0.008449s)
+2026-09-10 21:00:29 I (271876) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8077us (0.008077s)
+2026-09-10 21:00:29 I (271884) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=8011us (0.008011s)
+2026-09-10 21:00:29 I (271892) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7837us (0.007837s)
+2026-09-10 21:00:29 I (271900) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7931us (0.007931s)
+2026-09-10 21:00:29 I (271908) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7972us (0.007972s)
+2026-09-10 21:00:29 I (271915) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7725us (0.007725s)
+2026-09-10 21:00:29 I (271923) burner_web: GBA ReadID trace end status=ESP_OK total=69020us (0.069020s)
+2026-09-10 21:00:29 I (271931) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:00:29 I (271940) burner_web: GBA Intel ReadID trace begin t=270724260us
+2026-09-10 21:00:29 I (271946) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5476us (0.005476s)
+2026-09-10 21:00:29 I (271954) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8849us (0.008849s)
+2026-09-10 21:00:29 I (271963) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8467us (0.008467s)
+2026-09-10 21:00:29 I (271971) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8570us (0.008570s)
+2026-09-10 21:00:29 I (271979) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8091us (0.008091s)
+2026-09-10 21:00:29 I (271988) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8717us (0.008717s)
+2026-09-10 21:00:29 I (271996) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8120us (0.008120s)
+2026-09-10 21:00:29 I (272005) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8941us (0.008941s)
+2026-09-10 21:00:29 I (272013) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8056us (0.008056s)
+2026-09-10 21:00:29 I (272022) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81798us (0.081798s)
+2026-09-10 21:00:29 I (272030) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 21:00:29 I (272049) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 21:00:29 I (272053) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:00:29 I (272057) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 21:00:29 I (272077) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 21:00:29 I (272086) burner_web: GBA AMD runtime commands: standard AMD source=none
+2026-09-10 21:00:29 I (272092) burner_web: GBA prepared: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-10 21:00:29 I (272114) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 21:00:52 I (295027) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 21:00:52 I (295029) power_manager: CPU perf lock released by burn_task
+2026-09-10 21:00:52 I (295032) burner_web: burn_task stack free min=11808 bytes
+2026-09-10 21:00:54 I (296578) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 21:00:54 I (296580) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 21:00:54 I (296584) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 21:00:54 I (296593) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 21:00:54 I (296599) burner_web: GBA ReadID trace begin t=295383300us
+2026-09-10 21:00:54 I (296605) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5451us (0.005451s)
+2026-09-10 21:00:54 I (296612) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=7107us (0.007107s)
+2026-09-10 21:00:54 I (296621) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=9315us (0.009315s)
+2026-09-10 21:00:54 I (296628) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7446us (0.007446s)
+2026-09-10 21:00:54 I (296636) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7598us (0.007598s)
+2026-09-10 21:00:54 I (296645) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=8494us (0.008494s)
+2026-09-10 21:00:54 I (296651) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=6760us (0.006760s)
+2026-09-10 21:00:54 I (296660) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=9042us (0.009042s)
+2026-09-10 21:00:54 I (296669) burner_web: GBA ReadID trace end status=ESP_OK total=69677us (0.069677s)
+2026-09-10 21:00:54 I (296675) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:00:54 I (296686) burner_web: GBA Intel ReadID trace begin t=295469800us
+2026-09-10 21:00:54 I (296689) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=3757us (0.003757s)
+2026-09-10 21:00:54 I (296699) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=9959us (0.009959s)
+2026-09-10 21:00:54 I (296708) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=9117us (0.009117s)
+2026-09-10 21:00:54 I (296716) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=7959us (0.007959s)
+2026-09-10 21:00:54 I (296725) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8178us (0.008178s)
+2026-09-10 21:00:54 I (296734) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=9435us (0.009435s)
+2026-09-10 21:00:54 I (296742) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8146us (0.008146s)
+2026-09-10 21:00:54 I (296751) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8946us (0.008946s)
+2026-09-10 21:00:54 I (296758) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=7319us (0.007319s)
+2026-09-10 21:00:54 I (296767) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81078us (0.081078s)
+2026-09-10 21:00:54 I (296776) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 21:00:54 I (296799) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 21:00:54 I (296805) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:00:54 I (296808) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 21:00:54 I (296928) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 21:00:54 I (297131) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 21:00:54 I (297133) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 21:00:54 I (297135) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 21:00:54 I (297145) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 21:00:54 I (297152) burner_web: GBA ReadID trace begin t=295935750us
+2026-09-10 21:00:54 I (297157) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5146us (0.005146s)
+2026-09-10 21:00:54 I (297165) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8288us (0.008288s)
+2026-09-10 21:00:54 I (297173) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7855us (0.007855s)
+2026-09-10 21:00:54 I (297181) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=8281us (0.008281s)
+2026-09-10 21:00:54 I (297189) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7711us (0.007711s)
+2026-09-10 21:00:54 I (297197) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=8170us (0.008170s)
+2026-09-10 21:00:54 I (297205) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7709us (0.007709s)
+2026-09-10 21:00:54 I (297213) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7846us (0.007846s)
+2026-09-10 21:00:54 I (297220) burner_web: GBA ReadID trace end status=ESP_OK total=68760us (0.068760s)
+2026-09-10 21:00:54 I (297228) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:00:54 I (297237) burner_web: GBA Intel ReadID trace begin t=296021375us
+2026-09-10 21:00:54 I (297243) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5734us (0.005734s)
+2026-09-10 21:00:54 I (297252) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8685us (0.008685s)
+2026-09-10 21:00:54 I (297260) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8507us (0.008507s)
+2026-09-10 21:00:54 I (297268) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8359us (0.008359s)
+2026-09-10 21:00:54 I (297277) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8571us (0.008571s)
+2026-09-10 21:00:54 I (297285) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8271us (0.008271s)
+2026-09-10 21:00:54 I (297294) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8649us (0.008649s)
+2026-09-10 21:00:54 I (297303) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8565us (0.008565s)
+2026-09-10 21:00:54 I (297311) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8178us (0.008178s)
+2026-09-10 21:00:54 I (297319) burner_web: GBA Intel ReadID trace end status=ESP_OK total=82163us (0.082163s)
+2026-09-10 21:00:54 I (297327) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 21:00:54 I (297347) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 21:00:54 I (297351) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:00:54 I (297355) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 21:00:54 I (297375) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 21:00:54 I (297384) burner_web: GBA AMD runtime commands: standard AMD source=none
+2026-09-10 21:00:55 I (297390) burner_web: GBA prepared: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-10 21:00:55 I (297411) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 21:00:55 I (297422) burner_web: GBA paired polling: 4 read-only address checks passed
+2026-09-10 21:00:55 I (297430) burner_web: GBA burn erase policy: force erase for all write paths
+2026-09-10 21:00:55 I (297434) burner_web: GBA write stage: addr=0x00000000 bytes=131072 processed=0/33554432 path=pipeline erase=yes
+2026-09-10 21:00:55 I (297614) burner_web: GBA program chunk: addr=0x00000000 bytes=65536 processed=0/33554432 path=pipeline
+2026-09-10 21:01:58 I (361295) burner_web: GBA write stage: addr=0x01FE0000 bytes=131072 processed=33423360/33554432 path=pipeline erase=yes
+2026-09-10 21:01:58 I (361359) burner_web: GBA program chunk: addr=0x01FF0000 bytes=65536 processed=33488896/33554432 path=pipeline
+2026-09-10 21:01:59 W (361404) burner_web: GBA post-write header diag: hoststyle=match standard=mismatch addr=0x00000000 len=512 swapped=0
+2026-09-10 21:01:59 W (361406) burner_web: GBA post-write standard mismatch @0x00000002 file=00 cart=2E
+2026-09-10 21:01:59 I (361412) burner_web: GBA CHIS summary: err=ESP_OK total=63991ms bytes=33554432/33554432 erase=186ms tf=4869ms program=20089ms avg_once=0B
+2026-09-10 21:01:59 I (361424) burner_web: GBA program profile: calls=0 build=0ms spi=0ms entry=0ms poll=0ms reset=0ms prefetch_wait=4826ms skipped_ff=0B
+2026-09-10 21:01:59 I (361537) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=burn finished
+2026-09-10 21:01:59 I (361539) power_manager: CPU perf lock released by burn_task
+2026-09-10 21:01:59 I (361542) burner_web: burn_task stack free min=8864 bytes
+2026-09-10 21:02:00 I (362460) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 21:02:00 I (362662) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 21:02:00 I (362664) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 21:02:00 I (362665) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 21:02:00 I (362676) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 21:02:00 I (362683) burner_web: GBA ReadID trace begin t=361466726us
+2026-09-10 21:02:00 I (362688) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5311us (0.005311s)
+2026-09-10 21:02:00 I (362696) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8369us (0.008369s)
+2026-09-10 21:02:00 I (362704) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7894us (0.007894s)
+2026-09-10 21:02:00 I (362712) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7898us (0.007898s)
+2026-09-10 21:02:00 I (362720) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7938us (0.007938s)
+2026-09-10 21:02:00 I (362728) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7944us (0.007944s)
+2026-09-10 21:02:00 I (362736) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7994us (0.007994s)
+2026-09-10 21:02:00 I (362744) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7708us (0.007708s)
+2026-09-10 21:02:00 I (362751) burner_web: GBA ReadID trace end status=ESP_OK total=68870us (0.068870s)
+2026-09-10 21:02:00 I (362759) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:02:00 I (362768) burner_web: GBA Intel ReadID trace begin t=361552471us
+2026-09-10 21:02:00 I (362774) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5590us (0.005590s)
+2026-09-10 21:02:00 I (362783) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8708us (0.008708s)
+2026-09-10 21:02:00 I (362791) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8719us (0.008719s)
+2026-09-10 21:02:00 I (362800) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8347us (0.008347s)
+2026-09-10 21:02:00 I (362808) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8599us (0.008599s)
+2026-09-10 21:02:00 I (362816) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8177us (0.008177s)
+2026-09-10 21:02:00 I (362825) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8472us (0.008472s)
+2026-09-10 21:02:00 I (362833) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8333us (0.008333s)
+2026-09-10 21:02:00 I (362842) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8457us (0.008457s)
+2026-09-10 21:02:00 I (362850) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81785us (0.081785s)
+2026-09-10 21:02:00 I (362858) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 21:02:00 I (362878) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=none
+2026-09-10 21:02:00 I (362880) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 21:02:00 I (362886) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-10 21:02:00 I (362906) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 21:02:00 I (362914) burner_web: GBA AMD runtime commands: standard AMD source=none
+2026-09-10 21:02:00 I (362920) burner_web: GBA prepared: chip=CFI AMD 128MB profile=AGB:amd:auto-cfi flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-10 21:02:00 I (362942) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 21:02:23 I (385917) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 21:02:23 I (385918) power_manager: CPU perf lock released by burn_task
+2026-09-10 21:02:23 I (385922) burner_web: burn_task stack free min=11812 bytes

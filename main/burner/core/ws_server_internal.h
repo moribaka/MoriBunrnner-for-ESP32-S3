@@ -892,7 +892,7 @@ void burner_status_advance_erase_phase(uint32_t sectors_done, uint32_t bytes_don
 void burner_status_mark_erase_begin(void);
 void burner_status_mark_erase_end(void);
 void burner_status_mark_write_begin(void);
-void burner_status_mark_write_end(void);
+uint64_t burner_status_mark_write_end(void);
 void burner_status_mark_write_manual_begin(void);
 void burner_status_record_write_sample(uint32_t bytes, uint64_t elapsed_us);
 void burner_status_mark_task_begin(void);

@@ -135,6 +135,7 @@ void burner_status_phase_reset_locked(void)
     s_status.erase_elapsed_us = 0u;
     s_status.write_start_us = 0u;
     s_status.write_elapsed_us = 0u;
+    s_status.write_erase_base_us = 0u;
     s_status.write_speed_manual = false;
     s_status.tf_to_psram_speed_current_bps = 0u;
     s_status.tf_to_psram_speed_avg_bps = 0u;
@@ -442,21 +443,29 @@ void burner_status_mark_erase_end(void)
     xSemaphoreGive(s_status_lock);
 }
 
+static uint64_t burner_status_erase_elapsed_at(const burner_status_t *status, uint64_t now_us)
+{
+    return status->erase_elapsed_us + (status->erase_start_us > 0u && now_us > status->erase_start_us
+        ? now_us - status->erase_start_us : 0u);
+}
+
+/* Program operations may synchronously erase a sector in pipeline mode.
+ * Count only their non-erase time, including while a sample is still active. */
+static uint64_t burner_status_active_write_us(const burner_status_t *status, uint64_t now_us)
+{
+    if (!status->write_start_us || now_us <= status->write_start_us) return 0u;
+    uint64_t elapsed_us = now_us - status->write_start_us;
+    uint64_t erase_us = burner_status_erase_elapsed_at(status, now_us) - status->write_erase_base_us;
+    return elapsed_us > erase_us ? elapsed_us - erase_us : 0u;
+}
+
 void burner_status_mark_write_begin(void)
 {
-    uint64_t now_us;
-
-    if (s_status_lock == NULL) {
-        return;
-    }
-
-    now_us = (uint64_t)esp_timer_get_time();
+    if (s_status_lock == NULL) return;
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    uint64_t now_us = (uint64_t)esp_timer_get_time();
     s_status.write_start_us = now_us;
-    burner_status_speed_reset_locked();
-    s_status.write_speed_manual = false;
-    s_status.speed_warmup_until_us = now_us + BURNER_SPEED_WARMUP_US;
-    s_status.speed_last_bytes = s_status.processed_bytes;
+    s_status.write_erase_base_us = burner_status_erase_elapsed_at(&s_status, now_us);
     xSemaphoreGive(s_status_lock);
 }
 
@@ -476,28 +485,15 @@ void burner_status_mark_write_manual_begin(void)
     xSemaphoreGive(s_status_lock);
 }
 
-void burner_status_mark_write_end(void)
+uint64_t burner_status_mark_write_end(void)
 {
-    uint64_t now_us;
-
-    if (s_status_lock == NULL) {
-        return;
-    }
-
+    if (s_status_lock == NULL) return 0u;
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    if (s_status.write_speed_manual) {
-        s_status.write_start_us = 0u;
-        xSemaphoreGive(s_status_lock);
-        return;
-    }
-    if (s_status.write_start_us > 0u) {
-        now_us = (uint64_t)esp_timer_get_time();
-        if (now_us > s_status.write_start_us) {
-            s_status.write_elapsed_us += now_us - s_status.write_start_us;
-        }
-        s_status.write_start_us = 0u;
-    }
+    uint64_t elapsed_us = burner_status_active_write_us(&s_status, (uint64_t)esp_timer_get_time());
+    s_status.write_elapsed_us += elapsed_us;
+    s_status.write_start_us = 0u;
     xSemaphoreGive(s_status_lock);
+    return elapsed_us;
 }
 
 void burner_status_mark_task_begin(void)
@@ -669,7 +665,6 @@ void burner_status_record_tf_to_psram_copy(uint32_t bytes, uint64_t elapsed_us)
     }
 
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    s_status.write_elapsed_us += elapsed_us;
     burner_status_record_speed_sample_locked(
         bytes,
         elapsed_us,
@@ -1007,17 +1002,13 @@ void burner_status_snapshot(burner_status_t *out)
     }
 
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    now_us = (uint64_t)esp_timer_get_time();
     *out = s_status;
     xSemaphoreGive(s_status_lock);
 
-    now_us = (uint64_t)esp_timer_get_time();
     if (out->task_start_us > 0u && now_us > out->task_start_us) {
         out->task_elapsed_us += now_us - out->task_start_us;
     }
-    if (out->erase_start_us > 0u && now_us > out->erase_start_us) {
-        out->erase_elapsed_us += now_us - out->erase_start_us;
-    }
-    if (out->write_start_us > 0u && now_us > out->write_start_us) {
-        out->write_elapsed_us += now_us - out->write_start_us;
-    }
+    out->write_elapsed_us += burner_status_active_write_us(out, now_us);
+    out->erase_elapsed_us = burner_status_erase_elapsed_at(out, now_us);
 }

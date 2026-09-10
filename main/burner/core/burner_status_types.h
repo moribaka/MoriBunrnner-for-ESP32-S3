@@ -31,7 +31,9 @@ typedef struct {
     uint64_t erase_start_us;
     uint64_t erase_elapsed_us;
     uint64_t write_start_us;
+    /* Accumulated cartridge programming intervals, excluding erase/TF I/O. */
     uint64_t write_elapsed_us;
+    uint64_t write_erase_base_us;
     uint32_t tf_to_psram_speed_current_bps;
     uint32_t tf_to_psram_speed_avg_bps;
     uint32_t tf_to_psram_speed_min_bps;
