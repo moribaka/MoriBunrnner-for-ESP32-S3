@@ -71,6 +71,8 @@ typedef struct {
     uint32_t process_calls, render_calls, music_polls;
     uint32_t directory_scans, directory_cache_hits;
     uint32_t model_bytes, page, selected, item_count;
+    uint32_t preview_generation, file_worker_stack_free;
+    bool file_start_active, preview_active, preview_done, preview_available, screen_dimmed;
     char selection[128];
     char status[96];
 } ui_runtime_stats_t;

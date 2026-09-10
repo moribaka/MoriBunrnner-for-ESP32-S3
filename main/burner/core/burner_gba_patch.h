@@ -73,8 +73,11 @@ typedef struct {
     uint8_t payload[BURNER_GBA_PATCH_MAX_PAYLOAD];
 } burner_gba_patch_plan_t;
 
-/* Returns true when a ROM contains a known non-SRAM save implementation. */
-bool burner_gba_rom_has_sram_patch_target(const char *input_path);
+/* Cancel is checked between scan chunks. Cancellation returns
+ * ESP_ERR_INVALID_STATE; only ESP_OK makes available_out authoritative. */
+typedef bool (*burner_gba_patch_cancel_cb_t)(void *ctx);
+int burner_gba_probe_sram_patch_target(const char *input_path, bool *available_out,
+    burner_gba_patch_cancel_cb_t cancel_cb, void *cancel_ctx);
 
 int burner_build_gba_patch_plan(
     const char *input_path,

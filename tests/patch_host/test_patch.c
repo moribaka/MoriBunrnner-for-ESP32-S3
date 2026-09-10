@@ -70,8 +70,36 @@ static void test_search_against_reference(void)
     }
 }
 
+static bool cancel_second_chunk(void *ctx)
+{
+    unsigned *calls = ctx;
+    return ++*calls == 2;
+}
+
+static void test_preview_cancellation(void)
+{
+    FILE *fp = rom_file(3 * PATCH_SCAN_BYTES);
+    bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])];
+    unsigned calls = 0;
+    assert(scan_patch_identifiers(fp, 3 * PATCH_SCAN_BYTES, found, false,
+        NULL, NULL, cancel_second_chunk, &calls) == -3);
+    assert(calls == 2 && ftell(fp) == PATCH_SCAN_BYTES);
+    /* A cancelled scan must not poison the next selection or miss an identifier
+     * split across chunks. Full patch planning uses the same scanner. */
+    const sram_patch_set_t *set = &s_generated_patch_sets[0];
+    put(fp, PATCH_SCAN_BYTES - 2, set->identifier, set->identifier_len);
+    assert(scan_patch_identifiers(fp, 3 * PATCH_SCAN_BYTES, found, false,
+        NULL, NULL, NULL, NULL) == 0 && found[0]);
+    fclose(fp);
+    bool available = true;
+    assert(burner_gba_probe_sram_patch_target("missing-preview-rom.gba", &available,
+        NULL, NULL) == ESP_FAIL && !available);
+    assert(burner_gba_probe_sram_patch_target(NULL, &available, NULL, NULL) == ESP_ERR_INVALID_ARG);
+}
+
 int main(void)
 {
+    test_preview_cancellation();
     test_search_against_reference();
     /* Pattern overlap and wildcard masks must work across read boundaries. */
     FILE *fp = rom_file(3 * PATCH_SCAN_BYTES);
@@ -115,9 +143,9 @@ int main(void)
     put(fp, PATCH_ANALYSIS_CHUNK_BYTES - 3, later->identifier, later->identifier_len);
     put(fp, 2 * PATCH_ANALYSIS_CHUNK_BYTES + 64, first->identifier, first->identifier_len);
     bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])];
-    assert(scan_patch_identifiers(fp, 3 * PATCH_ANALYSIS_CHUNK_BYTES, found, true, NULL, NULL) == 0);
+    assert(scan_patch_identifiers(fp, 3 * PATCH_ANALYSIS_CHUNK_BYTES, found, true, NULL, NULL, NULL, NULL) == 0);
     assert(found[0] && found[10]);
-    assert(scan_patch_identifiers(fp, 3 * PATCH_ANALYSIS_CHUNK_BYTES, found, false, NULL, NULL) == 0);
+    assert(scan_patch_identifiers(fp, 3 * PATCH_ANALYSIS_CHUNK_BYTES, found, false, NULL, NULL, NULL, NULL) == 0);
     assert(!found[0] && found[10]);
     fclose(fp);
 

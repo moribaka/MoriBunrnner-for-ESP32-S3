@@ -1,23 +1,11 @@
-static void ui_patch_analysis_task(void *param)
+static bool ui_file_scan_cancelled(void *ctx)
 {
-    char *path = (char *)param;
-    char full_path[BURNER_FILE_PATH_LEN] = {0};
-    bool available = burner_build_full_path(path, full_path, sizeof(full_path)) &&
-                     burner_gba_rom_has_sram_patch_target(full_path);
-
-    free(path);
-    if (ui_take_model_lock()) {
-        s_gba_sram_patch_available = available;
-        s_gba_patch_analysis_active = false;
-        s_gba_patch_analysis_done = true;
-        if (!available) {
-            s_gba_sram_patch = false;
-            s_gba_batteryless_patch = false;
-        }
-        ui_mark_content_dirty(&s_model);
-        xSemaphoreGive(s_model_lock);
-    }
-    vTaskDelete(NULL);
+    uint32_t generation = *(const uint32_t *)ctx;
+    if (!ui_take_model_lock()) return true;
+    bool cancelled = generation != s_file_scan_generation || s_file_start_active ||
+                     s_cart_mode != BURNER_CART_MODE_GBA;
+    xSemaphoreGive(s_model_lock);
+    return cancelled || usb_msc_tf_in_use_by_host() || burner_task_is_running_snapshot();
 }
 
 static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_entry_t *entry)
@@ -51,7 +39,9 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
         *ui_last_rom_file_for_mode_mut(s_cart_mode) = *entry;
         *ui_last_rom_kind_for_mode_mut(s_cart_mode) = kind;
         s_gba_sram_patch_available = false;
-        s_gba_patch_analysis_active = false;
+        s_file_scan_generation++;
+        s_file_scan_pending = s_cart_mode == BURNER_CART_MODE_GBA;
+        s_gba_patch_analysis_active = s_file_scan_pending;
         s_gba_patch_analysis_done = false;
         s_gba_sram_patch = false;
         s_gba_save_patch_choice = 0U;
@@ -71,22 +61,8 @@ static void ui_select_file_for_burner_locked(ui_model_t *model, const ui_file_en
                 model,
                 UI_BURN_ROM_OP_WRITE_ROM);
             if (s_cart_mode == BURNER_CART_MODE_GBA) {
-                char *path = (char *)malloc(strlen(entry->path) + 1U);
-                if (path != NULL) {
-                    strcpy(path, entry->path);
-                    s_gba_patch_analysis_active = true;
-                    if (xTaskCreatePinnedToCore(
-                            ui_patch_analysis_task,
-                            "ui_patch_probe",
-                            UI_BURN_PROBE_TASK_STACK_SIZE,
-                            path,
-                            UI_STORAGE_TASK_PRIORITY,
-                            NULL,
-                            UI_BURN_TASK_CORE_ID) != pdPASS) {
-                        free(path);
-                        s_gba_patch_analysis_active = false;
-                    }
-                }
+                snprintf(s_file_scan_path, sizeof(s_file_scan_path), "%s", entry->path);
+                xTaskNotifyGive(s_file_worker);
             }
         }
     }
@@ -291,20 +267,13 @@ static esp_err_t ui_save_patched_rom(const ui_file_start_request_t *request, cha
     return err;
 }
 
-static void ui_start_file_action_task(void *param)
+static void ui_run_file_action(ui_file_start_request_t *request)
 {
-    ui_file_start_request_t *request = (ui_file_start_request_t *)param;
     burner_task_start_result_t result = {0};
     char error_msg[160] = {0};
     esp_err_t err = ESP_ERR_INVALID_ARG;
-    bool task_with_caps = false;
     bool perf_lock_acquired = false;
 
-    if (request == NULL) {
-        vTaskDelete(NULL);
-        return;
-    }
-    task_with_caps = request->task_with_caps;
     if (power_manager_perf_lock_acquire("ui_file_start") == ESP_OK) {
         perf_lock_acquired = true;
     }
@@ -317,11 +286,6 @@ static void ui_start_file_action_task(void *param)
         if (perf_lock_acquired) {
             power_manager_perf_lock_release("ui_file_start");
             perf_lock_acquired = false;
-        }
-        if (task_with_caps) {
-            vTaskDeleteWithCaps(NULL);
-        } else {
-            vTaskDelete(NULL);
         }
         return;
     }
@@ -414,56 +378,86 @@ static void ui_start_file_action_task(void *param)
     }
 
     ESP_LOGI(UI_TAG, "LCD file action task stack free min=%u bytes", (unsigned)uxTaskGetStackHighWaterMark2(NULL));
-    if (request->action != UI_FILE_ACTION_PATCH_SAVE)
+    if (request->action != UI_FILE_ACTION_PATCH_SAVE) {
         ui_finish_file_start_task(request, err, &result, error_msg);
+    } else if (ui_take_model_lock()) {
+        s_file_start_active = false;
+        xSemaphoreGive(s_model_lock);
+    }
     free(request);
     if (perf_lock_acquired) {
         power_manager_perf_lock_release("ui_file_start");
         perf_lock_acquired = false;
     }
-    if (task_with_caps) {
-        vTaskDeleteWithCaps(NULL);
-    } else {
-        vTaskDelete(NULL);
-    }
 }
 
 static void ui_start_file_action_async(ui_file_start_request_t *request)
 {
-    BaseType_t ret;
-
-    if (request == NULL) {
+    if (request == NULL) return;
+    if (!ui_take_model_lock()) {
+        free(request);
         return;
     }
+    /* prepare_* owns s_file_start_active until this request finishes. */
+    configASSERT(s_file_pending_action == NULL);
+    s_file_scan_generation++;
+    s_file_scan_pending = false;
+    s_gba_patch_analysis_active = false;
+    s_file_pending_action = request;
+    xSemaphoreGive(s_model_lock);
+    xTaskNotifyGive(s_file_worker);
+}
 
-    /* This task opens TF/SPIFFS files before handing off to the burn task.
-     * Keep its stack in internal RAM because SPI flash cache operations cannot
-     * run while the active task stack resides in PSRAM. */
-    request->task_with_caps = false;
-    ret = xTaskCreatePinnedToCore(
-        ui_start_file_action_task,
-        "ui_file_start",
-        UI_FILE_START_TASK_STACK_SIZE,
-        request,
-        UI_FILE_START_TASK_PRIORITY,
-        NULL,
-        UI_BURN_TASK_CORE_ID);
-    if (ret != pdPASS) {
-        size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        ESP_LOGW(
-            UI_TAG,
-            "LCD file action task create failed: ret=%d stack=%u internal_free=%u internal_largest=%u psram_free=%u psram_largest=%u",
-            (int)ret,
-            (unsigned)UI_FILE_START_TASK_STACK_SIZE,
-            (unsigned)internal_free,
-            (unsigned)internal_largest,
-            (unsigned)psram_free,
-            (unsigned)psram_largest);
-        ui_finish_file_start_task(request, ESP_ERR_NO_MEM, NULL, "create start task failed");
-        free(request);
+static void ui_file_worker_task(void *param)
+{
+    (void)param;
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        for (;;) {
+            char path[TF_PATH_LEN_MAX] = {0};
+            uint32_t generation;
+            if (!ui_take_model_lock()) break;
+            ui_file_start_request_t *request = s_file_pending_action;
+            s_file_pending_action = NULL;
+            bool scan = request == NULL && s_file_scan_pending;
+            generation = s_file_scan_generation;
+            if (scan) {
+                snprintf(path, sizeof(path), "%s", s_file_scan_path);
+                s_file_scan_pending = false;
+            }
+            xSemaphoreGive(s_model_lock);
+            if (request != NULL) {
+                ui_run_file_action(request);
+                continue;
+            }
+            if (!scan) break;
+
+            char full_path[BURNER_FILE_PATH_LEN] = {0};
+            bool available = false;
+            esp_err_t err = ESP_ERR_INVALID_ARG;
+            if (burner_build_full_path(path, full_path, sizeof(full_path))) {
+                err = burner_gba_probe_sram_patch_target(full_path, &available,
+                    ui_file_scan_cancelled, &generation);
+            }
+            ESP_LOGI(UI_TAG, "ROM preview generation=%" PRIu32 " result=%s available=%u stack_free=%u",
+                generation, esp_err_to_name(err), available,
+                (unsigned)uxTaskGetStackHighWaterMark2(NULL));
+            if (ui_take_model_lock()) {
+                if (generation == s_file_scan_generation) {
+                    s_gba_patch_analysis_active = false;
+                    if (err == ESP_OK && !s_file_start_active && s_cart_mode == BURNER_CART_MODE_GBA) {
+                        s_gba_sram_patch_available = available;
+                        s_gba_patch_analysis_done = true;
+                        if (!available) {
+                            s_gba_sram_patch = false;
+                            s_gba_batteryless_patch = false;
+                        }
+                        ui_mark_content_dirty(&s_model);
+                    }
+                }
+                xSemaphoreGive(s_model_lock);
+            }
+        }
     }
 }
 

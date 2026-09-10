@@ -691,6 +691,13 @@ static void dispatch(char *line)
             cJSON_AddNumberToObject(json, "page", stats.page);
             cJSON_AddNumberToObject(json, "selected", stats.selected);
             cJSON_AddNumberToObject(json, "count", stats.item_count);
+            cJSON_AddNumberToObject(json, "preview_generation", stats.preview_generation);
+            cJSON_AddNumberToObject(json, "file_worker_stack_free", stats.file_worker_stack_free);
+            cJSON_AddBoolToObject(json, "file_start_active", stats.file_start_active);
+            cJSON_AddBoolToObject(json, "preview_active", stats.preview_active);
+            cJSON_AddBoolToObject(json, "preview_done", stats.preview_done);
+            cJSON_AddBoolToObject(json, "preview_available", stats.preview_available);
+            cJSON_AddBoolToObject(json, "screen_dimmed", stats.screen_dimmed);
             cJSON_AddStringToObject(json, "selection", stats.selection);
             cJSON_AddStringToObject(json, "status", stats.status);
         }

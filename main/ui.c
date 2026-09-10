@@ -405,7 +405,6 @@ typedef struct {
     char gbx_profile_file[BURNER_GBX_PROFILE_NAME_LEN];
     bool ram_fram;
     uint8_t ram_latency;
-    bool task_with_caps;
     ui_page_t return_page;
 } ui_file_start_request_t;
 
@@ -1736,6 +1735,14 @@ static bool s_gba_batteryless_patch = false;
 static bool s_gba_sram_patch_available = false;
 static bool s_gba_patch_analysis_active = false;
 static bool s_gba_patch_analysis_done = false;
+/* Model lock protects the latest selection and the single pending action. */
+static uint32_t s_file_scan_generation;
+static bool s_file_scan_pending;
+static char s_file_scan_path[TF_PATH_LEN_MAX];
+static ui_file_start_request_t *s_file_pending_action;
+static TaskHandle_t s_file_worker;
+static StaticTask_t s_file_worker_tcb;
+static StackType_t s_file_worker_stack[UI_FILE_START_TASK_STACK_SIZE / sizeof(StackType_t)];
 static bool s_dump_batteryless_requested = false;
 static ui_file_entry_t s_last_rom_file_by_cart[2] = {0};
 static ui_file_kind_t s_last_rom_kind_by_cart[2] = {UI_FILE_KIND_UNSUPPORTED, UI_FILE_KIND_UNSUPPORTED};
@@ -1751,7 +1758,7 @@ static void ui_drop_nav_target_locked(ui_page_t page);
 static void ui_mark_content_dirty(ui_model_t *model);
 static void ui_mark_chrome_dirty(ui_model_t *model);
 static void ui_burn_probe_task(void *param);
-static void ui_patch_analysis_task(void *param);
+static void ui_file_worker_task(void *param);
 static bool ui_burner_operation_active(void);
 static void ui_focus_burn_rom_row_locked(ui_model_t *model, uint16_t row);
 static const char *ui_probe_chip_name(const burner_status_t *status);
@@ -3579,16 +3586,6 @@ static const char *ui_status_text_to_display(const char *text)
         return ui_strip_burner_status_prefix(text);
     }
     return text;
-}
-
-static bool ui_burn_status_text_is_terminal(const char *text)
-{
-    if (text == NULL) {
-        return false;
-    }
-    return strncmp(text, "burner done:", strlen("burner done:")) == 0 ||
-           strncmp(text, "burner error:", strlen("burner error:")) == 0 ||
-           strncmp(text, "burner cancelled:", strlen("burner cancelled:")) == 0;
 }
 
 static bool ui_build_file_entry_for_dirent(
@@ -8614,6 +8611,15 @@ esp_err_t ui_init(void)
     if (!ui_ensure_button_queue()) {
         return ESP_ERR_NO_MEM;
     }
+    if (s_file_worker == NULL) {
+        /* Reserve one internal stack for TF/SPIFFS/cache operations. Scan and
+         * start share it, so selecting files never allocates another stack. */
+        s_file_worker = xTaskCreateStaticPinnedToCore(ui_file_worker_task,
+            "ui_file_worker", sizeof(s_file_worker_stack), NULL,
+            UI_FILE_START_TASK_PRIORITY, s_file_worker_stack, &s_file_worker_tcb,
+            UI_BURN_TASK_CORE_ID);
+        if (s_file_worker == NULL) return ESP_ERR_NO_MEM;
+    }
 
     scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
@@ -8878,9 +8884,6 @@ void ui_set_status_text(const char *text)
 {
     const char *safe_text = (text == NULL) ? "" : text;
 
-    if (ui_burn_status_text_is_terminal(safe_text)) {
-        s_file_start_active = false;
-    }
     if (!ui_take_model_lock()) {
         return;
     }
@@ -8898,6 +8901,13 @@ void ui_get_runtime_stats(ui_runtime_stats_t *out)
     if (!ui_take_model_lock()) return;
     *out = s_ui_runtime_stats;
     out->model_bytes = sizeof(s_model);
+    out->file_start_active = s_file_start_active;
+    out->preview_active = s_gba_patch_analysis_active;
+    out->preview_done = s_gba_patch_analysis_done;
+    out->preview_available = s_gba_sram_patch_available;
+    out->preview_generation = s_file_scan_generation;
+    out->file_worker_stack_free = s_file_worker != NULL ? uxTaskGetStackHighWaterMark2(s_file_worker) : 0;
+    out->screen_dimmed = lvgl_port_is_idle_dimmed();
     out->page = s_model.page;
     out->selected = (s_model.page == UI_PAGE_FILES || s_model.page == UI_PAGE_MUSIC_FILES)
         ? s_model.file_selected : s_model.selected;

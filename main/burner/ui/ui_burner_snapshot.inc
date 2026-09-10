@@ -29,6 +29,8 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     if (!ui_take_model_lock()) {
         return;
     }
+    /* A previous job's terminal status cannot complete a new queued start. */
+    release_start = release_start && !s_file_start_active;
     if (s_task_result_capture_armed && burner_status_is_operation_active_state(status.state)) {
         s_task_result_active_seen = true;
     }
@@ -89,8 +91,5 @@ static void ui_update_burn_snapshot_if_needed(uint32_t now_ms)
     }
     xSemaphoreGive(s_model_lock);
 
-    if (release_start) {
-        s_file_start_active = false;
-    }
 }
 

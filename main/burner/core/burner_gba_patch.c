@@ -419,7 +419,8 @@ static int find_pattern(
  * Full scans preserve the generated table's priority even if a lower-priority
  * identifier appears earlier in the file. Detection-only callers may stop early. */
 static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
-    bool scan_all, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx)
+    bool scan_all, burner_gba_patch_progress_cb_t progress_cb, void *progress_ctx,
+    burner_gba_patch_cancel_cb_t cancel_cb, void *cancel_ctx)
 {
     const size_t set_count = sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0]);
     size_t max_len = 0, carry = 0;
@@ -440,6 +441,7 @@ static int scan_patch_identifiers(FILE *fp, uint32_t total, bool *found_out,
     unsigned char *buffer = malloc(PATCH_ANALYSIS_CHUNK_BYTES + max_len - 1);
     if (buffer == NULL) return -2;
     while (offset < total && (scan_all || !any_found)) {
+        if (cancel_cb != NULL && cancel_cb(cancel_ctx)) { free(buffer); return -3; }
         size_t want = total - offset;
         if (want > PATCH_ANALYSIS_CHUNK_BYTES) want = PATCH_ANALYSIS_CHUNK_BYTES;
         size_t got = patch_debug_read(buffer + carry, 1, want, fp);
@@ -648,7 +650,7 @@ static int build_gba_patch_plan_impl(
     if (apply_sram_patch) {
         bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])] = {0};
         patch_debug_phase("sram_identifier", "all save types (one pass)");
-        int scan_result = scan_patch_identifiers(fp, total, found, true, progress_cb, progress_ctx);
+        int scan_result = scan_patch_identifiers(fp, total, found, true, progress_cb, progress_ctx, NULL, NULL);
         if (scan_result != 0) {
             fclose(fp);
             set_error(error_msg, error_msg_len, "SRAM identifier scan failed");
@@ -1173,30 +1175,32 @@ done:
     return result;
 }
 
-bool burner_gba_rom_has_sram_patch_target(const char *input_path)
+int burner_gba_probe_sram_patch_target(const char *input_path, bool *available_out,
+    burner_gba_patch_cancel_cb_t cancel_cb, void *cancel_ctx)
 {
     FILE *fp;
     uint32_t total = 0U;
     bool found[sizeof(s_generated_patch_sets) / sizeof(s_generated_patch_sets[0])] = {0};
-    bool any_found = false;
-
-    if (input_path == NULL) {
-        return false;
-    }
+    if (input_path == NULL || available_out == NULL) return ESP_ERR_INVALID_ARG;
+    *available_out = false;
+    if (cancel_cb != NULL && cancel_cb(cancel_ctx)) return ESP_ERR_INVALID_STATE;
     fp = burner_file_open_read(input_path);
     if (fp == NULL || file_size(fp, &total) != 0) {
         if (fp != NULL) fclose(fp);
-        return false;
+        return ESP_FAIL;
     }
-    (void)scan_patch_identifiers(fp, total, found, false, NULL, NULL);
+    int result = scan_patch_identifiers(fp, total, found, false, NULL, NULL, cancel_cb, cancel_ctx);
     fclose(fp);
+    if (result != 0) return result == -3 ? ESP_ERR_INVALID_STATE :
+        (result == -2 ? ESP_ERR_NO_MEM : ESP_FAIL);
+    if (cancel_cb != NULL && cancel_cb(cancel_ctx)) return ESP_ERR_INVALID_STATE;
     for (size_t i = 0U; i < sizeof(found) / sizeof(found[0]); ++i) {
         if (found[i]) {
-            any_found = true;
+            *available_out = true;
             break;
         }
     }
-    return any_found;
+    return ESP_OK;
 }
 
 static uint32_t patch_read_le32(const unsigned char *p)
