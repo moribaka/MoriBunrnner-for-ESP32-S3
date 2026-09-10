@@ -279,14 +279,23 @@ esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len)
             trans.tx_buffer = tx_buf;
         }
         if (rx != NULL) {
-            rx_buf = burner_spi_alloc_rw_buffer(len, &free_rx_buf);
-            if (rx_buf == NULL) {
-                if (free_tx_buf) {
-                    free(tx_buf);
+            // RX DMA writes complete words. Non-overlapping aligned internal
+            // buffers can be filled directly, without a second CPU copy.
+            bool overlaps_tx = (uintptr_t)rx < (uintptr_t)tx + len &&
+                               (uintptr_t)tx < (uintptr_t)rx + len;
+            if (esp_ptr_dma_capable(rx) && !overlaps_tx &&
+                (((uintptr_t)rx | len) & 3u) == 0u) {
+                trans.rx_buffer = rx;
+            } else {
+                rx_buf = burner_spi_alloc_rw_buffer(len, &free_rx_buf);
+                if (rx_buf == NULL) {
+                    if (free_tx_buf) {
+                        free(tx_buf);
+                    }
+                    return ESP_ERR_NO_MEM;
                 }
-                return ESP_ERR_NO_MEM;
+                trans.rx_buffer = rx_buf;
             }
-            trans.rx_buffer = rx_buf;
         }
     }
 
@@ -295,7 +304,7 @@ esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len)
     if (err == ESP_OK && rx != NULL) {
         if (trans.flags & SPI_TRANS_USE_RXDATA) {
             memcpy(rx, trans.rx_data, len);
-        } else if (rx_buf != NULL) {
+        } else if (rx_buf != NULL && rx != rx_buf) {
             memcpy(rx, rx_buf, len);
         }
     }

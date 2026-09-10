@@ -24,7 +24,7 @@
 #define AG32_MCU_NEGOTIATE_TIMEOUT_MS 100u
 #define AG32_MCU_DEFAULT_TIMEOUT_MS 2000u
 
-static ag32_link_preference_t s_preference = AG32_LINK_PREFERENCE_LEGACY;
+static ag32_link_preference_t s_preference = AG32_LINK_PREFERENCE_AUTO;
 static ag32_link_active_t s_active = AG32_LINK_ACTIVE_UNKNOWN;
 static uint32_t s_capabilities;
 static uint32_t s_sequence;

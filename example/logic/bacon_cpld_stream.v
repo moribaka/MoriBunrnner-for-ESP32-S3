@@ -136,12 +136,15 @@ module bacon_cpld_stream #(
         tx_packet_words <= tx_padded_words + 10'd4;
     end
     wire [8:0] spi_address = tx_word >= 2 ? tx_word - 10'd1 : 9'd0;
-    always @(negedge sck) begin
+    // Match the proven Bacon return path: the master samples the current bit
+    // on its rising edge; the slave then presents the next bit. This leaves a
+    // full SCK period for the board round trip, rather than half a period.
+    always @(posedge sck) begin
         spi_q0 <= ram0[spi_address];
         spi_q1 <= ram1[spi_address];
     end
     wire [15:0] spi_q = consumer ? spi_q1 : spi_q0;
-    always @(negedge sck or posedge tx_csn or negedge resetn) begin
+    always @(posedge sck or posedge tx_csn or negedge resetn) begin
         if (!resetn || tx_csn) begin tx_bit<=0; tx_word<=0; tx_shift<=0; end
         else begin
             tx_bit <= tx_bit + 4'd1;
@@ -169,7 +172,7 @@ module bacon_cpld_stream #(
     reg [2:0] status_bit;
     reg [3:0] status_byte;
     reg [7:0] status_shift;
-    always @(negedge sck or posedge status_csn or negedge resetn) begin
+    always @(posedge sck or posedge status_csn or negedge resetn) begin
         if (!resetn || status_csn) begin status_bit<=0; status_byte<=0; status_shift<=0; end
         else begin
             status_bit <= status_bit + 3'd1;
@@ -224,22 +227,24 @@ module bacon_cpld_stream #(
     wire [23:0] last_cycle_address = (byte_bus ? next_address[23:0] : next_address[24:1]) - 24'd1;
     wire [10:0] advance_length = reading ? consumer_length : transfer_length;
     wire [25:0] next_completed = completed_bytes + advance_length;
+    reg [8:0] program_count;
     // These operands settle well before a page completes or a bus pulse ends.
     // Publish the already computed decision with the matching cursor update.
     always @(posedge clk) begin
         more_after_chunk <= receive_remaining > (reading ? transfer_length : rx_length);
         last_in_cycle <= byte_index + stride >= cycle_length;
+        program_count <= byte_bus ? transfer_length-11'd1 : (transfer_length>>1)-11'd1;
     end
 
     // Input strobes are registered by the bus/parser state machines. RX data
     // remains stable until the next SPI byte; observed_value holds the sampled
     // cartridge word after RD rises. CRC therefore has one shallow arbiter.
+    wire [15:0] crc_operand = crc_rx_pending ? {8'd0,rx_byte} : observed_value;
     always @(posedge clk or negedge resetn) begin
         if (!resetn) begin crc<=32'hffffffff; crc_bits<=0; end
         else if (!enable || crc_reload_pending) begin crc<=32'hffffffff; crc_bits<=0; end
-        else if (crc_rx_pending) begin crc<=crc ^ rx_byte; crc_bits<=8; end
-        else if (crc_read_pending) begin
-            crc<=crc ^ observed_value; crc_bits<=byte_bus ? 8 : 16;
+        else if (crc_rx_pending || crc_read_pending) begin
+            crc<=crc ^ crc_operand; crc_bits<=crc_rx_pending || byte_bus ? 8 : 16;
         end else if (crc_bits != 0) begin
             crc<=crc_next; crc_bits<=crc_bits-5'd1;
         end
@@ -455,7 +460,7 @@ module bacon_cpld_stream #(
                                 0: begin cycle_address<=byte_bus ? 24'haaa : 24'h555; cycle_value<=16'haa; end
                                 1: begin cycle_address<=byte_bus ? 24'h555 : 24'h2aa; cycle_value<=16'h55; end
                                 2: cycle_value<=16'h25;
-                                3: cycle_value<=byte_bus ? transfer_length-1 : (transfer_length>>1)-1;
+                                3: cycle_value<=program_count;
                                 4: begin cycle_payload<=1; cycle_length<=transfer_length; ram_read_index<=0; end
                                 5: cycle_value<=16'h29;
                                 6: begin

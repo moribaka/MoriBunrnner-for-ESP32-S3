@@ -2,11 +2,15 @@
 #include "ag32_mcu_transport.h"
 #include "burner/core/ws_server_internal.h"
 #include "esp_log.h"
+#include "esp_attr.h"
+#include "esp_rom_crc.h"
 #include "esp_timer.h"
 
 static int s_available = -1;
 static const char *TAG = "bacon_cpld";
 static bacon_cpld_stats_t s_stats;
+// Separate TX clocks from RX storage so DMA never reads a buffer it is writing.
+static DMA_ATTR uint8_t s_read_clocks[BACON_CPLD_BLOCK_BYTES + 8];
 void bacon_cpld_get_stats(bacon_cpld_stats_t *out) { if (out) *out = s_stats; }
 
 typedef struct { uint8_t flags; uint32_t completed, error; } cpld_status_t;
@@ -24,7 +28,8 @@ static esp_err_t mode_key(const char *key)
 static esp_err_t read_status(cpld_status_t *status)
 {
     ++s_stats.status_polls;
-    uint8_t tx[BACON_CPLD_STATUS_BYTES], rx[BACON_CPLD_STATUS_BYTES];
+    uint8_t tx[BACON_CPLD_STATUS_BYTES];
+    _Alignas(4) uint8_t rx[BACON_CPLD_STATUS_BYTES];
     memset(tx, 0x0f, sizeof(tx));
     esp_err_t err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_2, tx, rx, sizeof(rx));
     if (err != ESP_OK) return err;
@@ -118,7 +123,7 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
     s_available = 1;
     ag32_link_mark_cpld_active();
     uint8_t descriptor[BACON_CPLD_DESCRIPTOR_BYTES];
-    uint8_t wire[BACON_CPLD_BLOCK_BYTES + 8];
+    _Alignas(4) uint8_t wire[BACON_CPLD_BLOCK_BYTES + 8];
     bacon_cpld_descriptor(descriptor, operation, byte_address, size, programming ? page_bytes : 0);
     int64_t deadline = esp_timer_get_time() + (int64_t)(timeout_ms ? timeout_ms : 2000) * 1000;
     err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_0, descriptor, NULL, sizeof(descriptor));
@@ -135,10 +140,9 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
         if (err != ESP_OK) break;
         if (transferred == 0) s_stats.first_ready_us = esp_timer_get_time() - started;
         if (reading) {
-            memset(wire, 0, padded + 8);
-            err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_1, wire, wire, padded + 8);
+            err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_1, s_read_clocks, wire, padded + 8);
             if (err == ESP_OK) {
-                uint32_t computed = ag32_mcu_crc32(wire + 4, count);
+                uint32_t computed = esp_rom_crc32_le(0, wire + 4, count);
                 uint32_t received = ag32_mcu_read_le32(wire + 4 + padded);
                 if (computed != received) {
                     ESP_LOGE(TAG, "read CRC @0x%08" PRIx32 " bytes=%u computed=%08" PRIx32 " received=%08" PRIx32,
@@ -150,7 +154,7 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
         } else {
             memcpy(wire, (const uint8_t *)data + transferred, count);
             memset(wire + count, 0, padded - count);
-            ag32_mcu_write_le32(wire + padded, ag32_mcu_crc32(wire, count));
+            ag32_mcu_write_le32(wire + padded, esp_rom_crc32_le(0, wire, count));
             err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_0, wire, NULL, padded + 4);
         }
         if (err == ESP_OK) { transferred += count; ++s_stats.packets; }

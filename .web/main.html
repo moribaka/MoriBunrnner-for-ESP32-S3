@@ -9944,7 +9944,7 @@
             const dumpChunkKb = Number(data && data.dump_chunk_kb ? data.dump_chunk_kb : 64);
             const gbcVoltage = (data && data.gbc_voltage) ? String(data.gbc_voltage).toUpperCase() : '3V3';
             const gbaFixedEraseWindow = parseApiBoolean(data && data.gba_fixed_erase_window, true);
-            const ag32Link = (data && data.ag32_link) ? String(data.ag32_link).toLowerCase() : 'legacy';
+            const ag32Link = (data && data.ag32_link) ? String(data.ag32_link).toLowerCase() : 'auto';
             const ag32Active = (data && data.ag32_link_active) ? String(data.ag32_link_active).toLowerCase() : 'unknown';
             const ag32CapsKnown = parseApiBoolean(data && data.ag32_capabilities_known, false);
             const ag32Capabilities = Number(data && data.ag32_capabilities) >>> 0;
@@ -9962,7 +9962,8 @@
                 `GBC 电压: ${gbcVoltage}`,
                 `GBA 固定擦除窗口: ${gbaFixedEraseWindow ? '开启' : '关闭'}`,
                 `AG32 链路: ${ag32Link} (active: ${ag32Active})`,
-                `AG32 capability: ${ag32CapsKnown ? '0x' + ag32Capabilities.toString(16).padStart(8, '0') : '尚未握手'}`
+                ...(ag32Link === 'mcu' || ag32Active === 'mcu' ?
+                    [`MCU capability: ${ag32CapsKnown ? '0x' + ag32Capabilities.toString(16).padStart(8, '0') : '尚未握手'}`] : [])
             ].join('\n');
         }
 

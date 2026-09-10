@@ -181,7 +181,7 @@ static void burner_burn_config_apply_defaults(void)
     s_burn_psram_window_mb = BURN_PSRAM_WINDOW_DEFAULT_MB;
     s_burn_mbc5_chunk_kb = BURN_MBC5_PROGRAM_CHUNK_BYTES / 1024U;
     s_burn_dump_chunk_kb = BURN_GBA_DUMP_CHUNK_BYTES / 1024U;
-    ag32_mcu_link_set_preference(AG32_LINK_PREFERENCE_LEGACY);
+    ag32_mcu_link_set_preference(AG32_LINK_PREFERENCE_AUTO);
 }
 
 esp_err_t burner_load_burn_config(void)
@@ -201,7 +201,7 @@ esp_err_t burner_load_burn_config(void)
     burner_core_affinity_t erase_core = BURNER_CORE_AFFINITY_CPU1;
     burner_core_affinity_t tf_core = BURNER_CORE_AFFINITY_CPU1;
     burner_core_affinity_t psram_core = BURNER_CORE_AFFINITY_CPU1;
-    ag32_link_preference_t ag32_link = AG32_LINK_PREFERENCE_LEGACY;
+    ag32_link_preference_t ag32_link = AG32_LINK_PREFERENCE_AUTO;
 
     burner_burn_config_apply_defaults();
 

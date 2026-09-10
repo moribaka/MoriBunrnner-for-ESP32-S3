@@ -58,7 +58,7 @@ def run(args):
                 line = raw.decode(args.encoding, errors="replace").rstrip("\r")
                 print(line, flush=True)
                 if log:
-                    log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}\n")
+                    log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}".rstrip() + "\n")
                     log.flush()
                 marker = line.find("@mori ")
                 if marker < 0:

@@ -1,9 +1,13 @@
 `timescale 1ns/1ps
 module bacon_cpld_stream_tb;
+    // Characterization budget, not a measured board delay. A 14ns return
+    // delay exposes the old half-period launch margin at fixed 40MHz.
+    parameter MISO_DELAY_NS=0;
     reg clk=0, resetn=1, enable=0, abort_request=0;
     always #3.333 clk=~clk;
     reg cs0=1, cs1=1, sck=0, mosi=0;
-    wire miso, safe_to_exit;
+    wire miso, miso_native, safe_to_exit;
+    assign #(MISO_DELAY_NS) miso=miso_native;
     wire [7:0] a;
     wire [15:0] ad;
     wire ao, ado, cs, rd, wr;
@@ -11,7 +15,7 @@ module bacon_cpld_stream_tb;
     reg [15:0] ad_in;
     bacon_cpld_stream #(.PROGRAM_TIMEOUT_CYCLES(150000)) dut(
         .clk(clk),.resetn(resetn),.enable(enable),.abort_request(abort_request),
-        .cs0(cs0),.cs1(cs1),.sck(sck),.mosi(mosi),.miso(miso),.safe_to_exit(safe_to_exit),
+        .cs0(cs0),.cs1(cs1),.sck(sck),.mosi(mosi),.miso(miso_native),.safe_to_exit(safe_to_exit),
         .cart_a_in(a_in),.cart_ad_in(ad_in),.cart_a(a),.cart_ad(ad),
         .a_oe(ao),.ad_oe(ado),.cart_cs(cs),.cart_rd(rd),.cart_wr(wr));
 
@@ -129,7 +133,9 @@ module bacon_cpld_stream_tb;
         integer b;
         begin
             for(b=7;b>=0;b=b-1) begin
-                mosi=tx[b]; #12.5 sck=1; #2 rx[b]=miso; #10.5 sck=0;
+                // Sample the bit at the master edge, before slave sequential
+                // updates. A delayed post-edge read would sample the next bit.
+                mosi=tx[b]; #12.5 sck=1; rx[b]=miso; #12.5 sck=0;
             end
         end
     endtask
