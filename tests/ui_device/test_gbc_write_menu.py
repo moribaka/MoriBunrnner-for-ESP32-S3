@@ -46,7 +46,7 @@ def run(board, rom):
     assert state["page"] == 15 and state["count"] == 12, state
     board.select(15, lambda s: s["selection"] in ("Settings", "设置"))
     state = board.key("a")
-    assert state["count"] == 5, state  # Voltage was moved out of this submenu.
+    assert state["count"] == 4, state  # Voltage is direct; sector buffers need no window setting.
     board.key("b")
     board.select(15, lambda s: s["selected"] == 2)
     state = board.key("a")

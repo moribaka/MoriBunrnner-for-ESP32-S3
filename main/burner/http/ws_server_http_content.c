@@ -411,6 +411,16 @@ esp_err_t burner_tf_list_handler(httpd_req_t *req)
     return send_err;
 }
 
+static esp_err_t burner_tf_upload_error(httpd_req_t *req, const char *message,
+    const char *name, const char *path, uint32_t written)
+{
+    burner_status_mark_task_end();
+    burner_status_update(BURNER_STATE_ERROR,
+        burner_calc_progress_percent_u64(written, req->content_len), written, req->content_len,
+        message, name, path);
+    return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, message);
+}
+
 esp_err_t burner_tf_upload_handler(httpd_req_t *req)
 {
     char dir_arg[TF_PATH_LEN_MAX] = {0};
@@ -428,6 +438,9 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
     int remaining = 0;
     uint32_t written_total = 0;
     bool cancelled = false;
+
+    if (burner_task_is_running_snapshot())
+        return httpd_resp_send_custom_err(req, "409 Conflict", "cartridge task is running");
 
     {
         esp_err_t access_err = burner_reject_if_tf_busy(req);
@@ -482,6 +495,7 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
     }
 
     burner_cancel_reset();
+    burner_status_mark_task_begin();
     burner_status_update(
         BURNER_STATE_RECEIVING,
         0,
@@ -496,7 +510,8 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
         buf = (uint8_t *)malloc(TF_IO_CHUNK_SIZE);
         if (buf == NULL) {
             fclose(fp);
-            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no memory");
+            unlink(file_full);
+            return burner_tf_upload_error(req, "no memory", file_name, file_full, 0);
         }
     }
 
@@ -518,14 +533,11 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
         }
 
         recv_len = httpd_req_recv(req, (char *)buf, to_recv);
-        if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) {
-            continue;
-        }
         if (recv_len <= 0) {
             free(buf);
             fclose(fp);
             unlink(file_full);
-            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "upload interrupted");
+            return burner_tf_upload_error(req, "upload interrupted", file_name, file_full, written_total);
         }
 
         web_ws_mark_network_activity();
@@ -533,7 +545,7 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
             free(buf);
             fclose(fp);
             unlink(file_full);
-            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "write file failed");
+            return burner_tf_upload_error(req, "write file failed", file_name, file_full, written_total);
         }
 
         remaining -= recv_len;
@@ -551,7 +563,12 @@ esp_err_t burner_tf_upload_handler(httpd_req_t *req)
     if (buf != NULL) {
         free(buf);
     }
-    fclose(fp);
+    int close_result = fclose(fp);
+    burner_status_mark_task_end();
+    if (close_result != 0 && !cancelled) {
+        unlink(file_full);
+        return burner_tf_upload_error(req, "close upload file failed", file_name, file_full, written_total);
+    }
 
     if (!cancelled && burner_cancel_is_requested()) {
         cancelled = true;

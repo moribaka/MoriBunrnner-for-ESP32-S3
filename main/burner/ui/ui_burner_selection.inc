@@ -27,15 +27,9 @@ static uint16_t ui_burn_rom_item_count(void)
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_RAM) {
         return UI_BURN_RAM_ITEM_COUNT;
     }
-    if (s_cart_mode == BURNER_CART_MODE_MBC5) {
-        uint16_t count = 0;
-        while (ui_burn_rom_op_for_index(count) != UI_BURN_ROM_OP_INVALID) ++count;
-        return count;
-    }
-    if (!ui_cart_is_unlocked()) {
-        return (uint16_t)(UI_BURN_ROM_LOCKED_ITEM_COUNT + (ui_burn_rom_has_recipe_mode_row() ? 1U : 0U));
-    }
-    return UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT;
+    uint16_t count = 0;
+    while (ui_burn_rom_op_for_index(count) != UI_BURN_ROM_OP_INVALID) ++count;
+    return count;
 }
 
 static size_t ui_cart_mode_index(burner_cart_mode_t mode)

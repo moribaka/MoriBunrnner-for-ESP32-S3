@@ -1075,63 +1075,24 @@ static esp_err_t burner_bacon_gba_erase_sector(uint32_t flash_addr, bool is_mult
     return err;
 }
 
-static esp_err_t burner_gba_region_is_blank_sampled(
-    uint32_t region_addr,
-    uint32_t region_size,
-    bool is_multi_card,
-    bool *blank_out)
+static esp_err_t burner_gba_sector_is_blank(
+    uint32_t sector_addr, uint32_t sector_size, bool is_multi_card, bool *blank_out)
 {
-    uint8_t sample_buf[BURN_BLANK_SAMPLE_BYTES];
-    uint32_t sample_offsets[BURN_BLANK_SAMPLE_POINTS];
-    size_t sample_count;
-    esp_err_t err;
-
-    if (blank_out == NULL || region_size < BURN_BLANK_SAMPLE_BYTES || (region_size & 0x1u) != 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    sample_count = burner_build_blank_sample_offsets(
-        region_size,
-        BURN_BLANK_SAMPLE_BYTES,
-        0x1u,
-        sample_offsets);
-    if (sample_count == 0u) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    *blank_out = true;
-    for (size_t i = 0u; i < sample_count; ++i) {
-        bool chunk_blank = false;
-
-        err = burner_bacon_gba_read_block(
-            sample_buf,
-            BURN_BLANK_SAMPLE_BYTES,
-            region_addr + sample_offsets[i],
-            is_multi_card);
-        if (err != ESP_OK) {
-            return err;
-        }
-        err = burner_buffer_all_ff(sample_buf, BURN_BLANK_SAMPLE_BYTES, &chunk_blank);
-        if (err != ESP_OK) {
-            return err;
-        }
-        if (!chunk_blank) {
-            *blank_out = false;
-            return ESP_OK;
-        }
+    static EXT_RAM_BSS_ATTR uint8_t workspace[16384];
+    if (!blank_out || !sector_size || ((sector_addr | sector_size) & 1u)) return ESP_ERR_INVALID_ARG;
+    *blank_out = false;
+    for (uint32_t done = 0; done < sector_size;) {
+        size_t count = sector_size - done;
+        if (count > sizeof(workspace)) count = sizeof(workspace);
+        esp_err_t err = burner_bacon_gba_verify_read_block_hoststyle(
+            workspace, count, sector_addr + done, is_multi_card);
+        if (err != ESP_OK) return err;
+        if (!burner_gbc_bytes_are_ff(workspace, count)) return ESP_OK;
+        done += count;
         burner_task_yield_if_due();
     }
-
+    *blank_out = true;
     return ESP_OK;
-}
-
-static esp_err_t burner_gba_sector_is_blank(
-    uint32_t sector_addr,
-    uint32_t sector_size,
-    bool is_multi_card,
-    bool *blank_out)
-{
-    return burner_gba_region_is_blank_sampled(sector_addr, sector_size, is_multi_card, blank_out);
 }
 
 static esp_err_t burner_bacon_gba_erase_range(
@@ -1266,7 +1227,7 @@ erase_range_out:
         (erased > 0u || skipped_blank > 0u)) {
         ESP_LOGI(
             BURNER_TAG,
-            "GBA erase sector-sample: 4x2B erased=%" PRIu32 " skipped_blank=%" PRIu32,
+            "GBA erase full-sector check: erased=%" PRIu32 " skipped_blank=%" PRIu32,
             erased,
             skipped_blank);
     }

@@ -5,6 +5,7 @@ esp_err_t burner_spi_enter_swd_mode(void)
     burner_spi_lock_take();
     bool was_swd = s_swd_mode;
     s_swd_mode = true;
+    s_cart_power_mv = -1; // Companion reset/reflash can change its output latches.
     if (!was_swd) burner_spi_release_cs();
     gpio_config_t cfg = {
         .pin_bit_mask = (1ULL << MORI_PIN_MCU_SWDIO) | (1ULL << MORI_PIN_MCU_SWCLK),

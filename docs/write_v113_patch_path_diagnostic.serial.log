@@ -1,0 +1,28 @@
+2026-09-11 01:01:06
+2026-09-11 01:01:06 @mori {"event":"patch_started","message":"analysis only"}
+2026-09-11 01:01:08
+2026-09-11 01:01:08 @mori {"event":"status","version":"v2.32.113","uptime_ms":1857082,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":2293760,"total":9256960,"passes":2,"read_bytes":2301440,"read_ms":1899,"elapsed_ms":2026,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:10
+2026-09-11 01:01:10 @mori {"event":"status","version":"v2.32.113","uptime_ms":1859107,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":4685824,"total":9256960,"passes":2,"read_bytes":4693504,"read_ms":3847,"elapsed_ms":4051,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:12
+2026-09-11 01:01:12 @mori {"event":"status","version":"v2.32.113","uptime_ms":1861139,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":7012352,"total":9256960,"passes":2,"read_bytes":7020032,"read_ms":5785,"elapsed_ms":6083,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:14
+2026-09-11 01:01:14 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":7945,"save_type":"","sram":false,"batteryless":false,"waitcnt_count":15,"output_size":9256960,"sram_ops":0,"irq_ops":0,"payload_offset":0}
+2026-09-11 01:01:14
+2026-09-11 01:01:14 @mori {"event":"patch_started","message":"analysis only"}
+2026-09-11 01:01:16
+2026-09-11 01:01:16 @mori {"event":"status","version":"v2.32.113","uptime_ms":1865454,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":2228224,"total":16777216,"passes":2,"read_bytes":2229760,"read_ms":1909,"elapsed_ms":2027,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:18
+2026-09-11 01:01:18 @mori {"event":"status","version":"v2.32.113","uptime_ms":1867488,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":4521984,"total":16777216,"passes":2,"read_bytes":4523520,"read_ms":3846,"elapsed_ms":4061,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:20
+2026-09-11 01:01:20 @mori {"event":"status","version":"v2.32.113","uptime_ms":1869519,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":6881280,"total":16777216,"passes":2,"read_bytes":6882816,"read_ms":5793,"elapsed_ms":6092,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:22
+2026-09-11 01:01:22 @mori {"event":"status","version":"v2.32.113","uptime_ms":1871560,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":9273344,"total":16777216,"passes":2,"read_bytes":9274880,"read_ms":7757,"elapsed_ms":8133,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:24
+2026-09-11 01:01:24 @mori {"event":"status","version":"v2.32.113","uptime_ms":1873584,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":11665408,"total":16777216,"passes":2,"read_bytes":11666944,"read_ms":9712,"elapsed_ms":10157,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:26
+2026-09-11 01:01:26 @mori {"event":"status","version":"v2.32.113","uptime_ms":1875614,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":14057472,"total":16777216,"passes":2,"read_bytes":14059008,"read_ms":11670,"elapsed_ms":12187,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:28
+2026-09-11 01:01:28 @mori {"event":"status","version":"v2.32.113","uptime_ms":1877655,"internal_free":55691,"internal_largest":15360,"psram_free":7466344,"burn_running":false,"patch_running":true,"cancel_requested":false,"phase":"waitcnt","detail":"literal references","offset":16449536,"total":16777216,"passes":2,"read_bytes":16451072,"read_ms":13618,"elapsed_ms":14228,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-11 01:01:29
+2026-09-11 01:01:29 @mori {"event":"patch_done","result":0,"error":"","elapsed_ms":14488,"save_type":"","sram":false,"batteryless":false,"waitcnt_count":3,"output_size":16777216,"sram_ops":0,"irq_ops":0,"payload_offset":0}

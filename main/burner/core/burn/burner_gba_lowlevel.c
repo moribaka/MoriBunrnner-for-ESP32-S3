@@ -245,12 +245,6 @@ static void burner_gba_chis_diag_add_finalize(uint64_t elapsed_us)
     }
 }
 
-static void burner_gba_chis_diag_add_post_verify(uint64_t elapsed_us)
-{
-    if (s_gba_chis_diag.active) {
-        burner_gba_chis_diag_add_u64(&s_gba_chis_diag.post_verify_us, elapsed_us);
-    }
-}
 
 static uint32_t burner_gba_chis_diag_us_to_ms(uint64_t us)
 {
@@ -1212,32 +1206,6 @@ static esp_err_t burner_gba_sector_is_blank(
     bool is_multi_card,
     bool *blank_out);
 
-static void burner_gba_sector_erase_ctx_begin(
-    uint32_t range_begin,
-    uint32_t range_end,
-    uint32_t sector_size,
-    bool multi_card,
-    bool erase_always)
-{
-    burner_gba_sector_erase_ctx_reset();
-    (void)sector_size;
-    if (!burner_nor_geometry_is_valid(&s_cart_ctx.geometry) || range_end < range_begin) {
-        return;
-    }
-    if (burner_nor_geometry_region_cursor_begin(&s_cart_ctx.geometry, range_begin, &s_gba_sector_erase_ctx.cursor) !=
-        ESP_OK) {
-        burner_gba_sector_erase_ctx_reset();
-        return;
-    }
-
-    s_gba_sector_erase_ctx.active = true;
-    s_gba_sector_erase_ctx.multi_card = multi_card;
-    s_gba_sector_erase_ctx.erase_always = erase_always;
-    s_gba_sector_erase_ctx.range_end = range_end;
-    s_gba_sector_erase_ctx.erased_sector_addr = UINT32_MAX;
-    s_gba_sector_erase_ctx.pre_erased_sector_addr = UINT32_MAX;
-    s_gba_sector_erase_ctx.pre_erased_valid = false;
-}
 
 static bool burner_gba_sector_erase_ctx_should_handle(void)
 {
@@ -1835,22 +1803,6 @@ static esp_err_t burner_gba_switch_bank_if_needed(uint32_t bank)
     return ESP_OK;
 }
 
-static bool burner_gba_should_log_program_boundary(uint32_t byte_addr, size_t bytes, uint32_t processed, uint32_t total)
-{
-    uint32_t chunk_end;
-
-    if (bytes == 0u) {
-        return false;
-    }
-    if (processed == 0u || processed + (uint32_t)bytes >= total) {
-        return true;
-    }
-    if ((byte_addr % BURN_GBA_BANK_BYTES) == 0u) {
-        return true;
-    }
-    chunk_end = byte_addr + (uint32_t)bytes;
-    return (chunk_end % BURN_GBA_BANK_BYTES) == 0u;
-}
 
 const char *burner_gba_cmd_addr_mode_name(burner_gba_cmd_addr_mode_t mode)
 {

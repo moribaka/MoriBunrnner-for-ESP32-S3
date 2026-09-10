@@ -112,7 +112,10 @@ bool burner_try_probe_cart_title(
                 addr_begin + BURNER_MBC5_TITLE_OFFSET);
         }
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
 
     if (err != ESP_OK) {
@@ -600,7 +603,10 @@ esp_err_t burner_probe_gba_batteryless_save(
             region_found_out,
             data_present_out);
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
     return err;
 }
@@ -1067,7 +1073,10 @@ esp_err_t burner_probe_gba_rom_analysis(
             patch_kind_out,
             patch_detected_out);
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
     return err;
 }

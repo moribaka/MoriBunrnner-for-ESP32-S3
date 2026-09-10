@@ -15,6 +15,7 @@ Use this skill for the physical `F:\dev\esp32\moriburnner` board workflow. It is
 - Last verified board MAC: `a4:cb:8f:f2:c4:c0`, VID303A/PID1001. COM19 (VIDCAFE) is another device. Discover HTTP IP each session; the observed `192.168.1.134` is DHCP, not a permanent address.
 - The companion AG32 is updated by ESP32 over onboard SWD. Never connect an external SWD tool while the ESP32 is in SWD mode.
 - Bacon SPI must remain at 40 MHz. Do not lower the clock to hide timing errors.
+- This board has one shared cartridge slot. Confirm the inserted cartridge when changing between GBA and GB/GBC. `cart_power_mv` records the last successful software rail command, not an ADC measurement; -1 means unknown. Finishing cartridge access retains the selected voltage; the idle timer may then turn power off.
 - Primary cartridge I/O is pure CPLD: original Bacon for small accesses and the BSC1 extension for supported bulk operations. Legacy explicitly selects original Bacon; auto can select the extension before an operation after capability/recipe checks. Neither path negotiates with the MCU. The MCU transport is experimental; do not restore it as the default after diagnostics.
 - AG32 MCU firmware disables only `JTDI`, `JTDO`, and `NJTRST`; `JTCK`/`JTMS` remain available for SWD.
 - The AG32 batch is `example/moriburnner_ag32_batch.bin`; validate it before programming.
@@ -152,6 +153,38 @@ For runtime patch tests, first export the matching expected image with `patch-sa
 Use device `task_time_ms` for the burn task and the separate verify task time. Planning/probing before task start is included only in client wall time. Starting with package v2.32.109, HTTP/UI `write_time_ms` sums the measured cartridge program operations, including transfer and ready polling, excluding TF access and nested pipeline erases. Failed/cancelled attempts retain their elapsed write time; speed samples still describe completed blocks. Compare successful runs with serial `program_reports.program_ms`, allowing for the wrapper's mapping/control overhead. Older packages misreported TF/phase time in `write_time_ms`; do not mix those values into program-time comparisons. For pipeline erase, use HTTP `erase_time_ms`; the serial summary's erase field covers only the initial synchronous erase. Overlapped component times need not sum to wall time. See `docs/burn_timing_fix_20260910.md` for the regression evidence.
 
 ## Evidence and regression scope
+
+### v2.32.113 write pipeline and measurements
+
+Standard GBA/GBC writes compare final transformed sector data before erasing.
+PSRAM/pipeline use two whole-sector buffers and one persistent TF reader;
+direct uses one sector buffer with synchronous TF reads. Equal sectors are
+skipped unless force erase is selected. Partial sectors retain bytes outside
+the requested range. GBA programming page size comes from
+`program_buffer_write_bytes`; GBC uses `buffer_write_bytes` (the former may be
+zero). Do not substitute byte programming when the GBC buffered geometry is valid.
+
+Successful writes include full automatic readback against the runtime patch
+plan and captured header checksum. Require `write_verification_planned=true`
+and `write_verified_bytes == total` with terminal `burn finished`.
+`task_time_ms` includes automatic verification; `verify_time_ms` isolates it,
+while `write_time_ms` measures programming only. `write_matched_bytes` counts
+identical target bytes; `write_skipped_bytes` counts omitted FF programming
+pages, not the same-data sector count. An independent verify against an
+exported patched reference remains useful for testing the expected-data path.
+
+Compare timings only with recorded ROM SHA256, erase mode, patch settings and
+FF-page density. Different contents on the same chip can produce very different
+programming times. Cancel a cartridge job with HTTP `POST /api/cancel`;
+serial patch cancellation is not the cartridge cancel control. TF uploads are
+rejected during cartridge tasks, and interrupted uploads must leave a terminal
+error instead of a stale receiving state.
+
+For the requested minimal release, run `tools/package_minimal.ps1 -Version vX.Y.Z`
+after a matching build. It validates all ten merged flash segments and packages
+exactly a complete 16 MiB ESP32 BIN and the AG32 batch BIN, then checks ZIP
+readback hashes. See `docs/write_pipeline_v113_20260911.md` for board coverage
+and limitations of this pipeline revision.
 
 Read the current project evidence before stating board qualification. SWD batch success, simulated SPI correctness, PING, echo stress, cartridge reads and verified burns are separate milestones.
 

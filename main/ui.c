@@ -126,17 +126,15 @@
 #define UI_POWER_ITEM_COUNT 14
 #define UI_SYSTEM_ITEM_COUNT 5
 #define UI_BURNER_MODE_COUNT 2
-#define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
 #define UI_BURN_ROM_WRITE_PATH_ITEM_COUNT 5
 #define UI_BURN_ROM_RECIPE_ITEM_COUNT 3
 #define UI_BURN_ROM_DUMP_SIZE_ITEM_COUNT 5
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
 #define UI_BURN_ROM_MAPPER_ITEM_COUNT 2
-#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 5
+#define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 4
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 8
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
-#define UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT 9
 #define UI_BURN_ROM_ACTION_ROWS UI_LIST_VISIBLE_COUNT
 #define UI_BURN_SPLIT_GAP 8
 #define UI_BURN_SIDE_MARGIN 4
@@ -146,7 +144,7 @@
 #define UI_SETTINGS_ITEM_COUNT 11
 #define UI_TASK_STATUS_ITEM_COUNT 12
 #define UI_TASK_PATCH_BASE_ROW UI_TASK_STATUS_ITEM_COUNT
-#define UI_TASK_RESULT_ITEM_COUNT 19
+#define UI_TASK_RESULT_ITEM_COUNT 22
 #define UI_TASK_CANCEL_CONFIRM_ITEM_COUNT 2U
 #define UI_TASK_ERASE_PROGRESS_ROW 6U
 #define UI_TASK_BURN_PROGRESS_ROW 7U
@@ -1685,17 +1683,6 @@ void ui_set_language(uint8_t language)
 
 static const uint32_t s_save_size_kib_options[] = {32U, 64U, 128U, 256U, 512U};
 static const uint32_t s_power_idle_min_options[] = {0U, 1U, 2U, 3U, 5U, 10U, 15U, 30U, 60U, 120U};
-static const uint32_t s_psram_mb_options[] = {
-    BURN_PSRAM_WINDOW_AUTO_MB,
-    1U,
-    2U,
-    3U,
-    4U,
-    5U,
-    6U,
-    7U,
-    8U,
-};
 static const uint32_t s_dump_chunk_kb_options[] = {32U, 64U, 128U, 256U};
 static const uint32_t s_power_settle_ms_options[] = {100U, 200U, 400U, 800U, 1000U};
 
@@ -2659,18 +2646,6 @@ static void ui_format_speed_text(uint32_t bps, char *out, size_t out_len)
     } else {
         snprintf(out, out_len, "--");
     }
-}
-
-static const char *ui_psram_window_label(uint32_t mb, char *out, size_t out_len)
-{
-    if (mb == BURN_PSRAM_WINDOW_AUTO_MB) {
-        return "Auto";
-    }
-    if (out == NULL || out_len == 0U) {
-        return "";
-    }
-    snprintf(out, out_len, "%" PRIu32 " MB", mb);
-    return out;
 }
 
 #include "burner/ui/ui_burner_settings.inc"
@@ -5552,14 +5527,6 @@ static void ui_select_locked(
                     ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("Voltage settle changed"));
                 } else if (model->selected == 3U) {
-                    s_psram_mb = ui_next_option_u32(
-                        s_psram_mb_options,
-                        sizeof(s_psram_mb_options) / sizeof(s_psram_mb_options[0]),
-                        s_psram_mb,
-                        1);
-                    ui_persist_burn_settings_locked(model);
-                    ui_set_status_locked(model, ui_tr("PSRAM window changed"));
-                } else if (model->selected == 4U) {
                     s_dump_chunk_kb = ui_next_option_u32(
                         s_dump_chunk_kb_options,
                         sizeof(s_dump_chunk_kb_options) / sizeof(s_dump_chunk_kb_options[0]),

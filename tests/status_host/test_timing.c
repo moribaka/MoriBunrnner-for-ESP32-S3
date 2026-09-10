@@ -108,5 +108,24 @@ int main(void)
     clock_us += 5000000000ULL;
     assert(burner_status_mark_write_end() == 5000000000ULL);
     check(5004000000ULL, 3000000);
-    puts("Burn timing: TF isolation, live samples, erase overlap, failures, reset and 64-bit duration passed");
+    burner_status_mark_task_begin();
+    burner_status_plan_write_verify();
+    burner_status_update(BURNER_STATE_BURNING, 100, 1024, 1024, "written", "test", "test");
+    assert(s_status.progress == 80);
+    burner_status_mark_verify_begin();
+    clock_us += 500000;
+    burner_status_record_verified(512);
+    burner_status_update(BURNER_STATE_BURNING, 50, 512, 1024, "verify", "test", "test");
+    burner_status_t verified;
+    burner_status_snapshot(&verified);
+    assert(verified.progress == 90 && verified.verify_elapsed_us == 500000);
+    assert(verified.write_verified_bytes == 512 && verified.write_elapsed_us == 0);
+    burner_status_mark_verify_end();
+    clock_us += 1000000;
+    burner_status_snapshot(&verified);
+    assert(verified.verify_elapsed_us == 500000 && !verified.write_verify_active);
+    burner_status_record_write_matched(1024);
+    burner_status_mark_task_begin();
+    assert(!s_status.write_verification_planned && !s_status.write_matched_bytes && !s_status.write_verified_bytes);
+    puts("Burn timing and write/verify phase separation passed");
 }

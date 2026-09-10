@@ -275,7 +275,10 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
             }
         }
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
 
     if (err != ESP_OK) {

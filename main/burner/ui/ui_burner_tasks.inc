@@ -843,7 +843,10 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             burner_bacon_gba_d0d1_status(&gba_d0d1_known, &gba_d0d1_swapped);
         }
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
 
     if (err != ESP_OK) {
@@ -959,7 +962,10 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &batteryless_region_found,
                     &batteryless_data_present);
             }
-            burner_bacon_restore_3v3_power();
+            {
+                esp_err_t finish_err = burner_bacon_finish_cart_access();
+                if (err == ESP_OK) err = finish_err;
+            }
             burner_spi_lock_give();
             if (err == ESP_OK) {
                 if (batteryless_err == ESP_OK && batteryless_region_found) {
@@ -1016,7 +1022,10 @@ static esp_err_t ui_unlock_ppb_once(char *out, size_t out_len, burner_cart_mode_
     memset(&report, 0, sizeof(report));
     burner_spi_lock_take();
     err = burner_cart_unlock_ppb_locked(cart_mode, &report);
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
     if (err != ESP_OK) {
         return err;

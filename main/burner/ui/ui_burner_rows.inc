@@ -12,7 +12,6 @@ static void ui_fill_burner_row(const ui_model_t *model, uint16_t index, char *ti
 
 static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
-    char psram_label[16] = {0};
     char settle_label[16] = {0};
     (void)model;
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
@@ -105,9 +104,6 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
             snprintf(title, title_len, "%s", ui_tr("Voltage settle"));
             snprintf(hint, hint_len, "%s", ui_power_settle_label(s_bacon_power_settle_ms, settle_label, sizeof(settle_label)));
         } else if (index == 3U) {
-            snprintf(title, title_len, "%s", ui_tr("PSRAM window"));
-            snprintf(hint, hint_len, "%s", ui_psram_window_label(s_psram_mb, psram_label, sizeof(psram_label)));
-        } else if (index == 4U) {
             snprintf(title, title_len, "%s", ui_tr("Dump chunk"));
             snprintf(hint, hint_len, "%" PRIu32 " KB", s_dump_chunk_kb);
         } else {
@@ -626,6 +622,18 @@ static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, cha
         case 18:
             snprintf(title, title_len, "%s", ui_tr("Skipped blank data"));
             ui_format_bytes_text(status.write_skipped_bytes, hint, hint_len);
+            break;
+        case 19:
+            snprintf(title, title_len, "%s", ui_tr("Skipped identical data"));
+            ui_format_bytes_text(status.write_matched_bytes, hint, hint_len);
+            break;
+        case 20:
+            snprintf(title, title_len, "%s", ui_tr("Write verified bytes"));
+            ui_format_bytes_text(status.write_verified_bytes, hint, hint_len);
+            break;
+        case 21:
+            snprintf(title, title_len, "%s", ui_tr("Write verify time"));
+            ui_format_elapsed(status.verify_elapsed_us, hint, hint_len);
             break;
         default:
             snprintf(title, title_len, "NOR ID");

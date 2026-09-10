@@ -449,7 +449,10 @@ esp_err_t burner_cart_unlock_ppb_handler(httpd_req_t *req)
     memset(&report, 0, sizeof(report));
     burner_spi_lock_take();
     err = burner_cart_unlock_ppb_locked(cart_mode, &report);
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
 
     if (cart_mode == BURNER_CART_MODE_GBA) {
@@ -828,7 +831,10 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
                 (sample_error != NULL && sample_error[0] != '\0') ? sample_error : esp_err_to_name(sample_err));
         }
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
 
     if (err == ESP_OK && cart_mode == BURNER_CART_MODE_GBA) {
@@ -1218,7 +1224,10 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             }
         }
     }
-    burner_bacon_restore_3v3_power();
+    {
+        esp_err_t finish_err = burner_bacon_finish_cart_access();
+        if (err == ESP_OK) err = finish_err;
+    }
     burner_spi_lock_give();
 
     if (err != ESP_OK) {
@@ -1472,6 +1481,9 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         ",\"dump_write_speed_min_bps\":%" PRIu32 ",\"dump_write_speed_max_bps\":%" PRIu32
         ",\"mbc5_buffer_write_ok_count\":%" PRIu32 ",\"mbc5_buffer_fallback_count\":%" PRIu32
         ",\"write_skipped_bytes\":%" PRIu32
+        ",\"write_matched_bytes\":%" PRIu32 ",\"write_verified_bytes\":%" PRIu32
+        ",\"verify_time_ms\":%" PRIu32 ",\"write_verify_active\":%s,\"write_verification_planned\":%s"
+        ",\"cart_power_mv\":%d"
         ",\"erase_sector_count\":%" PRIu32 ",\"erase_sector_size\":%" PRIu32
         ",\"erase_active\":%s,\"erase_phase_done_sectors\":%" PRIu32 ",\"erase_phase_total_sectors\":%" PRIu32
         ",\"erase_phase_done_bytes\":%" PRIu32 ",\"erase_phase_total_bytes\":%" PRIu32
@@ -1517,6 +1529,12 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         snap.mbc5_buffer_write_ok_count,
         snap.mbc5_buffer_fallback_count,
         snap.write_skipped_bytes,
+        snap.write_matched_bytes,
+        snap.write_verified_bytes,
+        burner_us_to_ms_clamped(snap.verify_elapsed_us),
+        snap.write_verify_active ? "true" : "false",
+        snap.write_verification_planned ? "true" : "false",
+        burner_bacon_cart_power_mv(),
         snap.erase_sector_count,
         snap.erase_sector_size,
         snap.erase_phase_active ? "true" : "false",
