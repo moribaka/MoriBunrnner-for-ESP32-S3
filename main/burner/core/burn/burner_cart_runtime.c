@@ -104,9 +104,18 @@ esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job)
         return err;
     }
     if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
+        if (ag32_mcu_link_get_preference() == AG32_LINK_PREFERENCE_CPLD &&
+            job->mode == BURNER_JOB_WRITE_ROM) return ESP_ERR_NOT_SUPPORTED;
         return burner_gbc_gbx_prepare(job);
     }
-    return burner_bacon_mbc5_prepare(job->total_bytes);
+    err = burner_bacon_mbc5_prepare(job->total_bytes);
+    if (err == ESP_OK && ag32_mcu_link_get_preference() == AG32_LINK_PREFERENCE_CPLD) {
+        uint16_t page = s_cart_ctx.buffer_write_bytes;
+        if (job->mode == BURNER_JOB_WRITE_ROM &&
+            (page < 2 || page > 256 || (page & (page - 1)))) return ESP_ERR_NOT_SUPPORTED;
+        err = bacon_cpld_probe_locked();
+    }
+    return err;
 }
 
 esp_err_t burner_spi_prepare_burn_gba(const burner_task_param_t *job)
@@ -121,7 +130,19 @@ esp_err_t burner_spi_prepare_burn_gba(const burner_task_param_t *job)
     if (err != ESP_OK) {
         return err;
     }
-    return burner_bacon_gba_prepare(job);
+    err = burner_bacon_gba_prepare(job);
+    if (err == ESP_OK && ag32_mcu_link_get_preference() == AG32_LINK_PREFERENCE_CPLD) {
+        if (job->mode == BURNER_JOB_WRITE_ROM &&
+            (job->recipe_mode == BURNER_RECIPE_MODE_GBX || burner_gba_nor_is_intel_active() ||
+             s_gba_amd_runtime_profile != BURNER_GBA_AMD_RUNTIME_STANDARD ||
+             s_cart_ctx.gba_cmd_addr_mode != BURNER_GBA_CMD_ADDR_WORD ||
+             s_cart_ctx.gba_cmd_data_lane != BURNER_GBA_CMD_DATA_LOW || s_cart_ctx.d0d1_swapped ||
+             s_cart_ctx.program_buffer_write_bytes < 2 || s_cart_ctx.program_buffer_write_bytes > BACON_CPLD_BLOCK_BYTES ||
+             (s_cart_ctx.program_buffer_write_bytes & (s_cart_ctx.program_buffer_write_bytes - 1))))
+            return ESP_ERR_NOT_SUPPORTED;
+        err = bacon_cpld_probe_locked();
+    }
+    return err;
 }
 
 static esp_err_t burner_spi_prepare_ram(void)

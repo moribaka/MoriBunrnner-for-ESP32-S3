@@ -6740,11 +6740,12 @@
                             <div class="setting-item">
                                 <label class="setting-label" for="burnAg32Link">AG32 链路</label>
                                 <select id="burnAg32Link" class="input">
-                                    <option value="legacy">Bacon / 纯 CPLD（默认）</option>
-                                    <option value="auto">auto / 纯 CPLD</option>
-                                    <option value="mcu">MCU 盖中盖 / 实验路径</option>
+                                    <option value="legacy">原 Bacon / 纯 CPLD</option>
+                                    <option value="cpld">CPLD 连续协议</option>
+                                    <option value="auto">auto / CPLD 连续优先</option>
+                                    <option value="mcu">MCU 盖中盖（需实验固件）</option>
                                 </select>
-                                <span class="setting-desc">主读写由 CPLD 直接执行；MCU 路径仅在明确选择后启用</span>
+                                <span class="setting-desc">小访问保留原 Bacon；连续模式由 CPLD 执行数据传输和标准 AMD 缓冲编程</span>
                             </div>
                             <div class="setting-item">
                                 <label class="setting-label" for="burnPowerSettleMs">切压延时</label>

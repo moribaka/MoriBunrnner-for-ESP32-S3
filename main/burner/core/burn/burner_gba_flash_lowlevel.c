@@ -274,6 +274,15 @@ static esp_err_t burner_bacon_gba_rom_program(
         && s_cart_ctx.gba_cmd_data_lane == BURNER_GBA_CMD_DATA_LOW
         && !s_cart_ctx.d0d1_swapped) {
         bool used_mcu = false;
+        if (buffer_write_bytes >= 2 && buffer_write_bytes <= BACON_CPLD_BLOCK_BYTES) {
+            err = bacon_cpld_try_transfer_locked(BACON_CPLD_GBA_PROGRAM,
+                byte_addr, (void *)buf, len, buffer_write_bytes, BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);
+            if (used_mcu) {
+                if (err != ESP_OK) return err;
+                burner_gba_chis_diag_add_program_lowlevel(burner_gba_diag_now_us() - program_start_us);
+                return ESP_OK;
+            }
+        }
         err = ag32_mcu_try_program_locked(AG32_MCU_CMD_ROM_PROGRAM,
             byte_addr >> 1u, buffer_write_bytes, buf, len,
             BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);

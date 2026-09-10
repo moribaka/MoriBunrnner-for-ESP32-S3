@@ -328,6 +328,11 @@ static esp_err_t burner_bacon_rom_read_packed(uint32_t addr_byte, uint8_t *buf, 
         return ESP_ERR_INVALID_ARG;
     }
     bool used_mcu = false;
+    if (len >= BACON_CPLD_READ_MIN_BYTES) {
+        err = bacon_cpld_try_transfer_locked(BACON_CPLD_GBA_READ, addr_byte,
+            buf, len, 0, BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);
+        if (used_mcu) return err;
+    }
     err = ag32_mcu_try_read_locked(
         AG32_MCU_CAP_GBA_ROM, AG32_MCU_CMD_ROM_READ,
         addr_byte >> 1u, buf, len, &used_mcu);
@@ -460,6 +465,11 @@ static esp_err_t burner_bacon_rom_verify_read_packed_hoststyle(uint32_t addr_byt
     }
 
     bool used_mcu = false;
+    if (len >= BACON_CPLD_READ_MIN_BYTES) {
+        err = bacon_cpld_try_transfer_locked(BACON_CPLD_GBA_READ, addr_byte,
+            buf, len, 0, BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);
+        if (used_mcu) return err;
+    }
     err = ag32_mcu_try_read_locked(
         AG32_MCU_CAP_GBA_ROM, AG32_MCU_CMD_ROM_READ,
         addr_byte >> 1u, buf, len, &used_mcu);

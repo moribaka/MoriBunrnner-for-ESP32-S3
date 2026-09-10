@@ -673,7 +673,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     }
     if (ag32_link_arg[0] != '\0') {
         if (!ag32_mcu_link_parse_preference(ag32_link_arg, &ag32_link_val)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ag32_link must be auto/legacy/mcu");
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ag32_link must be auto/legacy/cpld/mcu");
         }
         update_ag32_link = true;
     }

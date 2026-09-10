@@ -7,7 +7,7 @@
  * 2. 内层 bacon_legacy_core 保留 AGM 原版 top.v 的 SPI 协议主体
  * 3. 为方便与 AGM 原版逐段对照，差异实现统一前置并用分割线标注
  */
-module bacon(
+module bacon #(parameter ENABLE_MCU_TRANSPORT = 0)(
     /* 卡带总线信号 */
     inout       [23:16] A,
     inout       [15:0]  AD,
@@ -90,6 +90,11 @@ module bacon(
     wire core_dir_a;
     wire core_dir_ad;
     wire mcu_mode;
+    wire cpld_mode, cpld_abort, cpld_safe, cpld_miso;
+    wire [7:0] cpld_a;
+    wire [15:0] cpld_ad;
+    wire cpld_a_oe, cpld_ad_oe, cpld_cs, cpld_rd, cpld_wr;
+    wire extended_mode = mcu_mode || cpld_mode;
     wire mcu_status_miso;
     wire mcu_data_miso;
     wire mcu_response_ready;
@@ -107,8 +112,8 @@ module bacon(
     wire mcu_power_3v;
     wire mcu_power_5v;
     wire mcu_phi;
-    wire legacy_spi_cs0 = mcu_mode ? 1'b1 : ESP32_SPI2_CS_N;
-    wire legacy_spi_cs1 = mcu_mode ? 1'b1 : ESP32_SPI_CS1;
+    wire legacy_spi_cs0 = extended_mode ? 1'b1 : ESP32_SPI2_CS_N;
+    wire legacy_spi_cs1 = extended_mode ? 1'b1 : ESP32_SPI_CS1;
 
     bacon_mode_guard mode_guard (
         .sys_clock    (sys_clock),
@@ -122,9 +127,20 @@ module bacon(
         .protocol_error(mcu_protocol_error),
         .force_legacy(mcu_force_legacy),
         .mcu_mode     (mcu_mode),
+        .cpld_mode(cpld_mode), .cpld_abort(cpld_abort), .cpld_safe(cpld_safe),
+        .allow_mcu(ENABLE_MCU_TRANSPORT != 0),
         .status_miso  (mcu_status_miso)
     );
 
+    bacon_cpld_stream cpld_stream (
+        .clk(sys_clock), .resetn(resetn), .enable(cpld_mode), .abort_request(cpld_abort),
+        .cs0(ESP32_SPI2_CS_N), .cs1(ESP32_SPI_CS1), .sck(MCU_SPI_CLK), .mosi(ESP32_SPI2_MOSI),
+        .miso(cpld_miso), .safe_to_exit(cpld_safe),
+        .cart_a_in(A), .cart_ad_in(AD), .cart_a(cpld_a), .cart_ad(cpld_ad),
+        .a_oe(cpld_a_oe), .ad_oe(cpld_ad_oe), .cart_cs(cpld_cs), .cart_rd(cpld_rd), .cart_wr(cpld_wr)
+    );
+
+    generate if (ENABLE_MCU_TRANSPORT) begin : with_mcu_transport
     bacon_mcu_transport mcu_transport (
         .sys_clock(sys_clock),
         .resetn(resetn),
@@ -172,13 +188,41 @@ module bacon(
         .slave_ahb_hrdata(slave_ahb_hrdata)
     );
 
+    end else begin : pure_cpld
+        assign mcu_data_miso=0;
+        assign mcu_response_ready=0;
+        assign mcu_request_busy=0;
+        assign mcu_protocol_error=0;
+        assign mcu_force_legacy=0;
+        assign mcu_cart_a_out=0;
+        assign mcu_cart_ad_out=0;
+        assign mcu_cart_a_oe=0;
+        assign mcu_cart_ad_oe=0;
+        assign mcu_cart_cs1=1;
+        assign mcu_cart_cs2=1;
+        assign mcu_cart_rd=1;
+        assign mcu_cart_wr=1;
+        assign mcu_power_3v=0;
+        assign mcu_power_5v=0;
+        assign mcu_phi=0;
+        assign mem_ahb_hreadyout=1;
+        assign mem_ahb_hresp=0;
+        assign mem_ahb_hrdata=32'h43504c31;
+        assign slave_ahb_htrans=0;
+        assign slave_ahb_hsize=0;
+        assign slave_ahb_hburst=0;
+        assign slave_ahb_hwrite=0;
+        assign slave_ahb_haddr=0;
+        assign slave_ahb_hwdata=0;
+    end endgenerate
+
     bacon_legacy_core core_inst (
         .spi_cs0     (legacy_spi_cs0),
         .spi_cs1     (legacy_spi_cs1),
         .spi_sck     (MCU_SPI_CLK),
         .spi_mosi    (ESP32_SPI2_MOSI),
         .spi_miso    (core_spi_miso),
-        .interface_enable(!mcu_mode),
+        .interface_enable(!extended_mode),
         .led0        (core_led_act),
         .led1        (core_led_ready),
         .pwr_3v      (core_3v3),
@@ -197,7 +241,7 @@ module bacon(
         .cart_dir_ad (core_dir_ad)
     );
 
-    assign ESP32_SPI2_MISO = mcu_mode ?
+    assign ESP32_SPI2_MISO = cpld_mode ? cpld_miso : mcu_mode ?
         ((!ESP32_SPI2_CS_N && !ESP32_SPI_CS1) ? mcu_status_miso : mcu_data_miso) :
         core_spi_miso;
     assign LED_ACT         = core_led_act;
@@ -205,14 +249,14 @@ module bacon(
     assign V3V3_CTRL       = mcu_mode ? mcu_power_3v : core_3v3;
     assign V5V_CTRL        = mcu_mode ? mcu_power_5v : core_5v;
     assign PHI             = mcu_mode ? mcu_phi : core_phi;
-    assign WR_N            = mcu_mode ? mcu_cart_wr : core_wr_n;
-    assign RD_N            = mcu_mode ? mcu_cart_rd : core_rd_n;
-    assign CS1_N           = mcu_mode ? mcu_cart_cs1 : core_cs1_n;
-    assign CS2_N           = mcu_mode ? mcu_cart_cs2 : core_cs2_n;
-    assign CART_DIR_A      = mcu_mode ? mcu_cart_a_oe : core_dir_a;
-    assign CART_DIR_AD     = mcu_mode ? mcu_cart_ad_oe : core_dir_ad;
-    assign A               = (mcu_mode && mcu_cart_a_oe) ? mcu_cart_a_out : 8'hzz;
-    assign AD              = (mcu_mode && mcu_cart_ad_oe) ? mcu_cart_ad_out : 16'hzzzz;
+    assign WR_N            = cpld_mode ? cpld_wr : mcu_mode ? mcu_cart_wr : core_wr_n;
+    assign RD_N            = cpld_mode ? cpld_rd : mcu_mode ? mcu_cart_rd : core_rd_n;
+    assign CS1_N           = cpld_mode ? cpld_cs : mcu_mode ? mcu_cart_cs1 : core_cs1_n;
+    assign CS2_N           = cpld_mode ? 1'b1 : mcu_mode ? mcu_cart_cs2 : core_cs2_n;
+    assign CART_DIR_A      = cpld_mode ? cpld_a_oe : mcu_mode ? mcu_cart_a_oe : core_dir_a;
+    assign CART_DIR_AD     = cpld_mode ? cpld_ad_oe : mcu_mode ? mcu_cart_ad_oe : core_dir_ad;
+    assign A               = (cpld_mode && cpld_a_oe) ? cpld_a : (mcu_mode && mcu_cart_a_oe) ? mcu_cart_a_out : 8'hzz;
+    assign AD              = (cpld_mode && cpld_ad_oe) ? cpld_ad : (mcu_mode && mcu_cart_ad_oe) ? mcu_cart_ad_out : 16'hzzzz;
 
     assign slave_ahb_hsel   = slave_ahb_htrans[1];
     assign slave_ahb_hready  = 1'b1;
@@ -230,6 +274,10 @@ module bacon_mode_guard(
     input  request_busy,
     input  protocol_error,
     input  force_legacy,
+    input cpld_safe,
+    input allow_mcu,
+    output reg cpld_mode,
+    output reg cpld_abort,
     output reg mcu_mode,
     output status_miso
 );
@@ -240,6 +288,8 @@ module bacon_mode_guard(
     reg [6:0] mode_bit_count = 7'd0;
     reg enter_toggle = 1'b0;
     reg exit_toggle = 1'b0;
+    reg cpld_toggle = 1'b0;
+    reg [2:0] cpld_sync;
     reg [2:0] enter_sync;
     reg [2:0] exit_sync;
     reg [5:0] status_bit_count;
@@ -262,6 +312,7 @@ module bacon_mode_guard(
             mode_bit_count <= 7'd0;
             enter_toggle <= 1'b0;
             exit_toggle <= 1'b0;
+            cpld_toggle <= 1'b0;
         end else if (!(spi_cs0 && spi_cs1)) begin
             mode_shift <= 64'd0;
             mode_bit_count <= 7'd0;
@@ -273,6 +324,8 @@ module bacon_mode_guard(
                     enter_toggle <= ~enter_toggle;
                 else if ({mode_shift[62:0], spi_mosi} == EXIT_MAGIC)
                     exit_toggle <= ~exit_toggle;
+                else if ({mode_shift[62:0], spi_mosi} == 64'h4d4f52493243504c)
+                    cpld_toggle <= ~cpld_toggle;
             end else begin
                 mode_bit_count <= mode_bit_count + 7'd1;
             end
@@ -284,12 +337,21 @@ module bacon_mode_guard(
             enter_sync <= 3'b000;
             exit_sync <= 3'b000;
             mcu_mode <= 1'b0;
+            cpld_sync <= 0;
+            cpld_mode <= 0;
+            cpld_abort <= 0;
         end else begin
             enter_sync <= {enter_sync[1:0], enter_toggle};
             exit_sync <= {exit_sync[1:0], exit_toggle};
-            if (force_legacy || (exit_sync[2] != exit_sync[1]))
+            cpld_sync <= {cpld_sync[1:0], cpld_toggle};
+            if (force_legacy || (exit_sync[2] != exit_sync[1])) begin
                 mcu_mode <= 1'b0;
-            else if (enter_sync[2] != enter_sync[1])
+                if (cpld_mode) cpld_abort <= 1;
+            end else if (cpld_abort && cpld_safe) begin
+                cpld_mode <= 0; cpld_abort <= 0;
+            end else if (cpld_sync[2] != cpld_sync[1] && !mcu_mode && !cpld_mode) begin
+                cpld_mode <= 1;
+            end else if (enter_sync[2] != enter_sync[1] && !cpld_mode && allow_mcu)
                 mcu_mode <= 1'b1;
         end
     end

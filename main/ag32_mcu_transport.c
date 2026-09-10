@@ -1,4 +1,5 @@
 #include "ag32_mcu_transport.h"
+#include "bacon_cpld_transport.h"
 
 #include <inttypes.h>
 #include <stdlib.h>
@@ -250,7 +251,7 @@ static esp_err_t negotiate_capabilities(void)
 
 void ag32_mcu_link_set_preference(ag32_link_preference_t preference)
 {
-    if ((unsigned)preference > AG32_LINK_PREFERENCE_MCU) return;
+    if ((unsigned)preference > AG32_LINK_PREFERENCE_CPLD) return;
     if (s_preference != preference) {
         s_preference = preference;
         ag32_mcu_link_invalidate();
@@ -279,29 +280,36 @@ bool ag32_mcu_link_parse_preference(
         *preference_out = AG32_LINK_PREFERENCE_MCU;
         return true;
     }
+    if (strcasecmp(text, "cpld") == 0) {
+        *preference_out = AG32_LINK_PREFERENCE_CPLD;
+        return true;
+    }
     return false;
 }
 
 const char *ag32_mcu_link_preference_name(ag32_link_preference_t preference)
 {
-    static const char *const names[] = {"auto", "legacy", "mcu"};
+    static const char *const names[] = {"auto", "legacy", "mcu", "cpld"};
     return (unsigned)preference < sizeof(names) / sizeof(names[0])
         ? names[preference] : "unknown";
 }
 
 const char *ag32_mcu_link_active_name(ag32_link_active_t active)
 {
-    static const char *const names[] = {"unknown", "legacy", "mcu"};
+    static const char *const names[] = {"unknown", "legacy", "mcu", "cpld"};
     return (unsigned)active < sizeof(names) / sizeof(names[0])
         ? names[active] : "unknown";
 }
 
 void ag32_mcu_link_invalidate(void)
 {
+    bacon_cpld_link_invalidate();
     s_active = AG32_LINK_ACTIVE_UNKNOWN;
     s_capabilities = 0u;
     s_capabilities_known = false;
 }
+
+void ag32_link_mark_cpld_active(void) { s_active = AG32_LINK_ACTIVE_CPLD; }
 
 esp_err_t ag32_mcu_try_command_locked(
     uint32_t required_capability,

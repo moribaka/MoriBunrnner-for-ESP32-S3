@@ -11,12 +11,14 @@ typedef enum {
     AG32_LINK_PREFERENCE_AUTO = 0,
     AG32_LINK_PREFERENCE_LEGACY,
     AG32_LINK_PREFERENCE_MCU,
+    AG32_LINK_PREFERENCE_CPLD,
 } ag32_link_preference_t;
 
 typedef enum {
     AG32_LINK_ACTIVE_UNKNOWN = 0,
     AG32_LINK_ACTIVE_LEGACY,
     AG32_LINK_ACTIVE_MCU,
+    AG32_LINK_ACTIVE_CPLD,
 } ag32_link_active_t;
 
 void ag32_mcu_link_set_preference(ag32_link_preference_t preference);
@@ -30,6 +32,7 @@ const char *ag32_mcu_link_active_name(ag32_link_active_t active);
 uint32_t ag32_mcu_link_capabilities(void);
 bool ag32_mcu_link_capabilities_known(void);
 void ag32_mcu_link_invalidate(void);
+void ag32_link_mark_cpld_active(void);
 
 esp_err_t ag32_mcu_try_command_locked(
     uint32_t required_capability,

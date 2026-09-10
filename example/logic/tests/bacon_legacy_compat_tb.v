@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 
 module bacon_legacy_compat_tb;
+    parameter ENABLE_MCU = 0;
     reg sys_clock = 1'b0;
     reg resetn = 1'b0;
     reg spi_cs0 = 1'b1;
@@ -13,7 +14,7 @@ module bacon_legacy_compat_tb;
     tri [7:0] cart_a;
     tri [15:0] cart_ad;
 
-    bacon dut (
+    bacon #(.ENABLE_MCU_TRANSPORT(ENABLE_MCU)) dut (
         .A(cart_a),
         .AD(cart_ad),
         .V3V3_CTRL(power_3v),
@@ -81,17 +82,17 @@ module bacon_legacy_compat_tb;
         if (!power_3v || power_5v)
             $fatal(1, "legacy 3V power command failed");
 
-        mode_bytes(64'h4d4f5249324d4355);
-        if (!dut.mcu_mode || !power_3v || power_5v)
-            $fatal(1, "MCU entry changed legacy power state");
+        mode_bytes(ENABLE_MCU ? 64'h4d4f5249324d4355 : 64'h4d4f52493243504c);
+        if (!(ENABLE_MCU ? dut.mcu_mode : dut.cpld_mode) || !power_3v || power_5v)
+            $fatal(1, "extended mode entry changed legacy power state");
 
         mode_bytes(64'h4d4f5249324c4547);
-        if (dut.mcu_mode || !power_3v || power_5v)
+        if (dut.mcu_mode || dut.cpld_mode || !power_3v || power_5v)
             $fatal(1, "legacy exit did not restore prior state");
 
         legacy_power_byte(8'h04);
         if (power_3v || power_5v)
-            $fatal(1, "legacy command failed after MCU exit");
+            $fatal(1, "legacy command failed after extended mode exit");
 
         $display("bacon legacy compatibility test passed");
         $finish;

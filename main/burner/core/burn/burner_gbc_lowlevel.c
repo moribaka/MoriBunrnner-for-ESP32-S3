@@ -83,6 +83,11 @@ static esp_err_t burner_bacon_gbc_read(uint16_t addr, uint8_t *buf, size_t len)
     }
 
     bool used_mcu = false;
+    if (len >= BACON_CPLD_READ_MIN_BYTES) {
+        err = bacon_cpld_try_transfer_locked(BACON_CPLD_GB_READ, addr,
+            buf, len, 0, BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);
+        if (used_mcu) return err;
+    }
     err = ag32_mcu_try_read_locked(
         AG32_MCU_CAP_GBC_ROM, AG32_MCU_CMD_GBC_READ,
         addr, buf, len, &used_mcu);

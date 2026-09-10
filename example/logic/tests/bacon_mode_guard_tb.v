@@ -9,6 +9,8 @@ module bacon_mode_guard_tb;
     reg spi_mosi = 1'b0;
     wire mcu_mode;
     wire status_miso;
+    wire cpld_mode, cpld_abort;
+    reg cpld_safe=1;
 
     bacon_mode_guard dut (
         .sys_clock(sys_clock),
@@ -21,6 +23,7 @@ module bacon_mode_guard_tb;
         .request_busy(1'b0),
         .protocol_error(1'b0),
         .force_legacy(1'b0),
+        .allow_mcu(1'b1), .cpld_safe(cpld_safe), .cpld_mode(cpld_mode), .cpld_abort(cpld_abort),
         .mcu_mode(mcu_mode),
         .status_miso(status_miso)
     );
@@ -85,6 +88,25 @@ module bacon_mode_guard_tb;
 
         mode_bytes(64'h4d4f5249324c4547);
         if (mcu_mode !== 1'b0) $fatal(1, "exit magic did not restore legacy mode");
+
+        spi_cs0=0;
+        begin : payload_magic
+            integer i;
+            reg [63:0] key;
+            key=64'h4d4f52493243504c;
+            for(i=63;i>=0;i=i-1) spi_bit(key[i]);
+        end
+        spi_cs0=1; #100;
+        if(cpld_mode) $fatal(1,"payload entered CPLD mode");
+        mode_bytes(64'h4d4f52493243504c);
+        if(!cpld_mode || mcu_mode) $fatal(1,"CPLD entry failed");
+        mode_bytes(64'h4d4f5249324d4355);
+        if(mcu_mode) $fatal(1,"MCU stole CPLD ownership");
+        cpld_safe=0;
+        mode_bytes(64'h4d4f5249324c4547);
+        if(!cpld_mode || !cpld_abort) $fatal(1,"exit did not wait for safe bus state");
+        cpld_safe=1; #100;
+        if(cpld_mode || cpld_abort) $fatal(1,"CPLD safe exit failed");
 
         $display("bacon mode guard test passed");
         $finish;

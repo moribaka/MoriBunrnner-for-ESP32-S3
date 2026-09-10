@@ -1858,6 +1858,11 @@ static esp_err_t burner_bacon_gbc_rom_program(
     }
 
     bool used_mcu = false;
+    if (buffer_write_bytes >= 2 && buffer_write_bytes <= 256) {
+        err = bacon_cpld_try_transfer_locked(BACON_CPLD_GB_PROGRAM, cart_addr,
+            (void *)buf, len, buffer_write_bytes, BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);
+        if (used_mcu) return err;
+    }
     err = ag32_mcu_try_program_locked(AG32_MCU_CMD_GBC_ROM_PROGRAM,
         cart_addr, buffer_write_bytes, buf, len,
         BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);

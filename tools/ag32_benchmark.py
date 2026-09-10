@@ -87,7 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", required=True)
     parser.add_argument("--action", choices=("read", "verify", "write"), required=True)
-    parser.add_argument("--link", choices=("legacy", "mcu"), required=True)
+    parser.add_argument("--link", choices=("legacy", "mcu", "cpld"), required=True)
     parser.add_argument("--rom", required=True)
     parser.add_argument("--verify-rom")
     parser.add_argument("--write-path", choices=("direct", "psram", "pipeline"), default="psram")

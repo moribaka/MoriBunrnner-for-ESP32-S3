@@ -1,0 +1,52 @@
+=== User constraints ===
+
+Clock transfer report:
+  Worst  hold:   0.603, with clock ESP_SPI_SCK
+  Worst  hold:   0.357, with clock PIN_HSE
+  Worst  hold:   0.357, with clock PIN_HSI
+  Worst  hold:   0.357, with clock pll_inst|auto_generated|pll1|clk[0]
+
+=== Auto constraints ===
+
+Clock transfer report:
+  Worst  hold:   0.615, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:  -3.486, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst  hold:  -5.650, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   4.785, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:  -6.195, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   4.077, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:   3.339, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+Coverage report
+  User constraints covered 8144 connections out of 9152 total, coverage: 89.0%
+  Auto constraints covered 8703 connections out of 9152 total, coverage: 95.1%
+
+
+Hold from ESP32_SPI_CS1 to clken_ctrl_X44_Y2_N1, clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q, constraint 0.000, skew 8.730, data 2.667
+  Slack:  -6.195
+    Arrival Time:    2.625
+        0.000    0.000   R                         Launch Clock Edge
+      Data Path:
+        0.000    0.000   RR              example_board|ESP32_SPI_CS1 =>                ESP32_SPI_CS1~input|padio 
+        1.309    1.309   RR                ESP32_SPI_CS1~input|padio =>              ESP32_SPI_CS1~input|combout 
+        1.961    0.652   RR              ESP32_SPI_CS1~input|combout => macro_inst|core_inst|led1_breathe_level[6]~20|D 
+        2.054    0.093   RF macro_inst|core_inst|led1_breathe_level[6]~20|D => macro_inst|core_inst|led1_breathe_level[6]~20|LutOut 
+        2.625    0.571   FF macro_inst|core_inst|led1_breathe_level[6]~20|LutOut =>               clken_ctrl_X44_Y2_N1|ClkEn E
+    Required Time:   8.820
+        0.000    0.000   R                          Latch Clock Edge
+      Latch Clock Path:
+        0.000    0.000   RR                    example_board|PIN_HSI =>                      PIN_HSI~input|padio 
+        1.309    1.309   RR                      PIN_HSI~input|padio =>                    PIN_HSI~input|combout 
+        1.309    0.000   RR                    PIN_HSI~input|combout => gclksw_inst|gclk_switch__alta_gclksw|clkin0 
+        1.711    0.402   RR gclksw_inst|gclk_switch__alta_gclksw|clkin0 => gclksw_inst|gclk_switch__alta_gclksw|clkout 
+        1.824    0.113   RR gclksw_inst|gclk_switch__alta_gclksw|clkout =>            gclksw_inst|gclk_switch|inclk 
+        1.824    0.000   RR            gclksw_inst|gclk_switch|inclk =>           gclksw_inst|gclk_switch|outclk 
+        3.375    1.551   RR           gclksw_inst|gclk_switch|outclk =>               clken_ctrl_X49_Y2_N0|ClkIn 
+        3.523    0.148   RR               clken_ctrl_X49_Y2_N0|ClkIn =>              clken_ctrl_X49_Y2_N0|ClkOut 
+        3.656    0.133   RR              clken_ctrl_X49_Y2_N0|ClkOut =>             macro_inst|core_inst|osc|Clk 
+        3.871    0.215   RR             macro_inst|core_inst|osc|Clk =>               macro_inst|core_inst|osc|Q D
+        7.179    3.308   RR               macro_inst|core_inst|osc|Q =>   macro_inst|core_inst|osc~clkctrl|inclk D
+        7.179    0.000   RR   macro_inst|core_inst|osc~clkctrl|inclk =>  macro_inst|core_inst|osc~clkctrl|outclk 
+        8.730    1.551   RR  macro_inst|core_inst|osc~clkctrl|outclk =>               clken_ctrl_X44_Y2_N1|ClkIn 
+        8.820    0.090   R                                      Hold
+

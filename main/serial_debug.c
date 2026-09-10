@@ -294,6 +294,78 @@ static void bacon_check(void)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "cpld-info") == 0) {
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "cartridge or firmware job is running"); return;
+        }
+        burner_spi_lock_take();
+        esp_err_t err = burner_spi_init();
+        if (err == ESP_OK) err = bacon_cpld_probe_locked();
+        burner_spi_lock_give();
+        cJSON *json = event("cpld_info");
+        if (json) {
+            cJSON_AddBoolToObject(json,"ok",err == ESP_OK);
+            cJSON_AddStringToObject(json,"error",esp_err_to_name(err));
+            cJSON_AddNumberToObject(json,"block_bytes",BACON_CPLD_BLOCK_BYTES);
+        }
+        reply(json); return;
+    }
+    if (strcmp(line, "cpld-check") == 0) {
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "cartridge or firmware job is running"); return;
+        }
+        uint8_t *expected = heap_caps_malloc(65536, MALLOC_CAP_SPIRAM);
+        uint8_t *actual = heap_caps_malloc(65536, MALLOC_CAP_SPIRAM);
+        esp_err_t err = expected && actual ? ESP_OK : ESP_ERR_NO_MEM;
+        ag32_link_preference_t previous = ag32_mcu_link_get_preference();
+        bool halt_attempted = false, halted = false;
+        bool perf = power_manager_perf_lock_acquire("cpld_check") == ESP_OK;
+        if (!perf && err == ESP_OK) err = ESP_ERR_INVALID_STATE;
+        burner_spi_lock_take();
+        ag32_mcu_link_set_preference(AG32_LINK_PREFERENCE_LEGACY);
+        if (err == ESP_OK) err = burner_spi_init();
+        if (err == ESP_OK) err = burner_bacon_gba_prepare_power();
+        if (err == ESP_OK) err = burner_bacon_gba_verify_read_block_hoststyle(expected,65536,0,false);
+        burner_spi_lock_give();
+        if (err == ESP_OK) {
+            halt_attempted = true;
+            err = debug_mcu_run_control(true);
+            halted = err == ESP_OK;
+        }
+        uint64_t elapsed = 0;
+        unsigned passes = 0;
+        bacon_cpld_stats_t stats = {0};
+        burner_spi_lock_take();
+        ag32_mcu_link_set_preference(AG32_LINK_PREFERENCE_CPLD);
+        for (unsigned i=0; err == ESP_OK && i<8; ++i) {
+            bool used = false;
+            int64_t start = esp_timer_get_time();
+            err = bacon_cpld_try_transfer_locked(BACON_CPLD_GBA_READ,0,actual,65536,0,2000,&used);
+            elapsed += esp_timer_get_time()-start;
+            if (err == ESP_OK && (!used || memcmp(expected,actual,65536))) err=ESP_ERR_INVALID_RESPONSE;
+            if (err == ESP_OK) ++passes;
+        }
+        bacon_cpld_get_stats(&stats);
+        ag32_mcu_link_set_preference(previous);
+        burner_spi_lock_give();
+        esp_err_t resume_err = halt_attempted ? debug_mcu_run_control(false) : ESP_OK;
+        if (err == ESP_OK) err=resume_err;
+        if (perf) power_manager_perf_lock_release("cpld_check");
+        free(expected); free(actual);
+        cJSON *json=event("cpld_check");
+        if (json) {
+            cJSON_AddBoolToObject(json,"ok",err==ESP_OK && passes==8);
+            cJSON_AddStringToObject(json,"error",esp_err_to_name(err));
+            cJSON_AddNumberToObject(json,"passes",passes);
+            cJSON_AddNumberToObject(json,"bytes",passes*65536u);
+            cJSON_AddNumberToObject(json,"elapsed_us",elapsed);
+            cJSON_AddNumberToObject(json,"last_first_ready_us",stats.first_ready_us);
+            cJSON_AddNumberToObject(json,"last_status_polls",stats.status_polls);
+            cJSON_AddBoolToObject(json,"mcu_halted",halted);
+            cJSON_AddBoolToObject(json,"mcu_resumed",halted && resume_err==ESP_OK);
+        }
+        reply(json); return;
+    }
     if (strcmp(line, "bacon-check") == 0) { bacon_check(); return; }
     if (strcmp(line, "ag32-test") == 0 || strcmp(line, "ag32-stream-test") == 0) {
         bool stream = strcmp(line, "ag32-stream-test") == 0;
@@ -402,7 +474,7 @@ static void dispatch(char *line)
         ag32_link_preference_t next;
         ag32_link_preference_t previous = ag32_mcu_link_get_preference();
         if (!ag32_mcu_link_parse_preference(line + 10, &next)) {
-            message("error", "ag32-link must be auto/legacy/mcu");
+            message("error", "ag32-link must be auto/legacy/cpld/mcu");
             return;
         }
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
@@ -650,7 +722,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | bacon-check | ag32-link [auto|legacy|mcu] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | bacon-check | cpld-info | cpld-check | ag32-link [auto|legacy|mcu|cpld] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {
