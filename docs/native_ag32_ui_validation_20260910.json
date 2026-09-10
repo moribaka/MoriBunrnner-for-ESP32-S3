@@ -1,0 +1,154 @@
+{
+  "batch_status": {
+    "ok": true,
+    "state": "success",
+    "path": "/sdcard/ag32_cpld_posedge_20260910.bin",
+    "phase": "complete",
+    "message": "AG32 batch programmed and verified",
+    "processed": 108924,
+    "total": 108924,
+    "dp_idcode": "0x2ba01477",
+    "device_id": "0x40200001",
+    "records": 3,
+    "programmed": 108924,
+    "verified": 108924,
+    "destructive_started": true,
+    "recovery_required": false
+  },
+  "artifacts": [
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\build\\moriburnner.bin",
+      "Hash": "B129B53E4D7C0E9FC64A387E491DD76C3B60549D53441D8C291CF69AF06F1D8B"
+    },
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\example\\moriburnner_ag32_batch.bin",
+      "Hash": "94EFE7052DF14813D0829E175BA520F8EE8B5C2B2C6D5A68E17C2604A43B3907"
+    },
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\dist\\moriburnner_esp32_full_20260910_ag32_ui.zip",
+      "Hash": "1687B1AD2ADC764B9584C99D1904DDC1065C6C07DF9283C3E60D649703E3BA12"
+    },
+    {
+      "Path": "F:\\dev\\esp32\\moriburnner\\dist\\moriburnner_esp32_full_20260910_ag32_ui\\FULL.bin",
+      "Hash": "B8AA806EEDDD3661E4EB0BE8226BE4DC3E24BF851938FAFAF525F9C3BE47FC7A"
+    }
+  ],
+  "source_commit": "d1af7b7",
+  "native_path": [
+    "系统",
+    "设置",
+    "AG32固件更新"
+  ],
+  "tested_via_native_key_events": true,
+  "tests": [
+    "BIN filter and folder navigation",
+    "Invalid file rejected without starting programmer",
+    "Default cancel, B cancel, A cancel",
+    "Native confirmation started real SWD update",
+    "Back/menu/right blocked during update",
+    "Success and return to settings",
+    "Bacon 256 reads and CPLD 8x64KiB reads with MCU halted"
+  ],
+  "package_files": [
+    {
+      "name": "机身AG32更新说明.md",
+      "sha256": "8c836643c274562ce71c44fc29253944878aa7d36bb45186175652f5649f8eb7"
+    },
+    {
+      "name": "刷机说明.md",
+      "sha256": "b366a6241356262f9971ec4618d40492e36c698188e08e179135af40ab7a8aa7"
+    },
+    {
+      "name": "assets.bin",
+      "sha256": "369c9321fd5c93dbcd69f29b6e844d0eabf0490e4fc83a6d5cd30b648eca0f3e"
+    },
+    {
+      "name": "bootloader/bootloader.bin",
+      "sha256": "05f849389f010fe5f04a0e2551ec5ad3ff120ed1f9cb77a4299367aedfd9b1aa"
+    },
+    {
+      "name": "flash_args",
+      "sha256": "b81f3109421f4ba471680f875a7d37c3d2f28465f30ceda2643ffa5d7a476c6f"
+    },
+    {
+      "name": "flash_command.txt",
+      "sha256": "b1f21b04ddee91d9d67169fe48cc09b92c1119bc16d8a6fc4e38cd85984be7a7"
+    },
+    {
+      "name": "flash_full.cmd",
+      "sha256": "6ac253bf960d0359748afb3d08806069bf1d8c62b30f9ce20e431528342f454f"
+    },
+    {
+      "name": "flash_merged.cmd",
+      "sha256": "dd46bf28ee2982020a9f48ac723c0cc2f7f45e9b7469de3827438679480c028a"
+    },
+    {
+      "name": "flasher_args.json",
+      "sha256": "06a515a6ce2b14e52b13a9a6d8207233402b3aaff9849b23831d55838935c681"
+    },
+    {
+      "name": "fmsx.bin",
+      "sha256": "b4d1b78918a0f8686367ceb3e1738ae2ea74db0d9416fd552d3662e314673403"
+    },
+    {
+      "name": "FULL.bin",
+      "sha256": "b8aa806eeddd3661e4eb0be8226be4dc3e24bf851938fafaf525f9c3be47fc7a"
+    },
+    {
+      "name": "fullflash-single.bin",
+      "sha256": "b8aa806eeddd3661e4eb0be8226be4dc3e24bf851938fafaf525f9c3be47fc7a"
+    },
+    {
+      "name": "gwenesis.bin",
+      "sha256": "ea2bbc063f768098f6b6b1dfb11871d9ce2869d32b906fc55a5a140be25f1ce4"
+    },
+    {
+      "name": "launcher.bin",
+      "sha256": "594a068033e3f692da16cea76120f3dffa618ddd5bf917b1f8779bc757842a78"
+    },
+    {
+      "name": "moriburnner_dualsystem_fullflash_merged.bin",
+      "sha256": "b8aa806eeddd3661e4eb0be8226be4dc3e24bf851938fafaf525f9c3be47fc7a"
+    },
+    {
+      "name": "moriburnner.bin",
+      "sha256": "b129b53e4d7c0e9fc64a387e491dd76c3b60549d53441d8c291cf69af06f1d8b"
+    },
+    {
+      "name": "ota_data_initial.bin",
+      "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
+    },
+    {
+      "name": "partition_table/partition-table.bin",
+      "sha256": "b4bad24b7b286865a0f41256c8b5eb43ac2b62907fe82d507c0dbe2f36fb6e06"
+    },
+    {
+      "name": "prboom-go.bin",
+      "sha256": "d66157bf565c269968dd85800973dbbdc670071e601c3fee1bcf6223c6894be4"
+    },
+    {
+      "name": "README.txt",
+      "sha256": "2195597652d0f27ee0e5da99121073e4942840d0a8943c10da5d4faca38524ee"
+    },
+    {
+      "name": "retro-core.bin",
+      "sha256": "9c1c0cf59045c9c652ee7eebd41697a396d4292466a4d73ccd9184681cafa028"
+    },
+    {
+      "name": "TF_UPDATE/web/main.html",
+      "sha256": "a566b15c8aa28f1a7719faa154ce9db775607100cb74ad2ad5a162ad1396e5f5"
+    },
+    {
+      "name": "tools/esptool.exe",
+      "sha256": "074e4bca8a6282e48356a24321b0f7d674d73a79aba91b2f5f015f988a8df2fb"
+    },
+    {
+      "name": "tools/LICENSE",
+      "sha256": "189b1af95d661151e054cea10c91b3d754e4de4d3fecfb074c1fb29476f7167b"
+    },
+    {
+      "name": "tools/README.md",
+      "sha256": "cc0171bb1f2f495dd1ffefbe637a0658f6c20d157b68dbf239f7b7f75f8c59a7"
+    }
+  ]
+}

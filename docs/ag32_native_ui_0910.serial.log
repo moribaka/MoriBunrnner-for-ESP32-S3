@@ -1,0 +1,404 @@
+2026-09-10 18:00:47 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-10 18:00:47 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-10 18:00:47 I (1277) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-10 18:00:47 I (1286) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-10 18:00:47 I (1293) main: timezone configured: CST-8
+2026-09-10 18:00:47 I (1297) main: boot step: mount assets
+2026-09-10 18:00:47 I (1392) assets: mounted /assets: total=1438481 used=763291
+2026-09-10 18:00:48 I (1393) main: boot step: mount sdcard
+2026-09-10 18:00:48 I (1441) SDCARD: SD card mounted
+2026-09-10 18:00:48 I (1442) SDCARD: Total: 59638MB
+2026-09-10 18:00:48 W (1603) main: repaired legacy lang_zh_cn.ini
+2026-09-10 18:00:48 I (3403) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=3v3 settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=auto
+2026-09-10 18:00:48 I (3409) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-10 18:00:48 I (3420) main: UI language=1 (zh)
+2026-09-10 18:00:48 I (3428) main: boot step: init i2c peripherals
+2026-09-10 18:00:48 W (3429) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-10 18:00:48 I (3439) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-10 18:00:48 I (3447) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-10 18:00:48 I (3450) power_manager: detected AXP209 at 0x34
+2026-09-10 18:00:48 I (3454) main: AXP209 power manager ready at 0x34
+2026-09-10 18:00:48 I (3459) tca9555: TCA9555 ready at 0x20
+2026-09-10 18:00:48 I (3467) main: tca9555.ini apply=0, skip register apply
+2026-09-10 18:00:48 I (3469) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-10 18:00:48 I (3473) tca9555: IRQ enabled on GPIO 17
+2026-09-10 18:00:48 I (3475) main: boot step: init usb msc manager
+2026-09-10 18:00:48 I (3480) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-10 18:00:48 I (3485) main: USB MSC manager ready, pass-through default is disabled
+2026-09-10 18:00:48 I (3492) main: boot step: init nvs
+2026-09-10 18:00:48 I (3523) main: boot step: init mcu debug
+2026-09-10 18:00:48 I (3524) main: boot step: init lvgl/display
+2026-09-10 18:00:48 I (3767) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-10 18:00:48 I (3768) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-10 18:00:48 I (3772) lvgl_port: using single LVGL draw buffer (20
+2026-09-10 18:00:48 @mori {"event":"ui","process_calls":9544,"render_calls":152,"music_polls":1367,"model_bytes":15312,"directory_scans":0,"cache_hits":0,"page":0,"selected":0,"count":5,"selection":"系统","status":"wifi connected 192.168.1.134"}
+2026-09-10 18:01:09
+2026-09-10 18:01:09 @mori {"event":"key","message":"a"}
+2026-09-10 18:01:09
+2026-09-10 18:01:09 @mori {"event":"key","message":"right"}
+2026-09-10 18:01:10
+2026-09-10 18:01:10 @mori {"event":"key","message":"right"}
+2026-09-10 18:01:10
+2026-09-10 18:01:10 @mori {"event":"key","message":"a"}
+2026-09-10 18:01:11
+2026-09-10 18:01:11 @mori {"event":"ui","process_calls":10981,"render_calls":231,"music_polls":1573,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":5,"selected":0,"count":0,"selection":"","status":"Lazer Boomerang - Signals.mp3"}
+2026-09-10 18:01:11
+2026-09-10 18:01:11 @mori {"event":"key","message":"up"}
+2026-09-10 18:01:12
+2026-09-10 18:01:12 @mori {"event":"ui","process_calls":11047,"render_calls":232,"music_polls":1583,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":5,"selected":0,"count":0,"selection":"","status":"Lazer Boomerang - Signals.mp3"}
+2026-09-10 18:01:12
+2026-09-10 18:01:12 @mori {"event":"key","message":"a"}
+2026-09-10 18:01:13
+2026-09-10 18:01:13 @mori {"event":"ui","process_calls":11103,"render_calls":238,"music_polls":1592,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":5,"selected":0,"count":0,"selection":"","status":"Lazer Boomerang - Signals.mp3"}
+2026-09-10 18:01:44
+2026-09-10 18:01:44 @mori {"event":"ui","process_calls":13028,"render_calls":373,"music_polls":1876,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":5,"selected":0,"count":0,"selection":"","status":"Lazer Boomerang - Signals.mp3"}
+2026-09-10 18:01:45
+2026-09-10 18:01:45 @mori {"event":"key","message":"a"}
+2026-09-10 18:01:45
+2026-09-10 18:01:45 @mori {"event":"ui","process_calls":13092,"render_calls":380,"music_polls":1886,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":5,"selected":0,"count":0,"selection":"","status":"已暂停"}
+2026-09-10 18:01:46
+2026-09-10 18:01:46 @mori {"event":"key","message":"b"}
+2026-09-10 18:01:46
+2026-09-10 18:01:46 @mori {"event":"ui","process_calls":13153,"render_calls":401,"music_polls":1895,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":0,"selected":2,"count":5,"selection":"音乐","status":"就绪"}
+2026-09-10 18:01:59
+2026-09-10 18:01:59 @mori {"event":"key","message":"left"}
+2026-09-10 18:02:00
+2026-09-10 18:02:00 @mori {"event":"ui","process_calls":13968,"render_calls":441,"music_polls":2012,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":0,"selected":1,"count":5,"selection":"阅读器","status":"就绪"}
+2026-09-10 18:02:00
+2026-09-10 18:02:00 @mori {"event":"key","message":"left"}
+2026-09-10 18:02:01
+2026-09-10 18:02:01 @mori {"event":"ui","process_calls":14033,"render_calls":491,"music_polls":2022,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":0,"selected":0,"count":5,"selection":"系统","status":"就绪"}
+2026-09-10 18:02:01
+2026-09-10 18:02:01 @mori {"event":"key","message":"a"}
+2026-09-10 18:02:02
+2026-09-10 18:02:02 @mori {"event":"ui","process_calls":14093,"render_calls":511,"music_polls":2030,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":1,"selected":0,"count":5,"selection":"Apps","status":"就绪"}
+2026-09-10 18:02:02
+2026-09-10 18:02:02 @mori {"event":"key","message":"right"}
+2026-09-10 18:02:03
+2026-09-10 18:02:03 @mori {"event":"ui","process_calls":14157,"render_calls":543,"music_polls":2040,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":1,"selected":1,"count":5,"selection":"TF","status":"就绪"}
+2026-09-10 18:02:03
+2026-09-10 18:02:03 @mori {"event":"key","message":"right"}
+2026-09-10 18:02:04
+2026-09-10 18:02:04 @mori {"event":"ui","process_calls":14220,"render_calls":592,"music_polls":2049,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":1,"selected":2,"count":5,"selection":"设置","status":"就绪"}
+2026-09-10 18:02:04
+2026-09-10 18:02:04 @mori {"event":"key","message":"a"}
+2026-09-10 18:02:05
+2026-09-10 18:02:05 @mori {"event":"ui","process_calls":14280,"render_calls":635,"music_polls":2058,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":17,"selected":0,"count":11,"selection":"亮度","status":"就绪"}
+2026-09-10 18:02:05
+2026-09-10 18:02:05 @mori {"event":"key","message":"up"}
+2026-09-10 18:02:06
+2026-09-10 18:02:06 @mori {"event":"ui","process_calls":14345,"render_calls":667,"music_polls":2068,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":17,"selected":10,"count":11,"selection":"AG32固件更新","status":"就绪"}
+2026-09-10 18:02:06
+2026-09-10 18:02:06 @mori {"event":"key","message":"a"}
+2026-09-10 18:02:07
+2026-09-10 18:02:07 @mori {"event":"ui","process_calls":14405,"render_calls":705,"music_polls":2077,"model_bytes":15312,"directory_scans":3,"cache_hits":0,"page":20,"selected":0,"count":7,"selection":"选择AG32固件","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:02
+2026-09-10 18:03:02 @mori {"event":"key","message":"menu"}
+2026-09-10 18:03:03
+2026-09-10 18:03:03 @mori {"event":"key","message":"a"}
+2026-09-10 18:03:03
+2026-09-10 18:03:03 @mori {"event":"ui","process_calls":17914,"render_calls":782,"music_polls":2580,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":0,"count":25,"selection":"_gba","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:04
+2026-09-10 18:03:04 @mori {"event":"ui","process_calls":17947,"render_calls":782,"music_polls":2585,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":0,"count":25,"selection":"_gba","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:04
+2026-09-10 18:03:04 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:05
+2026-09-10 18:03:05 @mori {"event":"ui","process_calls":18011,"render_calls":800,"music_polls":2594,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":1,"count":25,"selection":"_nds","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:05
+2026-09-10 18:03:05 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:06
+2026-09-10 18:03:06 @mori {"event":"ui","process_calls":18077,"render_calls":818,"music_polls":2604,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":2,"count":25,"selection":"dumps","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:07
+2026-09-10 18:03:07 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:07
+2026-09-10 18:03:07 @mori {"event":"ui","process_calls":18142,"render_calls":835,"music_polls":2613,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":3,"count":25,"selection":"GBA汉化","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:08
+2026-09-10 18:03:08 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:08
+2026-09-10 18:03:08 @mori {"event":"ui","process_calls":18206,"render_calls":853,"music_polls":2622,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":4,"count":25,"selection":"music","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:09
+2026-09-10 18:03:09 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:09
+2026-09-10 18:03:09 @mori {"event":"ui","process_calls":18272,"render_calls":874,"music_polls":2631,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":5,"count":25,"selection":"retro-go","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:10
+2026-09-10 18:03:10 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:10
+2026-09-10 18:03:10 @mori {"event":"ui","process_calls":18338,"render_calls":892,"music_polls":2641,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":6,"count":25,"selection":"ROM_OUTPUT","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:11
+2026-09-10 18:03:11 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:11
+2026-09-10 18:03:11 @mori {"event":"ui","process_calls":18405,"render_calls":914,"music_polls":2650,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":7,"count":25,"selection":"romart","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:12
+2026-09-10 18:03:12 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:12
+2026-09-10 18:03:12 @mori {"event":"ui","process_calls":18470,"render_calls":932,"music_polls":2660,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":8,"count":25,"selection":"roms","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:13
+2026-09-10 18:03:13 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:13
+2026-09-10 18:03:13 @mori {"event":"ui","process_calls":18536,"render_calls":954,"music_polls":2669,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":9,"count":25,"selection":"SAVEGAME","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:14
+2026-09-10 18:03:14 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:14
+2026-09-10 18:03:14 @mori {"event":"ui","process_calls":18601,"render_calls":975,"music_polls":2679,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":10,"count":25,"selection":"SRAM","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:15
+2026-09-10 18:03:15 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:15
+2026-09-10 18:03:15 @mori {"event":"ui","process_calls":18665,"render_calls":994,"music_polls":2688,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":11,"count":25,"selection":"宝可梦","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:16
+2026-09-10 18:03:16 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:16
+2026-09-10 18:03:16 @mori {"event":"ui","process_calls":18723,"render_calls":1020,"music_polls":2696,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":12,"count":25,"selection":"ag32_cpld_20260910_hwtest.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:17
+2026-09-10 18:03:17 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:18
+2026-09-10 18:03:18 @mori {"event":"ui","process_calls":18788,"render_calls":1057,"music_polls":2706,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":13,"count":25,"selection":"ag32_cpld_posedge_20260910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:18
+2026-09-10 18:03:18 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:19
+2026-09-10 18:03:19 @mori {"event":"ui","process_calls":18851,"render_calls":1118,"music_polls":2715,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":14,"count":25,"selection":"ag32_fast_0910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:19
+2026-09-10 18:03:19 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:20
+2026-09-10 18:03:20 @mori {"event":"ui","process_calls":18917,"render_calls":1136,"music_polls":2724,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":15,"count":25,"selection":"ag32_fifo_0910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:20
+2026-09-10 18:03:20 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:21
+2026-09-10 18:03:21 @mori {"event":"ui","process_calls":18983,"render_calls":1159,"music_polls":2734,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":16,"count":25,"selection":"ag32_native_cs_0910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:21
+2026-09-10 18:03:21 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:22
+2026-09-10 18:03:22 @mori {"event":"ui","process_calls":19048,"render_calls":1180,"music_polls":2743,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":17,"count":25,"selection":"ag32_shift_0910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:22
+2026-09-10 18:03:22 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:23
+2026-09-10 18:03:23 @mori {"event":"ui","process_calls":19113,"render_calls":1198,"music_polls":2753,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":18,"count":25,"selection":"ag32_stream2_0910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:23
+2026-09-10 18:03:23 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:24
+2026-09-10 18:03:24 @mori {"event":"ui","process_calls":19178,"render_calls":1216,"music_polls":2762,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":19,"count":25,"selection":"ag32_stream_0910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:24
+2026-09-10 18:03:24 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:25
+2026-09-10 18:03:25 @mori {"event":"ui","process_calls":19246,"render_calls":1235,"music_polls":2772,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":20,"count":25,"selection":"ag32_update_runtime.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:25
+2026-09-10 18:03:25 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:26
+2026-09-10 18:03:26 @mori {"event":"ui","process_calls":19311,"render_calls":1253,"music_polls":2781,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":21,"count":25,"selection":"ag32_update_runtime2.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:27
+2026-09-10 18:03:27 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:27
+2026-09-10 18:03:27 @mori {"event":"ui","process_calls":19377,"render_calls":1271,"music_polls":2791,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":22,"count":25,"selection":"ag32_update_runtime3.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:28
+2026-09-10 18:03:28 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:28
+2026-09-10 18:03:28 @mori {"event":"ui","process_calls":19441,"render_calls":1292,"music_polls":2800,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":23,"count":25,"selection":"ag32_update_test.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:29
+2026-09-10 18:03:29 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:29
+2026-09-10 18:03:29 @mori {"event":"ui","process_calls":19502,"render_calls":1321,"music_polls":2810,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":6,"selected":24,"count":25,"selection":"z_ui_invalid_batch_20260910.bin","status":"从TF卡选择Batch文件"}
+2026-09-10 18:03:30
+2026-09-10 18:03:30 @mori {"event":"key","message":"a"}
+2026-09-10 18:03:30
+2026-09-10 18:03:30 @mori {"event":"ui","process_calls":19566,"render_calls":1385,"music_polls":2819,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":20,"selected":0,"count":7,"selection":"选择AG32固件","status":"record 0 header is truncated"}
+2026-09-10 18:03:31
+2026-09-10 18:03:31 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:31
+2026-09-10 18:03:31 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:32
+2026-09-10 18:03:32 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:32
+2026-09-10 18:03:32 @mori {"event":"key","message":"down"}
+2026-09-10 18:03:33
+2026-09-10 18:03:33 @mori {"event":"ui","process_calls":19728,"render_calls":1508,"music_polls":2843,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":20,"selected":4,"count":7,"selection":"AG32更新失败","status":"record 0 header is truncated"}
+2026-09-10 18:03:33
+2026-09-10 18:03:33 @mori {"event":"key","message":"a"}
+2026-09-10 18:03:34
+2026-09-10 18:03:34 @mori {"event":"ui","process_calls":19790,"render_calls":1510,"music_polls":2852,"model_bytes":15312,"directory_scans":4,"cache_hits":0,"page":20,"selected":4,"count":7,"selection":"AG32更新失败","status":"record 0 header is truncated"}
+2026-09-10 18:03:34
+2026-09-10 18:03:34 @mori {"event":"ag32_batch_status","state":"idle","phase":"","message":"","processed":0,"total":0,"device_id":0,"recovery_required":false}
+2026-09-10 18:05:14
+2026-09-10 18:05:14 @mori {"event":"key","message":"menu"}
+2026-09-10 18:05:14
+2026-09-10 18:05:14 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:15
+2026-09-10 18:05:15 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:15
+2026-09-10 18:05:15 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:16
+2026-09-10 18:05:16 @mori {"event":"key","message":"a"}
+2026-09-10 18:05:16
+2026-09-10 18:05:16 @mori {"event":"ui","process_calls":26172,"render_calls":1689,"music_polls":3765,"model_bytes":15312,"directory_scans":5,"cache_hits":0,"page":6,"selected":0,"count":25,"selection":"_gba","status":"从TF卡选择Batch文件"}
+2026-09-10 18:05:17
+2026-09-10 18:05:17 @mori {"event":"key","message":"a"}
+2026-09-10 18:05:17
+2026-09-10 18:05:17 @mori {"event":"ui","process_calls":26233,"render_calls":1706,"music_polls":3774,"model_bytes":15312,"directory_scans":6,"cache_hits":0,"page":6,"selected":0,"count":0,"selection":"","status":"没有匹配文件"}
+2026-09-10 18:05:18
+2026-09-10 18:05:18 @mori {"event":"key","message":"b"}
+2026-09-10 18:05:18
+2026-09-10 18:05:18 @mori {"event":"ui","process_calls":26291,"render_calls":1725,"music_polls":3783,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":0,"count":25,"selection":"_gba","status":"TF根目录"}
+2026-09-10 18:05:19
+2026-09-10 18:05:19 @mori {"event":"ui","process_calls":26324,"render_calls":1725,"music_polls":3788,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":0,"count":25,"selection":"_gba","status":"TF根目录"}
+2026-09-10 18:05:20
+2026-09-10 18:05:20 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:20
+2026-09-10 18:05:20 @mori {"event":"ui","process_calls":26388,"render_calls":1743,"music_polls":3797,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":1,"count":25,"selection":"_nds","status":"TF根目录"}
+2026-09-10 18:05:21
+2026-09-10 18:05:21 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:21
+2026-09-10 18:05:21 @mori {"event":"ui","process_calls":26454,"render_calls":1761,"music_polls":3807,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":2,"count":25,"selection":"dumps","status":"TF根目录"}
+2026-09-10 18:05:22
+2026-09-10 18:05:22 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:22
+2026-09-10 18:05:22 @mori {"event":"ui","process_calls":26520,"render_calls":1778,"music_polls":3816,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":3,"count":25,"selection":"GBA汉化","status":"TF根目录"}
+2026-09-10 18:05:23
+2026-09-10 18:05:23 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:23
+2026-09-10 18:05:23 @mori {"event":"ui","process_calls":26584,"render_calls":1796,"music_polls":3825,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":4,"count":25,"selection":"music","status":"TF根目录"}
+2026-09-10 18:05:24
+2026-09-10 18:05:24 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:24
+2026-09-10 18:05:24 @mori {"event":"ui","process_calls":26649,"render_calls":1816,"music_polls":3835,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":5,"count":25,"selection":"retro-go","status":"TF根目录"}
+2026-09-10 18:05:25
+2026-09-10 18:05:25 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:25
+2026-09-10 18:05:25 @mori {"event":"ui","process_calls":26714,"render_calls":1834,"music_polls":3844,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":6,"count":25,"selection":"ROM_OUTPUT","status":"TF根目录"}
+2026-09-10 18:05:26
+2026-09-10 18:05:26 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:26
+2026-09-10 18:05:26 @mori {"event":"ui","process_calls":26778,"render_calls":1856,"music_polls":3853,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":7,"count":25,"selection":"romart","status":"TF根目录"}
+2026-09-10 18:05:27
+2026-09-10 18:05:27 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:27
+2026-09-10 18:05:27 @mori {"event":"ui","process_calls":26842,"render_calls":1874,"music_polls":3862,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":8,"count":25,"selection":"roms","status":"TF根目录"}
+2026-09-10 18:05:28
+2026-09-10 18:05:28 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:28
+2026-09-10 18:05:28 @mori {"event":"ui","process_calls":26907,"render_calls":1896,"music_polls":3871,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":9,"count":25,"selection":"SAVEGAME","status":"TF根目录"}
+2026-09-10 18:05:29
+2026-09-10 18:05:29 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:29
+2026-09-10 18:05:29 @mori {"event":"ui","process_calls":26974,"render_calls":1918,"music_polls":3881,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":10,"count":25,"selection":"SRAM","status":"TF根目录"}
+2026-09-10 18:05:30
+2026-09-10 18:05:30 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:31
+2026-09-10 18:05:31 @mori {"event":"ui","process_calls":27040,"render_calls":1936,"music_polls":3890,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":11,"count":25,"selection":"宝可梦","status":"TF根目录"}
+2026-09-10 18:05:31
+2026-09-10 18:05:31 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:32
+2026-09-10 18:05:32 @mori {"event":"ui","process_calls":27100,"render_calls":1964,"music_polls":3899,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":12,"count":25,"selection":"ag32_cpld_20260910_hwtest.bin","status":"TF根目录"}
+2026-09-10 18:05:32
+2026-09-10 18:05:32 @mori {"event":"key","message":"down"}
+2026-09-10 18:05:33
+2026-09-10 18:05:33 @mori {"event":"ui","process_calls":27166,"render_calls":2001,"music_polls":3909,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":6,"selected":13,"count":25,"selection":"ag32_cpld_posedge_20260910.bin","status":"TF根目录"}
+2026-09-10 18:05:33
+2026-09-10 18:05:33 @mori {"event":"key","message":"a"}
+2026-09-10 18:05:34
+2026-09-10 18:05:34 @mori {"event":"ui","process_calls":27224,"render_calls":2059,"music_polls":3918,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":4,"count":7,"selection":"开始更新AG32","status":"固件校验通过"}
+2026-09-10 18:05:34
+2026-09-10 18:05:34 @mori {"event":"key","message":"a"}
+2026-09-10 18:05:35
+2026-09-10 18:05:35 @mori {"event":"ui","process_calls":27287,"render_calls":2096,"music_polls":3928,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":0,"count":4,"selection":"取消","status":"将擦除并更新MCU和CPLD"}
+2026-09-10 18:05:35
+2026-09-10 18:05:35 @mori {"event":"key","message":"b"}
+2026-09-10 18:05:36
+2026-09-10 18:05:36 @mori {"event":"ui","process_calls":27348,"render_calls":2131,"music_polls":3936,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":4,"count":7,"selection":"开始更新AG32","status":"已取消更新"}
+2026-09-10 18:05:36
+2026-09-10 18:05:36 @mori {"event":"ag32_batch_status","state":"idle","phase":"","message":"","processed":0,"total":0,"device_id":0,"recovery_required":false}
+2026-09-10 18:05:37
+2026-09-10 18:05:37 @mori {"event":"key","message":"a"}
+2026-09-10 18:05:37
+2026-09-10 18:05:37 @mori {"event":"key","message":"a"}
+2026-09-10 18:05:38
+2026-09-10 18:05:38 @mori {"event":"ui","process_calls":27471,"render_calls":2197,"music_polls":3955,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":4,"count":7,"selection":"开始更新AG32","status":"已取消更新"}
+2026-09-10 18:05:38
+2026-09-10 18:05:38 @mori {"event":"ag32_batch_status","state":"idle","phase":"","message":"","processed":0,"total":0,"device_id":0,"recovery_required":false}
+2026-09-10 18:06:00
+2026-09-10 18:06:00 @mori {"event":"key","message":"a"}
+2026-09-10 18:06:01
+2026-09-10 18:06:01 @mori {"event":"ui","process_calls":28890,"render_calls":2247,"music_polls":4158,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":0,"count":4,"selection":"取消","status":"将擦除并更新MCU和CPLD"}
+2026-09-10 18:06:01
+2026-09-10 18:06:01 @mori {"event":"key","message":"down"}
+2026-09-10 18:06:02
+2026-09-10 18:06:02 @mori {"event":"key","message":"down"}
+2026-09-10 18:06:02
+2026-09-10 18:06:02 @mori {"event":"ui","process_calls":28987,"render_calls":2317,"music_polls":4172,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":2,"count":4,"selection":"ag32_cpld_posedge_20260910.bin","status":"将擦除并更新MCU和CPLD"}
+2026-09-10 18:06:03
+2026-09-10 18:06:03 @mori {"event":"key","message":"up"}
+2026-09-10 18:06:03
+2026-09-10 18:06:03 @mori {"event":"ui","process_calls":29051,"render_calls":2348,"music_polls":4182,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":1,"count":4,"selection":"确认刷写AG32","status":"将擦除并更新MCU和CPLD"}
+2026-09-10 18:06:04
+2026-09-10 18:06:04 @mori {"event":"key","message":"a"}
+2026-09-10 18:06:04
+2026-09-10 18:06:04 @mori {"event":"ui","process_calls":29099,"render_calls":2364,"music_polls":4190,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":0,"count":7,"selection":"正在校验固件","status":"AG32更新中，请保持供电"}
+2026-09-10 18:06:05
+2026-09-10 18:06:05 @mori {"event":"ag32_batch_status","state":"running","phase":"verify","message":"AG32 batch update queued","processed":128,"total":108924,"device_id":1075838977,"recovery_required":true}
+2026-09-10 18:06:05
+2026-09-10 18:06:05 @mori {"event":"key","message":"b"}
+2026-09-10 18:06:06
+2026-09-10 18:06:06 @mori {"event":"key","message":"menu"}
+2026-09-10 18:06:06
+2026-09-10 18:06:06 @mori {"event":"key","message":"right"}
+2026-09-10 18:06:07
+2026-09-10 18:06:07 @mori {"event":"ui","process_calls":29243,"render_calls":2388,"music_polls":4212,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":0,"count":7,"selection":"正在写入AG32","status":"AG32更新中，请保持供电"}
+2026-09-10 18:10:12
+2026-09-10 18:10:12 @mori {"event":"ag32_batch_status","state":"success","phase":"complete","message":"AG32 batch programmed and verified","processed":108924,"total":108924,"device_id":1075838977,"recovery_required":false}
+2026-09-10 18:10:12
+2026-09-10 18:10:12 @mori {"event":"ui","process_calls":43514,"render_calls":2762,"music_polls":6387,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":0,"count":7,"selection":"选择AG32固件","status":"AG32更新成功"}
+2026-09-10 18:11:58
+2026-09-10 18:11:58 @mori {"event":"key","message":"menu"}
+2026-09-10 18:11:58
+2026-09-10 18:11:58 @mori {"event":"key","message":"down"}
+2026-09-10 18:11:59
+2026-09-10 18:11:59 @mori {"event":"key","message":"down"}
+2026-09-10 18:11:59
+2026-09-10 18:11:59 @mori {"event":"key","message":"down"}
+2026-09-10 18:12:00
+2026-09-10 18:12:00 @mori {"event":"key","message":"down"}
+2026-09-10 18:12:00
+2026-09-10 18:12:00 @mori {"event":"ui","process_calls":50270,"render_calls":2947,"music_polls":7352,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":20,"selected":4,"count":7,"selection":"AG32更新成功","status":"AG32更新成功"}
+2026-09-10 18:12:01
+2026-09-10 18:12:01 @mori {"event":"key","message":"b"}
+2026-09-10 18:12:02
+2026-09-10 18:12:02 @mori {"event":"ui","process_calls":50334,"render_calls":2978,"music_polls":7362,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":17,"selected":0,"count":11,"selection":"亮度","status":"AG32更新成功"}
+2026-09-10 18:12:02
+2026-09-10 18:12:02 @mori {"event":"key","message":"up"}
+2026-09-10 18:12:03
+2026-09-10 18:12:03 @mori {"event":"ui","process_calls":50400,"render_calls":3017,"music_polls":7371,"model_bytes":15312,"directory_scans":7,"cache_hits":0,"page":17,"selected":10,"count":11,"selection":"AG32固件更新","status":"AG32更新成功"}
+2026-09-10 18:12:03 I (833093) power_manager: CPU perf lock acquired by bacon_check
+2026-09-10 18:12:03 I (833297) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 18:12:03 I (833299) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 18:12:03 I (833301) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 18:12:03 I (833303) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 18:12:03 I (833307) mcu_debug: DMI DMSTATUS before halt=0x000f0ca2
+2026-09-10 18:12:03 I (833313) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 18:12:03 I (833321) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 18:12:03 I (833327) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 18:12:03 I (833346) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 18:12:03 I (833348) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 18:12:03 I (833349) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 18:12:03 I (833351) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 18:12:03 I (833357) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 18:12:03 I (833364) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 18:12:03 I (833370) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 18:12:03 I (833378) power_manager: CPU perf lock released by bacon_check
+2026-09-10 18:12:03
+2026-09-10 18:12:03 @mori {"event":"bacon_check","ok":true,"error":"ESP_OK","preference":"auto","mcu_halted_during_reads":true,"mcu_resumed":true,"samples":256,"mean_us":37.05078125,"p50_us":36,"p95_us":37,"max_us":140}
+2026-09-10 18:12:04 I (833821) power_manager: CPU perf lock acquired by cpld_check
+2026-09-10 18:12:04 I (834069) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 18:12:04 I (834071) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 18:12:04 I (834072) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 18:12:04 I (834074) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 18:12:04 I (834079) mcu_debug: DMI DMSTATUS before halt=0x000f0ca2
+2026-09-10 18:12:04 I (834085) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 18:12:04 I (834092) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 18:12:04 I (834098) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 18:12:04 I (834352) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 18:12:04 I (834354) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 18:12:04 I (834355) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 18:12:04 I (834357) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 18:12:04 I (834364) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 18:12:04 I (834370) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 18:12:04 I (834377) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 18:12:04 I (834384) power_manager: CPU perf lock released by cpld_check
+2026-09-10 18:12:04
+2026-09-10 18:12:04 @mori {"event":"cpld_check","ok":true,"error":"ESP_OK","passes":8,"bytes":524288,"elapsed_us":213713,"last_first_ready_us":400,"last_status_polls":70,"mcu_halted":true,"mcu_resumed":true}

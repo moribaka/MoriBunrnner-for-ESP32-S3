@@ -56,6 +56,18 @@ SPI is initialized lazily. Diagnostics must call `burner_spi_init()` under the S
 
 ## AG32 batch update
 
+The native device menu now supports **System → Settings → AG32 firmware update**.
+Select a TF `.bin`; validation runs in a worker, then the confirmation defaults
+to Cancel. The page uses the same batch programmer as web/serial, shows phase,
+programmed/verified bytes, and blocks navigation during programming. See
+docs/native_ag32_ui_20260910.md for the on-board test and current app hash.
+
+For native UI testing, use serial `ui` snapshots and `key` commands after each
+transition. The first key may only wake a dimmed screen; do not send a blind
+sequence that could open another app. Check invalid-file rejection and both
+cancel paths before an authorized real update, then verify busy navigation,
+terminal success and restored SPI operation.
+
 Upload the batch to the TF root and validate it before starting a destructive update:
 
 ```powershell
