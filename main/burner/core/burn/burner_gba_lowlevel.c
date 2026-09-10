@@ -605,6 +605,11 @@ static esp_err_t burner_bacon_rom_read_u16(uint32_t word_addr, uint16_t *out_val
     return ESP_OK;
 }
 
+esp_err_t burner_debug_read_word_locked(uint32_t word_addr, uint16_t *value)
+{
+    return burner_bacon_rom_read_u16(word_addr, value);
+}
+
 static bool s_gba_amd_poll_pair_enabled;
 
 /* Two complete read cycles, including RD/CS release, in one SPI transaction.

@@ -15,6 +15,7 @@ Use this skill for the physical `F:\dev\esp32\moriburnner` board workflow. It is
 - Last verified board MAC: `a4:cb:8f:f2:c4:c0`, VID303A/PID1001. COM19 (VIDCAFE) is another device. Discover HTTP IP each session; the observed `192.168.1.134` is DHCP, not a permanent address.
 - The companion AG32 is updated by ESP32 over onboard SWD. Never connect an external SWD tool while the ESP32 is in SWD mode.
 - Bacon SPI must remain at 40 MHz. Do not lower the clock to hide timing errors.
+- Primary cartridge I/O is pure CPLD Bacon. Both legacy and auto select it without MCU negotiation or request allocation. The MCU transport is an explicit experimental option; do not restore MCU as the default after diagnostics.
 - AG32 MCU firmware disables only `JTDI`, `JTDO`, and `NJTRST`; `JTCK`/`JTMS` remain available for SWD.
 - The AG32 batch is `example/moriburnner_ag32_batch.bin`; validate it before programming.
 
@@ -76,14 +77,21 @@ Older ESP firmware copied the report only at job completion: while `state=runnin
 
 ## Protocol bring-up order
 
-1. Confirm ESP32 app boot and TF mount over COM26.
-2. Confirm `/api/mcu/probe` and 40 MHz SPI.
-3. Validate and program the AG32 batch.
-4. Set `ag32-link mcu` and run `ag32-ping`.
-5. Only after PING/capability and response CRC pass, test read-only ROM/RAM commands.
-6. Test legacy compatibility with `ag32-link legacy`; restore `auto` only after both paths are understood.
+1. Confirm ESP32 boot, TF mount, selected backend and 40 MHz SPI.
+2. For the primary GBA path, run `bacon-check` with legacy or auto selected.
+   It compares 256 single-word reads while the MCU is halted against samples
+   taken before halting, measures latency, and attempts to resume the MCU.
+   Require ok=true and mcu_resumed=true. It is read-only for cartridge contents.
+3. Validate/program an AG32 batch only when firmware changes require it.
+4. When specifically testing the experimental MCU path, select mcu, then
+   require PING/capability, framed echo and stream echo before cartridge writes.
+5. Restore the chosen primary CPLD setting after auxiliary MCU diagnostics.
 
-Do not test destructive cartridge erase/program operations while the MCU transport is still failing PING. Do not add retries, clock reduction, or legacy fallback to conceal a protocol framing/timing bug; fix the owning state machine.
+Do not write through the MCU transport while its PING fails. MCU readiness is not a prerequisite for pure-CPLD Bacon operation. Do not add retries, clock reduction, or mid-operation protocol switching to conceal a framing/timing bug.
+
+The CPLD continuous extension is described in shared/BACON_CPLD_STREAM_DESIGN.md
+and is still a design, not an implemented bitstream. Do not claim the prior
+MCU Stream implements that hardware path.
 
 ## Build evidence
 

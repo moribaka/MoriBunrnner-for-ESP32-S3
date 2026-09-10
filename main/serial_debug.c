@@ -27,6 +27,7 @@
 #include "ag32_batch_programmer.h"
 #include "ag32_mcu_transport.h"
 #include "mcu_debug.h"
+#include "power_manager.h"
 
 static TaskHandle_t s_console;
 static portMUX_TYPE s_job_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -208,8 +209,92 @@ static bool local_path(const char *path)
         strstr(path, "..") == NULL;
 }
 
+static esp_err_t debug_mcu_run_control(bool halt)
+{
+    if (burner_spi_swd_restore_blocked()) return ESP_ERR_INVALID_STATE;
+    esp_err_t err = burner_spi_enter_swd_mode();
+    if (err != ESP_OK) return err;
+    uint32_t idcode = 0;
+    err = mcu_debug_session_begin(&idcode);
+    if (err == ESP_OK) {
+        err = halt ? mcu_debug_halt() : mcu_debug_resume();
+        mcu_debug_session_end();
+    }
+    esp_err_t restore_err = burner_spi_leave_swd_mode(true);
+    return err == ESP_OK ? restore_err : err;
+}
+
+static int compare_u32(const void *a, const void *b)
+{
+    uint32_t left = *(const uint32_t *)a, right = *(const uint32_t *)b;
+    return (left > right) - (left < right);
+}
+
+/* Read-only proof that the selected cartridge path works with the MCU
+ * halted. Attempt to resume after every halt attempt, including errors. */
+static void bacon_check(void)
+{
+    if (burner_task_is_running_snapshot() || ag32_batch_program_is_running() ||
+        ag32_mcu_link_get_preference() == AG32_LINK_PREFERENCE_MCU) {
+        message("error", "select legacy/auto with no active cartridge or firmware job");
+        return;
+    }
+    uint16_t reference[64] = {0};
+    uint32_t timings[256] = {0};
+    unsigned samples = 0;
+    bool varied = false;
+    bool halted = false;
+    bool halt_attempted = false;
+    esp_err_t err = power_manager_perf_lock_acquire("bacon_check");
+    bool perf_lock = err == ESP_OK;
+    burner_spi_lock_take();
+    if (err == ESP_OK) err = burner_spi_init();
+    if (err == ESP_OK) err = burner_bacon_gba_prepare_power();
+    for (unsigned i = 0; err == ESP_OK && i < 64; ++i) {
+        err = burner_debug_read_word_locked(i * 0x401u, &reference[i]);
+        if (i && reference[i] != reference[0]) varied = true;
+    }
+    if (err == ESP_OK && !varied) err = ESP_ERR_INVALID_RESPONSE;
+    burner_spi_lock_give();
+    if (err == ESP_OK) {
+        halt_attempted = true;
+        err = debug_mcu_run_control(true);
+        halted = err == ESP_OK;
+    }
+    uint64_t total_us = 0;
+    burner_spi_lock_take();
+    for (unsigned i = 0; err == ESP_OK && i < 256; ++i) {
+        uint16_t observed = 0;
+        int64_t start = esp_timer_get_time();
+        err = burner_debug_read_word_locked((i % 64) * 0x401u, &observed);
+        uint32_t elapsed = esp_timer_get_time() - start;
+        if (err == ESP_OK && observed != reference[i % 64]) err = ESP_ERR_INVALID_RESPONSE;
+        if (err == ESP_OK) { timings[samples++] = elapsed; total_us += elapsed; }
+    }
+    burner_spi_lock_give();
+    esp_err_t resume_err = halt_attempted ? debug_mcu_run_control(false) : ESP_OK;
+    if (err == ESP_OK) err = resume_err;
+    if (perf_lock) power_manager_perf_lock_release("bacon_check");
+    qsort(timings, samples, sizeof(timings[0]), compare_u32);
+    cJSON *json = event("bacon_check");
+    if (json) {
+        cJSON_AddBoolToObject(json, "ok", err == ESP_OK && samples == 256);
+        cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
+        cJSON_AddStringToObject(json, "preference", ag32_mcu_link_preference_name(ag32_mcu_link_get_preference()));
+        cJSON_AddBoolToObject(json, "mcu_halted_during_reads", halted);
+        cJSON_AddBoolToObject(json, "mcu_resumed", halted && resume_err == ESP_OK);
+        cJSON_AddNumberToObject(json, "samples", samples);
+        cJSON_AddNumberToObject(json, "mean_us", samples ? (double)total_us / samples : 0);
+        cJSON_AddNumberToObject(json, "p50_us", samples ? timings[samples / 2] : 0);
+        cJSON_AddNumberToObject(json, "p95_us", samples ? timings[(samples - 1) * 95 / 100] : 0);
+        cJSON_AddNumberToObject(json, "max_us", samples ? timings[samples - 1] : 0);
+    }
+    reply(json);
+}
+
 static void dispatch(char *line)
 {
+    if (strcmp(line, "bacon-check") == 0) { bacon_check(); return; }
     if (strcmp(line, "ag32-test") == 0 || strcmp(line, "ag32-stream-test") == 0) {
         bool stream = strcmp(line, "ag32-stream-test") == 0;
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
@@ -565,7 +650,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-link [auto|legacy|mcu] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | bacon-check | ag32-link [auto|legacy|mcu] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {

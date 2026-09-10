@@ -47,6 +47,7 @@ def run(args):
             "ag32-probe": "ag32_probe", "ag32-batch-check": "ag32_batch_check",
             "ag32-regs": "ag32_regs",
             "ag32-stream-test": "ag32_stream_test",
+            "bacon-check": "bacon_check",
             "ag32-batch": "ag32_batch_started", "ag32-batch-status": "ag32_batch_status",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:

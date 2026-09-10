@@ -735,6 +735,7 @@ esp_err_t burner_bacon_gba_power_cycle_3v3_locked(void);
 esp_err_t burner_bacon_gba_release_bus_idle(void);
 void burner_bacon_restore_3v3_power(void);
 esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card);
+esp_err_t burner_debug_read_word_locked(uint32_t word_addr, uint16_t *value);
 esp_err_t burner_spi_prepare_burn_mbc5(const burner_task_param_t *job);
 esp_err_t burner_spi_prepare_burn_gba(const burner_task_param_t *job);
 esp_err_t burner_bacon_mbc5_read_block(uint8_t *out, size_t len, uint32_t offset);

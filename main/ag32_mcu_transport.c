@@ -23,7 +23,7 @@
 #define AG32_MCU_NEGOTIATE_TIMEOUT_MS 100u
 #define AG32_MCU_DEFAULT_TIMEOUT_MS 2000u
 
-static ag32_link_preference_t s_preference = AG32_LINK_PREFERENCE_AUTO;
+static ag32_link_preference_t s_preference = AG32_LINK_PREFERENCE_LEGACY;
 static ag32_link_active_t s_active = AG32_LINK_ACTIVE_UNKNOWN;
 static uint32_t s_capabilities;
 static uint32_t s_sequence;
@@ -321,22 +321,13 @@ esp_err_t ag32_mcu_try_command_locked(
     *used_mcu = false;
     if (response_size != NULL) *response_size = 0u;
     if (result != NULL) *result = 0u;
-    if (s_preference == AG32_LINK_PREFERENCE_LEGACY) {
+    if (s_preference != AG32_LINK_PREFERENCE_MCU) {
         s_active = AG32_LINK_ACTIVE_LEGACY;
-        return ESP_OK;
-    }
-    if (s_preference == AG32_LINK_PREFERENCE_AUTO
-        && s_capabilities_known
-        && s_active == AG32_LINK_ACTIVE_LEGACY) {
         return ESP_OK;
     }
     if (!s_capabilities_known) {
         err = negotiate_capabilities();
         if (err != ESP_OK) {
-            if (s_preference == AG32_LINK_PREFERENCE_AUTO) {
-                s_active = AG32_LINK_ACTIVE_LEGACY;
-                return ESP_OK;
-            }
             *used_mcu = true;
             return err;
         }
@@ -371,7 +362,10 @@ esp_err_t ag32_mcu_try_stream_locked(
 {
     if (!used_mcu) return ESP_ERR_INVALID_ARG;
     *used_mcu = false;
-    if (s_preference == AG32_LINK_PREFERENCE_LEGACY) return ESP_OK;
+    if (s_preference != AG32_LINK_PREFERENCE_MCU) {
+        s_active = AG32_LINK_ACTIVE_LEGACY;
+        return ESP_OK;
+    }
     *used_mcu = true;
     if (!data || !size || size > UINT32_MAX) return ESP_ERR_INVALID_ARG;
     uint8_t *wire = malloc(AG32_MCU_STREAM_CHUNK_SIZE + 12u);
@@ -436,6 +430,10 @@ esp_err_t ag32_mcu_try_read_locked(
 {
     if (used_mcu == NULL) return ESP_ERR_INVALID_ARG;
     *used_mcu = false;
+    if (s_preference != AG32_LINK_PREFERENCE_MCU) {
+        s_active = AG32_LINK_ACTIVE_LEGACY;
+        return ESP_OK;
+    }
     if (data == NULL || size == 0u) {
         if (s_preference == AG32_LINK_PREFERENCE_MCU) *used_mcu = true;
         return ESP_ERR_INVALID_ARG;
@@ -476,6 +474,10 @@ esp_err_t ag32_mcu_try_write_locked(
 {
     if (used_mcu == NULL) return ESP_ERR_INVALID_ARG;
     *used_mcu = false;
+    if (s_preference != AG32_LINK_PREFERENCE_MCU) {
+        s_active = AG32_LINK_ACTIVE_LEGACY;
+        return ESP_OK;
+    }
     if (data == NULL || size == 0u) {
         if (s_preference == AG32_LINK_PREFERENCE_MCU) *used_mcu = true;
         return ESP_ERR_INVALID_ARG;
@@ -517,6 +519,10 @@ esp_err_t ag32_mcu_try_program_locked(
 {
     if (used_mcu == NULL) return ESP_ERR_INVALID_ARG;
     *used_mcu = false;
+    if (s_preference != AG32_LINK_PREFERENCE_MCU) {
+        s_active = AG32_LINK_ACTIVE_LEGACY;
+        return ESP_OK;
+    }
     if (data == NULL || size == 0u) {
         if (s_preference == AG32_LINK_PREFERENCE_MCU) *used_mcu = true;
         return ESP_ERR_INVALID_ARG;

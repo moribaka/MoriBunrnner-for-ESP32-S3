@@ -30,9 +30,9 @@ CRC still cover only the actual response.
 
 The protocol uses request sequence numbers. A response must repeat both the
 request sequence and opcode. ESP32 rejects mismatches instead of retrying the
-operation through legacy mode. `auto` mode may select legacy only when the
-initial MCU capability handshake is unavailable; the active mode is always
-reported.
+operation through legacy mode. `legacy` is the default. `auto` currently
+selects the pure-CPLD Bacon path without probing the MCU. MCU operation must
+be explicitly selected; the selected backend is reported as active.
 
 Command values `A0`, `A2`, and `F0` through `FC` retain the Beggar programmer's
 operation meanings. Their transport framing, CRC enforcement, address flags,

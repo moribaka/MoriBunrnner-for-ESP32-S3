@@ -1,0 +1,79 @@
+2026-09-10 12:49:31 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-10 12:49:31 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-10 12:49:31 I (1282) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-10 12:49:31 I (1291) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-10 12:49:31 I (1298) main: timezone configured: CST-8
+2026-09-10 12:49:31 I (1302) main: boot step: mount assets
+2026-09-10 12:49:31 I (1397) assets: mounted /assets: total=1438481 used=763291
+2026-09-10 12:49:31 I (1398) main: boot step: mount sdcard
+2026-09-10 12:49:31 I (1449) SDCARD: SD card mounted
+2026-09-10 12:49:31 I (1449) SDCARD: Total: 59638MB
+2026-09-10 12:49:31 W (1612) main: repaired legacy lang_zh_cn.ini
+2026-09-10 12:49:31 I (3441) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=3v3 settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=legacy
+2026-09-10 12:49:31 I (3447) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-10 12:49:31 I (3459) main: UI language=1 (zh)
+2026-09-10 12:49:31 I (3467) main: boot step: init i2c peripherals
+2026-09-10 12:49:31 W (3468) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-10 12:49:31 I (3478) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-10 12:49:31 I (3485) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-10 12:49:31 I (3489) power_manager: detected AXP209 at 0x34
+2026-09-10 12:49:31 I (3493) main: AXP209 power manager ready at 0x34
+2026-09-10 12:49:31 I (3497) tca9555: TCA9555 ready at 0x20
+2026-09-10 12:49:31 I (3505) main: tca9555.ini apply=0, skip register apply
+2026-09-10 12:49:31 I (3508) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-10 12:49:31 I (3511) tca9555: IRQ enabled on GPIO 17
+2026-09-10 12:49:31 I (3514) main: boot step: init usb msc manager
+2026-09-10 12:49:31 I (3518) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-10 12:49:31 I (3524) main: USB MSC manager ready, pass-through default is disabled
+2026-09-10 12:49:31 I (3530) main: boot step: init nvs
+2026-09-10 12:49:31 I (3561) main: boot step: init mcu debug
+2026-09-10 12:49:31 I (3562) main: boot step: init lvgl/display
+2026-09-10 12:49:31 I (3805) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-10 12:49:31 I (3806) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-10 12:49:31 I (3810) lvgl_port: using single LVGL draw buffer (ion: e7ae62f
+2026-09-10 12:49:31 I (4100) net80211: net80211 rom version: e7ae62f
+2026-09-10 12:49:31 I (4099) power_manager: CPU perf lock acquired by bacon_check
+2026-09-10 12:49:31 I (4102) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 12:49:31 I (4112) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 12:49:31 I (4118) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 12:49:31 I (4153) phy_init: phy_version 701,f4f1da3a,Mar  3 2025,15:50:10
+2026-09-10 12:49:31 I (4209) wifi_manager: Found saved Wi-Fi config, connecting...
+2026-09-10 12:49:31 W (4215) wifi:Password length matches WPA2 standards, authmode threshold changes from OPEN to WPA2
+2026-09-10 12:49:31 I (4337) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 12:49:31 I (4339) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 12:49:31 I (4341) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 12:49:31 I (4343) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 12:49:31 I (4347) mcu_debug: DMI DMSTATUS before halt=0x000f0ca2
+2026-09-10 12:49:31 I (4352) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 12:49:31 I (4360) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 12:49:31 I (4375) wifi_manager: STA connected to AP
+2026-09-10 12:49:31 I (4385) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 12:49:31 I (4400) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 12:49:31 I (4402) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 12:49:31 I (4403) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 12:49:31 I (4406) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 12:49:31 I (4411) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 12:49:31 I (4418) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 12:49:31 I (4425) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 12:49:31 I (4431) power_manager: CPU perf lock released by bacon_check
+2026-09-10 12:49:31 
+2026-09-10 12:49:31 @mori {"event":"bacon_check","ok":true,"error":"ESP_OK","preference":"legacy","mcu_halted_during_reads":true,"mcu_resumed":true,"samples":256,"mean_us":48.0546875,"p50_us":36,"p95_us":37,"max_us":2775}
+2026-09-10 12:50:33 I (66013) power_manager: CPU perf lock acquired by bacon_check
+2026-09-10 12:50:33 I (66218) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 12:50:33 I (66219) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 12:50:33 I (66221) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 12:50:33 I (66223) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 12:50:33 I (66228) mcu_debug: DMI DMSTATUS before halt=0x000f0ca2
+2026-09-10 12:50:33 I (66233) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 12:50:33 I (66241) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 12:50:33 I (66247) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 12:50:33 I (66265) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 12:50:33 I (66267) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 12:50:33 I (66268) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 12:50:33 I (66270) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 12:50:33 I (66277) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 12:50:33 I (66283) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 12:50:33 I (66289) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 12:50:33 I (66297) power_manager: CPU perf lock released by bacon_check
+2026-09-10 12:50:33 
+2026-09-10 12:50:33 @mori {"event":"bacon_check","ok":true,"error":"ESP_OK","preference":"auto","mcu_halted_during_reads":true,"mcu_resumed":true,"samples":256,"mean_us":37,"p50_us":36,"p95_us":37,"max_us":131}

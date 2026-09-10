@@ -6740,11 +6740,11 @@
                             <div class="setting-item">
                                 <label class="setting-label" for="burnAg32Link">AG32 链路</label>
                                 <select id="burnAg32Link" class="input">
-                                    <option value="auto">auto</option>
-                                    <option value="mcu">MCU 高速协议</option>
-                                    <option value="legacy">Bacon 兼容协议</option>
+                                    <option value="legacy">Bacon / 纯 CPLD（默认）</option>
+                                    <option value="auto">auto / 纯 CPLD</option>
+                                    <option value="mcu">MCU 盖中盖 / 实验路径</option>
                                 </select>
-                                <span class="setting-desc">auto 仅在 MCU 握手不可用时选择兼容协议</span>
+                                <span class="setting-desc">主读写由 CPLD 直接执行；MCU 路径仅在明确选择后启用</span>
                             </div>
                             <div class="setting-item">
                                 <label class="setting-label" for="burnPowerSettleMs">切压延时</label>
@@ -9943,7 +9943,7 @@
             const dumpChunkKb = Number(data && data.dump_chunk_kb ? data.dump_chunk_kb : 64);
             const gbcVoltage = (data && data.gbc_voltage) ? String(data.gbc_voltage).toUpperCase() : '3V3';
             const gbaFixedEraseWindow = parseApiBoolean(data && data.gba_fixed_erase_window, true);
-            const ag32Link = (data && data.ag32_link) ? String(data.ag32_link).toLowerCase() : 'auto';
+            const ag32Link = (data && data.ag32_link) ? String(data.ag32_link).toLowerCase() : 'legacy';
             const ag32Active = (data && data.ag32_link_active) ? String(data.ag32_link_active).toLowerCase() : 'unknown';
             const ag32CapsKnown = parseApiBoolean(data && data.ag32_capabilities_known, false);
             const ag32Capabilities = Number(data && data.ag32_capabilities) >>> 0;
@@ -9999,7 +9999,7 @@
                 state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, true);
                 gbcVoltageEl.value = state.gbcVoltage;
                 gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
-                ag32LinkEl.value = String(data.ag32_link || 'auto').toLowerCase();
+                ag32LinkEl.value = String(data.ag32_link || 'legacy').toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);
             } catch (error) {
                 statusEl.textContent = '读取失败: ' + error.message;
@@ -10029,7 +10029,7 @@
             const dumpChunkKb = String(getDumpChunkKb());
             const gbcVoltage = String(gbcVoltageEl.value || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
             const gbaFixedEraseWindow = parseApiBoolean(gbaFixedEraseWindowEl.value, true) ? 'true' : 'false';
-            const ag32Link = String(ag32LinkEl.value || 'auto').toLowerCase();
+            const ag32Link = String(ag32LinkEl.value || 'legacy').toLowerCase();
             statusEl.textContent = '应用中...';
 
             try {
