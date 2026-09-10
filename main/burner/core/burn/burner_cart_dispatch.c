@@ -62,14 +62,3 @@ esp_err_t burner_run_verify_gba_save_job_new(const burner_task_param_t *job)
     (void)job;
     return ESP_ERR_NOT_SUPPORTED;
 }
-/* The writer has finalized the flash's read mode; retain its mapping and rail. */
-static esp_err_t burner_written_read_block(uint8_t *out, size_t bytes,
-                                         uint32_t address, const burner_task_param_t *job)
-{
-    return burner_write_read_sector((void *)job, out, bytes, address);
-}
-
-esp_err_t burner_run_verify_written_rom_job(const burner_task_param_t *job)
-{
-    return burner_verify_stream_expected(job, burner_written_read_block, true);
-}

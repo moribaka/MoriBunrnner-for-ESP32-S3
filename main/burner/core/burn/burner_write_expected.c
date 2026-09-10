@@ -1,5 +1,5 @@
-/* Capture the source length and final GBA header once. Programming, sector
- * comparison and automatic readback all use this same immutable definition. */
+/* Capture the source length and final GBA header once. Programming and sector
+ * comparison use the same immutable definition. */
 esp_err_t burner_prepare_write_source(burner_task_param_t *job)
 {
     FILE *fp = burner_file_open_read(job->rom_path);

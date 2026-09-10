@@ -627,14 +627,6 @@ static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, cha
             snprintf(title, title_len, "%s", ui_tr("Skipped identical data"));
             ui_format_bytes_text(status.write_matched_bytes, hint, hint_len);
             break;
-        case 20:
-            snprintf(title, title_len, "%s", ui_tr("Write verified bytes"));
-            ui_format_bytes_text(status.write_verified_bytes, hint, hint_len);
-            break;
-        case 21:
-            snprintf(title, title_len, "%s", ui_tr("Write verify time"));
-            ui_format_elapsed(status.verify_elapsed_us, hint, hint_len);
-            break;
         default:
             snprintf(title, title_len, "NOR ID");
             ui_format_probe_id(&status, probe_text, sizeof(probe_text));

@@ -1,8 +1,8 @@
-/* File-to-cartridge comparison shared by GB/GBC and GBA.
+/* Exact file-to-cartridge comparison shared by GB/GBC and GBA.
  * TF uses internal DMA memory; bulk cartridge reads finish in PSRAM before comparison.
- * Standalone verify is exact; post-write verify replays the declared transformations. */
-static esp_err_t burner_verify_stream_expected(const burner_task_param_t *job,
-                                      burner_dump_read_block_fn_t read_block, bool written)
+ * Verification never repairs the input header or synthesizes missing bytes. */
+static esp_err_t burner_verify_stream(const burner_task_param_t *job,
+                                      burner_dump_read_block_fn_t read_block)
 {
     const size_t cart_capacity = 64u * 1024u;
     /* One small DMA buffer fits alongside the native worker. Cartridge
@@ -34,20 +34,11 @@ static esp_err_t burner_verify_stream_expected(const burner_task_param_t *job,
             size_t count = cart_count - compared;
             if (count > capacity) count = capacity;
             started = esp_timer_get_time();
-            size_t from_file = count;
-            if (written) {
-                from_file = processed < job->source_size ? job->source_size - processed : 0;
-                if (from_file > count) from_file = count;
-            }
             size_t got = 0;
-            while (got < from_file) {
-                ssize_t n = read(fd, expected + got, from_file - got);
+            while (got < count) {
+                ssize_t n = read(fd, expected + got, count - got);
                 if (n <= 0) { err = ESP_FAIL; failure = "read verify file failed"; goto done; }
                 got += n;
-            }
-            if (written) {
-                if (from_file < count) memset(expected + from_file, 0xFF, count - from_file);
-                burner_apply_write_transform(job, expected, count, processed);
             }
             tf_us += esp_timer_get_time() - started;
             const uint8_t *cart_part = actual + compared;
@@ -80,11 +71,10 @@ static esp_err_t burner_verify_stream_expected(const burner_task_param_t *job,
                                            expected[count - 1], cart_part[count - 1], true);
             processed += count;
             compared += count;
-            if (written) burner_status_record_verified(processed);
         }
         int progress = burner_calc_progress_percent_u64(processed, job->total_bytes);
         burner_status_update(BURNER_STATE_BURNING, progress, processed, job->total_bytes,
-                             written ? "verifying written ROM" : "file->cart verify running", job->rom_name, job->rom_path);
+                             "file->cart verify running", job->rom_name, job->rom_path);
         burner_emit_progress_cb(progress, processed);
     }
 done:
@@ -100,9 +90,4 @@ done:
              " tf=%" PRIu64 "ms cart=%" PRIu64 "ms", esp_err_to_name(err),
              processed, job->total_bytes, tf_us / 1000, cart_us / 1000);
     return err;
-}
-
-static esp_err_t burner_verify_stream(const burner_task_param_t *job, burner_dump_read_block_fn_t read_block)
-{
-    return burner_verify_stream_expected(job, read_block, false);
 }

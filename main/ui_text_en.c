@@ -25,8 +25,6 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"Bytes", "Bytes"},
     {"Skipped blank data", "Skipped blank data"},
     {"Skipped identical data", "Skipped identical data"},
-    {"Write verified bytes", "Write verified bytes"},
-    {"Write verify time", "Write verify time"},
     {"Capacity", "Capacity"},
     {"Capacity:", "Capacity:"},
     {"Cart", "Cart"},

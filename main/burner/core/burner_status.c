@@ -153,9 +153,6 @@ void burner_status_phase_reset_locked(void)
     s_status.mbc5_buffer_fallback_count = 0u;
     s_status.write_skipped_bytes = 0u;
     s_status.write_matched_bytes = 0;
-    s_status.write_verified_bytes = 0;
-    s_status.verify_start_us = s_status.verify_elapsed_us = 0;
-    s_status.write_verification_planned = s_status.write_verify_active = false;
     s_status.write_speed_total_bytes = 0u;
     s_status.write_speed_total_us = 0u;
     s_status.tf_to_psram_total_bytes = 0u;
@@ -699,42 +696,6 @@ void burner_status_record_write_matched(uint32_t bytes)
     xSemaphoreGive(s_status_lock);
 }
 
-void burner_status_plan_write_verify(void)
-{
-    if (!s_status_lock) return;
-    xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    s_status.write_verification_planned = true;
-    xSemaphoreGive(s_status_lock);
-}
-
-void burner_status_mark_verify_begin(void)
-{
-    if (!s_status_lock) return;
-    xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    s_status.write_verify_active = true;
-    s_status.verify_start_us = esp_timer_get_time();
-    xSemaphoreGive(s_status_lock);
-}
-
-void burner_status_mark_verify_end(void)
-{
-    if (!s_status_lock) return;
-    xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    if (s_status.write_verify_active)
-        s_status.verify_elapsed_us += esp_timer_get_time() - s_status.verify_start_us;
-    s_status.write_verify_active = false;
-    s_status.verify_start_us = 0;
-    xSemaphoreGive(s_status_lock);
-}
-
-void burner_status_record_verified(uint32_t bytes)
-{
-    if (!s_status_lock) return;
-    xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    s_status.write_verified_bytes = bytes;
-    xSemaphoreGive(s_status_lock);
-}
-
 void burner_status_record_write_sample(uint32_t bytes, uint64_t elapsed_us)
 {
     if (s_status_lock == NULL || bytes == 0u || elapsed_us == 0u) {
@@ -1020,9 +981,6 @@ void burner_status_update(
                 message_changed || now_us - s_last_ui_notify_us >= BURNER_UI_NOTIFY_INTERVAL_US || progress >= 100;
     if (notify_ui) s_last_ui_notify_us = now_us;
     s_status.state = state;
-    if (state == BURNER_STATE_BURNING && s_status.write_verification_planned) {
-        progress = s_status.write_verify_active ? 80 + progress * 20 / 100 : progress * 80 / 100;
-    }
     s_status.progress = progress;
     s_status.processed_bytes = processed;
     s_status.total_bytes = total;
@@ -1071,7 +1029,5 @@ void burner_status_snapshot(burner_status_t *out)
         out->task_elapsed_us += now_us - out->task_start_us;
     }
     out->write_elapsed_us += burner_status_active_write_us(out, now_us);
-    if (out->write_verify_active && out->verify_start_us)
-        out->verify_elapsed_us += now_us - out->verify_start_us;
     out->erase_elapsed_us = burner_status_erase_elapsed_at(out, now_us);
 }

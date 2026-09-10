@@ -1481,8 +1481,7 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         ",\"dump_write_speed_min_bps\":%" PRIu32 ",\"dump_write_speed_max_bps\":%" PRIu32
         ",\"mbc5_buffer_write_ok_count\":%" PRIu32 ",\"mbc5_buffer_fallback_count\":%" PRIu32
         ",\"write_skipped_bytes\":%" PRIu32
-        ",\"write_matched_bytes\":%" PRIu32 ",\"write_verified_bytes\":%" PRIu32
-        ",\"verify_time_ms\":%" PRIu32 ",\"write_verify_active\":%s,\"write_verification_planned\":%s"
+        ",\"write_matched_bytes\":%" PRIu32
         ",\"cart_power_mv\":%d"
         ",\"erase_sector_count\":%" PRIu32 ",\"erase_sector_size\":%" PRIu32
         ",\"erase_active\":%s,\"erase_phase_done_sectors\":%" PRIu32 ",\"erase_phase_total_sectors\":%" PRIu32
@@ -1530,10 +1529,6 @@ esp_err_t burner_status_handler(httpd_req_t *req)
         snap.mbc5_buffer_fallback_count,
         snap.write_skipped_bytes,
         snap.write_matched_bytes,
-        snap.write_verified_bytes,
-        burner_us_to_ms_clamped(snap.verify_elapsed_us),
-        snap.write_verify_active ? "true" : "false",
-        snap.write_verification_planned ? "true" : "false",
         burner_bacon_cart_power_mv(),
         snap.erase_sector_count,
         snap.erase_sector_size,

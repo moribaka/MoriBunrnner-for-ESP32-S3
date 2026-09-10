@@ -19,12 +19,7 @@
 #define BURNER_STATE_ERROR 2
 #define BURNER_CART_MODE_MBC5 1
 #define ESP_LOGI(...) ((void)0)
-typedef struct { uint32_t addr_begin, total_bytes; const char *rom_name, *rom_path; int cart_mode; uint32_t source_size; } burner_task_param_t;
-static void burner_apply_write_transform(const burner_task_param_t *job, uint8_t *data, size_t bytes, uint32_t offset) {
-    (void)job; (void)data; (void)bytes; (void)offset;
-}
-static uint32_t verified_count;
-static void burner_status_record_verified(uint32_t bytes) { verified_count = bytes; }
+typedef struct { uint32_t addr_begin, total_bytes; const char *rom_name, *rom_path; int cart_mode; } burner_task_param_t;
 static FILE *burner_open_mbc5_verify_log(const burner_task_param_t *job, char *path, size_t size) {
     (void)job; (void)path; (void)size; return NULL;
 }
@@ -106,16 +101,12 @@ int main(void) {
     const uint32_t chunks[] = {32768, 65536, 131072, 262144};
     for (size_t c = 0; c < 4; ++c) for (size_t l = 0; l < sizeof(lengths) / sizeof(lengths[0]); ++l) {
         reset();
-        burner_task_param_t job = {0x1fff0, lengths[l], "fixture", "dump_fixture.bin", l % 2, lengths[l]};
+        burner_task_param_t job = {0x1fff0, lengths[l], "fixture", "dump_fixture.bin", l % 2};
         assert(dump(&job, chunks[c]) == ESP_OK && recorded == job.total_bytes);
         assert(burner_verify_stream(&job, cart_read) == ESP_OK && recorded == job.total_bytes);
-        verified_count = 0;
-        assert(burner_verify_stream_expected(&job, cart_read, true) == ESP_OK && verified_count == job.total_bytes);
         // A bad header/checksum byte and a byte at the last boundary must fail exactly.
         corrupt_at = job.addr_begin + (job.total_bytes > 0xbd ? 0xbd : 0);
         assert(burner_verify_stream(&job, cart_read) == ESP_FAIL && !sample_equal && mismatch_addr == corrupt_at);
-        verified_count = 0;
-        assert(burner_verify_stream_expected(&job, cart_read, true) == ESP_FAIL && verified_count < job.total_bytes);
         corrupt_at = job.addr_begin + job.total_bytes - 1;
         assert(burner_verify_stream(&job, cart_read) == ESP_FAIL && mismatch_addr == corrupt_at);
         corrupt_at = UINT32_MAX;
@@ -124,7 +115,7 @@ int main(void) {
     }
     for (int fault = 0; fault < 6; ++fault) {
         reset();
-        burner_task_param_t job = {0, 200000, "fixture", "dump_fixture.bin", 1, 200000};
+        burner_task_param_t job = {0, 200000, "fixture", "dump_fixture.bin", 1};
         if (fault < 2) fail_allocation = fault + 1;
         if (fault == 2) fail_start = true;
         if (fault == 3) fail_write = true;

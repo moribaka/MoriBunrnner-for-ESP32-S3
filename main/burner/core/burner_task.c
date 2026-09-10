@@ -79,7 +79,6 @@ static void burner_task(void *param)
     }
 
     burner_status_mark_task_begin();
-    if (job->mode == BURNER_JOB_WRITE_ROM) burner_status_plan_write_verify();
     burner_status_update(
         BURNER_STATE_BURNING,
         0,
@@ -135,13 +134,6 @@ static void burner_task(void *param)
         err = ESP_ERR_INVALID_ARG;
     }
 
-    if (err == ESP_OK && job->mode == BURNER_JOB_WRITE_ROM) {
-        burner_status_mark_verify_begin();
-        burner_status_update(BURNER_STATE_BURNING, 0, 0, job->total_bytes,
-            "verifying written ROM", job->rom_name, job->rom_path);
-        err = burner_run_verify_written_rom_job(job);
-        burner_status_mark_verify_end();
-    }
     if (restore_power) {
         burner_spi_lock_take();
         {

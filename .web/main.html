@@ -9304,7 +9304,6 @@
                             已处理 / 总计: ${formatSize(data.processed || 0)} / ${formatSize(data.total || 0)}<br>
                             ${Number(data.write_skipped_bytes || 0) > 0 ? `跳过空白数据: ${formatSize(data.write_skipped_bytes)}<br>` : ''}
                             ${Number(data.write_matched_bytes || 0) > 0 ? `跳过相同数据: ${formatSize(data.write_matched_bytes)}<br>` : ''}
-                            ${data.write_verification_planned ? `烧后校验: ${formatSize(data.write_verified_bytes || 0)} / ${formatSize(data.total || 0)}，${(Number(data.verify_time_ms || 0) / 1000).toFixed(1)} 秒<br>` : ''}
                             Bacon SPI: ${spiClockText}${spiRequestedText}
                         </div>
                     </div>

@@ -154,7 +154,7 @@ Use device `task_time_ms` for the burn task and the separate verify task time. P
 
 ## Evidence and regression scope
 
-### v2.32.113 write pipeline and measurements
+### Write pipeline and measurements
 
 Standard GBA/GBC writes compare final transformed sector data before erasing.
 PSRAM/pipeline use two whole-sector buffers and one persistent TF reader;
@@ -164,14 +164,19 @@ the requested range. GBA programming page size comes from
 `program_buffer_write_bytes`; GBC uses `buffer_write_bytes` (the former may be
 zero). Do not substitute byte programming when the GBC buffered geometry is valid.
 
-Successful writes include full automatic readback against the runtime patch
-plan and captured header checksum. Require `write_verification_planned=true`
-and `write_verified_bytes == total` with terminal `burn finished`.
-`task_time_ms` includes automatic verification; `verify_time_ms` isolates it,
-while `write_time_ms` measures programming only. `write_matched_bytes` counts
-identical target bytes; `write_skipped_bytes` counts omitted FF programming
-pages, not the same-data sector count. An independent verify against an
-exported patched reference remains useful for testing the expected-data path.
+Cartridge burning, dump and verification are separate user operations.
+The user rejected mandatory post-write verification added in v2.32.113;
+v2.32.114 removes it, its 80/20 progress split and its status/UI fields.
+Burns finish after programming and bus cleanup, with progress reaching 100%.
+Do not add automatic verification or an automatic-verification setting when
+optimizing dump/verify. AG32 firmware-programmer verification is a separate
+workflow and is unaffected by this cartridge-flow correction.
+`task_time_ms` measures the burn task; `write_time_ms` measures programming
+only. `write_matched_bytes` counts identical target bytes;
+`write_skipped_bytes` counts omitted FF programming pages.
+The benchmark script explicitly starts an independent verify after a burn
+for test evidence; this is not part of device burn behavior. For runtime
+patch tests, compare independently against an exported patched reference.
 
 Compare timings only with recorded ROM SHA256, erase mode, patch settings and
 FF-page density. Different contents on the same chip can produce very different
@@ -183,8 +188,9 @@ error instead of a stale receiving state.
 For the requested minimal release, run `tools/package_minimal.ps1 -Version vX.Y.Z`
 after a matching build. It validates all ten merged flash segments and packages
 exactly a complete 16 MiB ESP32 BIN and the AG32 batch BIN, then checks ZIP
-readback hashes. See `docs/write_pipeline_v113_20260911.md` for board coverage
-and limitations of this pipeline revision.
+readback hashes. See `docs/write_flow_v114_20260911.md` for the current
+separate-operation behavior and `docs/write_pipeline_v113_20260911.md` for
+historical sector-engine coverage and limitations.
 
 Read the current project evidence before stating board qualification. SWD batch success, simulated SPI correctness, PING, echo stress, cartridge reads and verified burns are separate milestones.
 

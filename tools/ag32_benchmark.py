@@ -79,8 +79,6 @@ def job(args, action, rom):
                     "status": status, "wall_seconds": time.monotonic() - start}
         if status["state"] == "done" and status["message"] == expected_message:
             complete = status["processed"] == status["total"]
-            if action == "write" and status.get("write_verification_planned"):
-                complete = complete and status.get("write_verified_bytes") == status["total"]
             return {"ok": complete, "action": action,
                     "accepted": accepted, "status": status,
                     "wall_seconds": time.monotonic() - start}
