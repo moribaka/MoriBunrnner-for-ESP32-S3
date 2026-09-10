@@ -1,0 +1,48 @@
+=== User constraints ===
+
+Clock transfer report:
+  Worst  hold:   0.603, with clock ESP_SPI_SCK
+  Worst  hold:   0.288, with clock PIN_HSE
+  Worst  hold:   0.288, with clock PIN_HSI
+  Worst  hold:   0.288, with clock pll_inst|auto_generated|pll1|clk[0]
+
+=== Auto constraints ===
+
+Clock transfer report:
+  Worst  hold:   0.615, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:  -3.607, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst  hold:  -1.555, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.608, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:  -2.870, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.602, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:   0.615, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+Coverage report
+  User constraints covered 7769 connections out of 8684 total, coverage: 89.5%
+  Auto constraints covered 8231 connections out of 8684 total, coverage: 94.8%
+
+
+Hold from ESP32_SPI2_CS_N to macro_inst|core_inst|buf_miso_cs1[1]~1, clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1, constraint 0.000, skew 9.015, data 5.093
+  Slack:  -3.607
+    Arrival Time:  505.072
+      500.000  500.000   R                         Launch Clock Edge
+      Data Path:
+      500.000    0.000   RR            example_board|ESP32_SPI2_CS_N =>              ESP32_SPI2_CS_N~input|padio 
+      501.309    1.309   RR              ESP32_SPI2_CS_N~input|padio =>            ESP32_SPI2_CS_N~input|combout 
+      502.604    1.295   RR            ESP32_SPI2_CS_N~input|combout =>            macro_inst|legacy_spi_cs0~0|B 
+      503.123    0.519   RR            macro_inst|legacy_spi_cs0~0|B =>       macro_inst|legacy_spi_cs0~0|LutOut 
+      504.635    1.512   RR       macro_inst|legacy_spi_cs0~0|LutOut =>    macro_inst|core_inst|cart_cs2_out~2|D 
+      504.728    0.093   RF    macro_inst|core_inst|cart_cs2_out~2|D => macro_inst|core_inst|cart_cs2_out~2|LutOut 
+      505.072    0.344   FF macro_inst|core_inst|cart_cs2_out~2|LutOut => macro_inst|core_inst|buf_miso_cs1[1]~1|B E
+    Required Time: 508.679
+      500.000  500.000   F                          Latch Clock Edge
+      Latch Clock Path:
+      500.000    0.000   FF              example_board|ESP32_SPI_CS1 =>                ESP32_SPI_CS1~input|padio 
+      501.307    1.307   FF                ESP32_SPI_CS1~input|padio =>              ESP32_SPI_CS1~input|combout 
+      502.803    1.496   FF              ESP32_SPI_CS1~input|combout =>         macro_inst|core_inst|ad_incr~0|C 
+      503.129    0.326   FF         macro_inst|core_inst|ad_incr~0|C =>    macro_inst|core_inst|ad_incr~0|LutOut 
+      506.865    3.736   FF    macro_inst|core_inst|ad_incr~0|LutOut => macro_inst|core_inst|ad_incr~0clkctrl|inclk 
+      506.865    0.000   FF macro_inst|core_inst|ad_incr~0clkctrl|inclk => macro_inst|core_inst|ad_incr~0clkctrl|outclk 
+      509.015    2.150   FF macro_inst|core_inst|ad_incr~0clkctrl|outclk => macro_inst|core_inst|buf_miso_cs1[1]~1|D 
+      508.679   -0.336   F                                      Hold
+

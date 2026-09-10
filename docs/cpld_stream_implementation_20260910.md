@@ -77,7 +77,50 @@ substitute for actual board or routed timing validation.
 11. Give the CRC register its own sequential process. Parser and cartridge
     reader register input strobes; reads use the already captured observed_value
     after RD rises. CRC no longer shares the complete bus-state priority chain.
-    Full stream regression passes; full build/route pending.
+    Full stream regression passes. Full route completes:1940/2112logic,
+    128/132tiles; system setup-2.723ns, hold+0.288ns; SPI setup+15.114ns,
+    hold+0.603ns. Critical paths are the shared RAM-data priority mux, fault
+    fanout and BRAM-to-cartridge data selection. Not flashed. Reports:
+    docs/cpld_route_crc_pipeline/.
+12. Replace the RAM-data priority register with a registered source selector
+    and a direct RAM-input mux; use the existing captured read word. Register
+    the BRAM word before byte-lane selection. Register the sticky error/abort
+    fanout (one system cycle), retaining safe pulse completion. Remove the
+    redundant CRC gate in READ_FINISH: READ_HIGH already waits for CRC to finish.
+    Full stream regression passes. Route1916/2112logic,128/132tiles; system
+    setup-1.654ns, hold+0.323ns; SPI setup+6.314ns, hold+0.603ns. Remaining
+    worst paths: receive_remaining zero reduction to cycle-start control,
+    operation decoding, and byte-index end comparison. Not flashed. Reports:
+    docs/cpld_route_ram_mux/.
+13. Decode byte_bus/reading/programming directly when receiving the opcode.
+    Precompute page continuation and end-of-bus-cycle predicates, publish
+    remaining_nonzero with its cursor update. This avoids wide comparisons
+    driving every cycle-start register. Full stream regression passes;
+    full build/route complete:1911/2112logic,128/132tiles,1907LUTs,925registers,
+    2/4BRAM,1/1PLL,44/128pins. Final system setup-0.726ns,hold+0.348ns;
+    SPI setup+16.334ns,hold+0.603ns. Longest path is sampled NOR value through
+    completion comparison to consumer; the sample is held through READ_HIGH
+    and CYCLE_END before POLL_CHECK. Remaining small single-cycle violations
+    are recorded; accepted as hardware-test-only under the standing task
+    preference, not a timing-qualified release. No clock exceptions or
+    frequency reductions added. Legacy automatic CS/LED-clock hold warnings
+    remain separately reported. Reports/sources in docs/cpld_hwtest_20260910/.
+
+## First hardware-test batch
+
+Complete prelogic/MCU/Quartus+af_ip/Supra seed42/buildbatch flow passed.
+Host batch parser checks3records and exact MCU/CPLD payload equality; CPLD
+and MCU input hashes unchanged by packaging. Uploaded TF batch passes ESP
+parser:3records,108924payload bytes,109692file bytes.
+
+- Batch SHA256:4D8B994A5C42E2E2540E6D0410277D4EE6D0D19D466C337C230CD5D74AAE9E1E
+- CPLD SHA256:6D231BB044E4D0FF62BCC5B4086903985B18C3CD4CAE164F0D769A15919309AE
+- MCU SHA256:F0B69F07350F85AA05D663D9C37208B964B8D84FB2BD6BAFC7FD8A56C2A79DA4
+- ESP SHA256:5D9680D2CC496908464421CA18051C3598DE5A6F21D33F2A22E28F33E00B63D0
+
+ESP app-only update with identity/CRC error diagnostics is flashed and hash
+verified. TF batch:/sdcard/ag32_cpld_20260910_hwtest.bin. AG32 SWD update
+started after confirming no active cartridge/firmware task; outcome pending.
 
 Commands, in example then example/logic, sequentially:
 pio run -e release -t prelogic; pio run -e release;

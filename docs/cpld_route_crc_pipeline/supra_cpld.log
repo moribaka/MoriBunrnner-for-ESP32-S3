@@ -1,0 +1,900 @@
+Thu Sep 10 15:13:14 2026
+Using pre-ASF file example_board.pre.asf.
+Total IO  : 150
+Total Pin : 128/17
+Top array is built.
+Loading architect libraries...
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 53MB (53MB)
+Loading route table...
+
+## CPU time: 0:0:1, REAL time: 0:0:1
+## Memory Usage: 318MB (318MB)
+Using design VERILOG file ./simulation/modelsim/example_board.vo.
+Using design VE file example_board.vex.
+Preparing design...
+
+Info: Rename duplicated module cell alta_rv32 to alta_rv32_duplicated at ./alta_db/flatten.vx:1956.
+Info: Removing bbox feeder slice sys_ctrl_clkSource[0] driven by BBOX rv32|sys_ctrl_clkSource[0].
+Info: Removing bbox feeder slice sys_ctrl_clkSource[1] driven by BBOX rv32|sys_ctrl_clkSource[1].
+## CPU time: 0:0:0, REAL time: 0:0:1
+## Memory Usage: 339MB (339MB)
+Pseudo pack design...
+
+Using location file example_board.vex
+VCO frequency: 300.000 Mhz
+  clkout0: Enabled , 150.000 Mhz
+  clkout1: Disabled, 0.586 Mhz
+  clkout2: Disabled, 0.586 Mhz
+  clkout3: Disabled, 0.586 Mhz
+  clkout4: Disabled, 0.586 Mhz
+Info: Instance gclksw_inst|gclk_switch is identified as a clock switch.
+Packing Statistics
+ Total      Logics : 1941/2112 ( 91%)
+ Total        LUTs : 1933/2112 ( 91%)
+ Total   Registers :  916/2112 ( 43%)
+ Total  Block Rams :    2/   4 ( 50%)
+ Total        PLLs :    1/   1 (100%)
+ Total        Pins :   44/ 128 ( 34%)
+ Global    Signals :    6/   5 (120%)
+                     MCU_SPI_CLK~inputclkctrl_outclk (from:                              MCU_SPI_CLK~input_o)
+      auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp (from:   auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp)
+        macro_inst|core_inst|ad_incr~0clkctrl_outclk (from:           macro_inst|core_inst|ad_incr~0_combout)
+             macro_inst|core_inst|osc~clkctrl_outclk (from:                       macro_inst|core_inst|osc~q)
+           macro_inst|legacy_spi_cs0~0clkctrl_outclk (from:              macro_inst|legacy_spi_cs0~0_combout)
+                           sys_resetn~clkctrl_outclk (from:                               sys_resetn~combout)
+ Total Lonely   Datain   : 37
+ Total Lonely   Register : 8
+ Total LUT-FF   Pairs    : 784
+ Total Register Packings : 87
+ Registers with synchronous    reset : 0
+ Registers with asynchronous   reset : 590
+ Registers with sync and async reset : 165
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 337MB (339MB)
+Filter verilog...
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 337MB (339MB)
+Reading DB design...
+
+## CPU time: 0:0:0, REAL time: 0:0:1
+## Memory Usage: 341MB (341MB)
+Processing design...
+
+Info: Found GCLK net macro_inst|core_inst|ad_incr~0clkctrl_outclk (3).
+Info: Found GCLK net macro_inst|legacy_spi_cs0~0clkctrl_outclk (8).
+Info: Found GCLK net sys_resetn~clkctrl_outclk (99).
+Info: Found GCLK net macro_inst|core_inst|osc~clkctrl_outclk (7).
+Info: Found GCLK net MCU_SPI_CLK~inputclkctrl_outclk (39).
+Info: Found GCLK net auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp (136).
+Info: Fixing net rv32.resetn_out, from rv32|resetn_out to gclksw_inst|gclk_switch__alta_gclksw|resetn.
+Info: Fixing net PIN_HSE~input_o, from PIN_HSE~input|combout to gclksw_inst|gclk_switch__alta_gclksw|clkin1.
+Info: Fixing net gclksw_inst|gclk_switch__alta_gclksw__clkout, from gclksw_inst|gclk_switch__alta_gclksw|clkout to rv32|sys_clk.
+Info: Fixing net auto_generated_inst.hbo_13_1bc039b416d3bc4a_bp, from pll_inst|auto_generated|pll1|lock to rv32|sys_ctrl_pllReady.
+Info: Slice ~VCC is removed.
+Info: The input of IO PHI is disabled since all input pins are unused.
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 342MB (342MB)
+Using design SDC file ./example_board.sdc.
+Info: The input of IO PHI is disabled since all input pins are unused.
+Info: Auto constraint PLL: create_generated_clock -name pll_inst|auto_generated|pll1|clk[0] -divide_by 4 -multiply_by 75 -add -source PLL_CLKIN -master_clock PIN_OSC pll_inst|auto_generated|pll1|clkout0.
+Using ASF file example_board.asf.
+************ DESIGN ASF ************
+
+Info: The input of IO PHI is disabled since all input pins are unused.
+Warn: Logic slice macro_inst|core_inst|buf_miso_cs1[0]~5 is used as a latch, output net: macro_inst|core_inst|buf_miso_cs1[0]~5_combout.
+Warn: Logic slice macro_inst|core_inst|buf_miso_cs1[1]~1 is used as a latch, output net: macro_inst|core_inst|buf_miso_cs1[1]~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_cs2_out~1 is used as a latch, output net: macro_inst|core_inst|cart_cs2_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_ad_oe~1 is used as a latch, output net: macro_inst|core_inst|cart_ad_oe~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_cs1_out~1 is used as a latch, output net: macro_inst|core_inst|cart_cs1_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_nWR_out~1 is used as a latch, output net: macro_inst|core_inst|cart_nWR_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_nRD_out~1 is used as a latch, output net: macro_inst|core_inst|cart_nRD_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_a_oe_shadow is used as a latch, output net: macro_inst|core_inst|cart_a_oe~1_combout.
+Info: macro_inst|mode_guard|cpld_mode|Q is identified as a clock gate signal.
+Warn: Auto constraint INTERNAL: create_clock -name Internal_generated_clock_example_board|ESP32_SPI2_CS_N -period 1000.000 ESP32_SPI2_CS_N.
+Warn: Auto constraint INTERNAL: create_clock -name Internal_generated_clock_example_board|ESP32_SPI_CS1 -period 1000.000 ESP32_SPI_CS1.
+Warn: Auto constraint INTERNAL: create_generated_clock -name Internal_generated_clock_macro_inst|core_inst|osc|Q -divide_by 2 -add -source PIN_HSE -master_clock PIN_HSE macro_inst|core_inst|osc|Q.
+Warn: Auto constraint INTERNAL: create_generated_clock -name Internal_generated_clock_macro_inst|core_inst|osc|Q -divide_by 2 -add -source PIN_HSI -master_clock PIN_HSI macro_inst|core_inst|osc|Q.
+Warn: Auto constraint INTERNAL: create_generated_clock -name Internal_generated_clock_macro_inst|core_inst|osc|Q -divide_by 2 -add -source pll_inst|auto_generated|pll1|clkout0 -master_clock pll_inst|auto_generated|pll1|clk[0] macro_inst|core_inst|osc|Q.
+Placement Statistics
+ Total  Logic    Counts  : 1940/2112 (91.9%)
+ Total  Logic    Tiles   : 128/132 (97.0%)
+ Total  Other    Tiles   : 2/4 (50.0%)
+ Total  Valid    Nets    : 2522 (1457+1065)
+ Total  Valid    Fanouts : 11203 (6790+4413)
+ Total  Tile     Fanouts : 3309
+ Tile   Zip      Fanins  : 20 (2:35)
+ Tile   Zip      Fanouts : 32 (0:168)
+ Total  Ignored  Nets    : 1630
+ Total  Valid    Blocks  : 144 (122/20)
+ Total  Ignored  Blocks  : 0
+ Total  Zip Complexities : 1113/4376 1.91/2123.24
+ Avg    Zip   Bottleneck : 6.13 66.85
+ Avg    Net   Bottleneck : 20.59 713.97
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y3_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y3_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y3_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y3_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X43_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y3_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y3_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y3_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y3_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y3_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X47_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X47_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X47_Y1_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X47_Y1_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X47_Y1_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y3_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X52_Y2_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X53_Y1_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X54_Y1_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y2_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X58_Y6_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Iter #1/1 ...
+Pass 1 #1/2 ...
+Partitioning...
+ step = 3, partition : 2,2
+....................
+ step = 4, partition : 2,2
+....................
+
+## CPU time: 0:0:3, REAL time: 0:0:4
+Pass 1 #2/2 ...
+Partitioning...
+ step = 3, partition : 2,2
+....................
+ step = 4, partition : 2,2
+....................
+
+## CPU time: 0:0:3, REAL time: 0:0:4
+Pass 2 #1/1 ...
+Legalization and Swapping...
+..........
+
+## CPU time: 0:0:2, REAL time: 0:0:2
+Pass 3 #1/1 ...
+Touchup...
+
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+Pass 4 #1/1 ...
+Optimization...
+............................................................
+Finishing...
+
+## CPU time: 0:0:5, REAL time: 0:0:5
+Total wire cost after placement: -2.32333:-0.3485:0.285(-2.32333:-0.3485) 6505.11(883.521)+21153(23)+8843.77 7799.33(3761.46)+3361.25
+
+
+*** Post Placement Timing Report ***
+
+=== User constraints ===
+Fmax report
+  User constraint:  40.000MHz, Fmax: 116.320MHz, Clock: ESP_SPI_SCK
+  User constraint:   8.000MHz, Fmax: 111.235MHz, Clock: PIN_HSE
+  User constraint:  10.000MHz, Fmax: 111.235MHz, Clock: PIN_HSI
+  User constraint: 150.000MHz, Fmax: 111.235MHz, Clock: pll_inst|auto_generated|pll1|clk[0]
+
+Clock transfer report:
+  Worst setup:  16.403, with clock ESP_SPI_SCK
+  Worst setup: 116.010, with clock PIN_HSE
+  Worst setup:  91.010, with clock PIN_HSI
+  Worst setup:  -2.323, with clock pll_inst|auto_generated|pll1|clk[0]
+
+  Worst  hold:   0.603, with clock ESP_SPI_SCK
+  Worst  hold:   0.285, with clock PIN_HSE
+  Worst  hold:   0.285, with clock PIN_HSI
+  Worst  hold:   0.285, with clock pll_inst|auto_generated|pll1|clk[0]
+
+=== Auto constraints ===
+Fmax report
+  User constraint:  75.000MHz, Fmax: 134.282MHz, Clock: Internal_generated_clock_macro_inst|core_inst|osc|Q
+
+Clock transfer report:
+  Worst setup:   5.886, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup: 997.545, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst setup:  13.275, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup:   2.183, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst setup:  13.896, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup:   2.157, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst setup:   5.854, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+  Worst  hold:   0.615, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:  -3.163, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst  hold:  -2.342, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.564, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:  -2.583, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.373, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:   0.615, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+Coverage report
+  User constraints covered 7769 connections out of 8684 total, coverage: 89.5%
+  Auto constraints covered 8231 connections out of 8684 total, coverage: 94.8%
+
+
+Hold from ESP32_SPI2_CS_N to macro_inst|core_inst|buf_miso_cs1[1]~1, clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1, constraint 0.000, skew 8.176, data 4.696
+  Slack:  -3.163
+    Arrival Time:  504.677
+    Required Time: 507.840
+
+*** End Timing Report ***
+
+
+
+route_design -dump ./alta_db/route.tx -replace ./alta_db/replace.tx 
+
+Route Design Statistics
+ Total Routing Nets : 2522
+ Fanout     Average : 3.44 (1..159)
+ Max   Fanout  Net  : macro_inst|mode_guard|cpld_mode~q
+ Logic       Slices : 1940/2112 (91.9%)
+
+Routing...
+ Budget Useful Skew...
+## CPU time: 0:0:0, REAL time: 0:0:1
+ iter = 1/1, route#: 2522, violation# : 2111, overflow# : 1727, conflict# : 1423, node#: 16040
+## CPU time: 0:0:1, REAL time: 0:0:1
+ iter = 2/2, route#: 2522, violation# : 1417, overflow# : 1344, conflict# : 1145, node#: 17098
+## CPU time: 0:0:1, REAL time: 0:0:2
+ iter = 3/3, route#: 2522, violation# : 845, overflow# : 838, conflict# : 828, node#: 17965
+## CPU time: 0:0:1, REAL time: 0:0:2
+ iter = 4/4, route#: 2522, violation# : 396, overflow# : 396, conflict# : 495, node#: 18648
+## CPU time: 0:0:2, REAL time: 0:0:2
+ iter = 5/5, route#: 2522, violation# : 263, overflow# : 263, conflict# : 345, node#: 18958
+## CPU time: 0:0:2, REAL time: 0:0:3
+ iter = 6/6, route#: 2522, violation# : 125, overflow# : 125, conflict# : 186, node#: 19272
+## CPU time: 0:0:3, REAL time: 0:0:3
+ iter = 7/7, route#: 2522, violation# : 171, overflow# : 171, conflict# : 252, node#: 19270
+## CPU time: 0:0:3, REAL time: 0:0:4
+ iter = 8/4, route#: 446, violation# : 257, overflow# : 257, conflict# : 328, node#: 18953
+## CPU time: 0:0:3, REAL time: 0:0:4
+ iter = 9/5, route#: 384, violation# : 150, overflow# : 150, conflict# : 200, node#: 19203
+## CPU time: 0:0:4, REAL time: 0:0:4
+ iter = 10/6, route#: 309, violation# : 83, overflow# : 83, conflict# : 125, node#: 19454
+## CPU time: 0:0:4, REAL time: 0:0:4
+ iter = 11/7, route#: 273, violation# : 68, overflow# : 68, conflict# : 109, node#: 19527
+## CPU time: 0:0:4, REAL time: 0:0:5
+ iter = 12/8, route#: 226, violation# : 27, overflow# : 27, conflict# : 48, node#: 19655
+## CPU time: 0:0:4, REAL time: 0:0:5
+ iter = 13/9, route#: 201, violation# : 22, overflow# : 22, conflict# : 35, node#: 19706
+## CPU time: 0:0:5, REAL time: 0:0:5
+ iter = 14/4, route#: 355, violation# : 242, overflow# : 241, conflict# : 264, node#: 19113
+## CPU time: 0:0:5, REAL time: 0:0:5
+ iter = 15/5, route#: 322, violation# : 93, overflow# : 93, conflict# : 138, node#: 19379
+## CPU time: 0:0:5, REAL time: 0:0:6
+ iter = 16/6, route#: 224, violation# : 48, overflow# : 48, conflict# : 75, node#: 19429
+## CPU time: 0:0:5, REAL time: 0:0:6
+ iter = 17/7, route#: 185, violation# : 29, overflow# : 29, conflict# : 52, node#: 19482
+## CPU time: 0:0:5, REAL time: 0:0:6
+ iter = 18/8, route#: 164, violation# : 15, overflow# : 15, conflict# : 28, node#: 19564
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 19/9, route#: 167, violation# : 13, overflow# : 13, conflict# : 22, node#: 19594
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 20/5, route#: 28, violation# : 16, overflow# : 16, conflict# : 27, node#: 19561
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 21/6, route#: 27, violation# : 13, overflow# : 13, conflict# : 23, node#: 19577
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 22/7, route#: 28, violation# : 15, overflow# : 15, conflict# : 23, node#: 19608
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 23/8, route#: 37, violation# : 14, overflow# : 14, conflict# : 23, node#: 19628
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 24/9, route#: 36, violation# : 15, overflow# : 15, conflict# : 24, node#: 19665
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 25/10, route#: 28, violation# : 10, overflow# : 10, conflict# : 18, node#: 19654
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 26/5, route#: 23, violation# : 11, overflow# : 11, conflict# : 18, node#: 19608
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 27/6, route#: 23, violation# : 14, overflow# : 14, conflict# : 22, node#: 19625
+## CPU time: 0:0:6, REAL time: 0:0:6
+ iter = 28/7, route#: 23, violation# : 10, overflow# : 10, conflict# : 17, node#: 19643
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 29/8, route#: 21, violation# : 9, overflow# : 9, conflict# : 16, node#: 19660
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 30/9, route#: 18, violation# : 7, overflow# : 7, conflict# : 13, node#: 19687
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 31/10, route#: 20, violation# : 7, overflow# : 7, conflict# : 11, node#: 19722
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 32/5, route#: 27, violation# : 17, overflow# : 17, conflict# : 21, node#: 19667
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 33/6, route#: 27, violation# : 9, overflow# : 9, conflict# : 15, node#: 19690
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 34/7, route#: 13, violation# : 5, overflow# : 5, conflict# : 10, node#: 19698
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 35/8, route#: 10, violation# : 5, overflow# : 5, conflict# : 9, node#: 19704
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 36/9, route#: 12, violation# : 6, overflow# : 6, conflict# : 10, node#: 19708
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 37/10, route#: 12, violation# : 6, overflow# : 6, conflict# : 10, node#: 19720
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 38/5, route#: 8, violation# : 5, overflow# : 5, conflict# : 9, node#: 19710
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 39/6, route#: 10, violation# : 5, overflow# : 5, conflict# : 10, node#: 19707
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 40/7, route#: 12, violation# : 4, overflow# : 4, conflict# : 8, node#: 19712
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 41/8, route#: 11, violation# : 3, overflow# : 3, conflict# : 6, node#: 19726
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 42/9, route#: 7, violation# : 3, overflow# : 3, conflict# : 6, node#: 19725
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 43/10, route#: 8, violation# : 2, overflow# : 2, conflict# : 4, node#: 19729
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 44/5, route#: 4, violation# : 2, overflow# : 2, conflict# : 4, node#: 19727
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 45/6, route#: 6, violation# : 2, overflow# : 2, conflict# : 4, node#: 19726
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 46/7, route#: 7, violation# : 3, overflow# : 3, conflict# : 5, node#: 19725
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 47/8, route#: 6, violation# : 2, overflow# : 2, conflict# : 4, node#: 19739
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 48/9, route#: 5, violation# : 2, overflow# : 2, conflict# : 3, node#: 19742
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 49/10, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19741
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 50/5, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19736
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 51/6, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19742
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 52/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19742
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 53/8, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19741
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 54/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19742
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 55/10, route#: 5, violation# : 1, overflow# : 1, conflict# : 2, node#: 19750
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 56/5, route#: 1, violation# : 1, overflow# : 1, conflict# : 2, node#: 19750
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 57/6, route#: 2, violation# : 0, overflow# : 0, conflict# : 0, node#: 19752
+## CPU time: 0:0:7, REAL time: 0:0:8
+ iter = 58/2, route#: 521, violation# : 486, overflow# : 486, conflict# : 448, node#: 18649
+## CPU time: 0:0:7, REAL time: 0:0:8
+ iter = 59/3, route#: 502, violation# : 203, overflow# : 203, conflict# : 268, node#: 19081
+## CPU time: 0:0:8, REAL time: 0:0:8
+ iter = 60/4, route#: 361, violation# : 72, overflow# : 72, conflict# : 116, node#: 19305
+## CPU time: 0:0:8, REAL time: 0:0:9
+ iter = 61/5, route#: 238, violation# : 30, overflow# : 30, conflict# : 53, node#: 19428
+## CPU time: 0:0:8, REAL time: 0:0:9
+ iter = 62/6, route#: 186, violation# : 14, overflow# : 14, conflict# : 26, node#: 19504
+## CPU time: 0:0:8, REAL time: 0:0:9
+ iter = 63/4, route#: 222, violation# : 43, overflow# : 43, conflict# : 67, node#: 19373
+## CPU time: 0:0:8, REAL time: 0:0:9
+ iter = 64/5, route#: 197, violation# : 14, overflow# : 14, conflict# : 22, node#: 19489
+## CPU time: 0:0:9, REAL time: 0:0:9
+ iter = 65/6, route#: 177, violation# : 9, overflow# : 9, conflict# : 15, node#: 19555
+## CPU time: 0:0:9, REAL time: 0:0:9
+ iter = 66/7, route#: 168, violation# : 6, overflow# : 6, conflict# : 8, node#: 19562
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 67/8, route#: 155, violation# : 3, overflow# : 3, conflict# : 4, node#: 19578
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 68/9, route#: 155, violation# : 3, overflow# : 3, conflict# : 4, node#: 19591
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 69/5, route#: 167, violation# : 8, overflow# : 8, conflict# : 15, node#: 19544
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 70/6, route#: 154, violation# : 6, overflow# : 6, conflict# : 9, node#: 19549
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 71/7, route#: 153, violation# : 2, overflow# : 2, conflict# : 4, node#: 19576
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 72/8, route#: 149, violation# : 2, overflow# : 2, conflict# : 4, node#: 19575
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 73/9, route#: 151, violation# : 2, overflow# : 2, conflict# : 4, node#: 19578
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 74/10, route#: 145, violation# : 1, overflow# : 1, conflict# : 2, node#: 19603
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 75/5, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19605
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 76/6, route#: 4, violation# : 3, overflow# : 3, conflict# : 4, node#: 19609
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 77/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19609
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 78/8, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19610
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 79/9, route#: 4, violation# : 3, overflow# : 3, conflict# : 4, node#: 19606
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 80/10, route#: 4, violation# : 2, overflow# : 2, conflict# : 4, node#: 19612
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 81/5, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19608
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 82/6, route#: 5, violation# : 3, overflow# : 3, conflict# : 4, node#: 19610
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 83/7, route#: 8, violation# : 2, overflow# : 2, conflict# : 4, node#: 19626
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 84/8, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19625
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 85/9, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19629
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 86/10, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19624
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 87/5, route#: 10, violation# : 7, overflow# : 7, conflict# : 10, node#: 19608
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 88/6, route#: 7, violation# : 1, overflow# : 1, conflict# : 2, node#: 19617
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 89/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19617
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 90/8, route#: 4, violation# : 1, overflow# : 1, conflict# : 2, node#: 19618
+## CPU time: 0:0:10, REAL time: 0:0:11
+ iter = 91/9, route#: 2, violation# : 0, overflow# : 0, conflict# : 0, node#: 19620
+## CPU time: 0:0:10, REAL time: 0:0:11
+ iter = 92/2, route#: 410, violation# : 317, overflow# : 316, conflict# : 321, node#: 18844
+## CPU time: 0:0:11, REAL time: 0:0:11
+ iter = 93/3, route#: 396, violation# : 132, overflow# : 132, conflict# : 180, node#: 19175
+## CPU time: 0:0:11, REAL time: 0:0:12
+ iter = 94/4, route#: 271, violation# : 50, overflow# : 50, conflict# : 78, node#: 19333
+## CPU time: 0:0:11, REAL time: 0:0:12
+ iter = 95/5, route#: 195, violation# : 12, overflow# : 12, conflict# : 22, node#: 19407
+## CPU time: 0:0:11, REAL time: 0:0:12
+ iter = 96/6, route#: 163, violation# : 7, overflow# : 7, conflict# : 14, node#: 19408
+## CPU time: 0:0:12, REAL time: 0:0:12
+ iter = 97/4, route#: 166, violation# : 15, overflow# : 15, conflict# : 27, node#: 19395
+## CPU time: 0:0:12, REAL time: 0:0:12
+ iter = 98/5, route#: 153, violation# : 5, overflow# : 5, conflict# : 10, node#: 19414
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 99/6, route#: 151, violation# : 6, overflow# : 6, conflict# : 11, node#: 19405
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 100/7, route#: 149, violation# : 5, overflow# : 5, conflict# : 10, node#: 19427
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 101/8, route#: 150, violation# : 5, overflow# : 5, conflict# : 8, node#: 19463
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 102/9, route#: 144, violation# : 2, overflow# : 2, conflict# : 4, node#: 19471
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 103/4, route#: 153, violation# : 10, overflow# : 10, conflict# : 14, node#: 19402
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 104/5, route#: 145, violation# : 2, overflow# : 2, conflict# : 4, node#: 19422
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 105/6, route#: 140, violation# : 1, overflow# : 1, conflict# : 2, node#: 19444
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 106/7, route#: 143, violation# : 2, overflow# : 2, conflict# : 3, node#: 19456
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 107/8, route#: 142, violation# : 1, overflow# : 1, conflict# : 2, node#: 19449
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 108/9, route#: 138, violation# : 1, overflow# : 1, conflict# : 2, node#: 19477
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 109/5, route#: 11, violation# : 5, overflow# : 5, conflict# : 6, node#: 19481
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 110/6, route#: 5, violation# : 2, overflow# : 2, conflict# : 3, node#: 19480
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 111/7, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19481
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 112/8, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19493
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 113/9, route#: 5, violation# : 3, overflow# : 3, conflict# : 4, node#: 19490
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 114/10, route#: 4, violation# : 3, overflow# : 3, conflict# : 4, node#: 19491
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 115/5, route#: 6, violation# : 4, overflow# : 4, conflict# : 6, node#: 19489
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 116/6, route#: 6, violation# : 8, overflow# : 8, conflict# : 8, node#: 19509
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 117/7, route#: 7, violation# : 1, overflow# : 1, conflict# : 2, node#: 19520
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 118/8, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19524
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 119/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19527
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 120/10, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19528
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 121/5, route#: 5, violation# : 3, overflow# : 3, conflict# : 4, node#: 19506
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 122/6, route#: 4, violation# : 3, overflow# : 3, conflict# : 3, node#: 19513
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 123/7, route#: 4, violation# : 3, overflow# : 3, conflict# : 3, node#: 19521
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 124/8, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19537
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 125/9, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19537
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 126/10, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19539
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 127/5, route#: 2, violation# : 2, overflow# : 2, conflict# : 3, node#: 19523
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 128/6, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19523
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 129/7, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19523
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 130/8, route#: 5, violation# : 2, overflow# : 2, conflict# : 2, node#: 19535
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 131/9, route#: 4, violation# : 3, overflow# : 3, conflict# : 4, node#: 19540
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 132/10, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19543
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 133/5, route#: 7, violation# : 4, overflow# : 4, conflict# : 5, node#: 19526
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 134/6, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19528
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 135/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19540
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 136/8, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19540
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 137/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19540
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 138/10, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19531
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 139/5, route#: 5, violation# : 2, overflow# : 2, conflict# : 3, node#: 19533
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 140/6, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19530
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 141/7, route#: 3, violation# : 3, overflow# : 3, conflict# : 3, node#: 19531
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 142/8, route#: 5, violation# : 2, overflow# : 2, conflict# : 3, node#: 19531
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 143/9, route#: 6, violation# : 5, overflow# : 5, conflict# : 5, node#: 19542
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 144/10, route#: 5, violation# : 3, overflow# : 3, conflict# : 4, node#: 19543
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 145/5, route#: 5, violation# : 2, overflow# : 2, conflict# : 4, node#: 19534
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 146/6, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19540
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 147/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19541
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 148/8, route#: 5, violation# : 3, overflow# : 3, conflict# : 4, node#: 19561
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 149/9, route#: 5, violation# : 1, overflow# : 1, conflict# : 2, node#: 19563
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 150/10, route#: 1, violation# : 0, overflow# : 0, conflict# : 0, node#: 19569
+## CPU time: 0:0:14, REAL time: 0:0:15
+ iter = 151/2, route#: 411, violation# : 323, overflow# : 323, conflict# : 321, node#: 18827
+## CPU time: 0:0:14, REAL time: 0:0:15
+ iter = 152/3, route#: 418, violation# : 154, overflow# : 154, conflict# : 214, node#: 19115
+## CPU time: 0:0:15, REAL time: 0:0:15
+ iter = 153/4, route#: 282, violation# : 44, overflow# : 44, conflict# : 77, node#: 19328
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 154/5, route#: 207, violation# : 17, overflow# : 17, conflict# : 30, node#: 19415
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 155/6, route#: 170, violation# : 11, overflow# : 11, conflict# : 20, node#: 19460
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 156/4, route#: 188, violation# : 29, overflow# : 29, conflict# : 46, node#: 19371
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 157/5, route#: 173, violation# : 12, overflow# : 12, conflict# : 22, node#: 19444
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 158/6, route#: 159, violation# : 6, overflow# : 6, conflict# : 11, node#: 19475
+## CPU time: 0:0:16, REAL time: 0:0:16
+ iter = 159/7, route#: 152, violation# : 3, overflow# : 3, conflict# : 6, node#: 19457
+## CPU time: 0:0:16, REAL time: 0:0:16
+ iter = 160/8, route#: 144, violation# : 2, overflow# : 2, conflict# : 4, node#: 19451
+## CPU time: 0:0:16, REAL time: 0:0:16
+ iter = 161/9, route#: 141, violation# : 3, overflow# : 3, conflict# : 5, node#: 19475
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 162/5, route#: 143, violation# : 4, overflow# : 4, conflict# : 7, node#: 19420
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 163/6, route#: 143, violation# : 2, overflow# : 2, conflict# : 4, node#: 19444
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 164/7, route#: 141, violation# : 1, overflow# : 1, conflict# : 2, node#: 19463
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 165/8, route#: 139, violation# : 1, overflow# : 1, conflict# : 2, node#: 19475
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 166/9, route#: 140, violation# : 1, overflow# : 1, conflict# : 2, node#: 19487
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 167/10, route#: 140, violation# : 1, overflow# : 1, conflict# : 2, node#: 19503
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 168/5, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19503
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 169/6, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19506
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 170/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19504
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 171/8, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19506
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 172/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19505
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 173/10, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19510
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 174/5, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19503
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 175/6, route#: 6, violation# : 2, overflow# : 2, conflict# : 3, node#: 19510
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 176/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19504
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 177/8, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19508
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 178/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19509
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 179/10, route#: 5, violation# : 1, overflow# : 1, conflict# : 2, node#: 19503
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 180/5, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19503
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 181/6, route#: 3, violation# : 2, overflow# : 2, conflict# : 2, node#: 19504
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 182/7, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19509
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 183/8, route#: 4, violation# : 2, overflow# : 2, conflict# : 3, node#: 19509
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 184/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19508
+## CPU time: 0:0:17, REAL time: 0:0:17
+ iter = 185/10, route#: 2, violation# : 0, overflow# : 0, conflict# : 0, node#: 19522
+## CPU time: 0:0:17, REAL time: 0:0:18
+ iter = 186/2, route#: 434, violation# : 373, overflow# : 373, conflict# : 357, node#: 18779
+## CPU time: 0:0:18, REAL time: 0:0:18
+ iter = 187/3, route#: 407, violation# : 160, overflow# : 159, conflict# : 217, node#: 19071
+## CPU time: 0:0:18, REAL time: 0:0:19
+ iter = 188/4, route#: 296, violation# : 71, overflow# : 71, conflict# : 109, node#: 19248
+## CPU time: 0:0:18, REAL time: 0:0:19
+ iter = 189/5, route#: 215, violation# : 26, overflow# : 26, conflict# : 47, node#: 19346
+## CPU time: 0:0:18, REAL time: 0:0:19
+ iter = 190/6, route#: 192, violation# : 8, overflow# : 8, conflict# : 16, node#: 19433
+## CPU time: 0:0:19, REAL time: 0:0:19
+ iter = 191/4, route#: 193, violation# : 40, overflow# : 40, conflict# : 57, node#: 19329
+## CPU time: 0:0:19, REAL time: 0:0:19
+ iter = 192/5, route#: 171, violation# : 12, overflow# : 12, conflict# : 20, node#: 19425
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 193/6, route#: 151, violation# : 8, overflow# : 8, conflict# : 13, node#: 19432
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 194/7, route#: 161, violation# : 4, overflow# : 4, conflict# : 8, node#: 19457
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 195/8, route#: 143, violation# : 2, overflow# : 2, conflict# : 4, node#: 19483
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 196/9, route#: 144, violation# : 2, overflow# : 2, conflict# : 4, node#: 19492
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 197/5, route#: 150, violation# : 9, overflow# : 9, conflict# : 16, node#: 19431
+## CPU time: 0:0:20, REAL time: 0:0:20
+ iter = 198/6, route#: 146, violation# : 4, overflow# : 4, conflict# : 7, node#: 19455
+## CPU time: 0:0:20, REAL time: 0:0:20
+ iter = 199/7, route#: 144, violation# : 2, overflow# : 2, conflict# : 4, node#: 19470
+## CPU time: 0:0:20, REAL time: 0:0:20
+ iter = 200/8, route#: 144, violation# : 2, overflow# : 2, conflict# : 4, node#: 19457
+## CPU time: 0:0:20, REAL time: 0:0:21
+ iter = 201/9, route#: 140, violation# : 1, overflow# : 1, conflict# : 2, node#: 19474
+## CPU time: 0:0:20, REAL time: 0:0:21
+ iter = 202/10, route#: 146, violation# : 1, overflow# : 1, conflict# : 2, node#: 19494
+## CPU time: 0:0:20, REAL time: 0:0:21
+ iter = 203/5, route#: 5, violation# : 2, overflow# : 2, conflict# : 3, node#: 19484
+## CPU time: 0:0:20, REAL time: 0:0:21
+ iter = 204/6, route#: 1, violation# : 0, overflow# : 0, conflict# : 0, node#: 19492
+## CPU time: 0:0:21, REAL time: 0:0:21
+ iter = 205/2, route#: 414, violation# : 333, overflow# : 332, conflict# : 339, node#: 18839
+## CPU time: 0:0:21, REAL time: 0:0:22
+ iter = 206/3, route#: 389, violation# : 137, overflow# : 137, conflict# : 182, node#: 19170
+## CPU time: 0:0:21, REAL time: 0:0:22
+ iter = 207/4, route#: 259, violation# : 54, overflow# : 54, conflict# : 89, node#: 19319
+## CPU time: 0:0:21, REAL time: 0:0:22
+ iter = 208/5, route#: 194, violation# : 19, overflow# : 19, conflict# : 36, node#: 19397
+## CPU time: 0:0:22, REAL time: 0:0:22
+ iter = 209/6, route#: 175, violation# : 11, overflow# : 11, conflict# : 20, node#: 19468
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 210/4, route#: 205, violation# : 43, overflow# : 42, conflict# : 65, node#: 19387
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 211/5, route#: 193, violation# : 17, overflow# : 17, conflict# : 32, node#: 19481
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 212/6, route#: 165, violation# : 8, overflow# : 8, conflict# : 13, node#: 19536
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 213/7, route#: 151, violation# : 3, overflow# : 3, conflict# : 6, node#: 19521
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 214/8, route#: 150, violation# : 4, overflow# : 4, conflict# : 8, node#: 19532
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 215/9, route#: 152, violation# : 5, overflow# : 5, conflict# : 7, node#: 19533
+## CPU time: 0:0:23, REAL time: 0:0:23
+ iter = 216/5, route#: 157, violation# : 13, overflow# : 13, conflict# : 22, node#: 19488
+## CPU time: 0:0:23, REAL time: 0:0:23
+ iter = 217/6, route#: 151, violation# : 3, overflow# : 3, conflict# : 6, node#: 19525
+## CPU time: 0:0:23, REAL time: 0:0:24
+ iter = 218/7, route#: 155, violation# : 7, overflow# : 7, conflict# : 12, node#: 19541
+## CPU time: 0:0:23, REAL time: 0:0:24
+ iter = 219/8, route#: 155, violation# : 3, overflow# : 3, conflict# : 6, node#: 19529
+## CPU time: 0:0:23, REAL time: 0:0:24
+ iter = 220/9, route#: 145, violation# : 2, overflow# : 2, conflict# : 4, node#: 19551
+## CPU time: 0:0:23, REAL time: 0:0:24
+ iter = 221/10, route#: 142, violation# : 0, overflow# : 0, conflict# : 0, node#: 19564
+## CPU time: 0:0:24, REAL time: 0:0:25
+ iter = 222/2, route#: 449, violation# : 355, overflow# : 355, conflict# : 347, node#: 18784
+## CPU time: 0:0:24, REAL time: 0:0:25
+ iter = 223/3, route#: 398, violation# : 141, overflow# : 141, conflict# : 200, node#: 19083
+## CPU time: 0:0:25, REAL time: 0:0:25
+ iter = 224/4, route#: 271, violation# : 48, overflow# : 48, conflict# : 83, node#: 19268
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 225/5, route#: 192, violation# : 22, overflow# : 22, conflict# : 33, node#: 19354
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 226/6, route#: 174, violation# : 12, overflow# : 12, conflict# : 22, node#: 19435
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 227/4, route#: 184, violation# : 33, overflow# : 33, conflict# : 51, node#: 19359
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 228/5, route#: 168, violation# : 10, overflow# : 10, conflict# : 19, node#: 19433
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 229/6, route#: 151, violation# : 3, overflow# : 3, conflict# : 6, node#: 19458
+## CPU time: 0:0:26, REAL time: 0:0:26
+ iter = 230/7, route#: 149, violation# : 5, overflow# : 5, conflict# : 10, node#: 19459
+## CPU time: 0:0:26, REAL time: 0:0:26
+ iter = 231/8, route#: 142, violation# : 3, overflow# : 3, conflict# : 4, node#: 19473
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 232/9, route#: 138, violation# : 3, overflow# : 3, conflict# : 6, node#: 19496
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 233/4, route#: 150, violation# : 15, overflow# : 15, conflict# : 24, node#: 19416
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 234/5, route#: 147, violation# : 7, overflow# : 7, conflict# : 11, node#: 19442
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 235/6, route#: 147, violation# : 6, overflow# : 6, conflict# : 11, node#: 19454
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 236/7, route#: 144, violation# : 3, overflow# : 3, conflict# : 6, node#: 19482
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 237/8, route#: 142, violation# : 2, overflow# : 2, conflict# : 4, node#: 19471
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 238/9, route#: 141, violation# : 1, overflow# : 1, conflict# : 2, node#: 19510
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 239/5, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19501
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 240/6, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19501
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 241/7, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19510
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 242/8, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19511
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 243/9, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19499
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 244/10, route#: 3, violation# : 1, overflow# : 1, conflict# : 2, node#: 19510
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 245/5, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19501
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 246/6, route#: 4, violation# : 2, overflow# : 2, conflict# : 3, node#: 19508
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 247/7, route#: 2, violation# : 1, overflow# : 1, conflict# : 2, node#: 19516
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 248/8, route#: 2, violation# : 3, overflow# : 3, conflict# : 2, node#: 19514
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 249/9, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19522
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 250/10, route#: 5, violation# : 2, overflow# : 2, conflict# : 3, node#: 19544
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 251/5, route#: 1, violation# : 3, overflow# : 3, conflict# : 3, node#: 19528
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 252/6, route#: 4, violation# : 2, overflow# : 2, conflict# : 3, node#: 19521
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 253/7, route#: 3, violation# : 2, overflow# : 2, conflict# : 3, node#: 19521
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 254/8, route#: 6, violation# : 2, overflow# : 2, conflict# : 3, node#: 19524
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 255/9, route#: 4, violation# : 0, overflow# : 0, conflict# : 0, node#: 19529
+Optimizing...
+...
+
+Done
+
+
+*** Post Routing Timing Report ***
+
+=== User constraints ===
+Fmax report
+  User constraint:  40.000MHz, Fmax: 101.153MHz, Clock: ESP_SPI_SCK
+  User constraint:   8.000MHz, Fmax: 106.496MHz, Clock: PIN_HSE
+  User constraint:  10.000MHz, Fmax: 106.496MHz, Clock: PIN_HSI
+  User constraint: 150.000MHz, Fmax: 106.496MHz, Clock: pll_inst|auto_generated|pll1|clk[0]
+
+Clock transfer report:
+  Worst setup:  15.114, with clock ESP_SPI_SCK
+  Worst setup: 115.610, with clock PIN_HSE
+  Worst setup:  90.610, with clock PIN_HSI
+  Worst setup:  -2.723, with clock pll_inst|auto_generated|pll1|clk[0]
+
+  Worst  hold:   0.603, with clock ESP_SPI_SCK
+  Worst  hold:   0.288, with clock PIN_HSE
+  Worst  hold:   0.288, with clock PIN_HSI
+  Worst  hold:   0.288, with clock pll_inst|auto_generated|pll1|clk[0]
+
+=== Auto constraints ===
+Fmax report
+  User constraint:  75.000MHz, Fmax: 130.107MHz, Clock: Internal_generated_clock_macro_inst|core_inst|osc|Q
+
+Clock transfer report:
+  Worst setup:   5.647, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup: 996.524, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst setup:  12.827, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup:   1.782, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst setup:  14.002, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup:   0.528, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst setup:   5.854, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+  Worst  hold:   0.615, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:  -3.607, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst  hold:  -1.555, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.608, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:  -2.870, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.602, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:   0.615, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+Coverage report
+  User constraints covered 7769 connections out of 8684 total, coverage: 89.5%
+  Auto constraints covered 8231 connections out of 8684 total, coverage: 94.8%
+
+
+Hold from ESP32_SPI2_CS_N to macro_inst|core_inst|buf_miso_cs1[1]~1, clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1, constraint 0.000, skew 9.015, data 5.093
+  Slack:  -3.607
+    Arrival Time:  505.072
+    Required Time: 508.679
+
+*** End Timing Report ***
+
+
+
+Thu Sep 10 15:14:05 2026
+Warn: User constraints coverage is too low at 89.5%.
+Generating batch file: {C:/Users/mori/AgRV_pio/packages/tool-agrv_logic/python_dist/python.exe} {C:/Users/mori/AgRV_pio/packages/tool-agrv_logic/pio/gen_batch} -d 1075838977 -i 0xbff5105000730062aa234371030002b7 -o ./example_board_batch.bin --logic-config ./example_board.bin --logic-address 0x80007000 
+Using post-ASF file example_board.post.asf.
+Thu Sep 10 15:14:06 2026
+
+Total 0 fatals, 0 errors, 120 warnings, 20 infos.
