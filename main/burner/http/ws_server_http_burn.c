@@ -429,6 +429,9 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     }
     if (cart_mode != BURNER_CART_MODE_GBA) {
         gba_force_no_cfi = false;
+        apply_gba_sram_patch = false;
+        apply_gba_waitcnt_patch = false;
+        apply_gba_batteryless_patch = false;
     }
 
     err = burner_start_write_from_tf(
@@ -842,6 +845,7 @@ esp_err_t burner_start_write_from_tf(
     mbc5_program_chunk_bytes = burner_mbc5_program_chunk_kb_to_bytes(mbc5_chunk_kb);
     if (cart_mode != BURNER_CART_MODE_GBA) {
         gba_force_no_cfi = false;
+        apply_gba_sram_patch = false;
         apply_gba_waitcnt_patch = false;
         apply_gba_batteryless_patch = false;
     }

@@ -1,7 +1,7 @@
 static uint16_t ui_burn_rom_item_count(void)
 {
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
-        return s_cart_mode == BURNER_CART_MODE_GBA ? UI_BURN_ROM_WRITE_PATH_ITEM_COUNT : 4U;
+        return s_cart_mode == BURNER_CART_MODE_GBA ? UI_BURN_ROM_WRITE_PATH_ITEM_COUNT : 1U;
     }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
         return 3U;

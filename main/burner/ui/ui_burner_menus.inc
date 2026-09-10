@@ -153,12 +153,12 @@ static void ui_burn_rom_open_write_menu_locked(ui_model_t *model)
     model->selected = 0U;
     model->scroll = 0;
     ui_mark_content_dirty(model);
-    ui_set_status_locked(model, ui_tr("select burn patch"));
+    ui_set_status_locked(model, ui_tr(s_cart_mode == BURNER_CART_MODE_GBA ? "select burn patch" : "ROM selected"));
 }
 
 static void ui_burn_rom_open_save_patch_menu_locked(ui_model_t *model)
 {
-    if (model == NULL) {
+    if (model == NULL || s_cart_mode != BURNER_CART_MODE_GBA) {
         return;
     }
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_SAVE_PATCH;

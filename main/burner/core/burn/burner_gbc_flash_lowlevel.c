@@ -1,4 +1,5 @@
 /* Low-level GBC/MBC5 flash bank, erase, and program helpers. */
+#include "../burner_gbc_program_spans.h"
 
 static esp_err_t burner_bacon_mbc5_switch_bank(uint16_t bank)
 {
@@ -1553,50 +1554,27 @@ static size_t burner_build_blank_sample_offsets(
     return count;
 }
 
-static esp_err_t burner_mbc5_region_is_blank_sampled(
-    uint32_t region_addr,
-    uint32_t region_size,
-    bool *blank_out)
+static esp_err_t burner_gbc_blank_read(uint8_t *out, size_t size, uint32_t address)
 {
-    uint8_t sample_buf[BURN_BLANK_SAMPLE_BYTES];
-    uint32_t sample_offsets[BURN_BLANK_SAMPLE_POINTS];
-    size_t sample_len;
-    size_t sample_count;
     esp_err_t err;
-
-    if (blank_out == NULL || region_size == 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    sample_len = (region_size < BURN_BLANK_SAMPLE_BYTES) ? (size_t)region_size : (size_t)BURN_BLANK_SAMPLE_BYTES;
-    sample_count = burner_build_blank_sample_offsets(region_size, sample_len, 0u, sample_offsets);
-    if (sample_count == 0u) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    *blank_out = true;
-    for (size_t i = 0u; i < sample_count; ++i) {
-        bool chunk_blank = false;
-
-        err = burner_bacon_mbc5_read_block_program_window(
-            sample_buf,
-            sample_len,
-            region_addr + sample_offsets[i]);
-        if (err != ESP_OK) {
-            return err;
+    if (burner_gbc_gbx_is_active()) {
+        for (size_t done = 0; done < size;) {
+            uint16_t cart_address;
+            uint32_t remain;
+            err = burner_gbc_gbx_logical_to_cart_addr(address + done, &cart_address, &remain);
+            if (err != ESP_OK) return err;
+            size_t count = size - done;
+            if (count > remain) count = remain;
+            err = burner_bacon_gbc_read_stream_hoststyle(cart_address, out + done, count);
+            if (err != ESP_OK) return err;
+            done += count;
         }
-        err = burner_buffer_all_ff(sample_buf, sample_len, &chunk_blank);
-        if (err != ESP_OK) {
-            return err;
-        }
-        if (!chunk_blank) {
-            *blank_out = false;
-            return ESP_OK;
-        }
-        burner_task_yield_if_due();
+        err = ESP_OK;
+    } else {
+        err = burner_bacon_mbc5_read_block_program_window(out, size, address);
     }
-
-    return ESP_OK;
+    burner_task_yield_if_due();
+    return err;
 }
 
 static esp_err_t burner_mbc5_sector_is_blank(
@@ -1604,7 +1582,11 @@ static esp_err_t burner_mbc5_sector_is_blank(
     uint32_t sector_size,
     bool *blank_out)
 {
-    return burner_mbc5_region_is_blank_sampled(sector_addr, sector_size, blank_out);
+    /* SPI ownership serializes this workspace. A few sampled bytes cannot
+     * establish the erased precondition required by blank-page omission. */
+    static EXT_RAM_BSS_ATTR uint8_t workspace[BURN_MBC5_ROM_BANK_BYTES];
+    return burner_gbc_verify_blank_range(sector_addr, sector_size,
+        workspace, sizeof(workspace), burner_gbc_blank_read, blank_out);
 }
 
 static esp_err_t burner_bacon_mbc5_erase_range(
@@ -1760,7 +1742,7 @@ erase_range_out:
         (erased > 0u || skipped_blank > 0u)) {
         ESP_LOGI(
             BURNER_TAG,
-            "MBC5 erase sector-sample: 4x2B erased=%" PRIu32 " skipped_blank=%" PRIu32,
+            "MBC5 erase full-sector check: erased=%" PRIu32 " skipped_blank=%" PRIu32,
             erased,
             skipped_blank);
     }

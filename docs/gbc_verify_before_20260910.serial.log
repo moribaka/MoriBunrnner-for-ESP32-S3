@@ -1,0 +1,98 @@
+2026-09-10 21:25:45 I (1788080) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 21:25:45 I (1788182) burner_web: MBC5 power rail: 3V3
+2026-09-10 21:25:45 I (1788283) burner_web: MBC5 ReadID trace begin t=1787067359us
+2026-09-10 21:25:45 I (1788285) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1748us (0.001748s)
+2026-09-10 21:25:45 I (1788287) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2477us (0.002477s)
+2026-09-10 21:25:45 I (1788296) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8353us (0.008353s)
+2026-09-10 21:25:45 I (1788304) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8233us (0.008233s)
+2026-09-10 21:25:45 I (1788312) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7879us (0.007879s)
+2026-09-10 21:25:45 I (1788320) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7821us (0.007821s)
+2026-09-10 21:25:45 I (1788328) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=8110us (0.008110s)
+2026-09-10 21:25:45 I (1788336) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=8019us (0.008019s)
+2026-09-10 21:25:45 I (1788344) burner_web: MBC5 ReadID trace end status=ESP_OK total=60517us (0.060517s)
+2026-09-10 21:25:45 I (1788351) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 21:25:45 I (1788365) burner_web: GB mapper override: using MBC5
+2026-09-10 21:25:45 I (1788369) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 21:25:52 E (1794430) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:25:52 E (1794430) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:25:52 E (1794430) task_wdt: Tasks currently running:
+2026-09-10 21:25:52 E (1794430) task_wdt: CPU 0: IDLE0
+2026-09-10 21:25:52 E (1794430) task_wdt: CPU 1: burn_task
+2026-09-10 21:25:52 E (1794430) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:25:52 
+2026-09-10 21:25:52 
+2026-09-10 21:25:52 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x4038846B:0x3C35EFD0 0x4037A0DC:0x3C35EFF0 0x4037A169:0x3C35F010 0x420398BB:0x3C35F030 0x42033C15:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:25:52 
+2026-09-10 21:25:57 E (1799430) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:25:57 E (1799430) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:25:57 E (1799430) task_wdt: Tasks currently running:
+2026-09-10 21:25:57 E (1799430) task_wdt: CPU 0: IDLE0
+2026-09-10 21:25:57 E (1799430) task_wdt: CPU 1: burn_task
+2026-09-10 21:25:57 E (1799430) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:25:57 
+2026-09-10 21:25:57 
+2026-09-10 21:25:57 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x421AA136:0x3C35F070 0x42033C52:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:25:57 
+2026-09-10 21:26:03 E (1805720) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:26:03 E (1805720) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:26:03 E (1805720) task_wdt: Tasks currently running:
+2026-09-10 21:26:03 E (1805720) task_wdt: CPU 0: IDLE0
+2026-09-10 21:26:03 E (1805720) task_wdt: CPU 1: burn_task
+2026-09-10 21:26:03 E (1805720) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:26:03 
+2026-09-10 21:26:03 
+2026-09-10 21:26:03 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x421AA11F:0x3C35F070 0x42033C52:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:26:03 
+2026-09-10 21:26:08 E (1810720) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:26:08 E (1810720) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:26:08 E (1810720) task_wdt: Tasks currently running:
+2026-09-10 21:26:08 E (1810720) task_wdt: CPU 0: IDLE0
+2026-09-10 21:26:08 E (1810720) task_wdt: CPU 1: burn_task
+2026-09-10 21:26:08 E (1810720) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:26:08 
+2026-09-10 21:26:08 
+2026-09-10 21:26:08 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x42033C52:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:26:08 
+2026-09-10 21:26:14 E (1817016) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:26:14 E (1817016) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:26:14 E (1817016) task_wdt: Tasks currently running:
+2026-09-10 21:26:14 E (1817016) task_wdt: CPU 0: lvgl
+2026-09-10 21:26:14 E (1817016) task_wdt: CPU 1: burn_task
+2026-09-10 21:26:14 E (1817016) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:26:14 
+2026-09-10 21:26:14 
+2026-09-10 21:26:14 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x4038846B:0x3C35EFD0 0x4037A0DC:0x3C35EFF0 0x4037A169:0x3C35F010 0x420398BB:0x3C35F030 0x42033C15:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:26:14 
+2026-09-10 21:26:19 E (1822016) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:26:19 E (1822016) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:26:19 E (1822016) task_wdt: Tasks currently running:
+2026-09-10 21:26:19 E (1822016) task_wdt: CPU 0: lvgl
+2026-09-10 21:26:19 E (1822016) task_wdt: CPU 1: burn_task
+2026-09-10 21:26:19 E (1822016) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:26:19 
+2026-09-10 21:26:19 
+2026-09-10 21:26:19 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x4037A0D0:0x3C35EFF0 0x4037A169:0x3C35F010 0x420398BB:0x3C35F030 0x42033C15:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:26:19 
+2026-09-10 21:26:29 E (1831661) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:26:29 E (1831661) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:26:29 E (1831661) task_wdt: Tasks currently running:
+2026-09-10 21:26:29 E (1831661) task_wdt: CPU 0: IDLE0
+2026-09-10 21:26:29 E (1831661) task_wdt: CPU 1: burn_task
+2026-09-10 21:26:29 E (1831661) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:26:29 
+2026-09-10 21:26:29 
+2026-09-10 21:26:29 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x42033C71:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:26:29 
+2026-09-10 21:26:36 E (1839187) task_wdt: Task watchdog got triggered. The following tasks/users did not reset the watchdog in time:
+2026-09-10 21:26:36 E (1839187) task_wdt:  - IDLE1 (CPU 1)
+2026-09-10 21:26:36 E (1839187) task_wdt: Tasks currently running:
+2026-09-10 21:26:36 E (1839187) task_wdt: CPU 0: lvgl
+2026-09-10 21:26:36 E (1839187) task_wdt: CPU 1: burn_task
+2026-09-10 21:26:36 E (1839187) task_wdt: Print CPU 1 backtrace
+2026-09-10 21:26:36 
+2026-09-10 21:26:36 
+2026-09-10 21:26:36 Backtrace: 0x40378CE2:0x3FCA6550 0x40377CE2:0x3FCA6570 0x4038846B:0x3C35EFD0 0x4037A0DC:0x3C35EFF0 0x4037A169:0x3C35F010 0x420398BB:0x3C35F030 0x42033C15:0x3C35F090 0x42034043:0x3C35F100 0x42035FCC:0x3C35F3D0 0x420604AA:0x3C35F490 0x403821A9:0x3C35F910
+2026-09-10 21:26:36 
+2026-09-10 21:26:37 I (1840217) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 21:26:37 I (1840219) power_manager: CPU perf lock released by burn_task
+2026-09-10 21:26:37 I (1840223) burner_web: burn_task stack free min=11212 bytes

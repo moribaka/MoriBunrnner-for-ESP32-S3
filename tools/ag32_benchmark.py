@@ -52,12 +52,14 @@ def request(base, path, params=None, method="GET"):
 
 
 def job(args, action, rom):
-    params = {"mode": "gba", "name": rom.removeprefix("/sdcard/"), "recipe_mode": args.recipe}
+    params = {"mode": args.mode, "name": rom.removeprefix("/sdcard/"), "recipe_mode": args.recipe}
     if action == "write":
-        params.update(write_path=args.write_path, pipeline_erase="force",
-                      sram=int(not args.no_sram), waitcnt=int(args.waitcnt), batteryless=int(args.batteryless))
+        params.update(write_path=args.write_path, pipeline_erase=args.erase_mode,
+                      sram=int(args.mode == "gba" and not args.no_sram),
+                      waitcnt=int(args.mode == "gba" and args.waitcnt),
+                      batteryless=int(args.mode == "gba" and args.batteryless))
     if action == "read":
-        params.update(size="32MB", dump_chunk_kb=64)
+        params.update(size=args.size, dump_chunk_kb=64)
     start = time.monotonic()
     accepted = request(args.url, "/api/" + action, params, "POST")
     print(json.dumps({"action": action, "accepted": accepted}, ensure_ascii=False), flush=True)
@@ -89,6 +91,9 @@ def main():
     parser.add_argument("--action", choices=("read", "verify", "write"), required=True)
     parser.add_argument("--link", choices=("legacy", "mcu", "cpld"), required=True)
     parser.add_argument("--rom", required=True)
+    parser.add_argument("--mode", choices=("gba", "mbc5"), default="gba")
+    parser.add_argument("--size", default="32MB", help="Read/backup size")
+    parser.add_argument("--erase-mode", choices=("force", "smart"), default="force")
     parser.add_argument("--verify-rom")
     parser.add_argument("--write-path", choices=("direct", "psram", "pipeline"), default="psram")
     parser.add_argument("--recipe", choices=("chis", "chislink", "gbx"), default="chis")

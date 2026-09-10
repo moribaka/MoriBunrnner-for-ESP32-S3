@@ -1,0 +1,19 @@
+2026-09-10 21:18:41 I (1363958) burner_web: PSRAM auto window: free=7556136 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 21:18:41 I (1363962) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 21:18:41 I (1364065) burner_web: MBC5 power rail: 3V3
+2026-09-10 21:18:41 I (1364166) burner_web: MBC5 ReadID trace begin t=1362950296us
+2026-09-10 21:18:41 I (1364167) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1381us (0.001381s)
+2026-09-10 21:18:41 I (1364170) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2995us (0.002995s)
+2026-09-10 21:18:41 I (1364178) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=7928us (0.007928s)
+2026-09-10 21:18:41 I (1364186) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8069us (0.008069s)
+2026-09-10 21:18:41 I (1364195) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=8131us (0.008131s)
+2026-09-10 21:18:41 I (1364202) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7890us (0.007890s)
+2026-09-10 21:18:41 I (1364210) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7912us (0.007912s)
+2026-09-10 21:18:41 I (1364218) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7964us (0.007964s)
+2026-09-10 21:18:41 I (1364226) burner_web: MBC5 ReadID trace end status=ESP_OK total=60319us (0.060319s)
+2026-09-10 21:18:41 I (1364234) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 21:18:41 I (1364248) burner_web: GB mapper override: using MBC5
+2026-09-10 21:18:41 I (1364252) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 21:20:51 I (1493874) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=dump finished
+2026-09-10 21:20:51 I (1493876) power_manager: CPU perf lock released by burn_task
+2026-09-10 21:20:51 I (1493879) burner_web: burn_task stack free min=12092 bytes

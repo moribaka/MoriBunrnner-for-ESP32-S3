@@ -24,19 +24,24 @@ static esp_err_t burner_bacon_mbc5_prepare(uint32_t total_bytes)
         NULL);
 }
 
-static esp_err_t burner_bacon_mbc5_program_block(const uint8_t *data, size_t len, uint32_t offset)
+/* The caller has erased or completely verified every target sector as blank. */
+static esp_err_t burner_bacon_mbc5_program_erased_block(
+    const uint8_t *data, size_t len, uint32_t offset, uint32_t *written_bytes)
 {
     size_t programmed = 0;
     esp_err_t err;
 
-    if (data == NULL || len == 0u) {
+    if (data == NULL || len == 0u || written_bytes == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
+    *written_bytes = 0u;
     if (!s_cart_ctx.prepared) {
         return ESP_ERR_INVALID_STATE;
     }
     if (burner_gbc_gbx_is_active()) {
-        return burner_gbc_gbx_program_block(data, len, offset);
+        err = burner_gbc_gbx_program_block(data, len, offset);
+        if (err == ESP_OK) *written_bytes = (uint32_t)len;
+        return err;
     }
 
     while (programmed < len) {
@@ -55,6 +60,14 @@ static esp_err_t burner_bacon_mbc5_program_block(const uint8_t *data, size_t len
         burner_mbc5_addr_to_program_window(rom_addr, &bank, &cart_addr, &bank_off);
         bank_remain = BURN_MBC5_ROM_BANK_BYTES - bank_off;
         chunk = (remain < bank_remain) ? remain : bank_remain;
+        burner_gbc_program_span_t span = burner_gbc_program_span(
+            data + programmed, chunk, cart_addr, s_cart_ctx.buffer_write_bytes);
+        chunk = span.bytes;
+        if (span.blank) {
+            programmed += chunk;
+            burner_task_yield_if_due();
+            continue;
+        }
 
         if (bank != s_cart_ctx.current_bank) {
             err = burner_bacon_mbc5_switch_bank(bank);
@@ -74,6 +87,7 @@ static esp_err_t burner_bacon_mbc5_program_block(const uint8_t *data, size_t len
         }
 
         programmed += chunk;
+        *written_bytes += (uint32_t)chunk;
         burner_task_yield_if_due();
     }
 

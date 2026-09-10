@@ -151,6 +151,7 @@ void burner_status_phase_reset_locked(void)
     s_status.dump_write_speed_max_bps = 0u;
     s_status.mbc5_buffer_write_ok_count = 0u;
     s_status.mbc5_buffer_fallback_count = 0u;
+    s_status.write_skipped_bytes = 0u;
     s_status.write_speed_total_bytes = 0u;
     s_status.write_speed_total_us = 0u;
     s_status.tf_to_psram_total_bytes = 0u;
@@ -674,6 +675,15 @@ void burner_status_record_tf_to_psram_copy(uint32_t bytes, uint64_t elapsed_us)
         &s_status.tf_to_psram_speed_max_bps,
         &s_status.tf_to_psram_total_bytes,
         &s_status.tf_to_psram_total_us);
+    xSemaphoreGive(s_status_lock);
+}
+
+void burner_status_record_write_skipped(uint32_t bytes)
+{
+    if (s_status_lock == NULL || bytes == 0u) return;
+    xSemaphoreTake(s_status_lock, portMAX_DELAY);
+    uint64_t total = (uint64_t)s_status.write_skipped_bytes + bytes;
+    s_status.write_skipped_bytes = total > UINT32_MAX ? UINT32_MAX : (uint32_t)total;
     xSemaphoreGive(s_status_lock);
 }
 

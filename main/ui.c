@@ -148,7 +148,7 @@
 #define UI_SETTINGS_ITEM_COUNT 11
 #define UI_TASK_STATUS_ITEM_COUNT 12
 #define UI_TASK_PATCH_BASE_ROW UI_TASK_STATUS_ITEM_COUNT
-#define UI_TASK_RESULT_ITEM_COUNT 18
+#define UI_TASK_RESULT_ITEM_COUNT 19
 #define UI_TASK_CANCEL_CONFIRM_ITEM_COUNT 2U
 #define UI_TASK_ERASE_PROGRESS_ROW 6U
 #define UI_TASK_BURN_PROGRESS_ROW 7U
@@ -4734,7 +4734,7 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
         return;
     }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
-        !ui_gba_sram_patch_selectable()) {
+        s_cart_mode == BURNER_CART_MODE_GBA && !ui_gba_sram_patch_selectable()) {
         /* Skip unavailable SRAM while retaining every subsequent action. */
         uint16_t next = model->selected;
         do { next = delta > 0 ? (uint16_t)((next + 1U) % count) :
@@ -5443,7 +5443,7 @@ static void ui_select_locked(
             ui_set_status_locked(model, ui_cart_is_unlocked() ? ui_tr("cart analyzed") : ui_tr("analyze cart first"));
             break;
         case UI_PAGE_BURN_ROM:
-            if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH) {
+            if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_SAVE_PATCH && s_cart_mode == BURNER_CART_MODE_GBA) {
                 if (model->selected < 3U) {
                     s_gba_save_patch_choice = (model->selected == 0U) ? 1U :
                                               (model->selected == 1U) ? 2U : 0U;
@@ -5462,6 +5462,8 @@ static void ui_select_locked(
                         s_burn_rom_write_menu = false;
                         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
                     }
+                } else if (s_cart_mode != BURNER_CART_MODE_GBA) {
+                    return;
                 } else if (model->selected == 1U) {
                     if (!ui_gba_sram_patch_selectable()) {
                         ui_set_status_locked(model, ui_tr("Save patch not needed"));

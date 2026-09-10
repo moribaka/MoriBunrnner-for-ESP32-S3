@@ -1,0 +1,632 @@
+2026-09-10 21:58:00 I (106312) burner_web: PSRAM auto window: free=7539716 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 21:58:00 I (106318) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 21:58:00 I (106323) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 21:58:00 I (106429) burner_web: MBC5 power rail: 3V3
+2026-09-10 21:58:00 I (106530) burner_web: MBC5 ReadID trace begin t=105312771us
+2026-09-10 21:58:00 I (106531) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1505us (0.001505s)
+2026-09-10 21:58:00 I (106535) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=3980us (0.003980s)
+2026-09-10 21:58:00 I (106544) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8655us (0.008655s)
+2026-09-10 21:58:00 I (106551) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=6972us (0.006972s)
+2026-09-10 21:58:00 I (106558) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=6866us (0.006866s)
+2026-09-10 21:58:00 I (106566) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=8078us (0.008078s)
+2026-09-10 21:58:00 I (106574) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=8722us (0.008722s)
+2026-09-10 21:58:00 I (106582) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7925us (0.007925s)
+2026-09-10 21:58:00 I (106590) burner_web: MBC5 ReadID trace end status=ESP_OK total=60582us (0.060582s)
+2026-09-10 21:58:00 I (106599) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 21:58:00 I (106712) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 21:58:01 I (106816) burner_web: MBC5 power rail: 3V3
+2026-09-10 21:58:01 I (106917) burner_web: MBC5 ReadID trace begin t=105700275us
+2026-09-10 21:58:01 I (106918) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1355us (0.001355s)
+2026-09-10 21:58:01 I (106921) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2347us (0.002347s)
+2026-09-10 21:58:01 I (106929) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8238us (0.008238s)
+2026-09-10 21:58:01 I (106937) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8055us (0.008055s)
+2026-09-10 21:58:01 I (106945) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7883us (0.007883s)
+2026-09-10 21:58:01 I (106953) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7664us (0.007664s)
+2026-09-10 21:58:01 I (106961) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=8084us (0.008084s)
+2026-09-10 21:58:01 I (106968) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7716us (0.007716s)
+2026-09-10 21:58:01 I (106976) burner_web: MBC5 ReadID trace end status=ESP_OK total=59355us (0.059355s)
+2026-09-10 21:58:01 I (106984) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 21:58:01 I (106998) burner_web: GB mapper detect: bank0 fixed=0000 switch=4000 len=64 fixed=FF-3E-A4-EA switch=FF-3E-A4-EA eq=1 blank=0/0 result=MBC5
+2026-09-10 21:58:01 I (107010) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 21:58:01 I (107028) burner_web: MBC5 burn erase policy: force erase for all write paths
+2026-09-10 21:58:01 I (107032) burner_web: MBC5 erase plan: range=0x00000000-0x005FFFFF first_sector=0x005E0000 first_bank=376 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 21:58:01 I (107048) burner_web: MBC5 erase sector: flash=0x005E0000 size=131072 bank=376 cart=0x4000
+2026-09-10 21:58:02 I (107754) burner_web: MBC5 erase sector: flash=0x005C0000 size=131072 bank=368 cart=0x4000
+2026-09-10 21:58:02 I (108445) burner_web: MBC5 erase sector: flash=0x005A0000 size=131072 bank=360 cart=0x4000
+2026-09-10 21:58:03 I (109135) burner_web: MBC5 erase sector: flash=0x00580000 size=131072 bank=352 cart=0x4000
+2026-09-10 21:58:04 I (109823) burner_web: MBC5 erase sector: flash=0x00560000 size=131072 bank=344 cart=0x4000
+2026-09-10 21:58:04 I (110522) burner_web: MBC5 erase sector: flash=0x00540000 size=131072 bank=336 cart=0x4000
+2026-09-10 21:58:05 I (111219) burner_web: MBC5 erase sector: flash=0x00520000 size=131072 bank=328 cart=0x4000
+2026-09-10 21:58:06 I (111916) burner_web: MBC5 erase sector: flash=0x00500000 size=131072 bank=320 cart=0x4000
+2026-09-10 21:58:06 I (112608) burner_web: MBC5 erase sector: flash=0x004E0000 size=131072 bank=312 cart=0x4000
+2026-09-10 21:58:07 I (113308) burner_web: MBC5 erase sector: flash=0x004C0000 size=131072 bank=304 cart=0x4000
+2026-09-10 21:58:08 I (113998) burner_web: MBC5 erase sector: flash=0x004A0000 size=131072 bank=296 cart=0x4000
+2026-09-10 21:58:08 I (114697) burner_web: MBC5 erase sector: flash=0x00480000 size=131072 bank=288 cart=0x4000
+2026-09-10 21:58:09 I (115394) burner_web: MBC5 erase sector: flash=0x00460000 size=131072 bank=280 cart=0x4000
+2026-09-10 21:58:10 I (116095) burner_web: MBC5 erase sector: flash=0x00440000 size=131072 bank=272 cart=0x4000
+2026-09-10 21:58:11 I (116810) burner_web: MBC5 erase sector: flash=0x00420000 size=131072 bank=264 cart=0x4000
+2026-09-10 21:58:11 I (117515) burner_web: MBC5 erase sector: flash=0x00400000 size=131072 bank=256 cart=0x4000
+2026-09-10 21:58:12 I (118209) burner_web: MBC5 erase sector: flash=0x003E0000 size=131072 bank=248 cart=0x4000
+2026-09-10 21:58:13 I (118908) burner_web: MBC5 erase sector: flash=0x003C0000 size=131072 bank=240 cart=0x4000
+2026-09-10 21:58:13 I (119604) burner_web: MBC5 erase sector: flash=0x003A0000 size=131072 bank=232 cart=0x4000
+2026-09-10 21:58:14 I (120295) burner_web: MBC5 erase sector: flash=0x00380000 size=131072 bank=224 cart=0x4000
+2026-09-10 21:58:15 I (120998) burner_web: MBC5 erase sector: flash=0x00360000 size=131072 bank=216 cart=0x4000
+2026-09-10 21:58:15 I (121697) burner_web: MBC5 erase sector: flash=0x00340000 size=131072 bank=208 cart=0x4000
+2026-09-10 21:58:16 I (122394) burner_web: MBC5 erase sector: flash=0x00320000 size=131072 bank=200 cart=0x4000
+2026-09-10 21:58:17 I (123091) burner_web: MBC5 erase sector: flash=0x00300000 size=131072 bank=192 cart=0x4000
+2026-09-10 21:58:18 I (123788) burner_web: MBC5 erase sector: flash=0x002E0000 size=131072 bank=184 cart=0x4000
+2026-09-10 21:58:18 I (124455) burner_web: MBC5 erase sector: flash=0x002C0000 size=131072 bank=176 cart=0x4000
+2026-09-10 21:58:19 I (125042) burner_web: MBC5 erase sector: flash=0x002A0000 size=131072 bank=168 cart=0x4000
+2026-09-10 21:58:19 I (125684) burner_web: MBC5 erase sector: flash=0x00280000 size=131072 bank=160 cart=0x4000
+2026-09-10 21:58:20 I (126329) burner_web: MBC5 erase sector: flash=0x00260000 size=131072 bank=152 cart=0x4000
+2026-09-10 21:58:21 I (126968) burner_web: MBC5 erase sector: flash=0x00240000 size=131072 bank=144 cart=0x4000
+2026-09-10 21:58:21 I (127598) burner_web: MBC5 erase sector: flash=0x00220000 size=131072 bank=136 cart=0x4000
+2026-09-10 21:58:22 I (128254) burner_web: MBC5 erase sector: flash=0x00200000 size=131072 bank=128 cart=0x4000
+2026-09-10 21:58:23 I (128914) burner_web: MBC5 erase sector: flash=0x001E0000 size=131072 bank=120 cart=0x4000
+2026-09-10 21:58:23 I (129615) burner_web: MBC5 erase sector: flash=0x001C0000 size=131072 bank=112 cart=0x4000
+2026-09-10 21:58:24 I (130321) burner_web: MBC5 erase sector: flash=0x001A0000 size=131072 bank=104 cart=0x4000
+2026-09-10 21:58:25 I (131017) burner_web: MBC5 erase sector: flash=0x00180000 size=131072 bank=96 cart=0x4000
+2026-09-10 21:58:25 I (131712) burner_web: MBC5 erase sector: flash=0x00160000 size=131072 bank=88 cart=0x4000
+2026-09-10 21:58:26 I (132417) burner_web: MBC5 erase sector: flash=0x00140000 size=131072 bank=80 cart=0x4000
+2026-09-10 21:58:27 I (133121) burner_web: MBC5 erase sector: flash=0x00120000 size=131072 bank=72 cart=0x4000
+2026-09-10 21:58:28 I (133834) burner_web: MBC5 erase sector: flash=0x00100000 size=131072 bank=64 cart=0x4000
+2026-09-10 21:58:28 I (134540) burner_web: MBC5 erase sector: flash=0x000E0000 size=131072 bank=56 cart=0x4000
+2026-09-10 21:58:29 I (135243) burner_web: MBC5 erase sector: flash=0x000C0000 size=131072 bank=48 cart=0x4000
+2026-09-10 21:58:30 I (135939) burner_web: MBC5 erase sector: flash=0x000A0000 size=131072 bank=40 cart=0x4000
+2026-09-10 21:58:30 I (136650) burner_web: MBC5 erase sector: flash=0x00080000 size=131072 bank=32 cart=0x4000
+2026-09-10 21:58:31 I (137354) burner_web: MBC5 erase sector: flash=0x00060000 size=131072 bank=24 cart=0x4000
+2026-09-10 21:58:32 I (138062) burner_web: MBC5 erase sector: flash=0x00040000 size=131072 bank=16 cart=0x4000
+2026-09-10 21:58:33 I (138766) burner_web: MBC5 erase sector: flash=0x00020000 size=131072 bank=8 cart=0x4000
+2026-09-10 21:58:33 I (139464) burner_web: MBC5 erase sector: flash=0x00000000 size=131072 bank=0 cart=0x0000
+2026-09-10 21:58:37 I (143466) burner_web: MBC5 erase plan: range=0x00600000-0x00BFFFFF first_sector=0x00BE0000 first_bank=760 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 21:58:37 I (143473) burner_web: MBC5 erase sector: flash=0x00BE0000 size=131072 bank=760 cart=0x4000
+2026-09-10 21:58:38 I (144177) burner_web: MBC5 erase sector: flash=0x00BC0000 size=131072 bank=752 cart=0x4000
+2026-09-10 21:58:39 I (144885) burner_web: MBC5 erase sector: flash=0x00BA0000 size=131072 bank=744 cart=0x4000
+2026-09-10 21:58:39 I (145582) burner_web: MBC5 erase sector: flash=0x00B80000 size=131072 bank=736 cart=0x4000
+2026-09-10 21:58:40 I (146288) burner_web: MBC5 erase sector: flash=0x00B60000 size=131072 bank=728 cart=0x4000
+2026-09-10 21:58:41 I (146996) burner_web: MBC5 erase sector: flash=0x00B40000 size=131072 bank=720 cart=0x4000
+2026-09-10 21:58:41 I (147690) burner_web: MBC5 erase sector: flash=0x00B20000 size=131072 bank=712 cart=0x4000
+2026-09-10 21:58:42 I (148379) burner_web: MBC5 erase sector: flash=0x00B00000 size=131072 bank=704 cart=0x4000
+2026-09-10 21:58:43 I (149075) burner_web: MBC5 erase sector: flash=0x00AE0000 size=131072 bank=696 cart=0x4000
+2026-09-10 21:58:44 I (149770) burner_web: MBC5 erase sector: flash=0x00AC0000 size=131072 bank=688 cart=0x4000
+2026-09-10 21:58:44 I (150462) burner_web: MBC5 erase sector: flash=0x00AA0000 size=131072 bank=680 cart=0x4000
+2026-09-10 21:58:45 I (151172) burner_web: MBC5 erase sector: flash=0x00A80000 size=131072 bank=672 cart=0x4000
+2026-09-10 21:58:46 I (151867) burner_web: MBC5 erase sector: flash=0x00A60000 size=131072 bank=664 cart=0x4000
+2026-09-10 21:58:46 I (152577) burner_web: MBC5 erase sector: flash=0x00A40000 size=131072 bank=656 cart=0x4000
+2026-09-10 21:58:47 I (153266) burner_web: MBC5 erase sector: flash=0x00A20000 size=131072 bank=648 cart=0x4000
+2026-09-10 21:58:48 I (153953) burner_web: MBC5 erase sector: flash=0x00A00000 size=131072 bank=640 cart=0x4000
+2026-09-10 21:58:48 I (154645) burner_web: MBC5 erase sector: flash=0x009E0000 size=131072 bank=632 cart=0x4000
+2026-09-10 21:58:49 I (155352) burner_web: MBC5 erase sector: flash=0x009C0000 size=131072 bank=624 cart=0x4000
+2026-09-10 21:58:50 I (156036) burner_web: MBC5 erase sector: flash=0x009A0000 size=131072 bank=616 cart=0x4000
+2026-09-10 21:58:51 I (156737) burner_web: MBC5 erase sector: flash=0x00980000 size=131072 bank=608 cart=0x4000
+2026-09-10 21:58:51 I (157434) burner_web: MBC5 erase sector: flash=0x00960000 size=131072 bank=600 cart=0x4000
+2026-09-10 21:58:52 I (158130) burner_web: MBC5 erase sector: flash=0x00940000 size=131072 bank=592 cart=0x4000
+2026-09-10 21:58:53 I (158819) burner_web: MBC5 erase sector: flash=0x00920000 size=131072 bank=584 cart=0x4000
+2026-09-10 21:58:53 I (159453) burner_web: MBC5 erase sector: flash=0x00900000 size=131072 bank=576 cart=0x4000
+2026-09-10 21:58:54 I (160069) burner_web: MBC5 erase sector: flash=0x008E0000 size=131072 bank=568 cart=0x4000
+2026-09-10 21:58:55 I (160735) burner_web: MBC5 erase sector: flash=0x008C0000 size=131072 bank=560 cart=0x4000
+2026-09-10 21:58:55 I (161384) burner_web: MBC5 erase sector: flash=0x008A0000 size=131072 bank=552 cart=0x4000
+2026-09-10 21:58:56 I (162063) burner_web: MBC5 erase sector: flash=0x00880000 size=131072 bank=544 cart=0x4000
+2026-09-10 21:58:57 I (162754) burner_web: MBC5 erase sector: flash=0x00860000 size=131072 bank=536 cart=0x4000
+2026-09-10 21:58:57 I (163454) burner_web: MBC5 erase sector: flash=0x00840000 size=131072 bank=528 cart=0x4000
+2026-09-10 21:58:58 I (164143) burner_web: MBC5 erase sector: flash=0x00820000 size=131072 bank=520 cart=0x4000
+2026-09-10 21:58:59 I (164837) burner_web: MBC5 erase sector: flash=0x00800000 size=131072 bank=512 cart=0x4000
+2026-09-10 21:58:59 I (165524) burner_web: MBC5 erase sector: flash=0x007E0000 size=131072 bank=504 cart=0x4000
+2026-09-10 21:59:00 I (166222) burner_web: MBC5 erase sector: flash=0x007C0000 size=131072 bank=496 cart=0x4000
+2026-09-10 21:59:01 I (166928) burner_web: MBC5 erase sector: flash=0x007A0000 size=131072 bank=488 cart=0x4000
+2026-09-10 21:59:01 I (167641) burner_web: MBC5 erase sector: flash=0x00780000 size=131072 bank=480 cart=0x4000
+2026-09-10 21:59:02 I (168333) burner_web: MBC5 erase sector: flash=0x00760000 size=131072 bank=472 cart=0x4000
+2026-09-10 21:59:03 I (169037) burner_web: MBC5 erase sector: flash=0x00740000 size=131072 bank=464 cart=0x4000
+2026-09-10 21:59:04 I (169733) burner_web: MBC5 erase sector: flash=0x00720000 size=131072 bank=456 cart=0x4000
+2026-09-10 21:59:04 I (170435) burner_web: MBC5 erase sector: flash=0x00700000 size=131072 bank=448 cart=0x4000
+2026-09-10 21:59:05 I (171127) burner_web: MBC5 erase sector: flash=0x006E0000 size=131072 bank=440 cart=0x4000
+2026-09-10 21:59:06 I (171825) burner_web: MBC5 erase sector: flash=0x006C0000 size=131072 bank=432 cart=0x4000
+2026-09-10 21:59:06 I (172516) burner_web: MBC5 erase sector: flash=0x006A0000 size=131072 bank=424 cart=0x4000
+2026-09-10 21:59:07 I (173210) burner_web: MBC5 erase sector: flash=0x00680000 size=131072 bank=416 cart=0x4000
+2026-09-10 21:59:08 I (173916) burner_web: MBC5 erase sector: flash=0x00660000 size=131072 bank=408 cart=0x4000
+2026-09-10 21:59:08 I (174615) burner_web: MBC5 erase sector: flash=0x00640000 size=131072 bank=400 cart=0x4000
+2026-09-10 21:59:09 I (175312) burner_web: MBC5 erase sector: flash=0x00620000 size=131072 bank=392 cart=0x4000
+2026-09-10 21:59:10 I (176008) burner_web: MBC5 erase sector: flash=0x00600000 size=131072 bank=384 cart=0x4000
+2026-09-10 21:59:21 I (187492) burner_web: MBC5 erase plan: range=0x00C00000-0x011FFFFF first_sector=0x011E0000 first_bank=1144 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 21:59:21 I (187500) burner_web: MBC5 erase sector: flash=0x011E0000 size=131072 bank=1144 cart=0x4000
+2026-09-10 21:59:22 I (188197) burner_web: MBC5 erase sector: flash=0x011C0000 size=131072 bank=1136 cart=0x4000
+2026-09-10 21:59:23 I (188890) burner_web: MBC5 erase sector: flash=0x011A0000 size=131072 bank=1128 cart=0x4000
+2026-09-10 21:59:23 I (189592) burner_web: MBC5 erase sector: flash=0x01180000 size=131072 bank=1120 cart=0x4000
+2026-09-10 21:59:24 I (190299) burner_web: MBC5 erase sector: flash=0x01160000 size=131072 bank=1112 cart=0x4000
+2026-09-10 21:59:25 I (190990) burner_web: MBC5 erase sector: flash=0x01140000 size=131072 bank=1104 cart=0x4000
+2026-09-10 21:59:25 I (191690) burner_web: MBC5 erase sector: flash=0x01120000 size=131072 bank=1096 cart=0x4000
+2026-09-10 21:59:26 I (192383) burner_web: MBC5 erase sector: flash=0x01100000 size=131072 bank=1088 cart=0x4000
+2026-09-10 21:59:27 I (193075) burner_web: MBC5 erase sector: flash=0x010E0000 size=131072 bank=1080 cart=0x4000
+2026-09-10 21:59:28 I (193777) burner_web: MBC5 erase sector: flash=0x010C0000 size=131072 bank=1072 cart=0x4000
+2026-09-10 21:59:28 I (194468) burner_web: MBC5 erase sector: flash=0x010A0000 size=131072 bank=1064 cart=0x4000
+2026-09-10 21:59:29 I (195165) burner_web: MBC5 erase sector: flash=0x01080000 size=131072 bank=1056 cart=0x4000
+2026-09-10 21:59:30 I (195867) burner_web: MBC5 erase sector: flash=0x01060000 size=131072 bank=1048 cart=0x4000
+2026-09-10 21:59:30 I (196568) burner_web: MBC5 erase sector: flash=0x01040000 size=131072 bank=1040 cart=0x4000
+2026-09-10 21:59:31 I (197268) burner_web: MBC5 erase sector: flash=0x01020000 size=131072 bank=1032 cart=0x4000
+2026-09-10 21:59:32 I (197960) burner_web: MBC5 erase sector: flash=0x01000000 size=131072 bank=1024 cart=0x4000
+2026-09-10 21:59:32 I (198657) burner_web: MBC5 erase sector: flash=0x00FE0000 size=131072 bank=1016 cart=0x4000
+2026-09-10 21:59:33 I (199356) burner_web: MBC5 erase sector: flash=0x00FC0000 size=131072 bank=1008 cart=0x4000
+2026-09-10 21:59:34 I (200053) burner_web: MBC5 erase sector: flash=0x00FA0000 size=131072 bank=1000 cart=0x4000
+2026-09-10 21:59:35 I (200759) burner_web: MBC5 erase sector: flash=0x00F80000 size=131072 bank=992 cart=0x4000
+2026-09-10 21:59:35 I (201450) burner_web: MBC5 erase sector: flash=0x00F60000 size=131072 bank=984 cart=0x4000
+2026-09-10 21:59:36 I (202154) burner_web: MBC5 erase sector: flash=0x00F40000 size=131072 bank=976 cart=0x4000
+2026-09-10 21:59:37 I (202849) burner_web: MBC5 erase sector: flash=0x00F20000 size=131072 bank=968 cart=0x4000
+2026-09-10 21:59:37 I (203550) burner_web: MBC5 erase sector: flash=0x00F00000 size=131072 bank=960 cart=0x4000
+2026-09-10 21:59:38 I (204243) burner_web: MBC5 erase sector: flash=0x00EE0000 size=131072 bank=952 cart=0x4000
+2026-09-10 21:59:39 I (204948) burner_web: MBC5 erase sector: flash=0x00EC0000 size=131072 bank=944 cart=0x4000
+2026-09-10 21:59:39 I (205638) burner_web: MBC5 erase sector: flash=0x00EA0000 size=131072 bank=936 cart=0x4000
+2026-09-10 21:59:40 I (206328) burner_web: MBC5 erase sector: flash=0x00E80000 size=131072 bank=928 cart=0x4000
+2026-09-10 21:59:41 I (207028) burner_web: MBC5 erase sector: flash=0x00E60000 size=131072 bank=920 cart=0x4000
+2026-09-10 21:59:42 I (207726) burner_web: MBC5 erase sector: flash=0x00E40000 size=131072 bank=912 cart=0x4000
+2026-09-10 21:59:42 I (208426) burner_web: MBC5 erase sector: flash=0x00E20000 size=131072 bank=904 cart=0x4000
+2026-09-10 21:59:43 I (209121) burner_web: MBC5 erase sector: flash=0x00E00000 size=131072 bank=896 cart=0x4000
+2026-09-10 21:59:44 I (209816) burner_web: MBC5 erase sector: flash=0x00DE0000 size=131072 bank=888 cart=0x4000
+2026-09-10 21:59:44 I (210508) burner_web: MBC5 erase sector: flash=0x00DC0000 size=131072 bank=880 cart=0x4000
+2026-09-10 21:59:45 I (211212) burner_web: MBC5 erase sector: flash=0x00DA0000 size=131072 bank=872 cart=0x4000
+2026-09-10 21:59:46 I (211904) burner_web: MBC5 erase sector: flash=0x00D80000 size=131072 bank=864 cart=0x4000
+2026-09-10 21:59:46 I (212614) burner_web: MBC5 erase sector: flash=0x00D60000 size=131072 bank=856 cart=0x4000
+2026-09-10 21:59:47 I (213318) burner_web: MBC5 erase sector: flash=0x00D40000 size=131072 bank=848 cart=0x4000
+2026-09-10 21:59:48 I (214017) burner_web: MBC5 erase sector: flash=0x00D20000 size=131072 bank=840 cart=0x4000
+2026-09-10 21:59:48 I (214722) burner_web: MBC5 erase sector: flash=0x00D00000 size=131072 bank=832 cart=0x4000
+2026-09-10 21:59:49 I (215413) burner_web: MBC5 erase sector: flash=0x00CE0000 size=131072 bank=824 cart=0x4000
+2026-09-10 21:59:50 I (216112) burner_web: MBC5 erase sector: flash=0x00CC0000 size=131072 bank=816 cart=0x4000
+2026-09-10 21:59:51 I (216806) burner_web: MBC5 erase sector: flash=0x00CA0000 size=131072 bank=808 cart=0x4000
+2026-09-10 21:59:51 I (217502) burner_web: MBC5 erase sector: flash=0x00C80000 size=131072 bank=800 cart=0x4000
+2026-09-10 21:59:52 I (218193) burner_web: MBC5 erase sector: flash=0x00C60000 size=131072 bank=792 cart=0x4000
+2026-09-10 21:59:53 I (218893) burner_web: MBC5 erase sector: flash=0x00C40000 size=131072 bank=784 cart=0x4000
+2026-09-10 21:59:53 I (219595) burner_web: MBC5 erase sector: flash=0x00C20000 size=131072 bank=776 cart=0x4000
+2026-09-10 21:59:54 I (220286) burner_web: MBC5 erase sector: flash=0x00C00000 size=131072 bank=768 cart=0x4000
+2026-09-10 22:00:01 I (227117) burner_web: MBC5 erase plan: range=0x01200000-0x017FFFFF first_sector=0x017E0000 first_bank=1528 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:00:01 I (227124) burner_web: MBC5 erase sector: flash=0x017E0000 size=131072 bank=1528 cart=0x4000
+2026-09-10 22:00:02 I (227833) burner_web: MBC5 erase sector: flash=0x017C0000 size=131072 bank=1520 cart=0x4000
+2026-09-10 22:00:02 I (228548) burner_web: MBC5 erase sector: flash=0x017A0000 size=131072 bank=1512 cart=0x4000
+2026-09-10 22:00:03 I (229248) burner_web: MBC5 erase sector: flash=0x01780000 size=131072 bank=1504 cart=0x4000
+2026-09-10 22:00:04 I (229949) burner_web: MBC5 erase sector: flash=0x01760000 size=131072 bank=1496 cart=0x4000
+2026-09-10 22:00:04 I (230649) burner_web: MBC5 erase sector: flash=0x01740000 size=131072 bank=1488 cart=0x4000
+2026-09-10 22:00:05 I (231341) burner_web: MBC5 erase sector: flash=0x01720000 size=131072 bank=1480 cart=0x4000
+2026-09-10 22:00:06 I (232031) burner_web: MBC5 erase sector: flash=0x01700000 size=131072 bank=1472 cart=0x4000
+2026-09-10 22:00:07 I (232734) burner_web: MBC5 erase sector: flash=0x016E0000 size=131072 bank=1464 cart=0x4000
+2026-09-10 22:00:07 I (233435) burner_web: MBC5 erase sector: flash=0x016C0000 size=131072 bank=1456 cart=0x4000
+2026-09-10 22:00:08 I (234131) burner_web: MBC5 erase sector: flash=0x016A0000 size=131072 bank=1448 cart=0x4000
+2026-09-10 22:00:09 I (234831) burner_web: MBC5 erase sector: flash=0x01680000 size=131072 bank=1440 cart=0x4000
+2026-09-10 22:00:09 I (235537) burner_web: MBC5 erase sector: flash=0x01660000 size=131072 bank=1432 cart=0x4000
+2026-09-10 22:00:10 I (236234) burner_web: MBC5 erase sector: flash=0x01640000 size=131072 bank=1424 cart=0x4000
+2026-09-10 22:00:11 I (236931) burner_web: MBC5 erase sector: flash=0x01620000 size=131072 bank=1416 cart=0x4000
+2026-09-10 22:00:11 I (237626) burner_web: MBC5 erase sector: flash=0x01600000 size=131072 bank=1408 cart=0x4000
+2026-09-10 22:00:12 I (238317) burner_web: MBC5 erase sector: flash=0x015E0000 size=131072 bank=1400 cart=0x4000
+2026-09-10 22:00:13 I (239017) burner_web: MBC5 erase sector: flash=0x015C0000 size=131072 bank=1392 cart=0x4000
+2026-09-10 22:00:13 I (239710) burner_web: MBC5 erase sector: flash=0x015A0000 size=131072 bank=1384 cart=0x4000
+2026-09-10 22:00:14 I (240409) burner_web: MBC5 erase sector: flash=0x01580000 size=131072 bank=1376 cart=0x4000
+2026-09-10 22:00:15 I (241100) burner_web: MBC5 erase sector: flash=0x01560000 size=131072 bank=1368 cart=0x4000
+2026-09-10 22:00:16 I (241798) burner_web: MBC5 erase sector: flash=0x01540000 size=131072 bank=1360 cart=0x4000
+2026-09-10 22:00:16 I (242489) burner_web: MBC5 erase sector: flash=0x01520000 size=131072 bank=1352 cart=0x4000
+2026-09-10 22:00:17 I (243186) burner_web: MBC5 erase sector: flash=0x01500000 size=131072 bank=1344 cart=0x4000
+2026-09-10 22:00:18 I (243876) burner_web: MBC5 erase sector: flash=0x014E0000 size=131072 bank=1336 cart=0x4000
+2026-09-10 22:00:18 I (244568) burner_web: MBC5 erase sector: flash=0x014C0000 size=131072 bank=1328 cart=0x4000
+2026-09-10 22:00:19 I (245267) burner_web: MBC5 erase sector: flash=0x014A0000 size=131072 bank=1320 cart=0x4000
+2026-09-10 22:00:20 I (245961) burner_web: MBC5 erase sector: flash=0x01480000 size=131072 bank=1312 cart=0x4000
+2026-09-10 22:00:20 I (246664) burner_web: MBC5 erase sector: flash=0x01460000 size=131072 bank=1304 cart=0x4000
+2026-09-10 22:00:21 I (247364) burner_web: MBC5 erase sector: flash=0x01440000 size=131072 bank=1296 cart=0x4000
+2026-09-10 22:00:22 I (248070) burner_web: MBC5 erase sector: flash=0x01420000 size=131072 bank=1288 cart=0x4000
+2026-09-10 22:00:23 I (248760) burner_web: MBC5 erase sector: flash=0x01400000 size=131072 bank=1280 cart=0x4000
+2026-09-10 22:00:23 I (249455) burner_web: MBC5 erase sector: flash=0x013E0000 size=131072 bank=1272 cart=0x4000
+2026-09-10 22:00:24 I (250154) burner_web: MBC5 erase sector: flash=0x013C0000 size=131072 bank=1264 cart=0x4000
+2026-09-10 22:00:25 I (250855) burner_web: MBC5 erase sector: flash=0x013A0000 size=131072 bank=1256 cart=0x4000
+2026-09-10 22:00:25 I (251548) burner_web: MBC5 erase sector: flash=0x01380000 size=131072 bank=1248 cart=0x4000
+2026-09-10 22:00:26 I (252247) burner_web: MBC5 erase sector: flash=0x01360000 size=131072 bank=1240 cart=0x4000
+2026-09-10 22:00:27 I (252945) burner_web: MBC5 erase sector: flash=0x01340000 size=131072 bank=1232 cart=0x4000
+2026-09-10 22:00:27 I (253642) burner_web: MBC5 erase sector: flash=0x01320000 size=131072 bank=1224 cart=0x4000
+2026-09-10 22:00:28 I (254341) burner_web: MBC5 erase sector: flash=0x01300000 size=131072 bank=1216 cart=0x4000
+2026-09-10 22:00:29 I (255032) burner_web: MBC5 erase sector: flash=0x012E0000 size=131072 bank=1208 cart=0x4000
+2026-09-10 22:00:30 I (255725) burner_web: MBC5 erase sector: flash=0x012C0000 size=131072 bank=1200 cart=0x4000
+2026-09-10 22:00:30 I (256415) burner_web: MBC5 erase sector: flash=0x012A0000 size=131072 bank=1192 cart=0x4000
+2026-09-10 22:00:31 I (257119) burner_web: MBC5 erase sector: flash=0x01280000 size=131072 bank=1184 cart=0x4000
+2026-09-10 22:00:32 I (257824) burner_web: MBC5 erase sector: flash=0x01260000 size=131072 bank=1176 cart=0x4000
+2026-09-10 22:00:32 I (258516) burner_web: MBC5 erase sector: flash=0x01240000 size=131072 bank=1168 cart=0x4000
+2026-09-10 22:00:33 I (259212) burner_web: MBC5 erase sector: flash=0x01220000 size=131072 bank=1160 cart=0x4000
+2026-09-10 22:00:34 I (259904) burner_web: MBC5 erase sector: flash=0x01200000 size=131072 bank=1152 cart=0x4000
+2026-09-10 22:00:41 I (266780) burner_web: MBC5 erase plan: range=0x01800000-0x01DFFFFF first_sector=0x01DE0000 first_bank=1912 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:00:41 I (266788) burner_web: MBC5 erase sector: flash=0x01DE0000 size=131072 bank=1912 cart=0x4000
+2026-09-10 22:00:41 I (267495) burner_web: MBC5 erase sector: flash=0x01DC0000 size=131072 bank=1904 cart=0x4000
+2026-09-10 22:00:42 I (268204) burner_web: MBC5 erase sector: flash=0x01DA0000 size=131072 bank=1896 cart=0x4000
+2026-09-10 22:00:43 I (268904) burner_web: MBC5 erase sector: flash=0x01D80000 size=131072 bank=1888 cart=0x4000
+2026-09-10 22:00:43 I (269598) burner_web: MBC5 erase sector: flash=0x01D60000 size=131072 bank=1880 cart=0x4000
+2026-09-10 22:00:44 I (270313) burner_web: MBC5 erase sector: flash=0x01D40000 size=131072 bank=1872 cart=0x4000
+2026-09-10 22:00:45 I (271013) burner_web: MBC5 erase sector: flash=0x01D20000 size=131072 bank=1864 cart=0x4000
+2026-09-10 22:00:45 I (271706) burner_web: MBC5 erase sector: flash=0x01D00000 size=131072 bank=1856 cart=0x4000
+2026-09-10 22:00:46 I (272397) burner_web: MBC5 erase sector: flash=0x01CE0000 size=131072 bank=1848 cart=0x4000
+2026-09-10 22:00:47 I (273087) burner_web: MBC5 erase sector: flash=0x01CC0000 size=131072 bank=1840 cart=0x4000
+2026-09-10 22:00:48 I (273785) burner_web: MBC5 erase sector: flash=0x01CA0000 size=131072 bank=1832 cart=0x4000
+2026-09-10 22:00:48 I (274480) burner_web: MBC5 erase sector: flash=0x01C80000 size=131072 bank=1824 cart=0x4000
+2026-09-10 22:00:49 I (275189) burner_web: MBC5 erase sector: flash=0x01C60000 size=131072 bank=1816 cart=0x4000
+2026-09-10 22:00:50 I (275887) burner_web: MBC5 erase sector: flash=0x01C40000 size=131072 bank=1808 cart=0x4000
+2026-09-10 22:00:50 I (276579) burner_web: MBC5 erase sector: flash=0x01C20000 size=131072 bank=1800 cart=0x4000
+2026-09-10 22:00:51 I (277274) burner_web: MBC5 erase sector: flash=0x01C00000 size=131072 bank=1792 cart=0x4000
+2026-09-10 22:00:52 I (277977) burner_web: MBC5 erase sector: flash=0x01BE0000 size=131072 bank=1784 cart=0x4000
+2026-09-10 22:00:52 I (278687) burner_web: MBC5 erase sector: flash=0x01BC0000 size=131072 bank=1776 cart=0x4000
+2026-09-10 22:00:53 I (279387) burner_web: MBC5 erase sector: flash=0x01BA0000 size=131072 bank=1768 cart=0x4000
+2026-09-10 22:00:54 I (280076) burner_web: MBC5 erase sector: flash=0x01B80000 size=131072 bank=1760 cart=0x4000
+2026-09-10 22:00:55 I (280775) burner_web: MBC5 erase sector: flash=0x01B60000 size=131072 bank=1752 cart=0x4000
+2026-09-10 22:00:55 I (281462) burner_web: MBC5 erase sector: flash=0x01B40000 size=131072 bank=1744 cart=0x4000
+2026-09-10 22:00:56 I (282157) burner_web: MBC5 erase sector: flash=0x01B20000 size=131072 bank=1736 cart=0x4000
+2026-09-10 22:00:57 I (282854) burner_web: MBC5 erase sector: flash=0x01B00000 size=131072 bank=1728 cart=0x4000
+2026-09-10 22:00:57 I (283559) burner_web: MBC5 erase sector: flash=0x01AE0000 size=131072 bank=1720 cart=0x4000
+2026-09-10 22:00:58 I (284260) burner_web: MBC5 erase sector: flash=0x01AC0000 size=131072 bank=1712 cart=0x4000
+2026-09-10 22:00:59 I (284952) burner_web: MBC5 erase sector: flash=0x01AA0000 size=131072 bank=1704 cart=0x4000
+2026-09-10 22:00:59 I (285644) burner_web: MBC5 erase sector: flash=0x01A80000 size=131072 bank=1696 cart=0x4000
+2026-09-10 22:01:00 I (286353) burner_web: MBC5 erase sector: flash=0x01A60000 size=131072 bank=1688 cart=0x4000
+2026-09-10 22:01:01 I (287049) burner_web: MBC5 erase sector: flash=0x01A40000 size=131072 bank=1680 cart=0x4000
+2026-09-10 22:01:02 I (287736) burner_web: MBC5 erase sector: flash=0x01A20000 size=131072 bank=1672 cart=0x4000
+2026-09-10 22:01:02 I (288434) burner_web: MBC5 erase sector: flash=0x01A00000 size=131072 bank=1664 cart=0x4000
+2026-09-10 22:01:03 I (289121) burner_web: MBC5 erase sector: flash=0x019E0000 size=131072 bank=1656 cart=0x4000
+2026-09-10 22:01:04 I (289811) burner_web: MBC5 erase sector: flash=0x019C0000 size=131072 bank=1648 cart=0x4000
+2026-09-10 22:01:04 I (290503) burner_web: MBC5 erase sector: flash=0x019A0000 size=131072 bank=1640 cart=0x4000
+2026-09-10 22:01:05 I (291196) burner_web: MBC5 erase sector: flash=0x01980000 size=131072 bank=1632 cart=0x4000
+2026-09-10 22:01:06 I (291890) burner_web: MBC5 erase sector: flash=0x01960000 size=131072 bank=1624 cart=0x4000
+2026-09-10 22:01:06 I (292579) burner_web: MBC5 erase sector: flash=0x01940000 size=131072 bank=1616 cart=0x4000
+2026-09-10 22:01:07 I (293285) burner_web: MBC5 erase sector: flash=0x01920000 size=131072 bank=1608 cart=0x4000
+2026-09-10 22:01:08 I (293931) burner_web: MBC5 erase sector: flash=0x01900000 size=131072 bank=1600 cart=0x4000
+2026-09-10 22:01:08 I (294565) burner_web: MBC5 erase sector: flash=0x018E0000 size=131072 bank=1592 cart=0x4000
+2026-09-10 22:01:09 I (295262) burner_web: MBC5 erase sector: flash=0x018C0000 size=131072 bank=1584 cart=0x4000
+2026-09-10 22:01:10 I (295964) burner_web: MBC5 erase sector: flash=0x018A0000 size=131072 bank=1576 cart=0x4000
+2026-09-10 22:01:10 I (296663) burner_web: MBC5 erase sector: flash=0x01880000 size=131072 bank=1568 cart=0x4000
+2026-09-10 22:01:11 I (297356) burner_web: MBC5 erase sector: flash=0x01860000 size=131072 bank=1560 cart=0x4000
+2026-09-10 22:01:12 I (298065) burner_web: MBC5 erase sector: flash=0x01840000 size=131072 bank=1552 cart=0x4000
+2026-09-10 22:01:13 I (298755) burner_web: MBC5 erase sector: flash=0x01820000 size=131072 bank=1544 cart=0x4000
+2026-09-10 22:01:13 I (299452) burner_web: MBC5 erase sector: flash=0x01800000 size=131072 bank=1536 cart=0x4000
+2026-09-10 22:01:25 I (311316) burner_web: MBC5 erase plan: range=0x01E00000-0x01FFFFFF first_sector=0x01FE0000 first_bank=2040 first_cart=0x4000 bytes=2097152 timeout=40000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:01:25 I (311323) burner_web: MBC5 erase sector: flash=0x01FE0000 size=131072 bank=2040 cart=0x4000
+2026-09-10 22:01:26 I (312028) burner_web: MBC5 erase sector: flash=0x01FC0000 size=131072 bank=2032 cart=0x4000
+2026-09-10 22:01:27 I (312727) burner_web: MBC5 erase sector: flash=0x01FA0000 size=131072 bank=2024 cart=0x4000
+2026-09-10 22:01:27 I (313429) burner_web: MBC5 erase sector: flash=0x01F80000 size=131072 bank=2016 cart=0x4000
+2026-09-10 22:01:28 I (314144) burner_web: MBC5 erase sector: flash=0x01F60000 size=131072 bank=2008 cart=0x4000
+2026-09-10 22:01:29 I (314843) burner_web: MBC5 erase sector: flash=0x01F40000 size=131072 bank=2000 cart=0x4000
+2026-09-10 22:01:29 I (315535) burner_web: MBC5 erase sector: flash=0x01F20000 size=131072 bank=1992 cart=0x4000
+2026-09-10 22:01:30 I (316234) burner_web: MBC5 erase sector: flash=0x01F00000 size=131072 bank=1984 cart=0x4000
+2026-09-10 22:01:31 I (316929) burner_web: MBC5 erase sector: flash=0x01EE0000 size=131072 bank=1976 cart=0x4000
+2026-09-10 22:01:31 I (317630) burner_web: MBC5 erase sector: flash=0x01EC0000 size=131072 bank=1968 cart=0x4000
+2026-09-10 22:01:32 I (318330) burner_web: MBC5 erase sector: flash=0x01EA0000 size=131072 bank=1960 cart=0x4000
+2026-09-10 22:01:33 I (319029) burner_web: MBC5 erase sector: flash=0x01E80000 size=131072 bank=1952 cart=0x4000
+2026-09-10 22:01:34 I (319741) burner_web: MBC5 erase sector: flash=0x01E60000 size=131072 bank=1944 cart=0x4000
+2026-09-10 22:01:34 I (320439) burner_web: MBC5 erase sector: flash=0x01E40000 size=131072 bank=1936 cart=0x4000
+2026-09-10 22:01:35 I (321135) burner_web: MBC5 erase sector: flash=0x01E20000 size=131072 bank=1928 cart=0x4000
+2026-09-10 22:01:36 I (321826) burner_web: MBC5 erase sector: flash=0x01E00000 size=131072 bank=1920 cart=0x4000
+2026-09-10 22:01:37 I (322757) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=burn finished
+2026-09-10 22:01:37 I (322758) power_manager: CPU perf lock released by burn_task
+2026-09-10 22:01:37 I (322762) burner_web: burn_task stack free min=11336 bytes
+2026-09-10 22:01:37 I (323021) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 22:01:37 I (323123) burner_web: MBC5 power rail: 3V3
+2026-09-10 22:01:37 I (323224) burner_web: MBC5 ReadID trace begin t=322007273us
+2026-09-10 22:01:37 I (323226) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1489us (0.001489s)
+2026-09-10 22:01:37 I (323228) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2368us (0.002368s)
+2026-09-10 22:01:37 I (323236) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8393us (0.008393s)
+2026-09-10 22:01:37 I (323244) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8005us (0.008005s)
+2026-09-10 22:01:37 I (323252) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7812us (0.007812s)
+2026-09-10 22:01:37 I (323260) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7747us (0.007747s)
+2026-09-10 22:01:37 I (323268) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=8055us (0.008055s)
+2026-09-10 22:01:37 I (323276) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7958us (0.007958s)
+2026-09-10 22:01:37 I (323284) burner_web: MBC5 ReadID trace end status=ESP_OK total=59439us (0.059439s)
+2026-09-10 22:01:37 I (323291) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 22:01:37 I (323305) burner_web: GB mapper detect: bank0 fixed=0000 switch=4000 len=64 fixed=FF-3E-A4-EA switch=FF-3E-A4-EA eq=1 blank=0/0 result=MBC5
+2026-09-10 22:01:37 I (323317) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 22:02:02 I (347950) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 22:02:02 I (347952) power_manager: CPU perf lock released by burn_task
+2026-09-10 22:02:02 I (347955) burner_web: burn_task stack free min=11200 bytes
+2026-09-10 22:02:04 I (349785) burner_web: PSRAM auto window: free=7539756 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 22:02:04 I (349891) burner_web: MBC5 power rail: 3V3
+2026-09-10 22:02:04 I (349993) burner_web: MBC5 ReadID trace begin t=348775771us
+2026-09-10 22:02:04 I (349994) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1511us (0.001511s)
+2026-09-10 22:02:04 I (349998) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=3996us (0.003996s)
+2026-09-10 22:02:04 I (350006) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8348us (0.008348s)
+2026-09-10 22:02:04 I (350016) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=9173us (0.009173s)
+2026-09-10 22:02:04 I (350023) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7014us (0.007014s)
+2026-09-10 22:02:04 I (350030) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7457us (0.007457s)
+2026-09-10 22:02:04 I (350037) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7303us (0.007303s)
+2026-09-10 22:02:04 I (350046) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=8211us (0.008211s)
+2026-09-10 22:02:04 I (350052) burner_web: MBC5 ReadID trace end status=ESP_OK total=59704us (0.059704s)
+2026-09-10 22:02:04 I (350062) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 22:02:04 I (350176) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 22:02:04 I (350279) burner_web: MBC5 power rail: 3V3
+2026-09-10 22:02:04 I (350380) burner_web: MBC5 ReadID trace begin t=349163271us
+2026-09-10 22:02:04 I (350381) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1359us (0.001359s)
+2026-09-10 22:02:04 I (350384) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2637us (0.002637s)
+2026-09-10 22:02:04 I (350392) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=7998us (0.007998s)
+2026-09-10 22:02:04 I (350400) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8198us (0.008198s)
+2026-09-10 22:02:04 I (350408) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7703us (0.007703s)
+2026-09-10 22:02:04 I (350416) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7971us (0.007971s)
+2026-09-10 22:02:04 I (350424) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7619us (0.007619s)
+2026-09-10 22:02:04 I (350432) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=8188us (0.008188s)
+2026-09-10 22:02:04 I (350439) burner_web: MBC5 ReadID trace end status=ESP_OK total=59354us (0.059354s)
+2026-09-10 22:02:04 I (350447) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 22:02:04 I (350461) burner_web: GB mapper detect: bank0 fixed=0000 switch=4000 len=64 fixed=FF-3E-A4-EA switch=FF-3E-A4-EA eq=1 blank=0/0 result=MBC5
+2026-09-10 22:02:04 I (350472) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 22:02:04 I (350490) burner_web: MBC5 burn erase policy: smart full-sector blank check
+2026-09-10 22:02:04 I (350495) burner_web: MBC5 erase plan: range=0x00000000-0x005FFFFF first_sector=0x005E0000 first_bank=376 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:02:04 I (350511) burner_web: MBC5 erase sector: flash=0x005E0000 size=131072 bank=376 cart=0x4000
+2026-09-10 22:02:04 I (350646) burner_web: MBC5 erase sector: flash=0x005C0000 size=131072 bank=368 cart=0x4000
+2026-09-10 22:02:05 I (350767) burner_web: MBC5 erase sector: flash=0x005A0000 size=131072 bank=360 cart=0x4000
+2026-09-10 22:02:05 I (350894) burner_web: MBC5 erase sector: flash=0x00580000 size=131072 bank=352 cart=0x4000
+2026-09-10 22:02:05 I (350988) burner_web: MBC5 erase sector: flash=0x00560000 size=131072 bank=344 cart=0x4000
+2026-09-10 22:02:05 I (351087) burner_web: MBC5 erase sector: flash=0x00540000 size=131072 bank=336 cart=0x4000
+2026-09-10 22:02:05 I (351206) burner_web: MBC5 erase sector: flash=0x00520000 size=131072 bank=328 cart=0x4000
+2026-09-10 22:02:05 I (351294) burner_web: MBC5 erase sector: flash=0x00500000 size=131072 bank=320 cart=0x4000
+2026-09-10 22:02:05 I (351416) burner_web: MBC5 erase sector: flash=0x004E0000 size=131072 bank=312 cart=0x4000
+2026-09-10 22:02:05 I (351519) burner_web: MBC5 erase sector: flash=0x004C0000 size=131072 bank=304 cart=0x4000
+2026-09-10 22:02:05 I (351633) burner_web: MBC5 erase sector: flash=0x004A0000 size=131072 bank=296 cart=0x4000
+2026-09-10 22:02:06 I (351732) burner_web: MBC5 erase sector: flash=0x00480000 size=131072 bank=288 cart=0x4000
+2026-09-10 22:02:06 I (351827) burner_web: MBC5 erase sector: flash=0x00460000 size=131072 bank=280 cart=0x4000
+2026-09-10 22:02:06 I (351943) burner_web: MBC5 erase sector: flash=0x00440000 size=131072 bank=272 cart=0x4000
+2026-09-10 22:02:06 I (352034) burner_web: MBC5 erase sector: flash=0x00420000 size=131072 bank=264 cart=0x4000
+2026-09-10 22:02:06 I (352145) burner_web: MBC5 erase sector: flash=0x00400000 size=131072 bank=256 cart=0x4000
+2026-09-10 22:02:06 I (352246) burner_web: MBC5 erase sector: flash=0x003E0000 size=131072 bank=248 cart=0x4000
+2026-09-10 22:02:06 I (352319) burner_web: MBC5 erase sector: flash=0x003C0000 size=131072 bank=240 cart=0x4000
+2026-09-10 22:02:06 I (352408) burner_web: MBC5 erase sector: flash=0x003A0000 size=131072 bank=232 cart=0x4000
+2026-09-10 22:02:06 I (352480) burner_web: MBC5 erase sector: flash=0x00380000 size=131072 bank=224 cart=0x4000
+2026-09-10 22:02:06 I (352552) burner_web: MBC5 erase sector: flash=0x00360000 size=131072 bank=216 cart=0x4000
+2026-09-10 22:02:06 I (352640) burner_web: MBC5 erase sector: flash=0x00340000 size=131072 bank=208 cart=0x4000
+2026-09-10 22:02:06 I (352720) burner_web: MBC5 erase sector: flash=0x00320000 size=131072 bank=200 cart=0x4000
+2026-09-10 22:02:07 I (352793) burner_web: MBC5 erase sector: flash=0x00300000 size=131072 bank=192 cart=0x4000
+2026-09-10 22:02:07 I (352876) burner_web: MBC5 erase sector: flash=0x002E0000 size=131072 bank=184 cart=0x4000
+2026-09-10 22:02:07 I (353552) burner_web: MBC5 erase sector: flash=0x002C0000 size=131072 bank=176 cart=0x4000
+2026-09-10 22:02:08 I (354147) burner_web: MBC5 erase sector: flash=0x002A0000 size=131072 bank=168 cart=0x4000
+2026-09-10 22:02:09 I (354801) burner_web: MBC5 erase sector: flash=0x00280000 size=131072 bank=160 cart=0x4000
+2026-09-10 22:02:09 I (355454) burner_web: MBC5 erase sector: flash=0x00260000 size=131072 bank=152 cart=0x4000
+2026-09-10 22:02:10 I (356096) burner_web: MBC5 erase sector: flash=0x00240000 size=131072 bank=144 cart=0x4000
+2026-09-10 22:02:11 I (356736) burner_web: MBC5 erase sector: flash=0x00220000 size=131072 bank=136 cart=0x4000
+2026-09-10 22:02:11 I (357402) burner_web: MBC5 erase sector: flash=0x00200000 size=131072 bank=128 cart=0x4000
+2026-09-10 22:02:12 I (358064) burner_web: MBC5 erase sector: flash=0x001E0000 size=131072 bank=120 cart=0x4000
+2026-09-10 22:02:12 I (358135) burner_web: MBC5 erase sector: flash=0x001C0000 size=131072 bank=112 cart=0x4000
+2026-09-10 22:02:12 I (358213) burner_web: MBC5 erase sector: flash=0x001A0000 size=131072 bank=104 cart=0x4000
+2026-09-10 22:02:12 I (358303) burner_web: MBC5 erase sector: flash=0x00180000 size=131072 bank=96 cart=0x4000
+2026-09-10 22:02:12 I (358380) burner_web: MBC5 erase sector: flash=0x00160000 size=131072 bank=88 cart=0x4000
+2026-09-10 22:02:12 I (358453) burner_web: MBC5 erase sector: flash=0x00140000 size=131072 bank=80 cart=0x4000
+2026-09-10 22:02:12 I (358541) burner_web: MBC5 erase sector: flash=0x00120000 size=131072 bank=72 cart=0x4000
+2026-09-10 22:02:12 I (358614) burner_web: MBC5 erase sector: flash=0x00100000 size=131072 bank=64 cart=0x4000
+2026-09-10 22:02:12 I (358685) burner_web: MBC5 erase sector: flash=0x000E0000 size=131072 bank=56 cart=0x4000
+2026-09-10 22:02:13 I (358768) burner_web: MBC5 erase sector: flash=0x000C0000 size=131072 bank=48 cart=0x4000
+2026-09-10 22:02:13 I (358847) burner_web: MBC5 erase sector: flash=0x000A0000 size=131072 bank=40 cart=0x4000
+2026-09-10 22:02:13 I (358919) burner_web: MBC5 erase sector: flash=0x00080000 size=131072 bank=32 cart=0x4000
+2026-09-10 22:02:13 I (358996) burner_web: MBC5 erase sector: flash=0x00060000 size=131072 bank=24 cart=0x4000
+2026-09-10 22:02:13 I (359080) burner_web: MBC5 erase sector: flash=0x00040000 size=131072 bank=16 cart=0x4000
+2026-09-10 22:02:13 I (359151) burner_web: MBC5 erase sector: flash=0x00020000 size=131072 bank=8 cart=0x4000
+2026-09-10 22:02:13 I (359224) burner_web: MBC5 erase sector: flash=0x00000000 size=131072 bank=0 cart=0x0000
+2026-09-10 22:02:14 I (359930) burner_web: MBC5 erase full-sector check: erased=9 skipped_blank=39
+2026-09-10 22:02:17 I (363246) burner_web: MBC5 erase plan: range=0x00600000-0x00BFFFFF first_sector=0x00BE0000 first_bank=760 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:02:17 I (363254) burner_web: MBC5 erase sector: flash=0x00BE0000 size=131072 bank=760 cart=0x4000
+2026-09-10 22:02:18 I (363971) burner_web: MBC5 erase sector: flash=0x00BC0000 size=131072 bank=752 cart=0x4000
+2026-09-10 22:02:18 I (364702) burner_web: MBC5 erase sector: flash=0x00BA0000 size=131072 bank=744 cart=0x4000
+2026-09-10 22:02:19 I (365413) burner_web: MBC5 erase sector: flash=0x00B80000 size=131072 bank=736 cart=0x4000
+2026-09-10 22:02:20 I (366123) burner_web: MBC5 erase sector: flash=0x00B60000 size=131072 bank=728 cart=0x4000
+2026-09-10 22:02:21 I (366843) burner_web: MBC5 erase sector: flash=0x00B40000 size=131072 bank=720 cart=0x4000
+2026-09-10 22:02:21 I (367538) burner_web: MBC5 erase sector: flash=0x00B20000 size=131072 bank=712 cart=0x4000
+2026-09-10 22:02:22 I (368239) burner_web: MBC5 erase sector: flash=0x00B00000 size=131072 bank=704 cart=0x4000
+2026-09-10 22:02:23 I (368942) burner_web: MBC5 erase sector: flash=0x00AE0000 size=131072 bank=696 cart=0x4000
+2026-09-10 22:02:23 I (369647) burner_web: MBC5 erase sector: flash=0x00AC0000 size=131072 bank=688 cart=0x4000
+2026-09-10 22:02:24 I (370346) burner_web: MBC5 erase sector: flash=0x00AA0000 size=131072 bank=680 cart=0x4000
+2026-09-10 22:02:25 I (371066) burner_web: MBC5 erase sector: flash=0x00A80000 size=131072 bank=672 cart=0x4000
+2026-09-10 22:02:26 I (371771) burner_web: MBC5 erase sector: flash=0x00A60000 size=131072 bank=664 cart=0x4000
+2026-09-10 22:02:26 I (372485) burner_web: MBC5 erase sector: flash=0x00A40000 size=131072 bank=656 cart=0x4000
+2026-09-10 22:02:27 I (373179) burner_web: MBC5 erase sector: flash=0x00A20000 size=131072 bank=648 cart=0x4000
+2026-09-10 22:02:28 I (373879) burner_web: MBC5 erase sector: flash=0x00A00000 size=131072 bank=640 cart=0x4000
+2026-09-10 22:02:28 I (374581) burner_web: MBC5 erase sector: flash=0x009E0000 size=131072 bank=632 cart=0x4000
+2026-09-10 22:02:29 I (375296) burner_web: MBC5 erase sector: flash=0x009C0000 size=131072 bank=624 cart=0x4000
+2026-09-10 22:02:30 I (376001) burner_web: MBC5 erase sector: flash=0x009A0000 size=131072 bank=616 cart=0x4000
+2026-09-10 22:02:30 I (376712) burner_web: MBC5 erase sector: flash=0x00980000 size=131072 bank=608 cart=0x4000
+2026-09-10 22:02:31 I (377419) burner_web: MBC5 erase sector: flash=0x00960000 size=131072 bank=600 cart=0x4000
+2026-09-10 22:02:32 I (378121) burner_web: MBC5 erase sector: flash=0x00940000 size=131072 bank=592 cart=0x4000
+2026-09-10 22:02:33 I (378821) burner_web: MBC5 erase sector: flash=0x00920000 size=131072 bank=584 cart=0x4000
+2026-09-10 22:02:33 I (379464) burner_web: MBC5 erase sector: flash=0x00900000 size=131072 bank=576 cart=0x4000
+2026-09-10 22:02:34 I (380088) burner_web: MBC5 erase sector: flash=0x008E0000 size=131072 bank=568 cart=0x4000
+2026-09-10 22:02:35 I (380764) burner_web: MBC5 erase sector: flash=0x008C0000 size=131072 bank=560 cart=0x4000
+2026-09-10 22:02:35 I (381414) burner_web: MBC5 erase sector: flash=0x008A0000 size=131072 bank=552 cart=0x4000
+2026-09-10 22:02:36 I (382108) burner_web: MBC5 erase sector: flash=0x00880000 size=131072 bank=544 cart=0x4000
+2026-09-10 22:02:37 I (382802) burner_web: MBC5 erase sector: flash=0x00860000 size=131072 bank=536 cart=0x4000
+2026-09-10 22:02:37 I (383501) burner_web: MBC5 erase sector: flash=0x00840000 size=131072 bank=528 cart=0x4000
+2026-09-10 22:02:38 I (384200) burner_web: MBC5 erase sector: flash=0x00820000 size=131072 bank=520 cart=0x4000
+2026-09-10 22:02:39 I (384903) burner_web: MBC5 erase sector: flash=0x00800000 size=131072 bank=512 cart=0x4000
+2026-09-10 22:02:39 I (385597) burner_web: MBC5 erase sector: flash=0x007E0000 size=131072 bank=504 cart=0x4000
+2026-09-10 22:02:39 I (385673) burner_web: MBC5 erase sector: flash=0x007C0000 size=131072 bank=496 cart=0x4000
+2026-09-10 22:02:40 I (385746) burner_web: MBC5 erase sector: flash=0x007A0000 size=131072 bank=488 cart=0x4000
+2026-09-10 22:02:40 I (385826) burner_web: MBC5 erase sector: flash=0x00780000 size=131072 bank=480 cart=0x4000
+2026-09-10 22:02:40 I (385907) burner_web: MBC5 erase sector: flash=0x00760000 size=131072 bank=472 cart=0x4000
+2026-09-10 22:02:40 I (385980) burner_web: MBC5 erase sector: flash=0x00740000 size=131072 bank=464 cart=0x4000
+2026-09-10 22:02:40 I (386056) burner_web: MBC5 erase sector: flash=0x00720000 size=131072 bank=456 cart=0x4000
+2026-09-10 22:02:40 I (386141) burner_web: MBC5 erase sector: flash=0x00700000 size=131072 bank=448 cart=0x4000
+2026-09-10 22:02:40 I (386217) burner_web: MBC5 erase sector: flash=0x006E0000 size=131072 bank=440 cart=0x4000
+2026-09-10 22:02:40 I (386290) burner_web: MBC5 erase sector: flash=0x006C0000 size=131072 bank=432 cart=0x4000
+2026-09-10 22:02:40 I (386380) burner_web: MBC5 erase sector: flash=0x006A0000 size=131072 bank=424 cart=0x4000
+2026-09-10 22:02:40 I (386457) burner_web: MBC5 erase sector: flash=0x00680000 size=131072 bank=416 cart=0x4000
+2026-09-10 22:02:40 I (386530) burner_web: MBC5 erase sector: flash=0x00660000 size=131072 bank=408 cart=0x4000
+2026-09-10 22:02:40 I (386615) burner_web: MBC5 erase sector: flash=0x00640000 size=131072 bank=400 cart=0x4000
+2026-09-10 22:02:40 I (386690) burner_web: MBC5 erase sector: flash=0x00620000 size=131072 bank=392 cart=0x4000
+2026-09-10 22:02:41 I (386762) burner_web: MBC5 erase sector: flash=0x00600000 size=131072 bank=384 cart=0x4000
+2026-09-10 22:02:41 I (386844) burner_web: MBC5 erase full-sector check: erased=32 skipped_blank=16
+2026-09-10 22:02:51 I (397662) burner_web: MBC5 erase plan: range=0x00C00000-0x011FFFFF first_sector=0x011E0000 first_bank=1144 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:02:51 I (397670) burner_web: MBC5 erase sector: flash=0x011E0000 size=131072 bank=1144 cart=0x4000
+2026-09-10 22:02:52 I (398382) burner_web: MBC5 erase sector: flash=0x011C0000 size=131072 bank=1136 cart=0x4000
+2026-09-10 22:02:53 I (399086) burner_web: MBC5 erase sector: flash=0x011A0000 size=131072 bank=1128 cart=0x4000
+2026-09-10 22:02:54 I (399802) burner_web: MBC5 erase sector: flash=0x01180000 size=131072 bank=1120 cart=0x4000
+2026-09-10 22:02:54 I (400508) burner_web: MBC5 erase sector: flash=0x01160000 size=131072 bank=1112 cart=0x4000
+2026-09-10 22:02:55 I (401209) burner_web: MBC5 erase sector: flash=0x01140000 size=131072 bank=1104 cart=0x4000
+2026-09-10 22:02:56 I (401919) burner_web: MBC5 erase sector: flash=0x01120000 size=131072 bank=1096 cart=0x4000
+2026-09-10 22:02:56 I (402623) burner_web: MBC5 erase sector: flash=0x01100000 size=131072 bank=1088 cart=0x4000
+2026-09-10 22:02:57 I (403331) burner_web: MBC5 erase sector: flash=0x010E0000 size=131072 bank=1080 cart=0x4000
+2026-09-10 22:02:58 I (404042) burner_web: MBC5 erase sector: flash=0x010C0000 size=131072 bank=1072 cart=0x4000
+2026-09-10 22:02:59 I (404743) burner_web: MBC5 erase sector: flash=0x010A0000 size=131072 bank=1064 cart=0x4000
+2026-09-10 22:02:59 I (405450) burner_web: MBC5 erase sector: flash=0x01080000 size=131072 bank=1056 cart=0x4000
+2026-09-10 22:03:00 I (406167) burner_web: MBC5 erase sector: flash=0x01060000 size=131072 bank=1048 cart=0x4000
+2026-09-10 22:03:01 I (406876) burner_web: MBC5 erase sector: flash=0x01040000 size=131072 bank=1040 cart=0x4000
+2026-09-10 22:03:01 I (407581) burner_web: MBC5 erase sector: flash=0x01020000 size=131072 bank=1032 cart=0x4000
+2026-09-10 22:03:02 I (408285) burner_web: MBC5 erase sector: flash=0x01000000 size=131072 bank=1024 cart=0x4000
+2026-09-10 22:03:03 I (408992) burner_web: MBC5 erase sector: flash=0x00FE0000 size=131072 bank=1016 cart=0x4000
+2026-09-10 22:03:03 I (409065) burner_web: MBC5 erase sector: flash=0x00FC0000 size=131072 bank=1008 cart=0x4000
+2026-09-10 22:03:03 I (409152) burner_web: MBC5 erase sector: flash=0x00FA0000 size=131072 bank=1000 cart=0x4000
+2026-09-10 22:03:03 I (409227) burner_web: MBC5 erase sector: flash=0x00F80000 size=131072 bank=992 cart=0x4000
+2026-09-10 22:03:03 I (409299) burner_web: MBC5 erase sector: flash=0x00F60000 size=131072 bank=984 cart=0x4000
+2026-09-10 22:03:03 I (409380) burner_web: MBC5 erase sector: flash=0x00F40000 size=131072 bank=976 cart=0x4000
+2026-09-10 22:03:03 I (409459) burner_web: MBC5 erase sector: flash=0x00F20000 size=131072 bank=968 cart=0x4000
+2026-09-10 22:03:03 I (409531) burner_web: MBC5 erase sector: flash=0x00F00000 size=131072 bank=960 cart=0x4000
+2026-09-10 22:03:03 I (409607) burner_web: MBC5 erase sector: flash=0x00EE0000 size=131072 bank=952 cart=0x4000
+2026-09-10 22:03:03 I (409693) burner_web: MBC5 erase sector: flash=0x00EC0000 size=131072 bank=944 cart=0x4000
+2026-09-10 22:03:04 I (409767) burner_web: MBC5 erase sector: flash=0x00EA0000 size=131072 bank=936 cart=0x4000
+2026-09-10 22:03:04 I (409839) burner_web: MBC5 erase sector: flash=0x00E80000 size=131072 bank=928 cart=0x4000
+2026-09-10 22:03:04 I (409924) burner_web: MBC5 erase sector: flash=0x00E60000 size=131072 bank=920 cart=0x4000
+2026-09-10 22:03:04 I (410005) burner_web: MBC5 erase sector: flash=0x00E40000 size=131072 bank=912 cart=0x4000
+2026-09-10 22:03:04 I (410082) burner_web: MBC5 erase sector: flash=0x00E20000 size=131072 bank=904 cart=0x4000
+2026-09-10 22:03:04 I (410165) burner_web: MBC5 erase sector: flash=0x00E00000 size=131072 bank=896 cart=0x4000
+2026-09-10 22:03:04 I (410245) burner_web: MBC5 erase sector: flash=0x00DE0000 size=131072 bank=888 cart=0x4000
+2026-09-10 22:03:04 I (410318) burner_web: MBC5 erase sector: flash=0x00DC0000 size=131072 bank=880 cart=0x4000
+2026-09-10 22:03:04 I (410396) burner_web: MBC5 erase sector: flash=0x00DA0000 size=131072 bank=872 cart=0x4000
+2026-09-10 22:03:04 I (410480) burner_web: MBC5 erase sector: flash=0x00D80000 size=131072 bank=864 cart=0x4000
+2026-09-10 22:03:04 I (410551) burner_web: MBC5 erase sector: flash=0x00D60000 size=131072 bank=856 cart=0x4000
+2026-09-10 22:03:04 I (410623) burner_web: MBC5 erase sector: flash=0x00D40000 size=131072 bank=848 cart=0x4000
+2026-09-10 22:03:04 I (410708) burner_web: MBC5 erase sector: flash=0x00D20000 size=131072 bank=840 cart=0x4000
+2026-09-10 22:03:05 I (410783) burner_web: MBC5 erase sector: flash=0x00D00000 size=131072 bank=832 cart=0x4000
+2026-09-10 22:03:05 I (410855) burner_web: MBC5 erase sector: flash=0x00CE0000 size=131072 bank=824 cart=0x4000
+2026-09-10 22:03:05 I (410935) burner_web: MBC5 erase sector: flash=0x00CC0000 size=131072 bank=816 cart=0x4000
+2026-09-10 22:03:05 I (411020) burner_web: MBC5 erase sector: flash=0x00CA0000 size=131072 bank=808 cart=0x4000
+2026-09-10 22:03:05 I (411093) burner_web: MBC5 erase sector: flash=0x00C80000 size=131072 bank=800 cart=0x4000
+2026-09-10 22:03:05 I (411171) burner_web: MBC5 erase sector: flash=0x00C60000 size=131072 bank=792 cart=0x4000
+2026-09-10 22:03:05 I (411258) burner_web: MBC5 erase sector: flash=0x00C40000 size=131072 bank=784 cart=0x4000
+2026-09-10 22:03:05 I (411333) burner_web: MBC5 erase sector: flash=0x00C20000 size=131072 bank=776 cart=0x4000
+2026-09-10 22:03:05 I (411405) burner_web: MBC5 erase sector: flash=0x00C00000 size=131072 bank=768 cart=0x4000
+2026-09-10 22:03:05 I (411491) burner_web: MBC5 erase full-sector check: erased=16 skipped_blank=32
+2026-09-10 22:03:11 I (417634) burner_web: MBC5 erase plan: range=0x01200000-0x017FFFFF first_sector=0x017E0000 first_bank=1528 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:03:11 I (417641) burner_web: MBC5 erase sector: flash=0x017E0000 size=131072 bank=1528 cart=0x4000
+2026-09-10 22:03:12 I (417771) burner_web: MBC5 erase sector: flash=0x017C0000 size=131072 bank=1520 cart=0x4000
+2026-09-10 22:03:12 I (417861) burner_web: MBC5 erase sector: flash=0x017A0000 size=131072 bank=1512 cart=0x4000
+2026-09-10 22:03:12 I (417980) burner_web: MBC5 erase sector: flash=0x01780000 size=131072 bank=1504 cart=0x4000
+2026-09-10 22:03:12 I (418088) burner_web: MBC5 erase sector: flash=0x01760000 size=131072 bank=1496 cart=0x4000
+2026-09-10 22:03:12 I (418185) burner_web: MBC5 erase sector: flash=0x01740000 size=131072 bank=1488 cart=0x4000
+2026-09-10 22:03:12 I (418310) burner_web: MBC5 erase sector: flash=0x01720000 size=131072 bank=1480 cart=0x4000
+2026-09-10 22:03:12 I (418398) burner_web: MBC5 erase sector: flash=0x01700000 size=131072 bank=1472 cart=0x4000
+2026-09-10 22:03:12 I (418523) burner_web: MBC5 erase sector: flash=0x016E0000 size=131072 bank=1464 cart=0x4000
+2026-09-10 22:03:12 I (418612) burner_web: MBC5 erase sector: flash=0x016C0000 size=131072 bank=1456 cart=0x4000
+2026-09-10 22:03:12 I (418716) burner_web: MBC5 erase sector: flash=0x016A0000 size=131072 bank=1448 cart=0x4000
+2026-09-10 22:03:13 I (418824) burner_web: MBC5 erase sector: flash=0x01680000 size=131072 bank=1440 cart=0x4000
+2026-09-10 22:03:13 I (418916) burner_web: MBC5 erase sector: flash=0x01660000 size=131072 bank=1432 cart=0x4000
+2026-09-10 22:03:13 I (419042) burner_web: MBC5 erase sector: flash=0x01640000 size=131072 bank=1424 cart=0x4000
+2026-09-10 22:03:13 I (419144) burner_web: MBC5 erase sector: flash=0x01620000 size=131072 bank=1416 cart=0x4000
+2026-09-10 22:03:13 I (419251) burner_web: MBC5 erase sector: flash=0x01600000 size=131072 bank=1408 cart=0x4000
+2026-09-10 22:03:13 I (419357) burner_web: MBC5 erase sector: flash=0x015E0000 size=131072 bank=1400 cart=0x4000
+2026-09-10 22:03:13 I (419429) burner_web: MBC5 erase sector: flash=0x015C0000 size=131072 bank=1392 cart=0x4000
+2026-09-10 22:03:13 I (419514) burner_web: MBC5 erase sector: flash=0x015A0000 size=131072 bank=1384 cart=0x4000
+2026-09-10 22:03:13 I (419591) burner_web: MBC5 erase sector: flash=0x01580000 size=131072 bank=1376 cart=0x4000
+2026-09-10 22:03:13 I (419663) burner_web: MBC5 erase sector: flash=0x01560000 size=131072 bank=1368 cart=0x4000
+2026-09-10 22:03:14 I (419742) burner_web: MBC5 erase sector: flash=0x01540000 size=131072 bank=1360 cart=0x4000
+2026-09-10 22:03:14 I (419824) burner_web: MBC5 erase sector: flash=0x01520000 size=131072 bank=1352 cart=0x4000
+2026-09-10 22:03:14 I (419898) burner_web: MBC5 erase sector: flash=0x01500000 size=131072 bank=1344 cart=0x4000
+2026-09-10 22:03:14 I (419971) burner_web: MBC5 erase sector: flash=0x014E0000 size=131072 bank=1336 cart=0x4000
+2026-09-10 22:03:14 I (420058) burner_web: MBC5 erase sector: flash=0x014C0000 size=131072 bank=1328 cart=0x4000
+2026-09-10 22:03:14 I (420130) burner_web: MBC5 erase sector: flash=0x014A0000 size=131072 bank=1320 cart=0x4000
+2026-09-10 22:03:14 I (420207) burner_web: MBC5 erase sector: flash=0x01480000 size=131072 bank=1312 cart=0x4000
+2026-09-10 22:03:14 I (420292) burner_web: MBC5 erase sector: flash=0x01460000 size=131072 bank=1304 cart=0x4000
+2026-09-10 22:03:14 I (420372) burner_web: MBC5 erase sector: flash=0x01440000 size=131072 bank=1296 cart=0x4000
+2026-09-10 22:03:14 I (420444) burner_web: MBC5 erase sector: flash=0x01420000 size=131072 bank=1288 cart=0x4000
+2026-09-10 22:03:14 I (420523) burner_web: MBC5 erase sector: flash=0x01400000 size=131072 bank=1280 cart=0x4000
+2026-09-10 22:03:14 I (420606) burner_web: MBC5 erase sector: flash=0x013E0000 size=131072 bank=1272 cart=0x4000
+2026-09-10 22:03:15 I (421319) burner_web: MBC5 erase sector: flash=0x013C0000 size=131072 bank=1264 cart=0x4000
+2026-09-10 22:03:16 I (422022) burner_web: MBC5 erase sector: flash=0x013A0000 size=131072 bank=1256 cart=0x4000
+2026-09-10 22:03:16 I (422723) burner_web: MBC5 erase sector: flash=0x01380000 size=131072 bank=1248 cart=0x4000
+2026-09-10 22:03:17 I (423429) burner_web: MBC5 erase sector: flash=0x01360000 size=131072 bank=1240 cart=0x4000
+2026-09-10 22:03:18 I (424135) burner_web: MBC5 erase sector: flash=0x01340000 size=131072 bank=1232 cart=0x4000
+2026-09-10 22:03:19 I (424845) burner_web: MBC5 erase sector: flash=0x01320000 size=131072 bank=1224 cart=0x4000
+2026-09-10 22:03:19 I (425553) burner_web: MBC5 erase sector: flash=0x01300000 size=131072 bank=1216 cart=0x4000
+2026-09-10 22:03:20 I (426260) burner_web: MBC5 erase sector: flash=0x012E0000 size=131072 bank=1208 cart=0x4000
+2026-09-10 22:03:21 I (426977) burner_web: MBC5 erase sector: flash=0x012C0000 size=131072 bank=1200 cart=0x4000
+2026-09-10 22:03:21 I (427678) burner_web: MBC5 erase sector: flash=0x012A0000 size=131072 bank=1192 cart=0x4000
+2026-09-10 22:03:22 I (428386) burner_web: MBC5 erase sector: flash=0x01280000 size=131072 bank=1184 cart=0x4000
+2026-09-10 22:03:23 I (429091) burner_web: MBC5 erase sector: flash=0x01260000 size=131072 bank=1176 cart=0x4000
+2026-09-10 22:03:24 I (429795) burner_web: MBC5 erase sector: flash=0x01240000 size=131072 bank=1168 cart=0x4000
+2026-09-10 22:03:24 I (430503) burner_web: MBC5 erase sector: flash=0x01220000 size=131072 bank=1160 cart=0x4000
+2026-09-10 22:03:25 I (431211) burner_web: MBC5 erase sector: flash=0x01200000 size=131072 bank=1152 cart=0x4000
+2026-09-10 22:03:26 I (431913) burner_web: MBC5 erase full-sector check: erased=16 skipped_blank=32
+2026-09-10 22:03:32 I (438069) burner_web: MBC5 erase plan: range=0x01800000-0x01DFFFFF first_sector=0x01DE0000 first_bank=1912 first_cart=0x4000 bytes=6291456 timeout=120000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:03:32 I (438076) burner_web: MBC5 erase sector: flash=0x01DE0000 size=131072 bank=1912 cart=0x4000
+2026-09-10 22:03:32 I (438213) burner_web: MBC5 erase sector: flash=0x01DC0000 size=131072 bank=1904 cart=0x4000
+2026-09-10 22:03:32 I (438309) burner_web: MBC5 erase sector: flash=0x01DA0000 size=131072 bank=1896 cart=0x4000
+2026-09-10 22:03:32 I (438424) burner_web: MBC5 erase sector: flash=0x01D80000 size=131072 bank=1888 cart=0x4000
+2026-09-10 22:03:32 I (438522) burner_web: MBC5 erase sector: flash=0x01D60000 size=131072 bank=1880 cart=0x4000
+2026-09-10 22:03:32 I (438618) burner_web: MBC5 erase sector: flash=0x01D40000 size=131072 bank=1872 cart=0x4000
+2026-09-10 22:03:33 I (438738) burner_web: MBC5 erase sector: flash=0x01D20000 size=131072 bank=1864 cart=0x4000
+2026-09-10 22:03:33 I (438828) burner_web: MBC5 erase sector: flash=0x01D00000 size=131072 bank=1856 cart=0x4000
+2026-09-10 22:03:33 I (438941) burner_web: MBC5 erase sector: flash=0x01CE0000 size=131072 bank=1848 cart=0x4000
+2026-09-10 22:03:33 I (439048) burner_web: MBC5 erase sector: flash=0x01CC0000 size=131072 bank=1840 cart=0x4000
+2026-09-10 22:03:33 I (439149) burner_web: MBC5 erase sector: flash=0x01CA0000 size=131072 bank=1832 cart=0x4000
+2026-09-10 22:03:33 I (439263) burner_web: MBC5 erase sector: flash=0x01C80000 size=131072 bank=1824 cart=0x4000
+2026-09-10 22:03:33 I (439364) burner_web: MBC5 erase sector: flash=0x01C60000 size=131072 bank=1816 cart=0x4000
+2026-09-10 22:03:33 I (439486) burner_web: MBC5 erase sector: flash=0x01C40000 size=131072 bank=1808 cart=0x4000
+2026-09-10 22:03:33 I (439575) burner_web: MBC5 erase sector: flash=0x01C20000 size=131072 bank=1800 cart=0x4000
+2026-09-10 22:03:33 I (439682) burner_web: MBC5 erase sector: flash=0x01C00000 size=131072 bank=1792 cart=0x4000
+2026-09-10 22:03:34 I (439783) burner_web: MBC5 erase sector: flash=0x01BE0000 size=131072 bank=1784 cart=0x4000
+2026-09-10 22:03:34 I (440513) burner_web: MBC5 erase sector: flash=0x01BC0000 size=131072 bank=1776 cart=0x4000
+2026-09-10 22:03:35 I (441213) burner_web: MBC5 erase sector: flash=0x01BA0000 size=131072 bank=1768 cart=0x4000
+2026-09-10 22:03:36 I (441914) burner_web: MBC5 erase sector: flash=0x01B80000 size=131072 bank=1760 cart=0x4000
+2026-09-10 22:03:36 I (442622) burner_web: MBC5 erase sector: flash=0x01B60000 size=131072 bank=1752 cart=0x4000
+2026-09-10 22:03:37 I (443324) burner_web: MBC5 erase sector: flash=0x01B40000 size=131072 bank=1744 cart=0x4000
+2026-09-10 22:03:38 I (444028) burner_web: MBC5 erase sector: flash=0x01B20000 size=131072 bank=1736 cart=0x4000
+2026-09-10 22:03:39 I (444737) burner_web: MBC5 erase sector: flash=0x01B00000 size=131072 bank=1728 cart=0x4000
+2026-09-10 22:03:39 I (445460) burner_web: MBC5 erase sector: flash=0x01AE0000 size=131072 bank=1720 cart=0x4000
+2026-09-10 22:03:40 I (446169) burner_web: MBC5 erase sector: flash=0x01AC0000 size=131072 bank=1712 cart=0x4000
+2026-09-10 22:03:41 I (446873) burner_web: MBC5 erase sector: flash=0x01AA0000 size=131072 bank=1704 cart=0x4000
+2026-09-10 22:03:41 I (447577) burner_web: MBC5 erase sector: flash=0x01A80000 size=131072 bank=1696 cart=0x4000
+2026-09-10 22:03:42 I (448286) burner_web: MBC5 erase sector: flash=0x01A60000 size=131072 bank=1688 cart=0x4000
+2026-09-10 22:03:43 I (448990) burner_web: MBC5 erase sector: flash=0x01A40000 size=131072 bank=1680 cart=0x4000
+2026-09-10 22:03:43 I (449686) burner_web: MBC5 erase sector: flash=0x01A20000 size=131072 bank=1672 cart=0x4000
+2026-09-10 22:03:44 I (450401) burner_web: MBC5 erase sector: flash=0x01A00000 size=131072 bank=1664 cart=0x4000
+2026-09-10 22:03:45 I (451100) burner_web: MBC5 erase sector: flash=0x019E0000 size=131072 bank=1656 cart=0x4000
+2026-09-10 22:03:46 I (451798) burner_web: MBC5 erase sector: flash=0x019C0000 size=131072 bank=1648 cart=0x4000
+2026-09-10 22:03:46 I (452493) burner_web: MBC5 erase sector: flash=0x019A0000 size=131072 bank=1640 cart=0x4000
+2026-09-10 22:03:47 I (453204) burner_web: MBC5 erase sector: flash=0x01980000 size=131072 bank=1632 cart=0x4000
+2026-09-10 22:03:48 I (453914) burner_web: MBC5 erase sector: flash=0x01960000 size=131072 bank=1624 cart=0x4000
+2026-09-10 22:03:48 I (454617) burner_web: MBC5 erase sector: flash=0x01940000 size=131072 bank=1616 cart=0x4000
+2026-09-10 22:03:49 I (455331) burner_web: MBC5 erase sector: flash=0x01920000 size=131072 bank=1608 cart=0x4000
+2026-09-10 22:03:50 I (455985) burner_web: MBC5 erase sector: flash=0x01900000 size=131072 bank=1600 cart=0x4000
+2026-09-10 22:03:50 I (456620) burner_web: MBC5 erase sector: flash=0x018E0000 size=131072 bank=1592 cart=0x4000
+2026-09-10 22:03:51 I (457326) burner_web: MBC5 erase sector: flash=0x018C0000 size=131072 bank=1584 cart=0x4000
+2026-09-10 22:03:52 I (458036) burner_web: MBC5 erase sector: flash=0x018A0000 size=131072 bank=1576 cart=0x4000
+2026-09-10 22:03:53 I (458738) burner_web: MBC5 erase sector: flash=0x01880000 size=131072 bank=1568 cart=0x4000
+2026-09-10 22:03:53 I (459440) burner_web: MBC5 erase sector: flash=0x01860000 size=131072 bank=1560 cart=0x4000
+2026-09-10 22:03:54 I (460164) burner_web: MBC5 erase sector: flash=0x01840000 size=131072 bank=1552 cart=0x4000
+2026-09-10 22:03:55 I (460871) burner_web: MBC5 erase sector: flash=0x01820000 size=131072 bank=1544 cart=0x4000
+2026-09-10 22:03:55 I (461578) burner_web: MBC5 erase sector: flash=0x01800000 size=131072 bank=1536 cart=0x4000
+2026-09-10 22:03:56 I (462274) burner_web: MBC5 erase full-sector check: erased=32 skipped_blank=16
+2026-09-10 22:04:07 I (473455) burner_web: MBC5 erase plan: range=0x01E00000-0x01FFFFFF first_sector=0x01FE0000 first_bank=2040 first_cart=0x4000 bytes=2097152 timeout=40000ms geom=uniform largest=131072 regions=1
+2026-09-10 22:04:07 I (473463) burner_web: MBC5 erase sector: flash=0x01FE0000 size=131072 bank=2040 cart=0x4000
+2026-09-10 22:04:07 I (473593) burner_web: MBC5 erase sector: flash=0x01FC0000 size=131072 bank=2032 cart=0x4000
+2026-09-10 22:04:07 I (473716) burner_web: MBC5 erase sector: flash=0x01FA0000 size=131072 bank=2024 cart=0x4000
+2026-09-10 22:04:08 I (473808) burner_web: MBC5 erase sector: flash=0x01F80000 size=131072 bank=2016 cart=0x4000
+2026-09-10 22:04:08 I (473912) burner_web: MBC5 erase sector: flash=0x01F60000 size=131072 bank=2008 cart=0x4000
+2026-09-10 22:04:08 I (474022) burner_web: MBC5 erase sector: flash=0x01F40000 size=131072 bank=2000 cart=0x4000
+2026-09-10 22:04:08 I (474099) burner_web: MBC5 erase sector: flash=0x01F20000 size=131072 bank=1992 cart=0x4000
+2026-09-10 22:04:08 I (474181) burner_web: MBC5 erase sector: flash=0x01F00000 size=131072 bank=1984 cart=0x4000
+2026-09-10 22:04:08 I (474265) burner_web: MBC5 erase sector: flash=0x01EE0000 size=131072 bank=1976 cart=0x4000
+2026-09-10 22:04:08 I (474339) burner_web: MBC5 erase sector: flash=0x01EC0000 size=131072 bank=1968 cart=0x4000
+2026-09-10 22:04:08 I (474418) burner_web: MBC5 erase sector: flash=0x01EA0000 size=131072 bank=1960 cart=0x4000
+2026-09-10 22:04:08 I (474501) burner_web: MBC5 erase sector: flash=0x01E80000 size=131072 bank=1952 cart=0x4000
+2026-09-10 22:04:08 I (474572) burner_web: MBC5 erase sector: flash=0x01E60000 size=131072 bank=1944 cart=0x4000
+2026-09-10 22:04:08 I (474646) burner_web: MBC5 erase sector: flash=0x01E40000 size=131072 bank=1936 cart=0x4000
+2026-09-10 22:04:09 I (474734) burner_web: MBC5 erase sector: flash=0x01E20000 size=131072 bank=1928 cart=0x4000
+2026-09-10 22:04:09 I (474807) burner_web: MBC5 erase sector: flash=0x01E00000 size=131072 bank=1920 cart=0x4000
+2026-09-10 22:04:09 I (474879) burner_web: MBC5 erase full-sector check: erased=0 skipped_blank=16
+2026-09-10 22:04:09 I (475097) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=burn finished
+2026-09-10 22:04:09 I (475099) power_manager: CPU perf lock released by burn_task
+2026-09-10 22:04:09 I (475102) burner_web: burn_task stack free min=11364 bytes
+2026-09-10 22:04:09 I (475404) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 22:04:09 I (475506) burner_web: MBC5 power rail: 3V3
+2026-09-10 22:04:09 I (475607) burner_web: MBC5 ReadID trace begin t=474390271us
+2026-09-10 22:04:09 I (475609) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1508us (0.001508s)
+2026-09-10 22:04:09 I (475611) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2396us (0.002396s)
+2026-09-10 22:04:09 I (475619) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8380us (0.008380s)
+2026-09-10 22:04:09 I (475627) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8034us (0.008034s)
+2026-09-10 22:04:09 I (475635) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7922us (0.007922s)
+2026-09-10 22:04:09 I (475643) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7732us (0.007732s)
+2026-09-10 22:04:09 I (475651) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7845us (0.007845s)
+2026-09-10 22:04:09 I (475659) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7818us (0.007818s)
+2026-09-10 22:04:09 I (475667) burner_web: MBC5 ReadID trace end status=ESP_OK total=59554us (0.059554s)
+2026-09-10 22:04:09 I (475674) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 22:04:09 I (475688) burner_web: GB mapper detect: bank0 fixed=0000 switch=4000 len=64 fixed=FF-3E-A4-EA switch=FF-3E-A4-EA eq=1 blank=0/0 result=MBC5
+2026-09-10 22:04:09 I (475700) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 22:04:34 I (500259) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 22:04:34 I (500261) power_manager: CPU perf lock released by burn_task
+2026-09-10 22:04:34 I (500264) burner_web: burn_task stack free min=11244 bytes

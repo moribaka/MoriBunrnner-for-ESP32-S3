@@ -2341,7 +2341,7 @@
                         <option value="8">8 MB</option>
                     </select>
                 </div>
-                <label style="display:flex; align-items:center; gap:8px; margin: 8px 0 16px; text-align:left;">
+                <label id="fileActionWaitcntSection" style="display:flex; align-items:center; gap:8px; margin: 8px 0 16px; text-align:left;">
                     <input type="checkbox" id="fileActionWaitcntPatch">
                     <span>启用 GBA WAITCNT 补丁</span>
                 </label>
@@ -8516,6 +8516,7 @@
         function showFileActionModal(filename, size, path) {
             state.selectedFile = { filename, size, path };
             const mode = filename.toLowerCase().endsWith('.gba') ? 'gba' : 'mbc5';
+            document.getElementById('fileActionWaitcntSection').style.display = mode === 'gba' ? 'flex' : 'none';
 
             document.getElementById('fileActionName').textContent = filename;
             document.getElementById('fileActionInfo').textContent =
@@ -8581,7 +8582,9 @@
             const waitcntPatchSelect = document.getElementById('fileActionWaitcntPatch');
             const requestedWritePath = writePathSelect ? writePathSelect.value : (state.writePathMode || 'psram');
             const requestedPipelineErase = pipelineEraseSelect ? pipelineEraseSelect.value : getPipelineEraseMode();
-            state.gbaWaitcntPatch = Boolean(waitcntPatchSelect && waitcntPatchSelect.checked);
+            if (fileToBurn.filename.toLowerCase().endsWith('.gba')) {
+                state.gbaWaitcntPatch = Boolean(waitcntPatchSelect && waitcntPatchSelect.checked);
+            }
             if (psramMbSelect) {
                 setPsramWindowMb(psramMbSelect.value);
             }
@@ -9349,6 +9352,7 @@
                             状态: <span style="color: ${stateColors[data.state] || 'inherit'}">${getBurnStateText(data.state, activeOperation)}</span><br>
                             烧录文件: ${data.rom || '--'}<br>
                             已处理 / 总计: ${formatSize(data.processed || 0)} / ${formatSize(data.total || 0)}<br>
+                            ${Number(data.write_skipped_bytes || 0) > 0 ? `跳过空白数据: ${formatSize(data.write_skipped_bytes)}<br>` : ''}
                             Bacon SPI: ${spiClockText}${spiRequestedText}
                         </div>
                     </div>

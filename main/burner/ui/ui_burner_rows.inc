@@ -22,6 +22,13 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         return;
     }
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE) {
+        if (s_cart_mode != BURNER_CART_MODE_GBA) {
+            if (index == 0U) {
+                snprintf(title, title_len, "%s", ui_tr("ROM: Write"));
+                snprintf(hint, hint_len, "%s", ui_write_path_label());
+            }
+            return;
+        }
         if (index == 0U) {
             snprintf(title, title_len, "%s", ui_tr("Burn direct"));
             snprintf(hint, hint_len, "%s", ui_write_path_label());
@@ -615,6 +622,10 @@ static void ui_fill_task_result_row(const ui_model_t *model, uint16_t index, cha
         case 16:
             snprintf(title, title_len, "NOR chip");
             snprintf(hint, hint_len, "%s", ui_probe_chip_name(&status));
+            break;
+        case 18:
+            snprintf(title, title_len, "%s", ui_tr("Skipped blank data"));
+            ui_format_bytes_text(status.write_skipped_bytes, hint, hint_len);
             break;
         default:
             snprintf(title, title_len, "NOR ID");

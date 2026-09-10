@@ -23,6 +23,7 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"Burn via PSRAM", "Burn via PSRAM"},
     {"Burner", "Burner"},
     {"Bytes", "Bytes"},
+    {"Skipped blank data", "Skipped blank data"},
     {"Capacity", "Capacity"},
     {"Capacity:", "Capacity:"},
     {"Cart", "Cart"},

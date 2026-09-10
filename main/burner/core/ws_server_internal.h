@@ -895,6 +895,7 @@ void burner_status_mark_write_begin(void);
 uint64_t burner_status_mark_write_end(void);
 void burner_status_mark_write_manual_begin(void);
 void burner_status_record_write_sample(uint32_t bytes, uint64_t elapsed_us);
+void burner_status_record_write_skipped(uint32_t bytes);
 void burner_status_mark_task_begin(void);
 void burner_status_mark_task_end(void);
 uint32_t burner_erase_sector_count_from_bytes(uint64_t bytes, uint32_t sector_size);
