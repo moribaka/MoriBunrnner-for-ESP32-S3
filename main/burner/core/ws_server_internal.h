@@ -85,13 +85,8 @@
 #define BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT 1U
 #define BURN_GBA_FIXED_ERASE_WINDOW_MB 4U
 #define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES 0U
-#define BURN_READ_PSRAM_FRAGMENT_MB 7U
-#define BURN_READ_PSRAM_FRAGMENT_BYTES (BURN_READ_PSRAM_FRAGMENT_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
-#define BURN_VERIFY_PSRAM_WINDOW_MB 7U
-#define BURN_VERIFY_PSRAM_WINDOW_BYTES (BURN_VERIFY_PSRAM_WINDOW_MB * BURN_PSRAM_WINDOW_BYTES_PER_MB)
 #define BURN_TASK_STACK_BYTES (16U * 1024U)
 #define VERIFY_LOG_DIR_REL ".log"
-#define ROM_OUTPUT_TEMP_ROOT_REL ".temp/ROM_OUTPUT"
 #define TF_PATH_LEN_MAX 240
 #define TF_QUERY_LEN_MAX 320
 #define BURNER_FILE_NAME_LEN TF_PATH_LEN_MAX
@@ -496,6 +491,8 @@ _Static_assert(sizeof(burner_task_param_t) <= 1024,
 
 typedef struct {
     int fd;
+    uint8_t *dma_buf;
+    bool inflight;
     const uint8_t *src;
     size_t bytes;
     size_t written;
@@ -703,7 +700,6 @@ esp_err_t burner_load_burn_config(void);
 esp_err_t burner_save_burn_config(void);
 uint8_t *burner_spi_alloc_rw_buffer(size_t len, bool *needs_free);
 uint8_t *burner_spi_alloc_tx_buffer(size_t len, bool *needs_free);
-esp_err_t burner_tf_write_exact(int fd, const uint8_t *src, size_t bytes);
 void burner_tf_writer_task(void *arg);
 esp_err_t burner_tf_writer_start(burner_tf_writer_ctx_t *ctx, int fd);
 esp_err_t burner_tf_writer_submit(burner_tf_writer_ctx_t *ctx, const uint8_t *src, size_t bytes);

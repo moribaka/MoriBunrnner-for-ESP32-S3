@@ -1053,13 +1053,6 @@ esp_err_t burner_start_verify_from_tf(
         return burner_start_error(err, "invalid verify file", error_msg, error_msg_len);
     }
 
-    if (cart_mode == BURNER_CART_MODE_GBA && (verify_size & 0x1u) != 0u) {
-        if (verify_size == UINT32_MAX) {
-            return burner_start_error(ESP_ERR_INVALID_SIZE, "verify file too large", error_msg, error_msg_len);
-        }
-        verify_size += 1u;
-    }
-
     if (cart_mode == BURNER_CART_MODE_GBA) {
         err = burner_apply_gba_slot_limit(slot, verify_size, &addr_begin, &effective_size, &gba_force_multi);
     } else {
@@ -1082,7 +1075,7 @@ esp_err_t burner_start_verify_from_tf(
         false,
         BURN_MBC5_PROGRAM_CHUNK_BYTES,
         BURN_GBA_DUMP_CHUNK_BYTES,
-        BURN_VERIFY_PSRAM_WINDOW_BYTES,
+        0u,
         safe_name,
         full_path,
         addr_begin,

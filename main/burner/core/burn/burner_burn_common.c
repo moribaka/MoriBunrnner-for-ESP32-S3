@@ -308,108 +308,6 @@ esp_err_t burner_ensure_rom_output_dir(void)
     return ESP_FAIL;
 }
 
-static bool burner_dump_stage_build_dir_rel(
-    const char *rom_name,
-    char *stage_rel,
-    size_t stage_rel_len)
-{
-    int n;
-
-    if (rom_name == NULL || rom_name[0] == '\0' || stage_rel == NULL || stage_rel_len < 2u) {
-        return false;
-    }
-
-    n = snprintf(stage_rel, stage_rel_len, ROM_OUTPUT_TEMP_ROOT_REL "/%s.parts", rom_name);
-    return n > 0 && n < (int)stage_rel_len;
-}
-
-static esp_err_t burner_dump_stage_prepare(
-    const char *rom_name,
-    char *stage_rel,
-    size_t stage_rel_len,
-    char *stage_full,
-    size_t stage_full_len)
-{
-    struct stat st;
-
-    if (!burner_dump_stage_build_dir_rel(rom_name, stage_rel, stage_rel_len) ||
-        !burner_build_full_path(stage_rel, stage_full, stage_full_len)) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    if (stat(stage_full, &st) == 0) {
-        if (burner_remove_recursive(stage_full) != ESP_OK) {
-            return ESP_FAIL;
-        }
-    }
-
-    return burner_mkdirs_rel(stage_rel);
-}
-
-static bool burner_dump_stage_build_fragment_rel(
-    const char *stage_rel,
-    const char *rom_name,
-    uint32_t fragment_index,
-    char *fragment_rel,
-    size_t fragment_rel_len)
-{
-    int n;
-
-    if (stage_rel == NULL || stage_rel[0] == '\0' || rom_name == NULL || rom_name[0] == '\0' ||
-        fragment_rel == NULL || fragment_rel_len < 2u) {
-        return false;
-    }
-
-    n = snprintf(
-        fragment_rel,
-        fragment_rel_len,
-        "%s/%s.part%03" PRIu32,
-        stage_rel,
-        rom_name,
-        fragment_index);
-    return n > 0 && n < (int)fragment_rel_len;
-}
-
-static esp_err_t burner_dump_stage_write_fragment(
-    const char *stage_rel,
-    const char *rom_name,
-    uint32_t fragment_index,
-    const uint8_t *data,
-    size_t data_len)
-{
-    char fragment_rel[TF_PATH_LEN_MAX] = {0};
-    char fragment_full[TF_PATH_LEN_MAX + 64] = {0};
-    FILE *fp = NULL;
-
-    if (!burner_dump_stage_build_fragment_rel(
-            stage_rel,
-            rom_name,
-            fragment_index,
-            fragment_rel,
-            sizeof(fragment_rel)) ||
-        !burner_build_full_path(fragment_rel, fragment_full, sizeof(fragment_full))) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    if (burner_cancel_poll() != ESP_OK) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (usb_msc_tf_in_use_by_host()) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    fp = fopen(fragment_full, "wb");
-    if (fp == NULL) {
-        return ESP_FAIL;
-    }
-    if (fwrite(data, 1, data_len, fp) != data_len) {
-        fclose(fp);
-        unlink(fragment_full);
-        return ESP_FAIL;
-    }
-    fclose(fp);
-    return ESP_OK;
-}
 
 static esp_err_t burner_replace_file(const char *tmp_path, const char *target_path)
 {
@@ -457,108 +355,6 @@ static uint8_t *burner_attach_stdio_buffer(FILE *fp, size_t preferred_size)
     return buf;
 }
 
-static esp_err_t burner_dump_stage_merge_fragments(
-    const char *stage_rel,
-    const char *rom_name,
-    uint32_t fragment_count,
-    const char *target_path)
-{
-    char fragment_rel[TF_PATH_LEN_MAX] = {0};
-    char fragment_full[TF_PATH_LEN_MAX + 64] = {0};
-    char tmp_target[TF_PATH_LEN_MAX + 96] = {0};
-    uint8_t *copy_buf = NULL;
-    FILE *out_fp = NULL;
-    esp_err_t err = ESP_OK;
-    uint32_t index;
-
-    if (stage_rel == NULL || rom_name == NULL || fragment_count == 0u || target_path == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (snprintf(tmp_target, sizeof(tmp_target), "%s.merge_tmp", target_path) >= (int)sizeof(tmp_target)) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    out_fp = fopen(tmp_target, "wb");
-    if (out_fp == NULL) {
-        return ESP_FAIL;
-    }
-
-    copy_buf = (uint8_t *)malloc(TF_IO_CHUNK_SIZE);
-    if (copy_buf == NULL) {
-        fclose(out_fp);
-        unlink(tmp_target);
-        return ESP_ERR_NO_MEM;
-    }
-
-    for (index = 0u; index < fragment_count && err == ESP_OK; ++index) {
-        FILE *in_fp;
-
-        if (burner_cancel_poll() != ESP_OK) {
-            err = ESP_ERR_INVALID_STATE;
-            break;
-        }
-        if (usb_msc_tf_in_use_by_host()) {
-            err = ESP_ERR_INVALID_STATE;
-            break;
-        }
-
-        if (!burner_dump_stage_build_fragment_rel(
-                stage_rel,
-                rom_name,
-                index,
-                fragment_rel,
-                sizeof(fragment_rel)) ||
-            !burner_build_full_path(fragment_rel, fragment_full, sizeof(fragment_full))) {
-            err = ESP_ERR_INVALID_SIZE;
-            break;
-        }
-
-        in_fp = fopen(fragment_full, "rb");
-        if (in_fp == NULL) {
-            err = ESP_FAIL;
-            break;
-        }
-
-        while (err == ESP_OK) {
-            size_t read_len = fread(copy_buf, 1, TF_IO_CHUNK_SIZE, in_fp);
-
-            if (burner_cancel_poll() != ESP_OK) {
-                err = ESP_ERR_INVALID_STATE;
-                break;
-            }
-            if (usb_msc_tf_in_use_by_host()) {
-                err = ESP_ERR_INVALID_STATE;
-                break;
-            }
-
-            if (read_len == 0u) {
-                break;
-            }
-            if (fwrite(copy_buf, 1, read_len, out_fp) != read_len) {
-                err = ESP_FAIL;
-                break;
-            }
-        }
-        if (err == ESP_OK && ferror(in_fp)) {
-            err = ESP_FAIL;
-        }
-        fclose(in_fp);
-    }
-
-    free(copy_buf);
-
-    if (fclose(out_fp) != 0 && err == ESP_OK) {
-        err = ESP_FAIL;
-    }
-
-    if (err != ESP_OK) {
-        unlink(tmp_target);
-        return err;
-    }
-
-    return burner_replace_file(tmp_target, target_path);
-}
 
 typedef esp_err_t (*burner_dump_read_block_fn_t)(
     uint8_t *dst,
@@ -600,628 +396,8 @@ static esp_err_t burner_dump_read_block_gba(
     return err;
 }
 
-static int burner_dump_stage_progress(uint32_t processed, uint32_t total)
-{
-    int progress = burner_calc_progress_percent_u64(processed, total);
-
-    if (processed >= total) {
-        return 99;
-    }
-    if (progress > 99) {
-        return 99;
-    }
-    return progress;
-}
-
-static esp_err_t __attribute__((unused)) burner_run_read_job_staged(
-    const burner_task_param_t *job,
-    uint32_t work_total,
-    uint32_t chunk_bytes,
-    burner_dump_read_block_fn_t read_block,
-    const char *cache_msg,
-    const char *flush_msg,
-    const char *merge_msg,
-    const char *alloc_fail_msg,
-    const char *read_fail_msg)
-{
-    uint8_t *psram_stage_buf = NULL;
-    uint32_t processed = 0;
-    size_t stage_capacity = 0u;
-    size_t staged_bytes = 0u;
-    esp_err_t err = ESP_OK;
-    char stage_rel[TF_PATH_LEN_MAX] = {0};
-    char stage_full[TF_PATH_LEN_MAX + 64] = {0};
-    uint32_t fragment_count = 0u;
-    bool stage_ready = false;
-
-    if (job == NULL || work_total == 0u || chunk_bytes == 0u || read_block == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    stage_capacity = (work_total < burner_psram_window_mb_to_bytes(BURN_READ_PSRAM_FRAGMENT_MB))
-                         ? (size_t)work_total
-                         : (size_t)burner_psram_window_mb_to_bytes(BURN_READ_PSRAM_FRAGMENT_MB);
-    if (stage_capacity == 0u) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    burner_status_update(
-        BURNER_STATE_BURNING,
-        0,
-        0,
-        work_total,
-        cache_msg,
-        job->rom_name,
-        job->rom_path);
-
-    err = burner_dump_stage_prepare(job->rom_name, stage_rel, sizeof(stage_rel), stage_full, sizeof(stage_full));
-    if (err != ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            work_total,
-            "prepare temp dump dir failed",
-            job->rom_name,
-            job->rom_path);
-        return err;
-    }
-    stage_ready = true;
-
-    psram_stage_buf = (uint8_t *)heap_caps_malloc(stage_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (psram_stage_buf == NULL) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            work_total,
-            alloc_fail_msg,
-            job->rom_name,
-            job->rom_path);
-        err = ESP_ERR_NO_MEM;
-        goto staged_dump_done;
-    }
-
-    while (processed < work_total) {
-        size_t read_len = (size_t)(work_total - processed);
-        int progress;
-
-        if (read_len > chunk_bytes) {
-            read_len = chunk_bytes;
-        }
-
-        if ((staged_bytes + read_len) > stage_capacity && staged_bytes > 0u) {
-            burner_status_update(
-                BURNER_STATE_BURNING,
-                burner_dump_stage_progress(processed, work_total),
-                processed,
-                work_total,
-                flush_msg,
-                job->rom_name,
-                job->rom_path);
-            err = burner_dump_stage_write_fragment(
-                stage_rel,
-                job->rom_name,
-                fragment_count,
-                psram_stage_buf,
-                staged_bytes);
-            if (err != ESP_OK) {
-                if (!burner_cancel_is_requested()) {
-                    burner_status_update(
-                        BURNER_STATE_ERROR,
-                        burner_dump_stage_progress(processed, work_total),
-                        processed,
-                        work_total,
-                        "write temp fragment failed",
-                        job->rom_name,
-                        job->rom_path);
-                }
-                break;
-            }
-            fragment_count++;
-            staged_bytes = 0u;
-        }
-
-        if (usb_msc_tf_in_use_by_host()) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                burner_dump_stage_progress(processed, work_total),
-                processed,
-                work_total,
-                "tf busy by usb host",
-                job->rom_name,
-                job->rom_path);
-            err = ESP_ERR_INVALID_STATE;
-            break;
-        }
-
-        err = read_block(psram_stage_buf + staged_bytes, read_len, job->addr_begin + processed, job);
-        if (err != ESP_OK) {
-            if (!burner_cancel_is_requested()) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    burner_dump_stage_progress(processed, work_total),
-                    processed,
-                    work_total,
-                    read_fail_msg,
-                    job->rom_name,
-                    job->rom_path);
-            }
-            break;
-        }
-
-        staged_bytes += read_len;
-        processed += (uint32_t)read_len;
-        progress = burner_dump_stage_progress(processed, work_total);
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            progress,
-            processed,
-            work_total,
-            cache_msg,
-            job->rom_name,
-            job->rom_path);
-        burner_emit_progress_cb(progress, processed);
-    }
-
-    if (err == ESP_OK && staged_bytes > 0u) {
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            burner_dump_stage_progress(processed, work_total),
-            processed,
-            work_total,
-            flush_msg,
-            job->rom_name,
-            job->rom_path);
-        err = burner_dump_stage_write_fragment(
-            stage_rel,
-            job->rom_name,
-            fragment_count,
-            psram_stage_buf,
-            staged_bytes);
-        if (err != ESP_OK) {
-            if (!burner_cancel_is_requested()) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    burner_dump_stage_progress(processed, work_total),
-                    processed,
-                    work_total,
-                    "write temp fragment failed",
-                    job->rom_name,
-                    job->rom_path);
-            }
-        } else {
-            fragment_count++;
-            staged_bytes = 0u;
-        }
-    }
-
-    if (err == ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            99,
-            processed,
-            work_total,
-            merge_msg,
-            job->rom_name,
-            job->rom_path);
-        burner_emit_progress_cb(99, processed);
-        err = burner_dump_stage_merge_fragments(stage_rel, job->rom_name, fragment_count, job->rom_path);
-        if (err != ESP_OK) {
-            if (!burner_cancel_is_requested()) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    99,
-                    processed,
-                    work_total,
-                    "merge dump file failed",
-                    job->rom_name,
-                    job->rom_path);
-            }
-        }
-    }
-
-staged_dump_done:
-    if (psram_stage_buf != NULL) {
-        free(psram_stage_buf);
-    }
-    if (stage_ready) {
-        (void)burner_remove_recursive(stage_full);
-    }
-    return err;
-}
-
-static esp_err_t burner_run_read_job_direct(
-    const burner_task_param_t *job,
-    uint32_t work_total,
-    uint32_t chunk_bytes,
-    burner_dump_read_block_fn_t read_block,
-    const char *progress_msg,
-    const char *alloc_fail_msg,
-    const char *read_fail_msg,
-    const char *write_fail_msg)
-{
-    uint8_t *dump_buf[2] = {NULL, NULL};
-    burner_tf_writer_ctx_t tf_writer = {0};
-    uint32_t read_offset = 0u;
-    uint32_t processed = 0u;
-    uint32_t pending_write_bytes = 0u;
-    size_t buf_size = 0u;
-    size_t buf_count = 0u;
-    size_t slot_fill[2] = {0u, 0u};
-    size_t fill_slot = 0u;
-    esp_err_t err = ESP_OK;
-    int out_fd = -1;
-    char tmp_target[TF_PATH_LEN_MAX + 96] = {0};
-    uint64_t op_start_us;
-    uint64_t op_elapsed_us;
-    bool writer_inflight = false;
-
-    if (job == NULL || work_total == 0u || chunk_bytes == 0u || read_block == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (snprintf(tmp_target, sizeof(tmp_target), "%s.dump_tmp", job->rom_path) >= (int)sizeof(tmp_target)) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    burner_status_update(
-        BURNER_STATE_BURNING,
-        0,
-        0,
-        work_total,
-        progress_msg,
-        job->rom_name,
-        job->rom_path);
-
-    out_fd = open(tmp_target, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (out_fd < 0) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            work_total,
-            write_fail_msg,
-            job->rom_name,
-            job->rom_path);
-        return ESP_FAIL;
-    }
-
-    buf_size = (work_total < chunk_bytes) ? (size_t)work_total : (size_t)chunk_bytes;
-    dump_buf[0] = (uint8_t *)malloc(buf_size);
-    if (dump_buf[0] != NULL) {
-        dump_buf[1] = (uint8_t *)malloc(buf_size);
-        buf_count = (dump_buf[1] != NULL) ? 2u : 1u;
-    }
-    if (dump_buf[0] == NULL) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            0,
-            0,
-            work_total,
-            alloc_fail_msg,
-            job->rom_name,
-            job->rom_path);
-        err = ESP_ERR_NO_MEM;
-        goto direct_dump_done;
-    }
-    if (buf_count == 0u) {
-        buf_count = 1u;
-    }
-
-    err = burner_tf_writer_start(&tf_writer, out_fd);
-    if (err != ESP_OK) {
-        memset(&tf_writer, 0, sizeof(tf_writer));
-        tf_writer.fd = out_fd;
-        err = ESP_OK;
-    }
-
-    while (read_offset < work_total) {
-        size_t read_len = (size_t)(work_total - read_offset);
-        size_t free_space = buf_size - slot_fill[fill_slot];
-        int progress;
-        uint8_t *read_buf = dump_buf[fill_slot] + slot_fill[fill_slot];
-
-        if (writer_inflight && buf_count < 2u) {
-            err = burner_tf_writer_wait(&tf_writer);
-            writer_inflight = false;
-            if (err != ESP_OK) {
-                if (!burner_cancel_is_requested()) {
-                    burner_status_update(
-                        BURNER_STATE_ERROR,
-                        burner_calc_progress_percent_u64(processed, work_total),
-                        processed,
-                        work_total,
-                        write_fail_msg,
-                        job->rom_name,
-                        job->rom_path);
-                }
-                goto direct_dump_done;
-            }
-            processed += pending_write_bytes;
-            pending_write_bytes = 0u;
-        }
-
-        if (free_space == 0u) {
-            if (writer_inflight) {
-                err = burner_tf_writer_wait(&tf_writer);
-                writer_inflight = false;
-                if (err != ESP_OK) {
-                    if (!burner_cancel_is_requested()) {
-                        burner_status_update(
-                            BURNER_STATE_ERROR,
-                            burner_calc_progress_percent_u64(processed, work_total),
-                            processed,
-                            work_total,
-                            write_fail_msg,
-                            job->rom_name,
-                            job->rom_path);
-                    }
-                    goto direct_dump_done;
-                }
-                processed += pending_write_bytes;
-                pending_write_bytes = 0u;
-            }
-
-            err = burner_tf_writer_submit(&tf_writer, dump_buf[fill_slot], slot_fill[fill_slot]);
-            if (err != ESP_OK) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    burner_calc_progress_percent_u64(processed, work_total),
-                    processed,
-                    work_total,
-                    write_fail_msg,
-                    job->rom_name,
-                    job->rom_path);
-                goto direct_dump_done;
-            }
-
-            if (tf_writer.running && tf_writer.request != NULL && tf_writer.done != NULL) {
-                writer_inflight = true;
-                pending_write_bytes = (uint32_t)slot_fill[fill_slot];
-            } else {
-                processed += (uint32_t)slot_fill[fill_slot];
-            }
-
-            slot_fill[fill_slot] = 0u;
-            if (buf_count > 1u) {
-                fill_slot = (fill_slot + 1u) % buf_count;
-            }
-            continue;
-        }
-
-        if (read_len > (size_t)chunk_bytes) {
-            read_len = (size_t)chunk_bytes;
-        }
-        if (read_len > free_space) {
-            read_len = free_space;
-        }
-
-        if (burner_cancel_poll() != ESP_OK) {
-            err = ESP_ERR_INVALID_STATE;
-            goto direct_dump_done;
-        }
-
-        if (usb_msc_tf_in_use_by_host()) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                burner_calc_progress_percent_u64(processed, work_total),
-                processed,
-                work_total,
-                "tf busy by usb host",
-                job->rom_name,
-                job->rom_path);
-            err = ESP_ERR_INVALID_STATE;
-            goto direct_dump_done;
-        }
-
-        op_start_us = (uint64_t)esp_timer_get_time();
-        err = read_block(read_buf, read_len, job->addr_begin + read_offset, job);
-        op_elapsed_us = (uint64_t)esp_timer_get_time();
-        if (op_elapsed_us > op_start_us) {
-            burner_status_record_dump_read((uint32_t)read_len, op_elapsed_us - op_start_us);
-        }
-        if (err != ESP_OK) {
-            if (!burner_cancel_is_requested()) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    burner_calc_progress_percent_u64(processed, work_total),
-                    processed,
-                    work_total,
-                    read_fail_msg,
-                    job->rom_name,
-                    job->rom_path);
-            }
-            goto direct_dump_done;
-        }
-
-        read_offset += (uint32_t)read_len;
-        slot_fill[fill_slot] += read_len;
-
-        if (slot_fill[fill_slot] == buf_size || read_offset >= work_total) {
-            if (writer_inflight) {
-                err = burner_tf_writer_wait(&tf_writer);
-                writer_inflight = false;
-                if (err != ESP_OK) {
-                    if (!burner_cancel_is_requested()) {
-                        burner_status_update(
-                            BURNER_STATE_ERROR,
-                            burner_calc_progress_percent_u64(processed, work_total),
-                            processed,
-                            work_total,
-                            write_fail_msg,
-                            job->rom_name,
-                            job->rom_path);
-                    }
-                    goto direct_dump_done;
-                }
-                processed += pending_write_bytes;
-                pending_write_bytes = 0u;
-            }
-
-            err = burner_tf_writer_submit(&tf_writer, dump_buf[fill_slot], slot_fill[fill_slot]);
-            if (err != ESP_OK) {
-                burner_status_update(
-                    BURNER_STATE_ERROR,
-                    burner_calc_progress_percent_u64(processed, work_total),
-                    processed,
-                    work_total,
-                    write_fail_msg,
-                    job->rom_name,
-                    job->rom_path);
-                goto direct_dump_done;
-            }
-
-            if (tf_writer.running && tf_writer.request != NULL && tf_writer.done != NULL) {
-                writer_inflight = true;
-                pending_write_bytes = (uint32_t)slot_fill[fill_slot];
-            } else {
-                processed += (uint32_t)slot_fill[fill_slot];
-            }
-
-            slot_fill[fill_slot] = 0u;
-            if (buf_count > 1u) {
-                fill_slot = (fill_slot + 1u) % buf_count;
-            }
-        }
-
-        progress = burner_calc_progress_percent_u64(processed, work_total);
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            progress,
-            processed,
-            work_total,
-            progress_msg,
-            job->rom_name,
-            job->rom_path);
-    }
-
-    if (slot_fill[fill_slot] > 0u) {
-        if (writer_inflight) {
-            err = burner_tf_writer_wait(&tf_writer);
-            writer_inflight = false;
-            if (err != ESP_OK) {
-                if (!burner_cancel_is_requested()) {
-                    burner_status_update(
-                        BURNER_STATE_ERROR,
-                        burner_calc_progress_percent_u64(processed, work_total),
-                        processed,
-                        work_total,
-                        write_fail_msg,
-                        job->rom_name,
-                        job->rom_path);
-                }
-                goto direct_dump_done;
-            }
-            processed += pending_write_bytes;
-            pending_write_bytes = 0u;
-        }
-
-        err = burner_tf_writer_submit(&tf_writer, dump_buf[fill_slot], slot_fill[fill_slot]);
-        if (err != ESP_OK) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                burner_calc_progress_percent_u64(processed, work_total),
-                processed,
-                work_total,
-                write_fail_msg,
-                job->rom_name,
-                job->rom_path);
-            goto direct_dump_done;
-        }
-
-        if (tf_writer.running && tf_writer.request != NULL && tf_writer.done != NULL) {
-            writer_inflight = true;
-            pending_write_bytes = (uint32_t)slot_fill[fill_slot];
-        } else {
-            processed += (uint32_t)slot_fill[fill_slot];
-        }
-    }
-
-    if (writer_inflight) {
-        err = burner_tf_writer_wait(&tf_writer);
-        writer_inflight = false;
-        if (err != ESP_OK) {
-            burner_status_update(
-                BURNER_STATE_ERROR,
-                burner_calc_progress_percent_u64(processed, work_total),
-                processed,
-                work_total,
-                write_fail_msg,
-                job->rom_name,
-                job->rom_path);
-            goto direct_dump_done;
-        }
-        processed += pending_write_bytes;
-        pending_write_bytes = 0u;
-        burner_status_update(
-            BURNER_STATE_BURNING,
-            burner_calc_progress_percent_u64(processed, work_total),
-            processed,
-            work_total,
-            progress_msg,
-            job->rom_name,
-            job->rom_path);
-    }
-
-    op_start_us = (uint64_t)esp_timer_get_time();
-    if (close(out_fd) != 0) {
-        out_fd = -1;
-        op_elapsed_us = (uint64_t)esp_timer_get_time();
-        if (op_elapsed_us > op_start_us) {
-            burner_status_record_dump_finalize(op_elapsed_us - op_start_us);
-        }
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            burner_calc_progress_percent_u64(processed, work_total),
-            processed,
-            work_total,
-            write_fail_msg,
-            job->rom_name,
-            job->rom_path);
-        err = ESP_FAIL;
-        goto direct_dump_done;
-    }
-    out_fd = -1;
-
-    err = burner_replace_file(tmp_target, job->rom_path);
-    op_elapsed_us = (uint64_t)esp_timer_get_time();
-    if (op_elapsed_us > op_start_us) {
-        burner_status_record_dump_finalize(op_elapsed_us - op_start_us);
-    }
-    if (err != ESP_OK) {
-        burner_status_update(
-            BURNER_STATE_ERROR,
-            burner_calc_progress_percent_u64(processed, work_total),
-            processed,
-            work_total,
-            write_fail_msg,
-            job->rom_name,
-            job->rom_path);
-        goto direct_dump_done;
-    }
-
-direct_dump_done:
-    if (writer_inflight) {
-        (void)burner_tf_writer_wait(&tf_writer);
-        writer_inflight = false;
-    }
-    burner_tf_writer_stop(&tf_writer);
-    if (out_fd >= 0) {
-        close(out_fd);
-    }
-    if (err != ESP_OK) {
-        unlink(tmp_target);
-    }
-    if (dump_buf[0] != NULL) {
-        free(dump_buf[0]);
-    }
-    if (dump_buf[1] != NULL) {
-        free(dump_buf[1]);
-    }
-
-    return err;
-}
+#include "burner_dump_stream.c"
+#include "burner_verify_stream.c"
 
 typedef struct {
     FILE *fp;
@@ -1288,8 +464,11 @@ static esp_err_t burner_tf_read_exact(FILE *fp, uint8_t *dst, size_t bytes)
     return burner_source_read_exact(fp, dst, bytes, s_tf_reader_source_size);
 }
 
-esp_err_t burner_tf_write_exact(int fd, const uint8_t *src, size_t bytes)
+static esp_err_t burner_tf_write_exact(burner_tf_writer_ctx_t *ctx)
 {
+    int fd = ctx->fd;
+    const uint8_t *src = ctx->src;
+    size_t bytes = ctx->bytes;
     size_t offset = 0u;
     uint64_t write_start_us;
     uint64_t write_elapsed_us;
@@ -1308,11 +487,18 @@ esp_err_t burner_tf_write_exact(int fd, const uint8_t *src, size_t bytes)
 
     write_start_us = (uint64_t)esp_timer_get_time();
     while (offset < bytes) {
-        ssize_t written = write(fd, src + offset, bytes - offset);
-        if (written <= 0) {
-            return ESP_FAIL;
+        size_t count = bytes - offset;
+        if (count > 16384u) count = 16384u;
+        /* SDMMC on S3 cannot DMA from PSRAM. An internal 16 KiB block
+         * keeps FatFS writes multi-sector instead of 512-byte bounces. */
+        memcpy(ctx->dma_buf, src + offset, count);
+        size_t done = 0;
+        while (done < count) {
+            ssize_t written = write(fd, ctx->dma_buf + done, count - done);
+            if (written <= 0) return ESP_FAIL;
+            done += (size_t)written;
         }
-        offset += (size_t)written;
+        offset += count;
         if (offset < bytes) {
             if (burner_cancel_is_requested()) {
                 return ESP_ERR_INVALID_STATE;
@@ -1385,7 +571,7 @@ void burner_tf_writer_task(void *arg)
         if (ctx->src == NULL || ctx->bytes == 0u) {
             ctx->err = ESP_ERR_INVALID_ARG;
         } else {
-            ctx->err = burner_tf_write_exact(ctx->fd, ctx->src, ctx->bytes);
+            ctx->err = burner_tf_write_exact(ctx);
             if (ctx->err == ESP_OK) {
                 ctx->written = ctx->bytes;
             }
@@ -1786,9 +972,14 @@ esp_err_t burner_tf_writer_start(burner_tf_writer_ctx_t *ctx, int fd)
     memset(ctx, 0, sizeof(*ctx));
     ctx->fd = fd;
 
+    ctx->dma_buf = heap_caps_malloc(16384u, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+    if (ctx->dma_buf == NULL) return ESP_ERR_NO_MEM;
+
     ctx->request = xSemaphoreCreateBinary();
     ctx->done = xSemaphoreCreateBinary();
     if (ctx->request == NULL || ctx->done == NULL) {
+        free(ctx->dma_buf);
+        ctx->dma_buf = NULL;
         if (ctx->request != NULL) {
             vSemaphoreDelete(ctx->request);
             ctx->request = NULL;
@@ -1811,6 +1002,8 @@ esp_err_t burner_tf_writer_start(burner_tf_writer_ctx_t *ctx, int fd)
         s_burn_core_cfg.tf_core);
     if (create_ret != pdPASS) {
         ctx->running = false;
+        free(ctx->dma_buf);
+        ctx->dma_buf = NULL;
         vSemaphoreDelete(ctx->request);
         vSemaphoreDelete(ctx->done);
         ctx->request = NULL;
@@ -1827,8 +1020,8 @@ esp_err_t burner_tf_writer_submit(burner_tf_writer_ctx_t *ctx, const uint8_t *sr
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!ctx->running || ctx->request == NULL || ctx->done == NULL) {
-        return burner_tf_write_exact(ctx->fd, src, bytes);
+    if (!ctx->running || ctx->request == NULL || ctx->done == NULL || ctx->inflight) {
+        return ESP_ERR_INVALID_STATE;
     }
 
     if (src == NULL || bytes == 0u) {
@@ -1839,6 +1032,7 @@ esp_err_t burner_tf_writer_submit(burner_tf_writer_ctx_t *ctx, const uint8_t *sr
     ctx->bytes = bytes;
     ctx->written = 0u;
     ctx->err = ESP_FAIL;
+    ctx->inflight = true;
     xSemaphoreGive(ctx->request);
     return ESP_OK;
 }
@@ -1852,12 +1046,13 @@ esp_err_t burner_tf_writer_wait(burner_tf_writer_ctx_t *ctx)
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!ctx->running || ctx->request == NULL || ctx->done == NULL) {
-        return ESP_OK;
+    if (!ctx->running || ctx->request == NULL || ctx->done == NULL || !ctx->inflight) {
+        return ESP_ERR_INVALID_STATE;
     }
 
     wait_start_us = (uint64_t)esp_timer_get_time();
     xSemaphoreTake(ctx->done, portMAX_DELAY);
+    ctx->inflight = false;
     wait_end_us = (uint64_t)esp_timer_get_time();
     if (wait_end_us > wait_start_us) {
         burner_status_record_dump_wait(wait_end_us - wait_start_us);
@@ -1875,6 +1070,7 @@ void burner_tf_writer_stop(burner_tf_writer_ctx_t *ctx)
     }
 
     if (ctx->running && ctx->request != NULL && ctx->done != NULL) {
+        if (ctx->inflight) (void)burner_tf_writer_wait(ctx);
         ctx->stop = true;
         xSemaphoreGive(ctx->request);
         xSemaphoreTake(ctx->done, portMAX_DELAY);
@@ -1889,4 +1085,6 @@ void burner_tf_writer_stop(burner_tf_writer_ctx_t *ctx)
         ctx->done = NULL;
     }
     ctx->running = false;
+    free(ctx->dma_buf);
+    ctx->dma_buf = NULL;
 }

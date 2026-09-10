@@ -1,0 +1,20 @@
+2026-09-10 23:10:18 I (282613) burner_web: PSRAM auto window: free=7539756 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 23:10:18 I (282615) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 23:10:18 I (282717) burner_web: MBC5 power rail: 3V3
+2026-09-10 23:10:18 I (282819) burner_web: MBC5 ReadID trace begin t=281597261us
+2026-09-10 23:10:18 I (282821) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1528us (0.001528s)
+2026-09-10 23:10:18 I (282823) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2534us (0.002534s)
+2026-09-10 23:10:18 I (282831) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=7947us (0.007947s)
+2026-09-10 23:10:18 I (282839) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=7983us (0.007983s)
+2026-09-10 23:10:18 I (282847) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=8061us (0.008061s)
+2026-09-10 23:10:18 I (282855) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7856us (0.007856s)
+2026-09-10 23:10:18 I (282863) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7572us (0.007572s)
+2026-09-10 23:10:18 I (282871) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=8086us (0.008086s)
+2026-09-10 23:10:18 I (282878) burner_web: MBC5 ReadID trace end status=ESP_OK total=59275us (0.059275s)
+2026-09-10 23:10:18 I (282886) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 23:10:18 I (282900) burner_web: GB mapper detect: bank0 fixed=0000 switch=4000 len=64 fixed=FF-FF-FF-FF switch=FF-FF-FF-FF eq=1 blank=0/0 result=MBC5
+2026-09-10 23:10:18 I (282911) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 23:10:41 I (306244) burner_web: ROM verify: err=ESP_OK bytes=33554432/33554432 tf=4101ms cart=17415ms
+2026-09-10 23:10:41 I (306347) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 23:10:41 I (306348) power_manager: CPU perf lock released by burn_task
+2026-09-10 23:10:41 I (306352) burner_web: burn_task stack free min=12096 bytes

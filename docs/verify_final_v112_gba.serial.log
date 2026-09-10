@@ -1,0 +1,76 @@
+2026-09-10 23:06:16 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-10 23:06:16 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-10 23:06:16 I (1284) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-10 23:06:16 I (1293) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-10 23:06:16 I (1300) main: timezone configured: CST-8
+2026-09-10 23:06:16 I (1304) main: boot step: mount assets
+2026-09-10 23:06:16 I (1399) assets: mounted /assets: total=1438481 used=765550
+2026-09-10 23:06:16 I (1400) main: boot step: mount sdcard
+2026-09-10 23:06:16 I (1450) SDCARD: SD card mounted
+2026-09-10 23:06:16 I (1451) SDCARD: Total: 59638MB
+2026-09-10 23:06:16 W (1609) main: repaired legacy lang_zh_cn.ini
+2026-09-10 23:06:16 I (3387) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=3v3 settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-10 23:06:16 I (3393) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-10 23:06:16 I (3404) main: UI language=1 (zh)
+2026-09-10 23:06:16 I (3412) main: boot step: init i2c peripherals
+2026-09-10 23:06:16 W (3413) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-10 23:06:16 I (3424) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-10 23:06:16 I (3431) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-10 23:06:16 I (3434) power_manager: detected AXP209 at 0x34
+2026-09-10 23:06:16 I (3438) main: AXP209 power manager ready at 0x34
+2026-09-10 23:06:16 I (3443) tca9555: TCA9555 ready at 0x20
+2026-09-10 23:06:16 I (3451) main: tca9555.ini apply=0, skip register apply
+2026-09-10 23:06:16 I (3454) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-10 23:06:16 I (3457) tca9555: IRQ enabled on GPIO 17
+2026-09-10 23:06:16 I (3460) main: boot step: init usb msc manager
+2026-09-10 23:06:16 I (3464) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-10 23:06:16 I (3470) main: USB MSC manager ready, pass-through default is disabled
+2026-09-10 23:06:16 I (3476) main: boot step: init nvs
+2026-09-10 23:06:16 I (3507) main: boot step: init mcu debug
+2026-09-10 23:06:16 I (3508) main: boot step: init lvgl/display
+2026-09-10 23:06:16 I (3751) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-10 23:06:16 I (3753) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-10 23:06:16 I (3757) lvgl_port: using single LVGL draw buffer (20
+2026-09-10 23:06:17 I (41764) burner_web: PSRAM auto window: free=7539704 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 23:06:17 I (41766) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 23:06:17 I (41767) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 23:06:17 I (41777) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 23:06:17 I (41985) burner_web: GBA D0/D1 swap detection starting...
+2026-09-10 23:06:17 I (41987) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-10 23:06:17 I (41988) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-10 23:06:17 I (41999) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-10 23:06:17 I (42005) burner_web: GBA ReadID trace begin t=40783246us
+2026-09-10 23:06:17 I (42010) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5195us (0.005195s)
+2026-09-10 23:06:17 I (42018) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8059us (0.008059s)
+2026-09-10 23:06:17 I (42026) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7877us (0.007877s)
+2026-09-10 23:06:17 I (42034) burner_web: GBA ReadID trace read addr=0x000 data=0x0001 dt=8137us (0.008137s)
+2026-09-10 23:06:17 I (42042) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7808us (0.007808s)
+2026-09-10 23:06:17 I (42050) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7754us (0.007754s)
+2026-09-10 23:06:17 I (42058) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7646us (0.007646s)
+2026-09-10 23:06:17 I (42065) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7807us (0.007807s)
+2026-09-10 23:06:17 I (42073) burner_web: GBA ReadID trace end status=ESP_OK total=68085us (0.068085s)
+2026-09-10 23:06:17 I (42081) burner_web: GBA word-address probe @40000000Hz try=1 id=01 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 23:06:17 I (42090) burner_web: GBA Intel ReadID trace begin t=40868062us
+2026-09-10 23:06:17 I (42095) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5183us (0.005183s)
+2026-09-10 23:06:17 I (42104) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8669us (0.008669s)
+2026-09-10 23:06:17 I (42112) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8580us (0.008580s)
+2026-09-10 23:06:17 I (42121) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x002E dt=8230us (0.008230s)
+2026-09-10 23:06:17 I (42129) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8741us (0.008741s)
+2026-09-10 23:06:17 I (42137) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8122us (0.008122s)
+2026-09-10 23:06:17 I (42146) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8276us (0.008276s)
+2026-09-10 23:06:17 I (42154) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8449us (0.008449s)
+2026-09-10 23:06:17 I (42162) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8182us (0.008182s)
+2026-09-10 23:06:17 I (42171) burner_web: GBA Intel ReadID trace end status=ESP_OK total=80886us (0.080886s)
+2026-09-10 23:06:17 I (42179) burner_web: GBA intel-id probe @40000000Hz try=1 id=2E 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-10 23:06:17 I (42198) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=AMD standard
+2026-09-10 23:06:17 I (42201) burner_web: GBA profile match @40000000Hz try=1: chip=S29GL01GP/GS profile=AGB:AMD:555/2AA:AA/55 cmdset=amd method=AMD standard
+2026-09-10 23:06:17 I (42209) burner_web: GBA auto probe @40000000Hz try=1 id=01 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-10 23:06:17 I (42218) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=S29GL01GP/GS profile=AGB:AMD:555/2AA:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=512 cmdset=amd lane=low primary=0x0002
+2026-09-10 23:06:17 I (42238) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-10 23:06:17 I (42247) burner_web: GBA AMD runtime commands: standard AMD source=AMD standard
+2026-09-10 23:06:17 I (42254) burner_web: GBA prepared: chip=S29GL01GP/GS profile=AGB:AMD:555/2AA:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=512 prog_buf=512 cfi=ok nor=amd cmd=word-address low-lane id=01 00 7E 22 28 22 01 22
+2026-09-10 23:06:17 I (42275) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-10 23:06:39 I (63925) burner_web: ROM verify: err=ESP_OK bytes=33554432/33554432 tf=4152ms cart=15586ms
+2026-09-10 23:06:39 I (64028) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-10 23:06:39 I (64029) power_manager: CPU perf lock released by burn_task
+2026-09-10 23:06:39 I (64033) burner_web: burn_task stack free min=11956 bytes

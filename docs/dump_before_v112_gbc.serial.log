@@ -1,0 +1,33 @@
+2026-09-10 22:40:08 I (368929) burner_web: MBC5 power rail: 3V3
+2026-09-10 22:40:09 I (369030) burner_web: MBC5 ReadID trace begin t=367807781us
+2026-09-10 22:40:09 I (369031) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1441us (0.001441s)
+2026-09-10 22:40:09 I (369033) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2422us (0.002422s)
+2026-09-10 22:40:09 I (369042) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=8808us (0.008808s)
+2026-09-10 22:40:09 I (369050) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=7333us (0.007333s)
+2026-09-10 22:40:09 I (369057) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7698us (0.007698s)
+2026-09-10 22:40:09 I (369065) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=7983us (0.007983s)
+2026-09-10 22:40:09 I (369073) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7845us (0.007845s)
+2026-09-10 22:40:09 I (369081) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7957us (0.007957s)
+2026-09-10 22:40:09 I (369089) burner_web: MBC5 ReadID trace end status=ESP_OK total=59374us (0.059374s)
+2026-09-10 22:40:09 I (369096) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 22:40:09 I (369110) burner_web: GB mapper override: using MBC5
+2026-09-10 22:40:09 I (369115) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 22:40:09 I (369232) burner_web: PSRAM auto window: free=7538040 largest=7471104 reserve=262144 -> 6MB
+2026-09-10 22:40:09 I (369235) power_manager: CPU perf lock acquired by burn_task
+2026-09-10 22:40:09 I (369337) burner_web: MBC5 power rail: 3V3
+2026-09-10 22:40:09 I (369438) burner_web: MBC5 ReadID trace begin t=368216303us
+2026-09-10 22:40:09 I (369440) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0xAA dt=1635us (0.001635s)
+2026-09-10 22:40:09 I (369442) burner_web: MBC5 ReadID trace write addr=0x0555 data=0x55 dt=2465us (0.002465s)
+2026-09-10 22:40:09 I (369450) burner_web: MBC5 ReadID trace write addr=0x0AAA data=0x90 dt=7986us (0.007986s)
+2026-09-10 22:40:09 I (369458) burner_web: MBC5 ReadID trace read addr=0x0000 data=0xC2 dt=8053us (0.008053s)
+2026-09-10 22:40:09 I (369466) burner_web: MBC5 ReadID trace read addr=0x0002 data=0x7E dt=7705us (0.007705s)
+2026-09-10 22:40:09 I (369474) burner_web: MBC5 ReadID trace read addr=0x001C data=0x22 dt=8190us (0.008190s)
+2026-09-10 22:40:09 I (369482) burner_web: MBC5 ReadID trace read addr=0x001E data=0x01 dt=7984us (0.007984s)
+2026-09-10 22:40:09 I (369490) burner_web: MBC5 ReadID trace write addr=0x0000 data=0xF0 dt=7814us (0.007814s)
+2026-09-10 22:40:09 I (369498) burner_web: MBC5 ReadID trace end status=ESP_OK total=59429us (0.059429s)
+2026-09-10 22:40:09 I (369505) burner_web: MBC5 ID probe: id=C2 7E 22 01 chip=MX29GL256E/F flash=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 cmdset=amd
+2026-09-10 22:40:09 I (369519) burner_web: GB mapper override: using MBC5
+2026-09-10 22:40:09 I (369523) burner_web: GB prepared: mapper=MBC5 flash=33554432 usable=33554432 sector=131072 geom=uniform largest=131072 regions=1 buf=64 nor=amd cfi=ok id=C2 7E 22 01
+2026-09-10 22:41:53 I (473807) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=dump finished
+2026-09-10 22:41:53 I (473809) power_manager: CPU perf lock released by burn_task
+2026-09-10 22:41:53 I (473812) burner_web: burn_task stack free min=12048 bytes
