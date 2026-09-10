@@ -419,13 +419,21 @@ static void ui_file_worker_task(void *param)
             if (!ui_take_model_lock()) break;
             ui_file_start_request_t *request = s_file_pending_action;
             s_file_pending_action = NULL;
-            bool scan = request == NULL && s_file_scan_pending;
+            bool ag32_pending = s_ui_ag32_pending;
+            ui_ag32_request_t ag32_request = s_ui_ag32_request;
+            s_ui_ag32_pending = false;
+            bool scan = request == NULL && !ag32_pending && s_file_scan_pending;
             generation = s_file_scan_generation;
             if (scan) {
                 snprintf(path, sizeof(path), "%s", s_file_scan_path);
                 s_file_scan_pending = false;
             }
             xSemaphoreGive(s_model_lock);
+            if (ag32_pending) {
+                configASSERT(request == NULL);
+                ui_ag32_worker(&ag32_request);
+                continue;
+            }
             if (request != NULL) {
                 ui_run_file_action(request);
                 continue;

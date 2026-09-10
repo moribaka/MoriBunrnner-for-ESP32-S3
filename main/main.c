@@ -28,6 +28,7 @@
 #include "ip5306.h"
 #include "lvgl_port.h"
 #include "mcu_debug.h"
+#include "ag32_batch_programmer.h"
 #include "music_player.h"
 #include "lcd_display.h"
 #include "mori_system_settings.h"
@@ -3636,6 +3637,7 @@ void app_main(void)
         ESP_LOGW("main", "MCU debug init failed: %s", esp_err_to_name(debug_init_err));
     }
 
+    ESP_ERROR_CHECK(ag32_batch_programmer_init());
     ESP_LOGI("main", "boot step: init lvgl/display");
     lvgl_err = lvgl_port_init();
     if (lvgl_err != ESP_OK) {

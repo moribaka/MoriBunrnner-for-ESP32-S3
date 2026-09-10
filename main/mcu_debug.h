@@ -59,6 +59,7 @@ typedef struct {
 esp_err_t mcu_debug_init(void);
 esp_err_t mcu_debug_session_begin(uint32_t *dp_idcode);
 void mcu_debug_session_end(void);
+uint8_t mcu_debug_last_ack(void);
 esp_err_t mcu_debug_halt(void);
 esp_err_t mcu_debug_resume(void);
 esp_err_t mcu_debug_system_reset(void);

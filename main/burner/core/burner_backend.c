@@ -760,6 +760,7 @@ void burner_bacon_idle_task_entry(void *param)
         if (!s_mcu_spi_ready || s_mcu_spi == NULL) {
             continue;
         }
+        if (burner_spi_swd_restore_blocked()) continue;
         if (burner_task_is_running_snapshot()) {
             continue;
         }

@@ -54,6 +54,8 @@
 #define DMCONTROL_HALTREQ (1u << 31)
 #define DMSTATUS_ANYHALTED (1u << 8)
 #define DMSTATUS_ALLHALTED (1u << 9)
+#define DMSTATUS_ANYRUNNING (1u << 10)
+#define DMSTATUS_ALLRUNNING (1u << 11)
 #define DMSTATUS_ANYRESUMEACK (1u << 16)
 #define DMSTATUS_ALLRESUMEACK (1u << 17)
 
@@ -267,9 +269,10 @@ static esp_err_t swd_connect(uint32_t *dp_idcode)
     swd_write_bits(0xe79eu, 16u);
     swd_line_reset();
     swd_idle();
-    if (dp_read(DP_REG_IDCODE, &value) != ESP_OK) {
+    err = dp_read(DP_REG_IDCODE, &value);
+    if (err != ESP_OK) {
         ESP_LOGE(MCU_DEBUG_TAG, "SWD DP IDCODE read failed, ack=0x%x", s_last_ack);
-        return ESP_ERR_NOT_FOUND;
+        return err;
     }
     if (dp_idcode != NULL) {
         *dp_idcode = value;
@@ -311,9 +314,10 @@ static esp_err_t swd_connect(uint32_t *dp_idcode)
         return err;
     }
     for (unsigned attempt = 0u; attempt < 100u; ++attempt) {
-        if (dp_read(DP_REG_CTRL_STAT, &value) != ESP_OK) {
+        err = dp_read(DP_REG_CTRL_STAT, &value);
+        if (err != ESP_OK) {
             ESP_LOGE(MCU_DEBUG_TAG, "SWD DP power status read failed, ack=0x%x", s_last_ack);
-            return ESP_ERR_INVALID_RESPONSE;
+            return err;
         }
         if ((value & (DP_CTRL_CDBGPWRUPACK | DP_CTRL_CSYSPWRUPACK))
             == (DP_CTRL_CDBGPWRUPACK | DP_CTRL_CSYSPWRUPACK)) {
@@ -321,8 +325,8 @@ static esp_err_t swd_connect(uint32_t *dp_idcode)
         }
         esp_rom_delay_us(100u);
     }
-    ESP_LOGW(MCU_DEBUG_TAG, "SWD DP power ACK not implemented, CTRL/STAT=0x%08" PRIx32, value);
-    return ESP_OK;
+    ESP_LOGE(MCU_DEBUG_TAG, "SWD DP power ACK timeout, CTRL/STAT=0x%08" PRIx32, value);
+    return ESP_ERR_TIMEOUT;
 }
 
 static esp_err_t ap_prepare_dmi(void)
@@ -333,7 +337,7 @@ static esp_err_t ap_prepare_dmi(void)
     if (err != ESP_OK || idr == 0u || idr == UINT32_MAX) {
         ESP_LOGE(MCU_DEBUG_TAG, "SWD AP IDR failed: %s value=0x%08" PRIx32,
             esp_err_to_name(err), idr);
-        return ESP_ERR_NOT_FOUND;
+        return err != ESP_OK ? err : ESP_ERR_NOT_FOUND;
     }
     err = ap_read(AP_REG_CSW, &csw);
     if (err != ESP_OK) {
@@ -462,6 +466,7 @@ esp_err_t mcu_debug_session_begin(uint32_t *dp_idcode)
         return err;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_last_ack = 0u;
     if (s_session_active) {
         xSemaphoreGive(s_lock);
         return ESP_ERR_INVALID_STATE;
@@ -496,15 +501,18 @@ void mcu_debug_session_end(void)
     }
 }
 
+uint8_t mcu_debug_last_ack(void) { return s_last_ack; }
+
 esp_err_t mcu_debug_halt(void)
 {
     if (!s_session_active) {
         return ESP_ERR_INVALID_STATE;
     }
     uint32_t before = 0u;
-    (void)dmi_read(DMI_DMSTATUS, &before);
+    esp_err_t err = dmi_read(DMI_DMSTATUS, &before);
+    if (err != ESP_OK) return err;
     ESP_LOGI(MCU_DEBUG_TAG, "DMI DMSTATUS before halt=0x%08" PRIx32, before);
-    esp_err_t err = dmi_write(DMI_DMCONTROL, DMCONTROL_DMACTIVE | DMCONTROL_HALTREQ);
+    err = dmi_write(DMI_DMCONTROL, DMCONTROL_DMACTIVE | DMCONTROL_HALTREQ);
     return err == ESP_OK ? wait_dmstatus(DMSTATUS_ANYHALTED | DMSTATUS_ALLHALTED) : err;
 }
 
@@ -520,7 +528,7 @@ esp_err_t mcu_debug_resume(void)
     if (err == ESP_OK) {
         err = dmi_write(DMI_DMCONTROL, DMCONTROL_DMACTIVE);
     }
-    return err;
+    return err == ESP_OK ? wait_dmstatus(DMSTATUS_ANYRUNNING | DMSTATUS_ALLRUNNING) : err;
 }
 
 esp_err_t mcu_debug_system_reset(void)
@@ -533,7 +541,7 @@ esp_err_t mcu_debug_system_reset(void)
         esp_rom_delay_us(100u);
         err = dmi_write(DMI_DMCONTROL, DMCONTROL_DMACTIVE);
     }
-    return err;
+    return err == ESP_OK ? wait_dmstatus(DMSTATUS_ANYRUNNING | DMSTATUS_ALLRUNNING) : err;
 }
 
 esp_err_t mcu_debug_read_memory32(uint32_t address, uint32_t *value)
@@ -659,6 +667,7 @@ const char *mcu_debug_pull_mode_str(mcu_debug_pull_mode_t mode)
 esp_err_t mcu_debug_init(void) { return ESP_ERR_NOT_SUPPORTED; }
 esp_err_t mcu_debug_session_begin(uint32_t *id) { (void)id; return ESP_ERR_NOT_SUPPORTED; }
 void mcu_debug_session_end(void) { }
+uint8_t mcu_debug_last_ack(void) { return 0u; }
 esp_err_t mcu_debug_halt(void) { return ESP_ERR_NOT_SUPPORTED; }
 esp_err_t mcu_debug_resume(void) { return ESP_ERR_NOT_SUPPORTED; }
 esp_err_t mcu_debug_system_reset(void) { return ESP_ERR_NOT_SUPPORTED; }

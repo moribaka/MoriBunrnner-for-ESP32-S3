@@ -20,6 +20,12 @@ typedef struct {
     uint32_t programmed_bytes;
     uint32_t verified_bytes;
     bool destructive_started;
+    bool mcu_resumed;
+    uint8_t swd_ack;
+    uint32_t address;
+    esp_err_t error;
+    esp_err_t cleanup_error;
+    char phase[24];
 } ag32_batch_program_report_t;
 
 typedef enum {
@@ -36,6 +42,7 @@ typedef struct {
     char message[160];
     uint32_t processed;
     uint32_t total;
+    uint32_t stack_free_min;
     ag32_batch_program_report_t report;
 } ag32_batch_job_status_t;
 
@@ -47,6 +54,7 @@ esp_err_t ag32_batch_program_file(
     char *error,
     size_t error_size);
 
+esp_err_t ag32_batch_programmer_init(void);
 esp_err_t ag32_batch_program_start(const char *path);
 bool ag32_batch_program_is_running(void);
 esp_err_t ag32_batch_validate_path(

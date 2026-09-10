@@ -112,6 +112,10 @@ static int decode_record(
 
     if (range_fits(record->address, record->payload_size, AG32_FLASH_BASE, AG32_FLASH_SIZE)) {
         record->kind = AG32_BATCH_RECORD_FLASH;
+        if ((record->address & 3u) != 0u ||
+            (record->erase_options && (record->address & 0xfffu) != 0u)) {
+            return fail(error, error_size, "record %u has unaligned flash address", record_index);
+        }
     } else if (range_fits(record->address, record->payload_size, AG32_OPTION_BASE, AG32_OPTION_SIZE)) {
         record->kind = AG32_BATCH_RECORD_OPTION;
     } else {

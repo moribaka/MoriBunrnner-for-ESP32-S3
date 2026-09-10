@@ -98,7 +98,7 @@ esp_err_t burner_spi_begin_cs(burner_spi_cs_mode_t mode)
 #if BURNER_SPI_ENABLE
     uint32_t cs_setup_delay_us;
 
-    if (!s_mcu_spi_ready || s_mcu_spi == NULL) {
+    if (s_swd_mode || !s_mcu_spi_ready || s_mcu_spi == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -118,6 +118,7 @@ esp_err_t burner_spi_begin_cs(burner_spi_cs_mode_t mode)
 void burner_spi_end_cs(burner_spi_cs_mode_t mode)
 {
 #if BURNER_SPI_ENABLE
+    if (s_swd_mode) return;
     uint32_t cs_hold_delay_us = burner_spi_cs_hold_delay_us(mode);
 
     if (cs_hold_delay_us > 0u) {
@@ -143,7 +144,7 @@ esp_err_t burner_spi_transfer_cs(
     if (tx == NULL || len == 0u) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (!s_mcu_spi_ready || s_mcu_spi == NULL) {
+    if (s_swd_mode || !s_mcu_spi_ready || s_mcu_spi == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -207,7 +208,7 @@ esp_err_t burner_spi_transfer_cs_legacy(
     if (tx == NULL || len == 0u || len > BURNER_SPI_MAX_XFER) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (!s_mcu_spi_ready || s_mcu_spi == NULL) {
+    if (s_swd_mode || !s_mcu_spi_ready || s_mcu_spi == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -256,7 +257,7 @@ esp_err_t burner_spi_transfer_active(const uint8_t *tx, uint8_t *rx, size_t len)
     if (tx == NULL || len == 0u || len > BURNER_SPI_MAX_XFER) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (!s_mcu_spi_ready || s_mcu_spi == NULL) {
+    if (s_swd_mode || !s_mcu_spi_ready || s_mcu_spi == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -519,6 +520,23 @@ void burner_bacon_restore_3v3_power(void)
     (void)burner_bacon_gba_release_bus_idle();
 }
 
+static esp_err_t burner_spi_restore_cs_pins(void)
+{
+    gpio_config_t cfg = {
+        .pin_bit_mask = (1ULL << MORI_PIN_MCU_SPI_CS) | (1ULL << MORI_PIN_MCU_SPI_CS1),
+        .mode = GPIO_MODE_INPUT_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    /* Set the output latch before enabling the drivers. */
+    burner_spi_release_cs();
+    esp_err_t err = gpio_config(&cfg);
+    if (err == ESP_OK) err = gpio_set_drive_capability(MORI_PIN_MCU_SPI_CS1, GPIO_DRIVE_CAP_3);
+    if (err == ESP_OK) err = gpio_pullup_en(MORI_PIN_MCU_SPI_CS1);
+    return err;
+}
+
 esp_err_t burner_spi_init(void)
 {
 #if BURNER_SPI_ENABLE
@@ -573,34 +591,8 @@ esp_err_t burner_spi_init(void)
         MORI_PIN_MCU_SPI_MOSI,
         s_mcu_spi_clock_hz);
 
-    {
-        gpio_config_t cs_cfg = {
-            .pin_bit_mask = (1ULL << MORI_PIN_MCU_SPI_CS) | (1ULL << MORI_PIN_MCU_SPI_CS1),
-            .mode = GPIO_MODE_INPUT_OUTPUT,
-            .pull_up_en = GPIO_PULLUP_DISABLE,
-            .pull_down_en = GPIO_PULLDOWN_DISABLE,
-            .intr_type = GPIO_INTR_DISABLE,
-        };
-        err = gpio_config(&cs_cfg);
-        if (err != ESP_OK) {
-            ESP_LOGE(BURNER_TAG, "gpio_config(cs) failed: %s", esp_err_to_name(err));
-            return err;
-        }
-        err = gpio_set_drive_capability(MORI_PIN_MCU_SPI_CS1, GPIO_DRIVE_CAP_3);
-        if (err != ESP_OK) {
-            ESP_LOGW(BURNER_TAG, "gpio_set_drive_capability(cs1) failed: %s", esp_err_to_name(err));
-        }
-        err = gpio_pullup_en(MORI_PIN_MCU_SPI_CS1);
-        if (err != ESP_OK) {
-            ESP_LOGW(BURNER_TAG, "gpio_pullup_en(cs1) failed: %s", esp_err_to_name(err));
-        }
-        burner_spi_release_cs();
-        ESP_LOGI(
-            BURNER_TAG,
-            "MCU SPI CS idle readback: cs0=%d cs1=%d",
-            gpio_get_level(MORI_PIN_MCU_SPI_CS),
-            gpio_get_level(MORI_PIN_MCU_SPI_CS1));
-    }
+    err = burner_spi_restore_cs_pins();
+    if (err != ESP_OK) return err;
 
     err = spi_bus_initialize(BURNER_SPI_HOST, &bus_cfg, SPI_DMA_CH_AUTO);
     if (err != ESP_OK) {
@@ -654,71 +646,4 @@ esp_err_t burner_spi_init(void)
 #endif
 }
 
-esp_err_t burner_spi_enter_swd_mode(void)
-{
-#if BURNER_SPI_ENABLE
-    burner_spi_lock_take();
-    s_swd_mode = true;
-    burner_spi_release_cs();
-    if (s_mcu_spi != NULL) {
-        esp_err_t err = spi_bus_remove_device(s_mcu_spi);
-        if (err != ESP_OK) {
-            s_swd_mode = false;
-            burner_spi_lock_give();
-            return err;
-        }
-        s_mcu_spi = NULL;
-    }
-    if (s_mcu_spi_ready) {
-        esp_err_t err = spi_bus_free(BURNER_SPI_HOST);
-        if (err != ESP_OK) {
-            s_mcu_spi_ready = false;
-            burner_spi_lock_give();
-            return err;
-        }
-    }
-    s_mcu_spi_ready = false;
-    gpio_set_direction(MORI_PIN_MCU_SPI_CS1, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(MORI_PIN_MCU_SPI_CS1, GPIO_FLOATING);
-    gpio_set_direction(MORI_PIN_MCU_SWCLK, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(MORI_PIN_MCU_SWCLK, GPIO_FLOATING);
-    return ESP_OK;
-#else
-    return ESP_ERR_NOT_SUPPORTED;
-#endif
-}
-
-esp_err_t burner_spi_leave_swd_mode(bool restore_spi)
-{
-#if BURNER_SPI_ENABLE
-    esp_err_t err = ESP_OK;
-    if (restore_spi && !s_swd_restore_blocked) {
-        s_swd_mode = false;
-        err = burner_spi_init();
-        if (err != ESP_OK) {
-            s_swd_mode = true;
-            s_swd_restore_blocked = true;
-        }
-    }
-    burner_spi_lock_give();
-    return err;
-#else
-    (void)restore_spi;
-    return ESP_ERR_NOT_SUPPORTED;
-#endif
-}
-
-void burner_spi_block_swd_restore(void)
-{
-    s_swd_restore_blocked = true;
-}
-
-void burner_spi_allow_swd_restore(void)
-{
-    s_swd_restore_blocked = false;
-}
-
-bool burner_spi_swd_restore_blocked(void)
-{
-    return s_swd_restore_blocked;
-}
+#include "burner_spi_swd.inc"

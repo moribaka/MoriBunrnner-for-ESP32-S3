@@ -603,6 +603,17 @@ static void dispatch(char *line)
             cJSON_AddNumberToObject(json, "processed", status.processed);
             cJSON_AddNumberToObject(json, "total", status.total);
             cJSON_AddNumberToObject(json, "device_id", status.report.device_id);
+            cJSON_AddNumberToObject(json, "dp_idcode", status.report.dp_idcode);
+            cJSON_AddNumberToObject(json, "records", status.report.record_count);
+            cJSON_AddNumberToObject(json, "programmed", status.report.programmed_bytes);
+            cJSON_AddNumberToObject(json, "verified", status.report.verified_bytes);
+            cJSON_AddStringToObject(json, "error", esp_err_to_name(status.report.error));
+            cJSON_AddStringToObject(json, "cleanup_error", esp_err_to_name(status.report.cleanup_error));
+            cJSON_AddNumberToObject(json, "address", status.report.address);
+            cJSON_AddNumberToObject(json, "swd_ack", status.report.swd_ack);
+            cJSON_AddNumberToObject(json, "stack_free_min", status.stack_free_min);
+            cJSON_AddBoolToObject(json, "mcu_resumed", status.report.mcu_resumed);
+            cJSON_AddBoolToObject(json, "destructive_started", status.report.destructive_started);
             cJSON_AddBoolToObject(json, "recovery_required", burner_spi_swd_restore_blocked());
         }
         reply(json);

@@ -283,6 +283,9 @@ esp_err_t burner_mcu_probe_handler(httpd_req_t *req)
     esp_err_t err;
 
     (void)req;
+    if (ag32_batch_program_is_running() || burner_task_is_running_snapshot()) {
+        return httpd_resp_send_custom_err(req, "409 Conflict", "AG32 or cartridge job is running");
+    }
     if (burner_spi_swd_restore_blocked()) {
         return httpd_resp_send_custom_err(
             req, "409 Conflict", "AG32 update recovery is required; probe cannot resume the target");
@@ -376,7 +379,7 @@ esp_err_t burner_mcu_batch_check_handler(httpd_req_t *req)
 esp_err_t burner_mcu_batch_status_handler(httpd_req_t *req)
 {
     ag32_batch_job_status_t status;
-    char response[1400];
+    char response[1800];
     char path_escaped[609] = {0};
     char phase_escaped[49] = {0};
     char message_escaped[321] = {0};
@@ -393,10 +396,14 @@ esp_err_t burner_mcu_batch_status_handler(httpd_req_t *req)
         "\"message\":\"%s\",\"processed\":%" PRIu32 ",\"total\":%" PRIu32 ","
         "\"dp_idcode\":\"0x%08" PRIx32 "\",\"device_id\":\"0x%08" PRIx32 "\","
         "\"records\":%" PRIu32 ",\"programmed\":%" PRIu32 ",\"verified\":%" PRIu32 ","
+        "\"error\":\"%s\",\"cleanup_error\":\"%s\",\"address\":\"0x%08" PRIx32 "\","
+        "\"swd_ack\":%u,\"mcu_resumed\":%s,\"stack_free_min\":%" PRIu32 ","
         "\"destructive_started\":%s,\"recovery_required\":%s}",
         ag32_batch_job_state_name(status.state), path_escaped, phase_escaped, message_escaped,
         status.processed, status.total, status.report.dp_idcode, status.report.device_id,
         status.report.record_count, status.report.programmed_bytes, status.report.verified_bytes,
+        esp_err_to_name(status.report.error), esp_err_to_name(status.report.cleanup_error), status.report.address,
+        status.report.swd_ack, status.report.mcu_resumed ? "true" : "false", status.stack_free_min,
         status.report.destructive_started ? "true" : "false",
         burner_spi_swd_restore_blocked() ? "true" : "false");
     if (length < 0 || length >= (int)sizeof(response)) {

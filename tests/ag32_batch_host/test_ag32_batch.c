@@ -104,6 +104,12 @@ int main(int argc, char **argv)
     uint32_t middle_header = manifest.records[1].payload_offset - AG32_BATCH_HEADER_SIZE;
     uint32_t final_header = manifest.records[2].payload_offset - AG32_BATCH_HEADER_SIZE;
 
+    write_le32(batch + middle_header + 8u, manifest.records[1].address + 1u);
+    update_header_crc(batch + middle_header);
+    assert(parse_memory(batch, manifest.file_size, error, sizeof(error)) != 0);
+    write_le32(batch + middle_header + 8u, manifest.records[1].address);
+    update_header_crc(batch + middle_header);
+
     write_le32(batch + 16u, 0u);
     update_header_crc(batch);
     assert(parse_memory(batch, manifest.file_size, error, sizeof(error)) != 0);

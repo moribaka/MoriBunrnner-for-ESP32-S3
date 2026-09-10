@@ -2850,13 +2850,15 @@ esp_err_t burner_reject_if_tf_busy(httpd_req_t *req)
 {
     if (ag32_batch_program_is_running()) {
         httpd_resp_set_status(req, "503 Service Unavailable");
-        return httpd_resp_sendstr(req, "TF storage is reserved by the AG32 batch update.");
+        esp_err_t err = httpd_resp_sendstr(req, "TF storage is reserved by the AG32 batch update.");
+        return err == ESP_OK ? ESP_ERR_INVALID_STATE : err;
     }
     if (usb_msc_tf_in_use_by_host()) {
         httpd_resp_set_status(req, "503 Service Unavailable");
-        return httpd_resp_sendstr(
+        esp_err_t err = httpd_resp_sendstr(
             req,
             "TF storage is in USB pass-through mode. Open / and disable USB pass-through first.");
+        return err == ESP_OK ? ESP_ERR_INVALID_STATE : err;
     }
     return ESP_OK;
 }

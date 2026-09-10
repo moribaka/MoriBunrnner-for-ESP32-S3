@@ -4,6 +4,8 @@ typedef struct {
     char path[sizeof(((ag32_batch_job_status_t *)0)->path)];
     bool start;
 } ui_ag32_request_t;
+static ui_ag32_request_t s_ui_ag32_request;
+static bool s_ui_ag32_pending;
 
 static bool ui_ag32_busy(const ui_model_t *model)
 {
@@ -25,14 +27,17 @@ static void ui_ag32_worker(void *arg)
     }
     if (ui_take_model_lock()) {
         if (err == ESP_OK) {
-            s_model.ag32.phase = request->start ? UI_AG32_RUNNING : UI_AG32_READY;
+            /* Polling may already have observed this job's terminal state. */
+            if (!request->start) s_model.ag32.phase = UI_AG32_READY;
+            else if (s_model.ag32.phase == UI_AG32_STARTING) s_model.ag32.phase = UI_AG32_RUNNING;
             if (!request->start) {
                 s_model.ag32.status.report.record_count = records;
                 s_model.ag32.status.total = bytes;
                 s_model.selected = 4;
             }
-            ui_set_status_locked(&s_model, ui_tr(request->start ?
-                "AG32 busy - keep power on" : "AG32 batch valid"));
+            if (!request->start || s_model.ag32.phase == UI_AG32_RUNNING)
+                ui_set_status_locked(&s_model, ui_tr(request->start ?
+                    "AG32 busy - keep power on" : "AG32 batch valid"));
         } else {
             s_model.ag32.phase = UI_AG32_ERROR;
             snprintf(s_model.ag32.status.message, sizeof(s_model.ag32.status.message), "%s",
@@ -42,8 +47,6 @@ static void ui_ag32_worker(void *arg)
         ui_mark_content_dirty(&s_model);
         xSemaphoreGive(s_model_lock);
     }
-    free(request);
-    vTaskDelete(NULL);
 }
 
 static void ui_ag32_launch_locked(ui_model_t *model, bool start)
@@ -51,28 +54,22 @@ static void ui_ag32_launch_locked(ui_model_t *model, bool start)
     music_player_snapshot_t music;
     music_player_get_snapshot(&music);
     if (card == NULL || usb_msc_tf_in_use_by_host() || burner_task_is_running_snapshot() ||
-        s_file_start_active || s_gba_patch_analysis_active || s_storage_work_active ||
+        s_file_start_active || s_storage_work_active ||
         s_burn_probe_active || music.state == MUSIC_PLAYER_STATE_LOADING ||
         music.state == MUSIC_PLAYER_STATE_PLAYING) {
         ui_set_status_locked(model, ui_tr("AG32 requires idle TF"));
         return;
     }
-    ui_ag32_request_t *request = calloc(1, sizeof(*request));
-    if (!request) {
-        ui_set_status_locked(model, ui_tr("no memory"));
-        return;
-    }
+    ui_ag32_request_t *request = &s_ui_ag32_request;
+    s_file_scan_generation++;
+    s_file_scan_pending = false;
+    s_gba_patch_analysis_active = false;
     snprintf(request->path, sizeof(request->path), "%s", model->ag32.status.path);
     request->start = start;
     model->ag32.phase = start ? UI_AG32_STARTING : UI_AG32_CHECKING;
     ui_set_status_locked(model, ui_tr(start ? "AG32 busy - keep power on" : "checking AG32 batch"));
-    if (xTaskCreatePinnedToCore(ui_ag32_worker, "ui_ag32", 6144, request,
-                              UI_STORAGE_TASK_PRIORITY, NULL, UI_BURN_TASK_CORE_ID) != pdPASS) {
-        free(request);
-        model->ag32.phase = UI_AG32_ERROR;
-        snprintf(model->ag32.status.message, sizeof(model->ag32.status.message), "%s", ui_tr("cannot start task"));
-        ui_set_status_locked(model, model->ag32.status.message);
-    }
+    s_ui_ag32_pending = true;
+    xTaskNotifyGive(s_file_worker);
     ui_mark_content_dirty(model);
 }
 
