@@ -48,7 +48,11 @@ module bacon_mcu_transport_tb;
     reg slave_hresp = 1'b0;
     reg [31:0] slave_hrdata;
 
-    reg [31:0] sram [0:63];
+    reg [31:0] sram [0:4095];
+    reg memory_data_phase = 0;
+    reg memory_write = 0;
+    reg [31:0] memory_address = 0;
+    integer memory_wait = 0;
     reg force_legacy_seen = 1'b0;
     integer i;
 
@@ -79,17 +83,29 @@ module bacon_mcu_transport_tb;
     always #3.333 sys_clock = ~sys_clock;
 
     always @(*) begin
-        if (slave_haddr >= 32'h2000_0000 && slave_haddr < 32'h2000_0100)
-            slave_hrdata = sram[(slave_haddr - 32'h2000_0000) >> 2];
+        if (memory_address >= 32'h2000_0000 && memory_address < 32'h2000_4000)
+            slave_hrdata = sram[(memory_address - 32'h2000_0000) >> 2];
         else
             slave_hrdata = 32'hdead_beef;
     end
 
     always @(posedge sys_clock) begin
         if (force_legacy) force_legacy_seen <= 1'b1;
-        if (slave_htrans[1] && slave_hwrite &&
-            slave_haddr >= 32'h2000_0000 && slave_haddr < 32'h2000_0100)
-            sram[(slave_haddr - 32'h2000_0000) >> 2] <= slave_hwdata;
+        if (memory_wait != 0) begin
+            memory_wait <= memory_wait - 1;
+            if (memory_wait == 1) slave_hreadyout <= 1;
+        end
+        if (slave_hreadyout) begin
+            if (memory_data_phase && memory_write)
+                sram[(memory_address - 32'h2000_0000) >> 2] <= slave_hwdata;
+            memory_data_phase <= slave_htrans[1];
+            if (slave_htrans[1]) begin
+                memory_address <= slave_haddr;
+                memory_write <= slave_hwrite;
+                memory_wait <= 3;
+                slave_hreadyout <= 0;
+            end
+        end
     end
 
     task ahb_write(input [31:0] address, input [31:0] value);
@@ -139,8 +155,9 @@ module bacon_mcu_transport_tb;
             for (bit_index = 7; bit_index >= 0; bit_index = bit_index - 1) begin
                 spi_mosi = 1'b0;
                 #12.5 spi_sck = 1'b1;
+                #2;
                 value[bit_index] = spi_miso;
-                #12.5 spi_sck = 1'b0;
+                #10.5 spi_sck = 1'b0;
             end
         end
     endtask
@@ -148,7 +165,11 @@ module bacon_mcu_transport_tb;
     reg [7:0] rx_bytes [0:11];
     reg [7:0] retry_bytes [0:11];
     reg [31:0] ahb_value;
+    reg [7:0] bulk_byte;
+    reg [31:0] expected_word;
     initial begin
+        #1 resetn = 1;
+        #1 resetn = 0;
         for (i = 0; i < 64; i = i + 1) sram[i] = 32'd0;
         #30 resetn = 1'b1;
         #50;
@@ -168,6 +189,18 @@ module bacon_mcu_transport_tb;
         ahb_write(32'h6002_0004, 32'h2000_0000);
         ahb_write(32'h6002_0008, 32'd3);
         ahb_write(32'h6002_0000, 32'h0000_0001);
+
+        // ESP32 writes the two GPIO CS pins separately. Clockless transient
+        // selections must not become empty RX requests or interrupted TX.
+        spi_cs0 = 0;
+        #200 spi_cs1 = 0;
+        #30;
+        repeat (4) spi_send_byte(8'h07);
+        spi_cs0 = 1;
+        #200 spi_cs1 = 1;
+        #200;
+        if (dut.rx_done || !dut.rx_armed || protocol_error)
+            $fatal(1, "CS skew created an empty request");
 
         spi_cs0 = 1'b0;
         spi_cs1 = 1'b1;
@@ -200,7 +233,15 @@ module bacon_mcu_transport_tb;
         ahb_write(32'h6002_0010, 32'h2000_0020);
         ahb_write(32'h6002_0014, 32'd3);
         ahb_write(32'h6002_0000, 32'h0000_0004);
-        if (!response_ready) $fatal(1, "response was not published");
+        wait(response_ready);
+        #100;
+        // Polls between publication and reading must not consume TX words.
+        spi_cs0 = 0;
+        #200 spi_cs1 = 0;
+        #30;
+        repeat (8) spi_send_byte(8'h07);
+        spi_cs0 = 1;
+        #200 spi_cs1 = 1;
         #100;
 
         spi_cs0 = 1'b1;
@@ -251,6 +292,27 @@ module bacon_mcu_transport_tb;
         if (response_ready || !dut.tx_consumed)
             $fatal(1, "retried response consumption mismatch");
 
+        // 8192 bytes repeatedly wrap both FIFO slots. Alternate last bits
+        // and sample after the edge so an early word replacement is visible.
+        for (i = 0; i < 2048; i = i + 1)
+            sram[1024+i] = (32'h9e3779b9 * i) ^ 32'h8147ab33;
+        ahb_write(32'h6002_0010, 32'h2000_1000);
+        ahb_write(32'h6002_0014, 32'd2048);
+        ahb_write(32'h6002_0000, 32'h0000_0004);
+        wait(response_ready);
+        spi_cs1 = 0;
+        #30;
+        for (i = 0; i < 8192; i = i + 1) begin
+            spi_recv_byte(bulk_byte);
+            expected_word = sram[1024+i/4] >> (8*(i%4));
+            if (bulk_byte !== expected_word[7:0])
+                $fatal(1, "bulk response mismatch at %0d: %02x != %02x", i, bulk_byte, expected_word[7:0]);
+        end
+        spi_cs1 = 1;
+        #200;
+        if (response_ready || !dut.tx_consumed)
+            $fatal(1, "bulk response did not complete");
+
         ahb_write(32'h6002_0000, 32'h0000_0002);
         ahb_write(32'h6002_0000, 32'h0000_0080);
         ahb_write(32'h6002_0004, 32'h2000_0000);
@@ -280,5 +342,9 @@ module bacon_mcu_transport_tb;
 
         $display("bacon MCU transport test passed");
         $finish;
+    end
+    initial begin
+        #3000000;
+        $fatal(1, "transport test timed out");
     end
 endmodule

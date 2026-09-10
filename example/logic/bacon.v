@@ -396,6 +396,7 @@ module bacon_mcu_transport(
     reg [12:0] tx_sent_words;
     reg [5:0] rx_bit_count;
     reg [12:0] rx_wire_words;
+    reg mcu_mode_d;
 
     wire rx_selected = mcu_mode && !cs0_sync[2] && cs1_sync[2];
     wire tx_selected = mcu_mode && cs0_sync[2] && !cs1_sync[2];
@@ -414,8 +415,9 @@ module bacon_mcu_transport(
 
     assign mem_ahb_hreadyout = ahb_hreadyout_reg;
     assign mem_ahb_hresp = 1'b0;
-    assign response_ready = tx_published;
-    assign request_busy = mcu_busy || rx_done;
+    assign response_ready = tx_published &&
+        (tx_fetched_words >= ((tx_word_count > 13'd1) ? 13'd2 : tx_word_count));
+    assign request_busy = !rx_armed || mcu_busy || rx_done;
     assign protocol_error = transport_error;
     assign cart_a_out = cart_output_reg[23:16];
     assign cart_ad_out = cart_output_reg[15:0];
@@ -435,7 +437,8 @@ module bacon_mcu_transport(
     bacon_spi_ahb_stream stream (
         .sys_clock(sys_clock),
         .resetn(resetn),
-        .csn(spi_cs0 && spi_cs1),
+        .csn(spi_cs0 || !spi_cs1),
+        .tx_csn(spi_cs1 || !spi_cs0),
         .sck(spi_sck),
         .mosi(spi_mosi),
         .miso(spi_miso),
@@ -504,11 +507,22 @@ module bacon_mcu_transport(
             tx_sent_words <= 13'd0;
             rx_bit_count <= 6'd0;
             rx_wire_words <= 13'd0;
+            mcu_mode_d <= 0;
         end else begin
             force_legacy <= 1'b0;
             tx_retry_reset <= 1'b0;
             rx_selected_d <= rx_selected;
             tx_selected_d <= tx_selected;
+            mcu_mode_d <= mcu_mode;
+            if (mcu_mode_d && !mcu_mode) begin
+                rx_armed <= 0;
+                rx_done <= 0;
+                rx_end_seen <= 0;
+                tx_published <= 0;
+                tx_consumed <= 0;
+                mcu_busy <= 0;
+                transport_error <= 0;
+            end
 
             if (!mcu_mode)
                 cart_control_reg[7:6] <= {legacy_power_5v, legacy_power_3v};
@@ -528,7 +542,8 @@ module bacon_mcu_transport(
                     rx_bit_count <= rx_bit_count + 6'd1;
                 end
             end
-            if (rx_selected_d && !rx_selected) begin
+            if (rx_armed && rx_selected_d && !rx_selected &&
+                (rx_wire_words != 0 || rx_bit_count != 0)) begin
                 rx_end_seen <= 1'b1;
                 if (rx_bit_count != 6'd0)
                     transport_error <= 1'b1;
@@ -556,7 +571,8 @@ module bacon_mcu_transport(
                     tx_bit_count <= tx_bit_count + 6'd1;
                 end
             end
-            if (tx_selected_d && !tx_selected) begin
+            if (tx_published && tx_selected_d && !tx_selected &&
+                (tx_sent_words != 0 || tx_bit_count != 0)) begin
                 if (tx_sent_words >= tx_word_count) begin
                     tx_published <= 1'b0;
                     tx_consumed <= 1'b1;
@@ -668,6 +684,7 @@ module bacon_spi_ahb_stream(
     input sys_clock,
     input resetn,
     input csn,
+    input tx_csn,
     input sck,
     input mosi,
     output miso,
@@ -710,6 +727,7 @@ module bacon_spi_ahb_stream(
         .sys_clock(sys_clock),
         .resetn(resetn),
         .csn(csn),
+        .tx_csn(tx_csn),
         .sck(sck),
         .mosi(mosi),
         .miso(miso),
@@ -726,7 +744,7 @@ module bacon_spi_ahb_stream(
     always @(posedge sys_clock or negedge resetn) begin
         if (!resetn)
             ahb_data_phase <= 1'b0;
-        else if (ahb_htrans == 2'b10)
+        else if (ahb_htrans == 2'b10 && ahb_hreadyout)
             ahb_data_phase <= 1'b1;
         else if (ahb_hreadyout)
             ahb_data_phase <= 1'b0;
@@ -738,14 +756,14 @@ module bacon_spi_ahb_stream(
             ahb_hwrite <= 1'b0;
             ahb_haddr <= 32'd0;
             ahb_hwdata <= 32'd0;
-        end else if (ahb_htrans == 2'b10) begin
+        end else if (ahb_htrans == 2'b10 && ahb_hreadyout) begin
             ahb_htrans <= 2'b00;
-        end else if (rx_valid && rx_en && !ahb_data_phase && ahb_hreadyout) begin
+        end else if (rx_valid && rx_en && !ahb_data_phase && !ahb_htrans[1] && ahb_hreadyout) begin
             ahb_htrans <= 2'b10;
             ahb_hwrite <= 1'b1;
             ahb_haddr <= rx_addr;
             ahb_hwdata <= rx_data;
-        end else if (tx_ready && tx_fetch_en && !ahb_data_phase && ahb_hreadyout) begin
+        end else if (tx_ready && tx_fetch_en && !tx_valid && !ahb_data_phase && !ahb_htrans[1] && ahb_hreadyout) begin
             ahb_htrans <= 2'b10;
             ahb_hwrite <= 1'b0;
             ahb_haddr <= tx_addr;
@@ -771,6 +789,7 @@ module bacon_spi_stream_core(
     input sys_clock,
     input resetn,
     input csn,
+    input tx_csn,
     input sck,
     input mosi,
     output miso,
@@ -779,104 +798,105 @@ module bacon_spi_stream_core(
     output reg rx_valid,
     output reg [31:0] rx_data,
     input tx_en,
-    output reg tx_ready,
+    output tx_ready,
     input tx_valid,
     input [31:0] tx_data
 );
-    reg [2:0] csn_reg;
-    reg [2:0] sck_reg;
-    reg [2:0] mosi_reg;
-    reg [4:0] sck_count;
-    reg rx_word_ready;
+    reg [4:0] rx_bit_index;
+    reg [31:0] rx_shift;
     reg [31:0] rx_word;
-    reg [7:0] rx_shift;
-    reg [31:0] tx_word;
-    reg [5:0] tx_native_bit_count;
+    reg rx_toggle;
+    reg [2:0] rx_toggle_sync;
+    reg [31:0] tx_words [0:1];
+    reg [4:0] tx_native_bit_count;
+    reg [1:0] tx_read_count;
+    reg [1:0] tx_read_gray;
+    reg [1:0] tx_gray_meta, tx_gray_sync;
+    reg [1:0] tx_write_count;
+    reg tx_bit;
+    wire [4:0] tx_next_bit_index = 5'd30 - tx_native_bit_count;
+    wire [1:0] tx_consumed_count = {tx_gray_sync[1], tx_gray_sync[1] ^ tx_gray_sync[0]};
+    wire [1:0] tx_pending = tx_write_count - tx_consumed_count;
+    wire tx_resetn = resetn && tx_en;
 
-    wire sck_rise = !sck_reg[2] && sck_reg[1];
+    assign miso = tx_native_bit_count == 0 ? tx_words[tx_read_count[0]][31] : tx_bit;
+    assign tx_ready = tx_en && tx_pending < 2;
 
-    assign miso = tx_word[31 - tx_native_bit_count];
-
-    always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn) begin
-            csn_reg <= 3'b111;
-            sck_reg <= 3'b000;
-            mosi_reg <= 3'b000;
-        end else begin
-            csn_reg <= {csn_reg[1:0], csn};
-            sck_reg <= {sck_reg[1:0], sck};
-            mosi_reg <= {mosi_reg[1:0], mosi};
-        end
+    always @(posedge sck or posedge csn or negedge resetn) begin
+        if (!resetn || csn) rx_bit_index <= 0;
+        else rx_bit_index <= rx_bit_index + 5'd1;
     end
 
-    always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn)
-            sck_count <= 5'd0;
-        else if (csn_reg[2])
-            sck_count <= 5'd0;
-        else if (sck_rise)
-            sck_count <= sck_count + 5'd1;
-    end
-
-    always @(posedge sys_clock or negedge resetn) begin
+    // Capture MOSI in its own clock domain. The completed word remains
+    // stable for 32 clocks while its toggle crosses into the AHB domain.
+    always @(posedge sck or negedge resetn) begin
         if (!resetn) begin
             rx_word <= 32'd0;
-            rx_shift <= 8'd0;
-            rx_word_ready <= 1'b0;
-        end else begin
-            rx_word_ready <= 1'b0;
-            if (!csn_reg[2] && sck_rise) begin
-                rx_shift <= {rx_shift[6:0], mosi_reg[2]};
-                if (sck_count[2:0] == 3'd7)
-                    rx_word <= {{rx_shift[6:0], mosi_reg[2]}, rx_word[31:8]};
-                if (sck_count == 5'd31)
-                    rx_word_ready <= 1'b1;
+            rx_shift <= 32'd0;
+            rx_toggle <= 0;
+        end else if (!csn) begin
+            rx_shift <= {rx_shift[30:0], mosi};
+            if (rx_bit_index == 5'd31) begin
+                rx_word <= {rx_shift[6:0], mosi, rx_shift[14:7], rx_shift[22:15], rx_shift[30:23]};
+                rx_toggle <= !rx_toggle;
             end
         end
     end
 
     always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn)
+        if (!resetn) begin
             rx_data <= 32'd0;
-        else if (rx_word_ready)
-            rx_data <= rx_word;
-    end
-
-    always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn)
             rx_valid <= 1'b0;
-        else if (rx_en && rx_word_ready)
-            rx_valid <= 1'b1;
-        else if (!rx_en || rx_ready)
-            rx_valid <= 1'b0;
+            rx_toggle_sync <= 0;
+        end else begin
+            rx_toggle_sync <= {rx_toggle_sync[1:0], rx_toggle};
+            if (rx_en && (rx_toggle_sync[2] != rx_toggle_sync[1])) begin
+                rx_data <= rx_word;
+                rx_valid <= 1;
+            end else if (!rx_en || rx_ready) rx_valid <= 0;
+        end
     end
 
-    always @(posedge sys_clock or negedge resetn) begin
-        if (!resetn)
-            tx_ready <= 1'b1;
-        else if (tx_en && tx_valid)
-            tx_ready <= 1'b0;
-        else if (!tx_en || (!csn_reg[2] && sck_rise && sck_count == 5'd0))
-            tx_ready <= 1'b1;
-    end
-
-    /* Keep the word in the sys_clock/AHB domain and only advance a native
-     * SPI bit index. This avoids writing the same data register from two
-     * unrelated clocks while keeping MISO stable for the 40 MHz sampler. */
+    /* Two-word asynchronous FIFO. Only the consumed Gray pointer crosses
+     * into AHB; each data slot stays unchanged throughout its SPI word. */
     always @(posedge sys_clock or negedge resetn) begin
         if (!resetn) begin
-            tx_word <= 32'd0;
-        end else if (csn_reg[2] || (!csn_reg[2] && sck_rise && sck_count == 5'd30))
-            tx_word <= {tx_data[7:0], tx_data[15:8], tx_data[23:16], tx_data[31:24]};
+            tx_words[0] <= 32'd0;
+            tx_words[1] <= 32'd0;
+            tx_write_count <= 2'd0;
+            tx_gray_meta <= 2'd0;
+            tx_gray_sync <= 2'd0;
+        end else if (!tx_en) begin
+            tx_write_count <= 2'd0;
+            tx_gray_meta <= 2'd0;
+            tx_gray_sync <= 2'd0;
+        end else begin
+            tx_gray_meta <= tx_read_gray;
+            tx_gray_sync <= tx_gray_meta;
+            if (tx_valid) begin
+                tx_words[tx_write_count[0]] <=
+                    {tx_data[7:0], tx_data[15:8], tx_data[23:16], tx_data[31:24]};
+                tx_write_count <= tx_write_count + 2'd1;
+            end
+        end
     end
 
-    always @(posedge sck or posedge csn or negedge resetn) begin
-        if (!resetn || csn)
-            tx_native_bit_count <= 6'd0;
-        else if (tx_native_bit_count == 6'd31)
-            tx_native_bit_count <= 6'd0;
-        else
-            tx_native_bit_count <= tx_native_bit_count + 6'd1;
+    /* Mode 0: change the output index on falling edges, after the host
+     * sampled the bit. Status/request clocks cannot consume this FIFO. */
+    always @(negedge sck or negedge tx_resetn) begin
+        if (!tx_resetn) begin
+            tx_native_bit_count <= 5'd0;
+            tx_read_count <= 2'd0;
+            tx_read_gray <= 2'd0;
+            tx_bit <= 0;
+        end else if (!tx_csn) begin
+            tx_native_bit_count <= tx_native_bit_count + 5'd1;
+            tx_bit <= tx_words[tx_read_count[0]][tx_next_bit_index];
+            if (tx_native_bit_count == 5'd31) begin
+                tx_read_count <= tx_read_count + 2'd1;
+                tx_read_gray <= ((tx_read_count + 2'd1) >> 1) ^ (tx_read_count + 2'd1);
+            end
+        end
     end
 endmodule
 

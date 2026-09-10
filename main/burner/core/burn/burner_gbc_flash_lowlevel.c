@@ -1857,25 +1857,11 @@ static esp_err_t burner_bacon_gbc_rom_program(
         return ESP_ERR_INVALID_ARG;
     }
 
-    size_t accelerated = 0u;
     bool used_mcu = false;
-    while (accelerated < len) {
-        size_t chunk = len - accelerated;
-        if (chunk > AG32_MCU_MAX_PAYLOAD_SIZE - 6u)
-            chunk = AG32_MCU_MAX_PAYLOAD_SIZE - 6u;
-        err = ag32_mcu_try_program_locked(
-            AG32_MCU_CMD_GBC_ROM_PROGRAM,
-            (uint16_t)(cart_addr + (uint16_t)accelerated),
-            buffer_write_bytes,
-            buf + accelerated,
-            chunk,
-            BURNER_ROM_POLL_TIMEOUT_MS,
-            &used_mcu);
-        if (!used_mcu) break;
-        if (err != ESP_OK) return err;
-        accelerated += chunk;
-    }
-    if (used_mcu) return ESP_OK;
+    err = ag32_mcu_try_program_locked(AG32_MCU_CMD_GBC_ROM_PROGRAM,
+        cart_addr, buffer_write_bytes, buf, len,
+        BURNER_ROM_POLL_TIMEOUT_MS, &used_mcu);
+    if (used_mcu) return err;
 
     while (i < len) {
         err = burner_cancel_poll();

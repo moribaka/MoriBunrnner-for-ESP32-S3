@@ -384,7 +384,6 @@ esp_err_t ag32_batch_program_file(
     size_t error_size)
 {
     ag32_batch_manifest_t manifest;
-    ag32_batch_program_report_t local_report = {0};
     uint8_t *buffer = NULL;
     FILE *file = NULL;
     bool spi_mode_entered = false;
@@ -395,7 +394,7 @@ esp_err_t ag32_batch_program_file(
     if (path == NULL || report == NULL) {
         return set_error(ESP_ERR_INVALID_ARG, error, error_size, "invalid batch programming arguments");
     }
-    *report = local_report;
+    memset(report, 0, sizeof(*report));
     file = fopen(path, "rb");
     if (file == NULL) {
         return set_error(ESP_ERR_NOT_FOUND, error, error_size, "cannot open batch file");
@@ -405,7 +404,7 @@ esp_err_t ag32_batch_program_file(
         err = ESP_ERR_INVALID_ARG;
         goto out;
     }
-    local_report.record_count = manifest.record_count;
+    report->record_count = manifest.record_count;
     buffer = malloc(AG32_IO_CHUNK);
     if (buffer == NULL) {
         err = set_error(ESP_ERR_NO_MEM, error, error_size, "cannot allocate batch I/O buffer");
@@ -423,7 +422,7 @@ esp_err_t ag32_batch_program_file(
     }
     spi_mode_entered = true;
     report_progress(progress, progress_context, "connect", 0u, manifest.payload_bytes);
-    err = mcu_debug_session_begin(&local_report.dp_idcode);
+    err = mcu_debug_session_begin(&report->dp_idcode);
     if (err != ESP_OK) {
         err = set_error(err, error, error_size, "AG32 SWD connection failed");
         goto out;
@@ -434,10 +433,10 @@ esp_err_t ag32_batch_program_file(
         err = set_error(err, error, error_size, "cannot halt AG32 MCU");
         goto out;
     }
-    err = mcu_debug_read_memory32(AG32_DEVICE_ID_ADDRESS, &local_report.device_id);
-    if (err != ESP_OK || local_report.device_id != AG32_DEVICE_ID) {
+    err = mcu_debug_read_memory32(AG32_DEVICE_ID_ADDRESS, &report->device_id);
+    if (err != ESP_OK || report->device_id != AG32_DEVICE_ID) {
         err = set_error(ESP_ERR_INVALID_RESPONSE, error, error_size,
-            "unexpected AG32 device ID 0x%08" PRIx32, local_report.device_id);
+            "unexpected AG32 device ID 0x%08" PRIx32, report->device_id);
         goto out;
     }
     err = flash_unlock(true, error, error_size);
@@ -449,35 +448,35 @@ esp_err_t ag32_batch_program_file(
             if (record->erase_options != 0u) {
                 report_progress(progress, progress_context, "option_erase", 0u, manifest.payload_bytes);
                 err = flash_erase_operation(
-                    AG32_FLASH_CR_OPTER, 0u, &local_report.destructive_started,
+                    AG32_FLASH_CR_OPTER, 0u, &report->destructive_started,
                     error, error_size);
             }
             if (err == ESP_OK) {
                 err = program_option_record(file, record, error, error_size);
                 if (err == ESP_OK) {
-                    local_report.programmed_bytes += record->payload_size;
+                    report->programmed_bytes += record->payload_size;
                 }
             }
         } else {
             if (record->erase_options != 0u) {
                 err = flash_erase_range(record->address, record->payload_size,
-                    &local_report.destructive_started,
+                    &report->destructive_started,
                     progress, progress_context, error, error_size);
             }
             if (err == ESP_OK) {
                 err = program_flash_record(file, record, buffer,
-                    progress, progress_context, &local_report, manifest.payload_bytes,
+                    progress, progress_context, report, manifest.payload_bytes,
                     error, error_size);
             }
         }
         if (err != ESP_OK) goto out;
         err = verify_record(file, record, buffer,
-            progress, progress_context, &local_report, manifest.payload_bytes,
+            progress, progress_context, report, manifest.payload_bytes,
             error, error_size);
         if (err != ESP_OK) goto out;
     }
 
-    report_progress(progress, progress_context, "reset", local_report.verified_bytes, local_report.verified_bytes);
+    report_progress(progress, progress_context, "reset", report->verified_bytes, report->verified_bytes);
     err = mcu_debug_system_reset();
     if (err == ESP_OK) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -491,18 +490,17 @@ out:
     }
     if (spi_mode_entered) {
         esp_err_t restore_err = burner_spi_leave_swd_mode(
-            restore_spi || !local_report.destructive_started);
+            restore_spi || !report->destructive_started);
         if (err == ESP_OK && restore_err != ESP_OK) {
             err = set_error(restore_err, error, error_size, "AG32 updated but cartridge SPI restore failed");
         }
     }
     free(buffer);
     if (file != NULL) fclose(file);
-    *report = local_report;
     ESP_LOGI(AG32_PROGRAM_TAG,
         "batch result=%s records=%" PRIu32 " programmed=%" PRIu32 " verified=%" PRIu32,
-        esp_err_to_name(err), local_report.record_count,
-        local_report.programmed_bytes, local_report.verified_bytes);
+        esp_err_to_name(err), report->record_count,
+        report->programmed_bytes, report->verified_bytes);
     return err;
 }
 
@@ -512,8 +510,8 @@ static void job_progress(
     uint32_t total,
     void *context)
 {
-    (void)context;
     xSemaphoreTake(s_job_lock, portMAX_DELAY);
+    s_job_status.report = *(const ag32_batch_program_report_t *)context;
     snprintf(s_job_status.phase, sizeof(s_job_status.phase), "%s", phase);
     s_job_status.processed = processed;
     s_job_status.total = total;
@@ -526,7 +524,7 @@ static void ag32_batch_job_task(void *arg)
     ag32_batch_program_report_t report;
     char error[sizeof(s_job_status.message)] = {0};
     esp_err_t result = ag32_batch_program_file(
-        job->path, job_progress, NULL, &report, error, sizeof(error));
+        job->path, job_progress, &report, &report, error, sizeof(error));
 
     xSemaphoreTake(s_job_lock, portMAX_DELAY);
     s_job_status.report = report;

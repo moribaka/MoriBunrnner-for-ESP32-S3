@@ -231,6 +231,7 @@ task_done:
         BURNER_TAG,
         "burn_task stack free min=%u bytes",
         (unsigned)uxTaskGetStackHighWaterMark2(NULL));
+    free(job->gba_patch_plan);
     free(job);
     if (s_status_lock != NULL) {
         xSemaphoreTake(s_status_lock, portMAX_DELAY);
@@ -345,8 +346,14 @@ esp_err_t burner_start_task_ex(
     job->gba_force_no_cfi = gba_force_no_cfi;
     job->rom_preerased = rom_preerased;
     if (gba_patch_plan != NULL) {
-        job->gba_patch_plan_valid = true;
-        job->gba_patch_plan = *gba_patch_plan;
+        job->gba_patch_plan = heap_caps_malloc(sizeof(*gba_patch_plan),
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (job->gba_patch_plan == NULL) {
+            free(job);
+            burner_set_starting(false);
+            return ESP_ERR_NO_MEM;
+        }
+        *job->gba_patch_plan = *gba_patch_plan;
     }
 
     if (mode == BURNER_JOB_WRITE_ROM) {
@@ -393,6 +400,7 @@ esp_err_t burner_start_task_ex(
             (unsigned)internal_largest,
             (unsigned)psram_free,
             (unsigned)psram_largest);
+        free(job->gba_patch_plan);
         free(job);
         s_burn_task = NULL;
         burner_set_starting(false);

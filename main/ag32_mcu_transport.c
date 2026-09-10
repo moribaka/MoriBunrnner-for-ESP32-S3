@@ -18,6 +18,7 @@
 #define AG32_MCU_STATUS_VERSION 0x01u
 #define AG32_MCU_STATUS_MODE (1u << 0)
 #define AG32_MCU_STATUS_RESPONSE_READY (1u << 1)
+#define AG32_MCU_STATUS_REQUEST_BUSY (1u << 2)
 #define AG32_MCU_STATUS_ERROR (1u << 3)
 #define AG32_MCU_NEGOTIATE_TIMEOUT_MS 100u
 #define AG32_MCU_DEFAULT_TIMEOUT_MS 2000u
@@ -52,7 +53,6 @@ static esp_err_t read_transport_status(uint8_t *flags)
             response[0], response[1], response[2], response[3]);
         return ESP_ERR_NOT_FOUND;
     }
-    ESP_LOGI(AG32_MCU_TAG, "MCU status flags=0x%02x", response[3]);
     if (flags != NULL) *flags = response[3];
     return (response[3] & AG32_MCU_STATUS_MODE) != 0u
         ? ESP_OK : ESP_ERR_INVALID_STATE;
@@ -107,6 +107,20 @@ static esp_err_t status_to_esp(uint8_t status)
     }
 }
 
+static esp_err_t wait_request_ready(uint32_t timeout_ms)
+{
+    int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
+    do {
+        uint8_t flags = 0;
+        esp_err_t err = read_transport_status(&flags);
+        if (err != ESP_OK) return err;
+        if (flags & AG32_MCU_STATUS_ERROR) return ESP_ERR_INVALID_RESPONSE;
+        if (!(flags & AG32_MCU_STATUS_REQUEST_BUSY)) return ESP_OK;
+        vTaskDelay(1);
+    } while (esp_timer_get_time() < deadline);
+    return ESP_ERR_TIMEOUT;
+}
+
 static esp_err_t command_in_active_mode(
     uint8_t opcode,
     uint16_t flags,
@@ -156,12 +170,13 @@ static esp_err_t command_in_active_mode(
     if (request_size != 0u)
         memcpy(request_frame + AG32_MCU_FRAME_HEADER_SIZE, request_payload, request_size);
 
+    err = wait_request_ready(timeout_ms ? timeout_ms : AG32_MCU_DEFAULT_TIMEOUT_MS);
+    if (err != ESP_OK) goto out;
     err = burner_spi_transfer_cs(
         BURNER_SPI_CS_MODE_0, request_frame, NULL, request_wire_size);
     if (err != ESP_OK) goto out;
     err = wait_response_ready(timeout_ms != 0u ? timeout_ms : AG32_MCU_DEFAULT_TIMEOUT_MS);
     if (err != ESP_OK) goto out;
-    esp_rom_delay_us(20u);
     err = burner_spi_transfer_cs(
         BURNER_SPI_CS_MODE_1, response_wire, response_wire, response_wire_size);
     if (err != ESP_OK) goto out;
@@ -340,12 +355,75 @@ esp_err_t ag32_mcu_try_command_locked(
             response_payload, response_capacity, response_size,
             timeout_ms, result);
     }
-    esp_err_t exit_err = exit_mcu_mode();
+    esp_err_t exit_err = (err == ESP_OK && opcode == AG32_MCU_CMD_STREAM_BEGIN)
+        ? ESP_OK : exit_mcu_mode();
     if (exit_err != ESP_OK) {
         s_active = AG32_LINK_ACTIVE_UNKNOWN;
         if (err == ESP_OK) err = exit_err;
     }
     return err;
+}
+
+esp_err_t ag32_mcu_try_stream_locked(
+    uint32_t capability, uint8_t opcode, uint32_t address,
+    uint16_t buffer_bytes, void *data, size_t size, uint32_t timeout_ms,
+    bool *used_mcu)
+{
+    if (!used_mcu) return ESP_ERR_INVALID_ARG;
+    *used_mcu = false;
+    if (s_preference == AG32_LINK_PREFERENCE_LEGACY) return ESP_OK;
+    *used_mcu = true;
+    if (!data || !size || size > UINT32_MAX) return ESP_ERR_INVALID_ARG;
+    uint8_t *wire = malloc(AG32_MCU_STREAM_CHUNK_SIZE + 12u);
+    if (!wire) return ESP_ERR_NO_MEM;
+    uint8_t descriptor[12] = {opcode, 0};
+    ag32_mcu_write_le16(descriptor + 2, buffer_bytes);
+    ag32_mcu_write_le32(descriptor + 4, address);
+    ag32_mcu_write_le32(descriptor + 8, size);
+    uint32_t block_size = 0;
+    esp_err_t err = ag32_mcu_try_command_locked(capability | AG32_MCU_CAP_STREAM,
+        AG32_MCU_CMD_STREAM_BEGIN, 0, descriptor, sizeof(descriptor), NULL, 0,
+        NULL, timeout_ms, &block_size, used_mcu);
+    if (!*used_mcu || err != ESP_OK) { free(wire); return err; }
+    if (block_size != AG32_MCU_STREAM_CHUNK_SIZE) err = ESP_ERR_INVALID_RESPONSE;
+    bool reading = opcode == AG32_MCU_CMD_ROM_READ || opcode == AG32_MCU_CMD_GBC_READ ||
+        opcode == AG32_MCU_CMD_RAM_READ;
+    bool receiving = reading || opcode == AG32_MCU_CMD_ECHO;
+    for (size_t offset = 0; err == ESP_OK && offset < size;) {
+        size_t chunk = size - offset;
+        if (chunk > block_size) chunk = block_size;
+        size_t padded = (chunk + 3u) & ~(size_t)3u;
+        if (!reading) {
+            err = wait_request_ready(timeout_ms);
+            if (err != ESP_OK) break;
+            memcpy(wire, (uint8_t *)data + offset, chunk);
+            memset(wire + chunk, 0, padded - chunk);
+            ag32_mcu_write_le32(wire + padded, ag32_mcu_crc32(wire, chunk));
+            err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_0, wire, NULL, padded + 4);
+            if (err != ESP_OK) break;
+        }
+        err = wait_response_ready(timeout_ms);
+        if (err != ESP_OK) break;
+        size_t payload = receiving ? padded : 0;
+        memset(wire, 0, payload + 12);
+        err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_1, wire, wire, payload + 12);
+        if (err != ESP_OK) break;
+        if (ag32_mcu_crc32(wire + 4, payload + 4) != ag32_mcu_read_le32(wire + 8 + payload)) {
+            err = ESP_ERR_INVALID_CRC;
+            break;
+        }
+        err = status_to_esp(ag32_mcu_read_le32(wire + 4));
+        if (err != ESP_OK) break;
+        if (opcode == AG32_MCU_CMD_ECHO && memcmp(wire + 8, (uint8_t *)data + offset, chunk)) {
+            err = ESP_ERR_INVALID_RESPONSE;
+            break;
+        }
+        if (reading) memcpy((uint8_t *)data + offset, wire + 8, chunk);
+        offset += chunk;
+    }
+    esp_err_t exit_err = exit_mcu_mode();
+    free(wire);
+    return err == ESP_OK ? exit_err : err;
 }
 
 esp_err_t ag32_mcu_try_read_locked(
@@ -362,6 +440,9 @@ esp_err_t ag32_mcu_try_read_locked(
         if (s_preference == AG32_LINK_PREFERENCE_MCU) *used_mcu = true;
         return ESP_ERR_INVALID_ARG;
     }
+    if (size > AG32_MCU_STREAM_CHUNK_SIZE)
+        return ag32_mcu_try_stream_locked(capability, opcode, address, 0,
+            data, size, AG32_MCU_DEFAULT_TIMEOUT_MS, used_mcu);
     size_t copied = 0u;
     while (copied < size) {
         uint8_t request[6];
@@ -440,19 +521,6 @@ esp_err_t ag32_mcu_try_program_locked(
         if (s_preference == AG32_LINK_PREFERENCE_MCU) *used_mcu = true;
         return ESP_ERR_INVALID_ARG;
     }
-    if (size + 6u > AG32_MCU_MAX_PAYLOAD_SIZE) {
-        if (s_preference == AG32_LINK_PREFERENCE_MCU) *used_mcu = true;
-        return ESP_ERR_INVALID_SIZE;
-    }
-    uint8_t *request = malloc(size + 6u);
-    if (request == NULL) return ESP_ERR_NO_MEM;
-    ag32_mcu_write_le32(request, address);
-    ag32_mcu_write_le16(request + 4u, buffer_bytes);
-    memcpy(request + 6u, data, size);
-    esp_err_t err = ag32_mcu_try_command_locked(
-        AG32_MCU_CAP_AMD_PROGRAM, opcode, 0u,
-        request, size + 6u, NULL, 0u, NULL,
-        timeout_ms, NULL, used_mcu);
-    free(request);
-    return err;
+    return ag32_mcu_try_stream_locked(AG32_MCU_CAP_AMD_PROGRAM, opcode,
+        address, buffer_bytes, (void *)data, size, timeout_ms, used_mcu);
 }

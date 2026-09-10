@@ -486,10 +486,12 @@ typedef struct burner_task_param {
     bool gba_force_multi;
     bool gba_force_no_cfi;
     bool rom_preerased;
-    bool gba_patch_plan_valid;
-    burner_gba_patch_plan_t gba_patch_plan;
+    /* Owned by the burn task; probe jobs carry no patch payload. */
+    burner_gba_patch_plan_t *gba_patch_plan;
     bool task_with_caps;
 } burner_task_param_t;
+_Static_assert(sizeof(burner_task_param_t) <= 1024,
+    "Probe jobs are stack-local; keep bulk patch data out of task parameters");
 
 typedef struct {
     int fd;

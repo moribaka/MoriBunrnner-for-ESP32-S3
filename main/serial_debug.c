@@ -210,6 +210,57 @@ static bool local_path(const char *path)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "ag32-test") == 0 || strcmp(line, "ag32-stream-test") == 0) {
+        bool stream = strcmp(line, "ag32-stream-test") == 0;
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "burner or AG32 batch job is running");
+            return;
+        }
+        uint8_t *tx = heap_caps_malloc(AG32_MCU_MAX_PAYLOAD_SIZE, MALLOC_CAP_SPIRAM);
+        uint8_t *rx = heap_caps_malloc(AG32_MCU_MAX_PAYLOAD_SIZE, MALLOC_CAP_SPIRAM);
+        esp_err_t err = tx && rx ? ESP_OK : ESP_ERR_NO_MEM;
+        uint32_t bytes = 0, passes = 0, random = 0x8147ab33;
+        static const size_t sizes[] = {1, 3, 4, 31, 32, 33, 255, 512, 4096, 8192};
+        ag32_link_preference_t previous = ag32_mcu_link_get_preference();
+        burner_spi_lock_take();
+        if (err == ESP_OK) err = burner_spi_init();
+        ag32_mcu_link_set_preference(AG32_LINK_PREFERENCE_MCU);
+        int64_t start = esp_timer_get_time();
+        for (unsigned iteration = 0; err == ESP_OK && iteration < 100; ++iteration) {
+            size_t size = sizes[iteration % (sizeof(sizes) / sizeof(sizes[0]))];
+            for (size_t i = 0; i < size; ++i) {
+                random ^= random << 13; random ^= random >> 17; random ^= random << 5;
+                tx[i] = (uint8_t)random;
+            }
+            size_t received = 0;
+            bool used = false;
+            if (stream) {
+                err = ag32_mcu_try_stream_locked(0, AG32_MCU_CMD_ECHO, 0,
+                    0, tx, size, 2000, &used);
+                if (err == ESP_OK && !used) err = ESP_ERR_INVALID_RESPONSE;
+            } else {
+                err = ag32_mcu_try_command_locked(0, AG32_MCU_CMD_ECHO, 0,
+                    tx, size, rx, size, &received, 2000, NULL, &used);
+                if (err == ESP_OK && (!used || received != size || memcmp(tx, rx, size)))
+                    err = ESP_ERR_INVALID_RESPONSE;
+            }
+            if (err == ESP_OK) { ++passes; bytes += size; }
+        }
+        int64_t elapsed = esp_timer_get_time() - start;
+        ag32_mcu_link_set_preference(previous);
+        burner_spi_lock_give();
+        free(tx); free(rx);
+        cJSON *json = event(stream ? "ag32_stream_test" : "ag32_test");
+        if (json) {
+            cJSON_AddBoolToObject(json, "ok", err == ESP_OK);
+            cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
+            cJSON_AddNumberToObject(json, "passes", passes);
+            cJSON_AddNumberToObject(json, "bytes_each_direction", bytes);
+            cJSON_AddNumberToObject(json, "elapsed_ms", elapsed / 1000.0);
+        }
+        reply(json);
+        return;
+    }
     if (strcmp(line, "ag32-ping") == 0) {
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
             message("error", "burner or AG32 batch job is running");
@@ -220,7 +271,8 @@ static void dispatch(char *line)
         uint32_t capabilities = 0u;
         bool used_mcu = false;
         burner_spi_lock_take();
-        esp_err_t err = ag32_mcu_try_command_locked(
+        esp_err_t err = burner_spi_init();
+        if (err == ESP_OK) err = ag32_mcu_try_command_locked(
             0u, AG32_MCU_CMD_PING, 0u,
             NULL, 0u, payload, sizeof(payload), &payload_size,
             100u, &capabilities, &used_mcu);
@@ -290,7 +342,13 @@ static void dispatch(char *line)
         reply(json);
         return;
     }
-    if (strcmp(line, "ag32-probe") == 0) {
+    if (strcmp(line, "ag32-probe") == 0 || strcmp(line, "ag32-regs") == 0) {
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "burner or AG32 batch job is running");
+            return;
+        }
+        bool snapshot = strcmp(line, "ag32-regs") == 0;
+        uint32_t regs[7] = {0}, request[12] = {0}, response[12] = {0};
         mcu_debug_probe_result_t probe = {0};
         uint32_t device_id = 0u;
         bool spi_mode = false;
@@ -310,6 +368,17 @@ static void dispatch(char *line)
         if (err == ESP_OK) {
             err = mcu_debug_read_memory32(0x03000100u, &device_id);
         }
+        if (snapshot) {
+            for (unsigned i = 0; err == ESP_OK && i < 7; ++i)
+                err = mcu_debug_read_memory32(0x60020000u + i * 4u, &regs[i]);
+            if (err == ESP_OK && (regs[1] < 0x20000000u || regs[1] > 0x2001ffd0u ||
+                                 regs[4] < 0x20000000u || regs[4] > 0x2001ffd0u))
+                err = ESP_ERR_INVALID_RESPONSE;
+            for (unsigned i = 0; err == ESP_OK && i < 12; ++i) {
+                err = mcu_debug_read_memory32(regs[1] + i * 4u, &request[i]);
+                if (err == ESP_OK) err = mcu_debug_read_memory32(regs[4] + i * 4u, &response[i]);
+            }
+        }
         if (halted) {
             esp_err_t resume_err = mcu_debug_resume();
             if (err == ESP_OK) err = resume_err;
@@ -322,13 +391,25 @@ static void dispatch(char *line)
             if (err == ESP_OK) err = restore_err;
         }
         probe.status = err == ESP_OK ? MCU_DEBUG_PROBE_OK : MCU_DEBUG_PROBE_IO_ERROR;
-        cJSON *json = event("ag32_probe");
+        cJSON *json = event(snapshot ? "ag32_regs" : "ag32_probe");
         if (json != NULL) {
             cJSON_AddBoolToObject(json, "ok", err == ESP_OK);
             cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
             cJSON_AddStringToObject(json, "status", mcu_debug_probe_status_str(probe.status));
             cJSON_AddNumberToObject(json, "dp_idcode", probe.idcode);
             cJSON_AddNumberToObject(json, "device_id", device_id);
+            if (snapshot) {
+                cJSON *arrays[] = {cJSON_AddArrayToObject(json, "registers"),
+                    cJSON_AddArrayToObject(json, "request_words"),
+                    cJSON_AddArrayToObject(json, "response_words")};
+                for (unsigned a = 0; a < 3; ++a) {
+                    uint32_t *words = a == 0 ? regs : (a == 1 ? request : response);
+                    for (unsigned i = 0; i < (a == 0 ? 7u : 12u); ++i) {
+                        char hex[11]; snprintf(hex, sizeof(hex), "0x%08lx", (unsigned long)words[i]);
+                        cJSON_AddItemToArray(arrays[a], cJSON_CreateString(hex));
+                    }
+                }
+            }
         }
         reply(json);
         return;

@@ -30,6 +30,7 @@
 #define MCU_STATE_RX_ARMED    (1u << 6)
 #define MCU_STATE_RX_DONE     (1u << 7)
 #define MCU_STATE_TX_READY    (1u << 8)
+#define MCU_STATE_ERROR       (1u << 10)
 
 #define CART_CTRL_WR       (1u << 0)
 #define CART_CTRL_RD       (1u << 1)
@@ -54,6 +55,9 @@ static uint16_t s_gba_words[AG32_MCU_MAX_PAYLOAD_SIZE / 2u] __attribute__((align
 static uint32_t s_sequence;
 static uint32_t s_cart_control = CART_CTRL_IDLE_LINES | CART_CTRL_POWER_3V;
 static uint32_t s_cart_output;
+static uint8_t s_stream_opcode;
+static uint16_t s_stream_buffer_bytes;
+static uint32_t s_stream_address, s_stream_remaining, s_stream_timeout;
 
 static void cart_delay(void)
 {
@@ -332,6 +336,13 @@ static ag32_mcu_status_t process_command(
     *result = 0u;
 
     switch (request->opcode) {
+    case AG32_MCU_CMD_ECHO:
+        if (request->payload_size > request->response_capacity)
+            return AG32_MCU_STATUS_BAD_LENGTH;
+        memcpy(response_payload, payload, request->payload_size);
+        *response_size = request->payload_size;
+        return AG32_MCU_STATUS_OK;
+
     case AG32_MCU_CMD_PING:
         if (request->payload_size != 0u) return AG32_MCU_STATUS_INVALID_ARGUMENT;
         ag32_mcu_write_le32(response_payload + 0u, AG32_MCU_PROTOCOL_VERSION);
@@ -341,8 +352,36 @@ static ag32_mcu_status_t process_command(
         *response_size = 16u;
         *result = AG32_MCU_CAP_GBA_ROM | AG32_MCU_CAP_GBA_RAM |
             AG32_MCU_CAP_GBC_ROM | AG32_MCU_CAP_GBC_RAM |
-            AG32_MCU_CAP_AMD_PROGRAM | AG32_MCU_CAP_POWER;
+            AG32_MCU_CAP_AMD_PROGRAM | AG32_MCU_CAP_POWER | AG32_MCU_CAP_STREAM;
         return AG32_MCU_STATUS_OK;
+
+    case AG32_MCU_CMD_STREAM_BEGIN: {
+        if (request->payload_size != 12u) return AG32_MCU_STATUS_BAD_LENGTH;
+        uint8_t op = payload[0];
+        uint32_t address = ag32_mcu_read_le32(payload + 4);
+        uint32_t total = ag32_mcu_read_le32(payload + 8);
+        if (payload[1] != 0 || total == 0) return AG32_MCU_STATUS_INVALID_ARGUMENT;
+        if (op != AG32_MCU_CMD_ECHO && op != AG32_MCU_CMD_ROM_READ &&
+            op != AG32_MCU_CMD_ROM_WRITE && op != AG32_MCU_CMD_ROM_PROGRAM &&
+            op != AG32_MCU_CMD_GBC_READ && op != AG32_MCU_CMD_GBC_WRITE &&
+            op != AG32_MCU_CMD_GBC_ROM_PROGRAM && op != AG32_MCU_CMD_RAM_READ &&
+            op != AG32_MCU_CMD_RAM_WRITE) return AG32_MCU_STATUS_UNSUPPORTED;
+        if (op == AG32_MCU_CMD_ROM_READ || op == AG32_MCU_CMD_ROM_WRITE ||
+            op == AG32_MCU_CMD_ROM_PROGRAM) {
+            if ((total & 1) || address >= 0x1000000u || total / 2 > 0x1000000u - address)
+                return AG32_MCU_STATUS_INVALID_ARGUMENT;
+        } else if (op != AG32_MCU_CMD_ECHO &&
+                   (address >= 0x10000u || total > 0x10000u - address)) {
+            return AG32_MCU_STATUS_INVALID_ARGUMENT;
+        }
+        s_stream_opcode = op;
+        s_stream_buffer_bytes = ag32_mcu_read_le16(payload + 2);
+        s_stream_address = address;
+        s_stream_remaining = total;
+        s_stream_timeout = request->timeout_ms;
+        *result = AG32_MCU_STREAM_CHUNK_SIZE;
+        return AG32_MCU_STATUS_OK;
+    }
 
     case AG32_MCU_CMD_CART_POWER:
         if (request->payload_size != 2u || payload[0] > 2u || payload[1] > 3u)
@@ -442,6 +481,75 @@ static void arm_request(void)
     REG32(MCU_REG_CTRL) = MCU_CTRL_ARM_RX | MCU_CTRL_ERROR_CLEAR;
 }
 
+static bool wait_tx_consumed(void)
+{
+    while ((REG32(MCU_REG_CTRL) & (MCU_STATE_TX_READY | MCU_STATE_MODE)) ==
+           (MCU_STATE_TX_READY | MCU_STATE_MODE)) { }
+    return (REG32(MCU_REG_CTRL) & MCU_STATE_MODE) != 0;
+}
+
+/* The descriptor defines all block lengths. Data transactions have no
+ * command, address or length header; CS delimits one bounded DMA block. */
+static void run_stream(void)
+{
+    uint8_t *input = (uint8_t *)s_request_words;
+    uint8_t *output = (uint8_t *)s_response_words + 8;
+    bool reading = s_stream_opcode == AG32_MCU_CMD_ROM_READ ||
+        s_stream_opcode == AG32_MCU_CMD_GBC_READ || s_stream_opcode == AG32_MCU_CMD_RAM_READ;
+    bool programming = s_stream_opcode == AG32_MCU_CMD_ROM_PROGRAM ||
+        s_stream_opcode == AG32_MCU_CMD_GBC_ROM_PROGRAM;
+    while (s_stream_remaining && (REG32(MCU_REG_CTRL) & MCU_STATE_MODE)) {
+        uint32_t size = s_stream_remaining < AG32_MCU_STREAM_CHUNK_SIZE ?
+            s_stream_remaining : AG32_MCU_STREAM_CHUNK_SIZE;
+        uint32_t padded = (size + 3u) & ~3u;
+        ag32_mcu_status_t status = AG32_MCU_STATUS_OK;
+        if (!reading) {
+            REG32(MCU_REG_RX_ADDR) = (uint32_t)input;
+            REG32(MCU_REG_RX_LIMIT) = (padded + 4u) / 4u;
+            REG32(MCU_REG_CTRL) = MCU_CTRL_ARM_RX | MCU_CTRL_ERROR_CLEAR;
+            while ((REG32(MCU_REG_CTRL) & (MCU_STATE_RX_DONE | MCU_STATE_MODE)) == MCU_STATE_MODE) { }
+            if (!(REG32(MCU_REG_CTRL) & MCU_STATE_MODE)) break;
+            if ((REG32(MCU_REG_CTRL) & MCU_STATE_ERROR) ||
+                REG32(MCU_REG_RX_WORDS) != (padded + 4u) / 4u)
+                status = AG32_MCU_STATUS_BAD_LENGTH;
+            else if (ag32_mcu_crc32(input, size) != ag32_mcu_read_le32(input + padded))
+                status = AG32_MCU_STATUS_BAD_PAYLOAD_CRC;
+            REG32(MCU_REG_CTRL) = MCU_CTRL_CLEAR_RX;
+        }
+        uint32_t output_size = 0, result = 0;
+        if (status == AG32_MCU_STATUS_OK) {
+            uint32_t prefix = programming || reading ? 6u : 4u;
+            if (s_stream_opcode == AG32_MCU_CMD_ECHO) prefix = 0;
+            if (!reading) memmove(input + prefix, input, size);
+            if (prefix) ag32_mcu_write_le32(input, s_stream_address);
+            if (prefix == 6) ag32_mcu_write_le16(input + 4, reading ? size : s_stream_buffer_bytes);
+            ag32_mcu_request_t request = {
+                .opcode = s_stream_opcode,
+                .payload_size = reading ? 6u : prefix + size,
+                .response_capacity = AG32_MCU_STREAM_CHUNK_SIZE,
+                .timeout_ms = s_stream_timeout,
+            };
+            status = process_command(&request, input, output, &output_size, &result);
+        }
+        // Fixed response length remains known even on a failed block.
+        uint32_t wire_payload = reading || s_stream_opcode == AG32_MCU_CMD_ECHO ? padded : 0;
+        if (status != AG32_MCU_STATUS_OK) memset(output, 0, wire_payload);
+        else if (wire_payload > output_size) memset(output + output_size, 0, wire_payload - output_size);
+        s_response_words[0] = 0;
+        s_response_words[1] = status;
+        ag32_mcu_write_le32(output + wire_payload,
+            ag32_mcu_crc32((uint8_t *)s_response_words + 4, 4 + wire_payload));
+        REG32(MCU_REG_TX_ADDR) = (uint32_t)s_response_words;
+        REG32(MCU_REG_TX_WORDS) = 3u + wire_payload / 4u;
+        REG32(MCU_REG_CTRL) = MCU_CTRL_PUBLISH_TX | MCU_CTRL_BUSY_CLEAR;
+        if (!wait_tx_consumed() || status != AG32_MCU_STATUS_OK) break;
+        s_stream_remaining -= size;
+        s_stream_address += (s_stream_opcode == AG32_MCU_CMD_ROM_READ ||
+            s_stream_opcode == AG32_MCU_CMD_ROM_WRITE || s_stream_opcode == AG32_MCU_CMD_ROM_PROGRAM) ? size / 2u : size;
+    }
+    s_stream_remaining = 0;
+}
+
 int main(void)
 {
     board_init();
@@ -453,10 +561,18 @@ int main(void)
         while (1) { }
     }
     arm_request();
+    bool was_mcu = false;
 
     while (1) {
         uint32_t control = REG32(MCU_REG_CTRL);
-        if ((control & MCU_STATE_MODE) == 0u) continue;
+        if ((control & MCU_STATE_MODE) == 0u) {
+            if (was_mcu) arm_request();
+            was_mcu = false;
+            s_sequence = 0u;
+            s_cart_control = REG32(MCU_REG_CART_CTRL);
+            continue;
+        }
+        was_mcu = true;
         if ((control & MCU_STATE_RX_DONE) == 0u) continue;
 
         REG32(MCU_REG_CTRL) = MCU_CTRL_BUSY_SET;
@@ -486,7 +602,8 @@ int main(void)
         publish_response(&request, status, response_size, result);
         REG32(MCU_REG_CTRL) = MCU_CTRL_CLEAR_RX;
 
-        while ((REG32(MCU_REG_CTRL) & MCU_STATE_TX_READY) != 0u) { }
+        if (wait_tx_consumed() && status == AG32_MCU_STATUS_OK &&
+            request.opcode == AG32_MCU_CMD_STREAM_BEGIN) run_stream();
         arm_request();
     }
 }

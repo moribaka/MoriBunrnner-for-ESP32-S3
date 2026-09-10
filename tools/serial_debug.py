@@ -32,7 +32,8 @@ def run(args):
         port.open()
         port.reset_input_buffer()
         command = args.command.strip()
-        port.write((command + "\n").encode(args.encoding))
+        if command != "watch":
+            port.write((command + "\n").encode(args.encoding))
         deadline = time.monotonic() + args.timeout
         next_status = time.monotonic() + 2
         pending = bytearray()
@@ -42,8 +43,10 @@ def run(args):
             "ui": "ui", "key": "key",
             "epub": "epub_done", "play": "play",
             "tf-bench": "tf_bench_done",
-            "ag32-link": "ag32_link", "ag32-ping": "ag32_ping",
+            "ag32-link": "ag32_link", "ag32-ping": "ag32_ping", "ag32-test": "ag32_test",
             "ag32-probe": "ag32_probe", "ag32-batch-check": "ag32_batch_check",
+            "ag32-regs": "ag32_regs",
+            "ag32-stream-test": "ag32_stream_test",
             "ag32-batch": "ag32_batch_started", "ag32-batch-status": "ag32_batch_status",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:
@@ -62,16 +65,20 @@ def run(args):
                     event = json.loads(line[marker + 6:])
                 except json.JSONDecodeError:
                     continue
-                if event.get("event") == "error":
+                if event.get("event") == "error" and command != "watch":
                     return 1
                 if event.get("event") == terminal:
+                    if event.get("ok") is False:
+                        return 1
                     # status.result describes the previous patch, not failure
                     # of the status query itself.
                     return 1 if terminal in ("patch_done", "epub_done") and event.get("result", 0) != 0 else 0
             if terminal == "patch_done" and time.monotonic() >= next_status:
                 port.write(b"status\n")
                 next_status = time.monotonic() + 2
-        print("Timed out waiting for reply; patch may still be running. Use status or cancel.", file=sys.stderr)
+        if command == "watch":
+            return 0
+        print("Timed out waiting for reply; command may still be running. Use status to inspect it.", file=sys.stderr)
         return 2
     finally:
         port.close()

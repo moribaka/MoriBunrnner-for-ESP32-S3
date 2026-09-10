@@ -1,0 +1,98 @@
+---
+name: moriburnner-ag32-debug
+description: Flash and debug the MoriBurnner ESP32-S3 controller and its AG32 companion through onboard SWD, then validate the 40 MHz Bacon/MCU SPI transport. Use for real-board firmware flashing, AG32 batch updates, serial diagnostics, or protocol bring-up.
+metadata:
+  short-description: ESP32 to AG32 hardware flash/debug
+---
+
+# MoriBurnner ESP32 → AG32 hardware debug
+
+Use this skill for the physical `F:\dev\esp32\moriburnner` board workflow. It is an engineering/debug workflow, not a release checklist.
+
+## Hardware identification
+
+- ESP32-S3 native USB Serial/JTAG is normally `COM26`; verify with `esptool chip_id` before flashing.
+- Last verified board MAC: `a4:cb:8f:f2:c4:c0`, VID303A/PID1001. COM19 (VIDCAFE) is another device. Discover HTTP IP each session; the observed `192.168.1.134` is DHCP, not a permanent address.
+- The companion AG32 is updated by ESP32 over onboard SWD. Never connect an external SWD tool while the ESP32 is in SWD mode.
+- Bacon SPI must remain at 40 MHz. Do not lower the clock to hide timing errors.
+- AG32 MCU firmware disables only `JTDI`, `JTDO`, and `NJTRST`; `JTCK`/`JTMS` remain available for SWD.
+- The AG32 batch is `example/moriburnner_ag32_batch.bin`; validate it before programming.
+
+## ESP32 flash
+
+For a complete ESP32 refresh, run `tools/flash_dual_system.ps1 -Port COM26 -FlashOnly` after the build outputs and `build/flash_args` are current. This writes the bootloader, partition table, app, assets, and fixed Retro-Go partitions.
+
+For an app-only iteration, use the configured ESP-IDF Python and esptool:
+
+```powershell
+python -m esptool --chip esp32s3 -p COM26 -b 460800 `
+  --before default_reset --after hard_reset write_flash `
+  --flash_mode dio --flash_freq 80m --flash_size 16MB `
+  0x20000 build/moriburnner.bin
+```
+
+Always check the esptool `Hash of data verified` line and wait for the native USB Serial/JTAG port to return.
+
+## Serial diagnostics
+
+Use `tools/serial_debug.py` with UTF-8. The client now recognizes AG32 terminal events:
+
+Set DTR/RTS false **before** opening the serial port. Constructing `serial.Serial('COM26', ...)` and then clearing them can reset native USB. Keep one serial owner at a time.
+
+```powershell
+python tools/serial_debug.py --port COM26 status
+python tools/serial_debug.py --port COM26 ag32-probe
+python tools/serial_debug.py --port COM26 ag32-link
+python tools/serial_debug.py --port COM26 "ag32-link mcu"
+python tools/serial_debug.py --port COM26 ag32-ping
+```
+
+`ag32-ping` only negotiates MCU capabilities; it does not access the cartridge bus. A successful probe should report DP IDCODE `0x2ba01477`, and SPI status should report configured/actual 40 MHz.
+
+SPI is initialized lazily. Diagnostics must call `burner_spi_init()` under the SPI lock before transactions. `ESP_ERR_INVALID_STATE` without a wire status is not evidence of failed mode entry. A successful HTTP SWD probe used to hide this bug by initializing SPI on exit.
+
+`ag32-test` checks 100 echo transactions from 1 to 8192 bytes without touching cartridge contents. `ag32-regs` halts the MCU, snapshots transport registers and the first 12 words of each buffer, resumes, and restores SPI. Do not run either SWD probe/snapshot during a flash/burn job. Treat JSON `ok:false` as failure even if the command returned a terminal event.
+
+## AG32 batch update
+
+Upload the batch to the TF root and validate it before starting a destructive update:
+
+```powershell
+python -c "import requests; requests.post('http://DEVICE/api/tf/upload?dir=&name=ag32_update.bin', data=open('example/moriburnner_ag32_batch.bin','rb'), timeout=60).raise_for_status()"
+Invoke-RestMethod 'http://DEVICE/api/mcu/batch/check?path=/sdcard/ag32_update.bin'
+Invoke-RestMethod 'http://DEVICE/api/mcu/batch?path=/sdcard/ag32_update.bin' -Method Post
+```
+
+Poll `/api/mcu/batch/status` until a terminal state. A valid success must contain:
+
+- `state=success`
+- `dp_idcode=0x2ba01477`
+- `device_id=0x40200001`
+- `records=3`
+- `programmed == verified == total`
+- `recovery_required=false`
+
+Older ESP firmware copied the report only at job completion: while `state=running`, zero IDs/counts and `destructive_started=false` were stale defaults, even during erase/program/verify. Never infer that flashing has not started from those old runtime fields. Current job callbacks copy the report with progress; fields are still snapshots, not an atomic observation of the flash controller. Trust terminal success only when all checks above agree. Repeated program/verify phases are normal for separate batch records. Do not interrupt an active update or silently restore SPI after a destructive failure.
+
+## Protocol bring-up order
+
+1. Confirm ESP32 app boot and TF mount over COM26.
+2. Confirm `/api/mcu/probe` and 40 MHz SPI.
+3. Validate and program the AG32 batch.
+4. Set `ag32-link mcu` and run `ag32-ping`.
+5. Only after PING/capability and response CRC pass, test read-only ROM/RAM commands.
+6. Test legacy compatibility with `ag32-link legacy`; restore `auto` only after both paths are understood.
+
+Do not test destructive cartridge erase/program operations while the MCU transport is still failing PING. Do not add retries, clock reduction, or legacy fallback to conceal a protocol framing/timing bug; fix the owning state machine.
+
+## Build evidence
+
+For CPLD/AG32 source changes, use the `chisflash-ag32-batch` flow: `pio prelogic`, AG32 release build, `quartus_sh -t af_quartus.tcl`, Supra `af_run.tcl` with `MODE QUARTUS`, `FLOW ALL`, seed 42, `FITTING timing_more`, `EFFORT highest`, then `pio buildbatch`. Record actual logic/tile/LUT/register/BRAM/PLL/pin counts and setup/hold margins.
+
+## Evidence and regression scope
+
+Read the current project evidence before stating board qualification. SWD batch success, simulated SPI correctness, PING, echo stress, cartridge reads and verified burns are separate milestones.
+
+Model CS pins as separately driven GPIOs. A clockless intermediate CS0-only/CS1-only selection must not create an empty request or restart a response. Status polls must not consume data FIFO entries. Include arbitrary last bits, 8192-byte FIFO wraps, AHB address/data phases and waits, and partial transfers. Native SCK processes require an explicit reset pulse in simulation; a testbench declaration initialized to zero is insufficient for some event-driven reset cases.
+
+Keep the project copy at `docs/skills/moriburnner-ag32-debug/SKILL.md` synchronized. Save source, artifact hashes, actual route timing/utilization, command outcomes and board evidence in local Git. Do not present auto/legacy selection as a separate wire protocol or simulation throughput as measured burn speed.

@@ -51,6 +51,10 @@ esp_err_t ag32_mcu_try_read_locked(
     void *data,
     size_t size,
     bool *used_mcu);
+esp_err_t ag32_mcu_try_stream_locked(
+    uint32_t capability, uint8_t opcode, uint32_t address,
+    uint16_t buffer_bytes, void *data, size_t size, uint32_t timeout_ms,
+    bool *used_mcu);
 esp_err_t ag32_mcu_try_write_locked(
     uint32_t capability,
     uint8_t opcode,
