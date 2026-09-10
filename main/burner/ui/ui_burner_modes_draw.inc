@@ -161,6 +161,9 @@ static void ui_px_fill_row(
         case UI_PAGE_SETTINGS:
             ui_fill_settings_row(model, index, title, title_len, hint, hint_len);
             break;
+        case UI_PAGE_AG32_UPDATE:
+            ui_fill_ag32_row(model, index, title, title_len, hint, hint_len);
+            break;
         default:
             break;
     }

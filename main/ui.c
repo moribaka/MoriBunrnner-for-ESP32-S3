@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "ag32_batch_programmer.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -144,7 +145,7 @@
 #define UI_BURN_INFO_W 146
 #define UI_BURN_OPS_W (UI_CANVAS_W - (UI_BURN_SIDE_MARGIN * 2) - UI_BURN_SPLIT_GAP - UI_BURN_INFO_W)
 #define UI_BURN_SAVE_ITEM_COUNT 8
-#define UI_SETTINGS_ITEM_COUNT 10
+#define UI_SETTINGS_ITEM_COUNT 11
 #define UI_TASK_STATUS_ITEM_COUNT 12
 #define UI_TASK_PATCH_BASE_ROW UI_TASK_STATUS_ITEM_COUNT
 #define UI_TASK_RESULT_ITEM_COUNT 18
@@ -271,6 +272,8 @@ typedef enum {
     UI_PAGE_SETTINGS,
     UI_PAGE_TASK_STATUS,
     UI_PAGE_TASK_RESULT,
+    UI_PAGE_AG32_UPDATE,
+    UI_PAGE_COUNT,
 } ui_page_t;
 
 typedef enum {
@@ -293,6 +296,7 @@ typedef enum {
     UI_FILE_KIND_SAVE,
     UI_FILE_KIND_AUDIO,
     UI_FILE_KIND_READER,
+    UI_FILE_KIND_BIN,
 } ui_file_kind_t;
 
 typedef enum {
@@ -302,6 +306,7 @@ typedef enum {
     UI_FILE_FILTER_SAVE,
     UI_FILE_FILTER_AUDIO,
     UI_FILE_FILTER_READER,
+    UI_FILE_FILTER_BIN,
 } ui_file_filter_t;
 
 #define UI_FILE_KIND_MP3 UI_FILE_KIND_AUDIO
@@ -460,6 +465,11 @@ typedef struct {
     bool music_player_dirty;
     bool music_progress_dirty;
     ui_setting_adjust_t settings_adjust;
+    struct {
+        enum { UI_AG32_EMPTY, UI_AG32_CHECKING, UI_AG32_READY, UI_AG32_CONFIRM,
+               UI_AG32_STARTING, UI_AG32_RUNNING, UI_AG32_SUCCESS, UI_AG32_ERROR } phase;
+        ag32_batch_job_status_t status;
+    } ag32;
 } ui_model_t;
 
 typedef struct {
@@ -688,7 +698,10 @@ static ui_button_page_map_t s_button_page_maps[] = {
     {.page = UI_PAGE_SETTINGS},
     {.page = UI_PAGE_TASK_STATUS},
     {.page = UI_PAGE_TASK_RESULT},
+    {.page = UI_PAGE_AG32_UPDATE},
 };
+_Static_assert(sizeof(s_button_page_maps) / sizeof(s_button_page_maps[0]) == UI_PAGE_COUNT,
+               "Every UI page needs a button map");
 
 static lv_obj_t *s_canvas = NULL;
 static uint16_t *s_canvas_buf = NULL;
@@ -3190,6 +3203,9 @@ static ui_file_kind_t ui_file_kind_from_name(const char *name)
     if (strcasecmp(ext, "sav") == 0 || strcasecmp(ext, "srm") == 0) {
         return UI_FILE_KIND_SAVE;
     }
+    if (strcasecmp(ext, "bin") == 0) {
+        return UI_FILE_KIND_BIN;
+    }
     if (strcasecmp(ext, "mp3") == 0 ||
         strcasecmp(ext, "aac") == 0 ||
         strcasecmp(ext, "flac") == 0 ||
@@ -3217,6 +3233,8 @@ static bool ui_file_kind_matches_filter(ui_file_kind_t kind, ui_file_filter_t fi
             return kind == UI_FILE_KIND_AUDIO;
         case UI_FILE_FILTER_READER:
             return kind == UI_FILE_KIND_READER;
+        case UI_FILE_FILTER_BIN:
+            return kind == UI_FILE_KIND_BIN;
         default:
             return false;
     }
@@ -3467,6 +3485,8 @@ static const char *ui_page_title(ui_page_t page)
             return ui_tr("Save");
         case UI_PAGE_SETTINGS:
             return ui_tr("Settings");
+        case UI_PAGE_AG32_UPDATE:
+            return ui_tr("AG32 firmware update");
         case UI_PAGE_TASK_STATUS:
             return ui_tr("Task");
         case UI_PAGE_TASK_RESULT:
@@ -3976,6 +3996,8 @@ static void ui_open_file_action_page_locked(ui_model_t *model, const ui_file_ent
     ui_set_status_locked(model, ui_file_kind_label(model->action_kind));
 }
 
+#include "ui_ag32_update.inc"
+
 #include "music/ui_music_logic.inc"
 
 #include "burner/ui/ui_burner_tasks.inc"
@@ -4347,6 +4369,8 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
             return UI_BURN_SAVE_ITEM_COUNT;
         case UI_PAGE_SETTINGS:
             return UI_SETTINGS_ITEM_COUNT;
+        case UI_PAGE_AG32_UPDATE:
+            return model->ag32.phase == UI_AG32_CONFIRM ? 4U : 7U;
         case UI_PAGE_TASK_STATUS:
             if (s_task_cancel_confirm) {
                 return UI_TASK_CANCEL_CONFIRM_ITEM_COUNT;
@@ -5289,7 +5313,9 @@ static void ui_select_locked(
                     ui_set_status_locked(model, ui_tr("unsupported file"));
                 }
             } else {
-                if (model->parent_page == UI_PAGE_BURN_ROM || model->parent_page == UI_PAGE_BURN_SAVE ||
+                if (model->parent_page == UI_PAGE_AG32_UPDATE) {
+                    ui_ag32_select_file_locked(model, &entry);
+                } else if (model->parent_page == UI_PAGE_BURN_ROM || model->parent_page == UI_PAGE_BURN_SAVE ||
                     model->parent_page == UI_PAGE_BURNER) {
                     ui_select_file_for_burner_locked(model, &entry);
                 } else {
@@ -5794,11 +5820,17 @@ static void ui_select_locked(
                     ui_set_status_locked(model, ui_tr("save settings failed"));
                 }
                 ui_mark_content_dirty(model);
+            } else if (model->selected == 10U) {
+                ui_open_page_locked(model, UI_PAGE_AG32_UPDATE);
+                ui_set_status_locked(model, ui_tr("choose AG32 batch from TF"));
             } else if (model->selected == 9U) {
                 ui_open_page_locked(model, UI_PAGE_TASK_STATUS);
             } else {
                 ui_set_status_locked(model, ui_tr("use web page for this setting"));
             }
+            break;
+        case UI_PAGE_AG32_UPDATE:
+            ui_ag32_select_locked(model);
             break;
         case UI_PAGE_TASK_STATUS:
             if (s_task_cancel_confirm) {
@@ -5886,6 +5918,20 @@ static void ui_handle_page_button_action_locked(
     bool *start_work)
 {
     if (model == NULL) {
+        return;
+    }
+    // Batch programming owns SWD and TF. Do not let navigation start another
+    // app, USB passthrough or a reboot while it is running.
+    if (ag32_batch_program_is_running() || ui_ag32_busy(model)) {
+        ui_set_status_locked(model, ui_tr("AG32 busy - keep power on"));
+        return;
+    }
+    if (model->page == UI_PAGE_AG32_UPDATE && model->ag32.phase == UI_AG32_CONFIRM &&
+        (action == UI_INPUT_ACTION_BACK || action == UI_INPUT_ACTION_MENU)) {
+        model->ag32.phase = UI_AG32_READY;
+        model->selected = 4;
+        ui_mark_content_dirty(model);
+        ui_set_status_locked(model, ui_tr("AG32 update cancelled"));
         return;
     }
 
@@ -7044,6 +7090,10 @@ static void ui_fill_settings_row(const ui_model_t *model, uint16_t index, char *
         case 9:
             snprintf(title, title_len, "%s", ui_tr("Task status"));
             snprintf(hint, hint_len, "%s", ui_tr("burn progress"));
+            break;
+        case 10:
+            snprintf(title, title_len, "%s", ui_tr("AG32 firmware update"));
+            snprintf(hint, hint_len, "TF .bin / SWD");
             break;
         default:
             if (title_len > 0U) {
@@ -8589,6 +8639,7 @@ void ui_process(void)
         return;
     }
 
+    ui_ag32_poll();
     ui_process_button_queue();
     ui_process_button_repeats();
     bool music_polled = ui_refresh_sources();
@@ -8864,6 +8915,8 @@ void ui_get_runtime_stats(ui_runtime_stats_t *out)
         if (s_model.page == UI_PAGE_TF) ui_fill_tf_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
         else if (s_model.page == UI_PAGE_BURN_ROM) ui_fill_burn_rom_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
         else if (s_model.page == UI_PAGE_SYSTEM) ui_fill_system_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
+        else if (s_model.page == UI_PAGE_SETTINGS) ui_fill_settings_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
+        else if (s_model.page == UI_PAGE_AG32_UPDATE) ui_fill_ag32_row(&s_model, s_model.selected, out->selection, sizeof(out->selection), hint, sizeof(hint));
     }
     xSemaphoreGive(s_model_lock);
 }
