@@ -1,0 +1,2801 @@
+Thu Sep 10 15:05:05 2026
+Using pre-ASF file example_board.pre.asf.
+Total IO  : 150
+Total Pin : 128/17
+Top array is built.
+Loading architect libraries...
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 53MB (53MB)
+Loading route table...
+
+## CPU time: 0:0:1, REAL time: 0:0:2
+## Memory Usage: 318MB (318MB)
+Using design VERILOG file ./simulation/modelsim/example_board.vo.
+Using design VE file example_board.vex.
+Preparing design...
+
+Info: Rename duplicated module cell alta_rv32 to alta_rv32_duplicated at ./alta_db/flatten.vx:1956.
+Info: Removing bbox feeder slice sys_ctrl_clkSource[0] driven by BBOX rv32|sys_ctrl_clkSource[0].
+Info: Removing bbox feeder slice sys_ctrl_clkSource[1] driven by BBOX rv32|sys_ctrl_clkSource[1].
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 339MB (339MB)
+Pseudo pack design...
+
+Using location file example_board.vex
+VCO frequency: 300.000 Mhz
+  clkout0: Enabled , 150.000 Mhz
+  clkout1: Disabled, 0.586 Mhz
+  clkout2: Disabled, 0.586 Mhz
+  clkout3: Disabled, 0.586 Mhz
+  clkout4: Disabled, 0.586 Mhz
+Info: Instance gclksw_inst|gclk_switch is identified as a clock switch.
+Packing Statistics
+ Total      Logics : 1951/2112 ( 92%)
+ Total        LUTs : 1950/2112 ( 92%)
+ Total   Registers :  913/2112 ( 43%)
+ Total  Block Rams :    2/   4 ( 50%)
+ Total        PLLs :    1/   1 (100%)
+ Total        Pins :   44/ 128 ( 34%)
+ Global    Signals :    6/   5 (120%)
+                     MCU_SPI_CLK~inputclkctrl_outclk (from:                              MCU_SPI_CLK~input_o)
+      auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp (from:   auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp)
+        macro_inst|core_inst|ad_incr~0clkctrl_outclk (from:           macro_inst|core_inst|ad_incr~0_combout)
+             macro_inst|core_inst|osc~clkctrl_outclk (from:                       macro_inst|core_inst|osc~q)
+           macro_inst|legacy_spi_cs0~0clkctrl_outclk (from:              macro_inst|legacy_spi_cs0~0_combout)
+                           sys_resetn~clkctrl_outclk (from:                               sys_resetn~combout)
+ Total Lonely   Datain   : 41
+ Total Lonely   Register : 1
+ Total LUT-FF   Pairs    : 759
+ Total Register Packings : 112
+ Registers with synchronous    reset : 0
+ Registers with asynchronous   reset : 588
+ Registers with sync and async reset : 164
+## CPU time: 0:0:0, REAL time: 0:0:1
+## Memory Usage: 337MB (339MB)
+Filter verilog...
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 337MB (339MB)
+Reading DB design...
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 341MB (341MB)
+Processing design...
+
+Info: Found GCLK net macro_inst|core_inst|ad_incr~0clkctrl_outclk (4).
+Info: Found GCLK net macro_inst|legacy_spi_cs0~0clkctrl_outclk (8).
+Info: Found GCLK net sys_resetn~clkctrl_outclk (105).
+Info: Found GCLK net macro_inst|core_inst|osc~clkctrl_outclk (8).
+Info: Found GCLK net MCU_SPI_CLK~inputclkctrl_outclk (39).
+Info: Found GCLK net auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp (158).
+Info: Fixing net rv32.resetn_out, from rv32|resetn_out to gclksw_inst|gclk_switch__alta_gclksw|resetn.
+Info: Fixing net PIN_HSE~input_o, from PIN_HSE~input|combout to gclksw_inst|gclk_switch__alta_gclksw|clkin1.
+Info: Fixing net gclksw_inst|gclk_switch__alta_gclksw__clkout, from gclksw_inst|gclk_switch__alta_gclksw|clkout to rv32|sys_clk.
+Info: Fixing net auto_generated_inst.hbo_13_1bc039b416d3bc4a_bp, from pll_inst|auto_generated|pll1|lock to rv32|sys_ctrl_pllReady.
+Info: Slice ~VCC is removed.
+Info: The input of IO PHI is disabled since all input pins are unused.
+## CPU time: 0:0:0, REAL time: 0:0:0
+## Memory Usage: 342MB (342MB)
+Using design SDC file ./example_board.sdc.
+Info: The input of IO PHI is disabled since all input pins are unused.
+Info: Auto constraint PLL: create_generated_clock -name pll_inst|auto_generated|pll1|clk[0] -divide_by 4 -multiply_by 75 -add -source PLL_CLKIN -master_clock PIN_OSC pll_inst|auto_generated|pll1|clkout0.
+Using ASF file example_board.asf.
+************ DESIGN ASF ************
+
+Info: The input of IO PHI is disabled since all input pins are unused.
+Warn: Logic slice macro_inst|core_inst|cart_nWR_out~1 is used as a latch, output net: macro_inst|core_inst|cart_nWR_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_cs1_out~1 is used as a latch, output net: macro_inst|core_inst|cart_cs1_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_cs2_out~1 is used as a latch, output net: macro_inst|core_inst|cart_cs2_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_nRD_out~1 is used as a latch, output net: macro_inst|core_inst|cart_nRD_out~1_combout.
+Warn: Logic slice macro_inst|core_inst|cart_ad_oe~1 is used as a latch, output net: macro_inst|core_inst|cart_ad_oe~1_combout.
+Warn: Logic slice macro_inst|core_inst|buf_miso_cs1[7] is used as a latch, output net: macro_inst|core_inst|cart_a_oe~1_combout.
+Warn: Logic slice macro_inst|core_inst|buf_mosi[3] is used as a latch, output net: macro_inst|core_inst|buf_miso_cs1[0]~5_combout.
+Warn: Logic slice macro_inst|core_inst|buf_miso_cs1[3] is used as a latch, output net: macro_inst|core_inst|buf_miso_cs1[1]~1_combout.
+Info: macro_inst|mode_guard|cpld_mode|Q is identified as a clock gate signal.
+Warn: Auto constraint INTERNAL: create_clock -name Internal_generated_clock_example_board|ESP32_SPI2_CS_N -period 1000.000 ESP32_SPI2_CS_N.
+Warn: Auto constraint INTERNAL: create_clock -name Internal_generated_clock_example_board|ESP32_SPI_CS1 -period 1000.000 ESP32_SPI_CS1.
+Warn: Auto constraint INTERNAL: create_generated_clock -name Internal_generated_clock_macro_inst|core_inst|osc|Q -divide_by 2 -add -source PIN_HSE -master_clock PIN_HSE macro_inst|core_inst|osc|Q.
+Warn: Auto constraint INTERNAL: create_generated_clock -name Internal_generated_clock_macro_inst|core_inst|osc|Q -divide_by 2 -add -source PIN_HSI -master_clock PIN_HSI macro_inst|core_inst|osc|Q.
+Warn: Auto constraint INTERNAL: create_generated_clock -name Internal_generated_clock_macro_inst|core_inst|osc|Q -divide_by 2 -add -source pll_inst|auto_generated|pll1|clkout0 -master_clock pll_inst|auto_generated|pll1|clk[0] macro_inst|core_inst|osc|Q.
+Placement Statistics
+ Total  Logic    Counts  : 1950/2112 (92.3%)
+ Total  Logic    Tiles   : 126/132 (95.5%)
+ Total  Other    Tiles   : 2/4 (50.0%)
+ Total  Valid    Nets    : 2588 (1482+1106)
+ Total  Valid    Fanouts : 11393 (6903+4490)
+ Total  Tile     Fanouts : 3335
+ Tile   Zip      Fanins  : 21 (2:35)
+ Tile   Zip      Fanouts : 32 (0:177)
+ Total  Ignored  Nets    : 1624
+ Total  Valid    Blocks  : 142 (120/20)
+ Total  Ignored  Blocks  : 0
+ Total  Zip Complexities : 1167/4352 1.84/2150.37
+ Avg    Zip   Bottleneck : 6.37 70.56
+ Avg    Net   Bottleneck : 20.69 699.74
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X43_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X44_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X45_Y4_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y1_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X46_Y4_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X47_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X47_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X47_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X47_Y2_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X48_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X49_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X50_Y4_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y11_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y11_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y11_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y11_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y12_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y12_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y12_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y12_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X56_Y2_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X57_Y8_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X57_Y8_N0|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X57_Y8_N0|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X57_Y8_N0|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X57_Y8_N0|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock PIN_HSI to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock PIN_HSE to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock pll_inst|auto_generated|pll1|clk[0] to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Warn: Found CDC clock enable clken_ctrl_X59_Y1_N1|ClkEn, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to ESP_SPI_SCK.
+Iter #1/1 ...
+Pass 1 #1/2 ...
+Partitioning...
+ step = 3, partition : 2,2
+....................
+ step = 4, partition : 2,2
+....................
+
+## CPU time: 0:0:3, REAL time: 0:0:4
+Pass 1 #2/2 ...
+Partitioning...
+ step = 3, partition : 2,2
+....................
+ step = 4, partition : 2,2
+....................
+
+## CPU time: 0:0:4, REAL time: 0:0:4
+Pass 2 #1/1 ...
+Legalization and Swapping...
+..........
+
+## CPU time: 0:0:2, REAL time: 0:0:3
+Pass 3 #1/1 ...
+Touchup...
+
+
+## CPU time: 0:0:0, REAL time: 0:0:0
+Pass 4 #1/1 ...
+Optimization...
+............................................................
+Finishing...
+
+## CPU time: 0:0:6, REAL time: 0:0:6
+Total wire cost after placement: -3.35833:-0.50375:0.644001(-3.35833:-0.50375) 6659.1(929.492)+22954(23)+9602.87 8820.18(5379.44)+4458.75
+
+
+*** Post Placement Timing Report ***
+
+=== User constraints ===
+Fmax report
+  User constraint:  40.000MHz, Fmax: 102.218MHz, Clock: ESP_SPI_SCK
+  User constraint:   8.000MHz, Fmax:  99.751MHz, Clock: PIN_HSE
+  User constraint:  10.000MHz, Fmax:  99.751MHz, Clock: PIN_HSI
+  User constraint: 150.000MHz, Fmax:  99.751MHz, Clock: pll_inst|auto_generated|pll1|clk[0]
+
+Clock transfer report:
+  Worst setup:  15.217, with clock ESP_SPI_SCK
+  Worst setup: 114.975, with clock PIN_HSE
+  Worst setup:  89.975, with clock PIN_HSI
+  Worst setup:  -3.358, with clock pll_inst|auto_generated|pll1|clk[0]
+
+  Worst  hold:   0.615, with clock ESP_SPI_SCK
+  Worst  hold:   0.615, with clock PIN_HSE
+  Worst  hold:   0.615, with clock PIN_HSI
+  Worst  hold:   0.615, with clock pll_inst|auto_generated|pll1|clk[0]
+
+=== Auto constraints ===
+Fmax report
+  User constraint:  75.000MHz, Fmax:  97.513MHz, Clock: Internal_generated_clock_macro_inst|core_inst|osc|Q
+
+Clock transfer report:
+  Worst setup:   3.078, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup: 998.075, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst setup:  11.827, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup:   1.830, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst setup:  11.777, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst setup:   2.311, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst setup:   5.854, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+  Worst  hold:   0.615, with clock Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:  -3.529, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1
+  Worst  hold:  -1.755, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.474, from clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:  -1.922, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to Internal_generated_clock_macro_inst|core_inst|osc|Q
+  Worst  hold:   2.227, from clock Internal_generated_clock_example_board|ESP32_SPI_CS1 to pll_inst|auto_generated|pll1|clk[0]
+  Worst  hold:   0.615, from clock Internal_generated_clock_macro_inst|core_inst|osc|Q to pll_inst|auto_generated|pll1|clk[0]
+
+Coverage report
+  User constraints covered 7861 connections out of 8783 total, coverage: 89.5%
+  Auto constraints covered 8323 connections out of 8783 total, coverage: 94.8%
+
+
+Hold from ESP32_SPI2_CS_N to macro_inst|core_inst|buf_miso_cs1[3], clock Internal_generated_clock_example_board|ESP32_SPI2_CS_N to Internal_generated_clock_example_board|ESP32_SPI_CS1, constraint 0.000, skew 8.518, data 4.798
+  Slack:  -3.529
+    Arrival Time:  504.653
+    Required Time: 508.182
+
+*** End Timing Report ***
+
+
+
+route_design -dump ./alta_db/route.tx -replace ./alta_db/replace.tx 
+
+Route Design Statistics
+ Total Routing Nets : 2589
+ Fanout     Average : 3.41 (1..157)
+ Max   Fanout  Net  : auto_generated_inst.hbo_22_f9ff3d300b43c0f2_bp
+ Logic       Slices : 1950/2112 (92.3%)
+
+Routing...
+ Budget Useful Skew...
+## CPU time: 0:0:0, REAL time: 0:0:1
+ iter = 1/1, route#: 2589, violation# : 2452, overflow# : 1994, conflict# : 1502, node#: 16334
+## CPU time: 0:0:1, REAL time: 0:0:1
+ iter = 2/2, route#: 2589, violation# : 1695, overflow# : 1594, conflict# : 1271, node#: 17516
+## CPU time: 0:0:1, REAL time: 0:0:2
+ iter = 3/3, route#: 2589, violation# : 1113, overflow# : 1091, conflict# : 957, node#: 18451
+## CPU time: 0:0:2, REAL time: 0:0:2
+ iter = 4/4, route#: 2589, violation# : 624, overflow# : 624, conflict# : 652, node#: 19220
+## CPU time: 0:0:2, REAL time: 0:0:3
+ iter = 5/5, route#: 2589, violation# : 495, overflow# : 494, conflict# : 554, node#: 19489
+## CPU time: 0:0:3, REAL time: 0:0:4
+ iter = 6/6, route#: 2589, violation# : 375, overflow# : 374, conflict# : 441, node#: 19834
+## CPU time: 0:0:4, REAL time: 0:0:4
+ iter = 7/7, route#: 2589, violation# : 399, overflow# : 399, conflict# : 483, node#: 19918
+## CPU time: 0:0:4, REAL time: 0:0:5
+ iter = 8/4, route#: 615, violation# : 524, overflow# : 523, conflict# : 516, node#: 19452
+## CPU time: 0:0:5, REAL time: 0:0:6
+ iter = 9/5, route#: 599, violation# : 376, overflow# : 376, conflict# : 447, node#: 19766
+## CPU time: 0:0:5, REAL time: 0:0:6
+ iter = 10/6, route#: 513, violation# : 274, overflow# : 274, conflict# : 349, node#: 19998
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 11/7, route#: 487, violation# : 279, overflow# : 279, conflict# : 344, node#: 20180
+## CPU time: 0:0:6, REAL time: 0:0:7
+ iter = 12/8, route#: 483, violation# : 225, overflow# : 225, conflict# : 302, node#: 20352
+## CPU time: 0:0:7, REAL time: 0:0:8
+ iter = 13/9, route#: 465, violation# : 230, overflow# : 230, conflict# : 304, node#: 20408
+## CPU time: 0:0:8, REAL time: 0:0:8
+ iter = 14/4, route#: 641, violation# : 543, overflow# : 541, conflict# : 531, node#: 19593
+## CPU time: 0:0:8, REAL time: 0:0:9
+ iter = 15/5, route#: 551, violation# : 323, overflow# : 321, conflict# : 370, node#: 19965
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 16/6, route#: 491, violation# : 236, overflow# : 236, conflict# : 313, node#: 20155
+## CPU time: 0:0:9, REAL time: 0:0:10
+ iter = 17/7, route#: 441, violation# : 186, overflow# : 186, conflict# : 266, node#: 20241
+## CPU time: 0:0:10, REAL time: 0:0:10
+ iter = 18/8, route#: 418, violation# : 172, overflow# : 172, conflict# : 238, node#: 20372
+## CPU time: 0:0:10, REAL time: 0:0:11
+ iter = 19/9, route#: 425, violation# : 171, overflow# : 171, conflict# : 242, node#: 20463
+## CPU time: 0:0:11, REAL time: 0:0:11
+ iter = 20/5, route#: 304, violation# : 254, overflow# : 254, conflict# : 297, node#: 20269
+## CPU time: 0:0:11, REAL time: 0:0:12
+ iter = 21/6, route#: 321, violation# : 203, overflow# : 203, conflict# : 264, node#: 20357
+## CPU time: 0:0:12, REAL time: 0:0:12
+ iter = 22/7, route#: 288, violation# : 184, overflow# : 184, conflict# : 245, node#: 20411
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 23/8, route#: 287, violation# : 177, overflow# : 177, conflict# : 240, node#: 20514
+## CPU time: 0:0:12, REAL time: 0:0:13
+ iter = 24/9, route#: 274, violation# : 174, overflow# : 174, conflict# : 232, node#: 20558
+## CPU time: 0:0:13, REAL time: 0:0:13
+ iter = 25/10, route#: 270, violation# : 182, overflow# : 182, conflict# : 236, node#: 20625
+## CPU time: 0:0:13, REAL time: 0:0:14
+ iter = 26/5, route#: 288, violation# : 245, overflow# : 245, conflict# : 282, node#: 20365
+## CPU time: 0:0:14, REAL time: 0:0:14
+ iter = 27/6, route#: 298, violation# : 223, overflow# : 223, conflict# : 264, node#: 20462
+## CPU time: 0:0:14, REAL time: 0:0:15
+ iter = 28/7, route#: 313, violation# : 189, overflow# : 189, conflict# : 245, node#: 20576
+## CPU time: 0:0:14, REAL time: 0:0:15
+ iter = 29/8, route#: 286, violation# : 195, overflow# : 195, conflict# : 245, node#: 20661
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 30/9, route#: 275, violation# : 181, overflow# : 181, conflict# : 236, node#: 20766
+## CPU time: 0:0:15, REAL time: 0:0:16
+ iter = 31/10, route#: 271, violation# : 166, overflow# : 166, conflict# : 221, node#: 20787
+## CPU time: 0:0:16, REAL time: 0:0:16
+ iter = 32/5, route#: 302, violation# : 255, overflow# : 255, conflict# : 282, node#: 20517
+## CPU time: 0:0:16, REAL time: 0:0:17
+ iter = 33/6, route#: 288, violation# : 202, overflow# : 202, conflict# : 253, node#: 20679
+## CPU time: 0:0:17, REAL time: 0:0:17
+ iter = 34/7, route#: 294, violation# : 187, overflow# : 187, conflict# : 242, node#: 20685
+## CPU time: 0:0:17, REAL time: 0:0:18
+ iter = 35/8, route#: 285, violation# : 183, overflow# : 183, conflict# : 243, node#: 20849
+## CPU time: 0:0:17, REAL time: 0:0:18
+ iter = 36/9, route#: 281, violation# : 174, overflow# : 174, conflict# : 235, node#: 20867
+## CPU time: 0:0:18, REAL time: 0:0:18
+ iter = 37/10, route#: 262, violation# : 173, overflow# : 173, conflict# : 230, node#: 20947
+## CPU time: 0:0:18, REAL time: 0:0:19
+ iter = 38/5, route#: 331, violation# : 302, overflow# : 302, conflict# : 325, node#: 20517
+## CPU time: 0:0:19, REAL time: 0:0:19
+ iter = 39/6, route#: 339, violation# : 204, overflow# : 204, conflict# : 266, node#: 20678
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 40/7, route#: 298, violation# : 185, overflow# : 185, conflict# : 250, node#: 20791
+## CPU time: 0:0:19, REAL time: 0:0:20
+ iter = 41/8, route#: 272, violation# : 162, overflow# : 162, conflict# : 221, node#: 20898
+## CPU time: 0:0:20, REAL time: 0:0:20
+ iter = 42/9, route#: 246, violation# : 161, overflow# : 161, conflict# : 212, node#: 20881
+## CPU time: 0:0:20, REAL time: 0:0:21
+ iter = 43/10, route#: 247, violation# : 157, overflow# : 157, conflict# : 207, node#: 20922
+## CPU time: 0:0:20, REAL time: 0:0:21
+ iter = 44/5, route#: 295, violation# : 222, overflow# : 222, conflict# : 272, node#: 20606
+## CPU time: 0:0:21, REAL time: 0:0:21
+ iter = 45/6, route#: 297, violation# : 175, overflow# : 175, conflict# : 246, node#: 20714
+## CPU time: 0:0:21, REAL time: 0:0:22
+ iter = 46/7, route#: 274, violation# : 161, overflow# : 161, conflict# : 224, node#: 20855
+## CPU time: 0:0:21, REAL time: 0:0:22
+ iter = 47/8, route#: 271, violation# : 153, overflow# : 153, conflict# : 220, node#: 20933
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 48/9, route#: 240, violation# : 136, overflow# : 136, conflict# : 194, node#: 20941
+## CPU time: 0:0:22, REAL time: 0:0:23
+ iter = 49/10, route#: 234, violation# : 157, overflow# : 157, conflict# : 199, node#: 21022
+## CPU time: 0:0:23, REAL time: 0:0:23
+ iter = 50/5, route#: 314, violation# : 260, overflow# : 260, conflict# : 295, node#: 20645
+## CPU time: 0:0:23, REAL time: 0:0:24
+ iter = 51/6, route#: 299, violation# : 158, overflow# : 158, conflict# : 226, node#: 20696
+## CPU time: 0:0:23, REAL time: 0:0:24
+ iter = 52/7, route#: 274, violation# : 159, overflow# : 159, conflict# : 230, node#: 20815
+## CPU time: 0:0:24, REAL time: 0:0:24
+ iter = 53/8, route#: 243, violation# : 137, overflow# : 137, conflict# : 202, node#: 20867
+## CPU time: 0:0:24, REAL time: 0:0:25
+ iter = 54/9, route#: 230, violation# : 141, overflow# : 141, conflict# : 203, node#: 20900
+## CPU time: 0:0:24, REAL time: 0:0:25
+ iter = 55/10, route#: 230, violation# : 147, overflow# : 147, conflict# : 200, node#: 20962
+## CPU time: 0:0:25, REAL time: 0:0:25
+ iter = 56/5, route#: 268, violation# : 220, overflow# : 220, conflict# : 260, node#: 20675
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 57/6, route#: 284, violation# : 165, overflow# : 165, conflict# : 232, node#: 20811
+## CPU time: 0:0:25, REAL time: 0:0:26
+ iter = 58/7, route#: 248, violation# : 135, overflow# : 135, conflict# : 202, node#: 20850
+## CPU time: 0:0:26, REAL time: 0:0:26
+ iter = 59/8, route#: 232, violation# : 123, overflow# : 123, conflict# : 179, node#: 20995
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 60/9, route#: 208, violation# : 121, overflow# : 121, conflict# : 172, node#: 20974
+## CPU time: 0:0:26, REAL time: 0:0:27
+ iter = 61/10, route#: 199, violation# : 127, overflow# : 127, conflict# : 168, node#: 20995
+## CPU time: 0:0:27, REAL time: 0:0:27
+ iter = 62/5, route#: 232, violation# : 179, overflow# : 179, conflict# : 220, node#: 20789
+## CPU time: 0:0:27, REAL time: 0:0:28
+ iter = 63/6, route#: 247, violation# : 152, overflow# : 152, conflict# : 202, node#: 20857
+## CPU time: 0:0:27, REAL time: 0:0:28
+ iter = 64/7, route#: 228, violation# : 126, overflow# : 126, conflict# : 188, node#: 20940
+## CPU time: 0:0:28, REAL time: 0:0:28
+ iter = 65/8, route#: 200, violation# : 114, overflow# : 114, conflict# : 168, node#: 21038
+## CPU time: 0:0:28, REAL time: 0:0:29
+ iter = 66/9, route#: 207, violation# : 119, overflow# : 119, conflict# : 173, node#: 21066
+## CPU time: 0:0:28, REAL time: 0:0:29
+ iter = 67/10, route#: 206, violation# : 118, overflow# : 118, conflict# : 175, node#: 21084
+## CPU time: 0:0:28, REAL time: 0:0:29
+ iter = 68/5, route#: 238, violation# : 197, overflow# : 197, conflict# : 233, node#: 20845
+## CPU time: 0:0:29, REAL time: 0:0:30
+ iter = 69/6, route#: 246, violation# : 152, overflow# : 152, conflict# : 205, node#: 20907
+## CPU time: 0:0:29, REAL time: 0:0:30
+ iter = 70/7, route#: 230, violation# : 135, overflow# : 135, conflict# : 176, node#: 20983
+## CPU time: 0:0:29, REAL time: 0:0:30
+ iter = 71/8, route#: 191, violation# : 117, overflow# : 117, conflict# : 158, node#: 21071
+## CPU time: 0:0:30, REAL time: 0:0:31
+ iter = 72/9, route#: 189, violation# : 114, overflow# : 114, conflict# : 166, node#: 21081
+## CPU time: 0:0:30, REAL time: 0:0:31
+ iter = 73/10, route#: 201, violation# : 123, overflow# : 123, conflict# : 169, node#: 21167
+## CPU time: 0:0:30, REAL time: 0:0:31
+ iter = 74/5, route#: 249, violation# : 193, overflow# : 193, conflict# : 233, node#: 20828
+## CPU time: 0:0:31, REAL time: 0:0:32
+ iter = 75/6, route#: 256, violation# : 161, overflow# : 161, conflict# : 214, node#: 20957
+## CPU time: 0:0:31, REAL time: 0:0:32
+ iter = 76/7, route#: 230, violation# : 118, overflow# : 118, conflict# : 174, node#: 21003
+## CPU time: 0:0:31, REAL time: 0:0:32
+ iter = 77/8, route#: 195, violation# : 125, overflow# : 125, conflict# : 176, node#: 21048
+## CPU time: 0:0:32, REAL time: 0:0:33
+ iter = 78/9, route#: 192, violation# : 109, overflow# : 109, conflict# : 158, node#: 21057
+## CPU time: 0:0:32, REAL time: 0:0:33
+ iter = 79/10, route#: 183, violation# : 102, overflow# : 102, conflict# : 147, node#: 21130
+## CPU time: 0:0:32, REAL time: 0:0:33
+ iter = 80/5, route#: 251, violation# : 205, overflow# : 205, conflict# : 241, node#: 20846
+## CPU time: 0:0:33, REAL time: 0:0:34
+ iter = 81/6, route#: 278, violation# : 173, overflow# : 173, conflict# : 222, node#: 20911
+## CPU time: 0:0:33, REAL time: 0:0:34
+ iter = 82/7, route#: 245, violation# : 152, overflow# : 152, conflict# : 206, node#: 21007
+## CPU time: 0:0:34, REAL time: 0:0:34
+ iter = 83/8, route#: 232, violation# : 132, overflow# : 132, conflict# : 181, node#: 21069
+## CPU time: 0:0:34, REAL time: 0:0:35
+ iter = 84/9, route#: 203, violation# : 132, overflow# : 132, conflict# : 178, node#: 21125
+## CPU time: 0:0:34, REAL time: 0:0:35
+ iter = 85/10, route#: 201, violation# : 134, overflow# : 134, conflict# : 182, node#: 21159
+## CPU time: 0:0:35, REAL time: 0:0:35
+ iter = 86/5, route#: 259, violation# : 188, overflow# : 188, conflict# : 236, node#: 20883
+## CPU time: 0:0:35, REAL time: 0:0:36
+ iter = 87/6, route#: 237, violation# : 151, overflow# : 151, conflict# : 213, node#: 20933
+## CPU time: 0:0:35, REAL time: 0:0:36
+ iter = 88/7, route#: 245, violation# : 134, overflow# : 134, conflict# : 188, node#: 21034
+## CPU time: 0:0:36, REAL time: 0:0:36
+ iter = 89/8, route#: 176, violation# : 103, overflow# : 103, conflict# : 147, node#: 21122
+## CPU time: 0:0:36, REAL time: 0:0:37
+ iter = 90/9, route#: 186, violation# : 112, overflow# : 112, conflict# : 152, node#: 21158
+## CPU time: 0:0:36, REAL time: 0:0:37
+ iter = 91/10, route#: 191, violation# : 114, overflow# : 114, conflict# : 158, node#: 21167
+## CPU time: 0:0:37, REAL time: 0:0:37
+ iter = 92/5, route#: 243, violation# : 185, overflow# : 185, conflict# : 223, node#: 20854
+## CPU time: 0:0:37, REAL time: 0:0:38
+ iter = 93/6, route#: 234, violation# : 141, overflow# : 141, conflict# : 188, node#: 20959
+## CPU time: 0:0:37, REAL time: 0:0:38
+ iter = 94/7, route#: 225, violation# : 129, overflow# : 129, conflict# : 179, node#: 20982
+## CPU time: 0:0:38, REAL time: 0:0:38
+ iter = 95/8, route#: 192, violation# : 112, overflow# : 112, conflict# : 157, node#: 21068
+## CPU time: 0:0:38, REAL time: 0:0:39
+ iter = 96/9, route#: 176, violation# : 116, overflow# : 116, conflict# : 157, node#: 21069
+## CPU time: 0:0:38, REAL time: 0:0:39
+ iter = 97/10, route#: 200, violation# : 117, overflow# : 117, conflict# : 171, node#: 21099
+## CPU time: 0:0:38, REAL time: 0:0:39
+ iter = 98/5, route#: 218, violation# : 161, overflow# : 161, conflict# : 188, node#: 20850
+## CPU time: 0:0:39, REAL time: 0:0:40
+ iter = 99/6, route#: 224, violation# : 138, overflow# : 138, conflict# : 183, node#: 20911
+## CPU time: 0:0:39, REAL time: 0:0:40
+ iter = 100/7, route#: 193, violation# : 121, overflow# : 121, conflict# : 166, node#: 20960
+## CPU time: 0:0:39, REAL time: 0:0:40
+ iter = 101/8, route#: 195, violation# : 113, overflow# : 113, conflict# : 164, node#: 21042
+## CPU time: 0:0:40, REAL time: 0:0:40
+ iter = 102/9, route#: 204, violation# : 127, overflow# : 127, conflict# : 174, node#: 21146
+## CPU time: 0:0:40, REAL time: 0:0:41
+ iter = 103/10, route#: 200, violation# : 136, overflow# : 136, conflict# : 182, node#: 21207
+## CPU time: 0:0:40, REAL time: 0:0:41
+ iter = 104/5, route#: 283, violation# : 243, overflow# : 242, conflict# : 252, node#: 20826
+## CPU time: 0:0:41, REAL time: 0:0:41
+ iter = 105/6, route#: 254, violation# : 166, overflow# : 166, conflict# : 212, node#: 20969
+## CPU time: 0:0:41, REAL time: 0:0:42
+ iter = 106/7, route#: 234, violation# : 140, overflow# : 140, conflict# : 186, node#: 21022
+## CPU time: 0:0:41, REAL time: 0:0:42
+ iter = 107/8, route#: 234, violation# : 139, overflow# : 139, conflict# : 191, node#: 21089
+## CPU time: 0:0:42, REAL time: 0:0:42
+ iter = 108/9, route#: 212, violation# : 125, overflow# : 125, conflict# : 180, node#: 21120
+## CPU time: 0:0:42, REAL time: 0:0:43
+ iter = 109/10, route#: 216, violation# : 128, overflow# : 128, conflict# : 182, node#: 21168
+## CPU time: 0:0:42, REAL time: 0:0:43
+ iter = 110/5, route#: 270, violation# : 210, overflow# : 210, conflict# : 249, node#: 20861
+## CPU time: 0:0:43, REAL time: 0:0:44
+ iter = 111/6, route#: 256, violation# : 150, overflow# : 150, conflict# : 208, node#: 20992
+## CPU time: 0:0:43, REAL time: 0:0:44
+ iter = 112/7, route#: 242, violation# : 135, overflow# : 135, conflict# : 197, node#: 21071
+## CPU time: 0:0:43, REAL time: 0:0:44
+ iter = 113/8, route#: 217, violation# : 116, overflow# : 116, conflict# : 172, node#: 21183
+## CPU time: 0:0:44, REAL time: 0:0:45
+ iter = 114/9, route#: 205, violation# : 116, overflow# : 116, conflict# : 174, node#: 21220
+## CPU time: 0:0:44, REAL time: 0:0:45
+ iter = 115/10, route#: 193, violation# : 111, overflow# : 111, conflict# : 168, node#: 21232
+## CPU time: 0:0:44, REAL time: 0:0:45
+ iter = 116/5, route#: 241, violation# : 192, overflow# : 192, conflict# : 239, node#: 20926
+## CPU time: 0:0:45, REAL time: 0:0:46
+ iter = 117/6, route#: 260, violation# : 155, overflow# : 155, conflict# : 220, node#: 21017
+## CPU time: 0:0:45, REAL time: 0:0:46
+ iter = 118/7, route#: 229, violation# : 123, overflow# : 123, conflict# : 185, node#: 21111
+## CPU time: 0:0:45, REAL time: 0:0:46
+ iter = 119/8, route#: 197, violation# : 103, overflow# : 103, conflict# : 160, node#: 21192
+## CPU time: 0:0:46, REAL time: 0:0:46
+ iter = 120/9, route#: 188, violation# : 97, overflow# : 97, conflict# : 151, node#: 21242
+## CPU time: 0:0:46, REAL time: 0:0:47
+ iter = 121/10, route#: 165, violation# : 98, overflow# : 98, conflict# : 141, node#: 21264
+## CPU time: 0:0:46, REAL time: 0:0:47
+ iter = 122/5, route#: 217, violation# : 172, overflow# : 172, conflict# : 224, node#: 20977
+## CPU time: 0:0:47, REAL time: 0:0:48
+ iter = 123/6, route#: 249, violation# : 139, overflow# : 139, conflict# : 194, node#: 21064
+## CPU time: 0:0:47, REAL time: 0:0:48
+ iter = 124/7, route#: 214, violation# : 115, overflow# : 115, conflict# : 172, node#: 21147
+## CPU time: 0:0:47, REAL time: 0:0:48
+ iter = 125/8, route#: 191, violation# : 105, overflow# : 105, conflict# : 155, node#: 21262
+## CPU time: 0:0:47, REAL time: 0:0:48
+ iter = 126/9, route#: 169, violation# : 95, overflow# : 95, conflict# : 142, node#: 21243
+## CPU time: 0:0:48, REAL time: 0:0:48
+ iter = 127/10, route#: 165, violation# : 94, overflow# : 94, conflict# : 137, node#: 21328
+## CPU time: 0:0:48, REAL time: 0:0:49
+ iter = 128/5, route#: 198, violation# : 143, overflow# : 143, conflict# : 193, node#: 21068
+## CPU time: 0:0:48, REAL time: 0:0:49
+ iter = 129/6, route#: 225, violation# : 120, overflow# : 120, conflict# : 171, node#: 21153
+## CPU time: 0:0:49, REAL time: 0:0:50
+ iter = 130/7, route#: 198, violation# : 106, overflow# : 106, conflict# : 151, node#: 21193
+## CPU time: 0:0:49, REAL time: 0:0:50
+ iter = 131/8, route#: 173, violation# : 94, overflow# : 94, conflict# : 142, node#: 21288
+## CPU time: 0:0:49, REAL time: 0:0:50
+ iter = 132/9, route#: 165, violation# : 92, overflow# : 92, conflict# : 134, node#: 21348
+## CPU time: 0:0:49, REAL time: 0:0:50
+ iter = 133/10, route#: 145, violation# : 96, overflow# : 96, conflict# : 128, node#: 21346
+## CPU time: 0:0:50, REAL time: 0:0:51
+ iter = 134/5, route#: 241, violation# : 194, overflow# : 194, conflict# : 222, node#: 21030
+## CPU time: 0:0:50, REAL time: 0:0:51
+ iter = 135/6, route#: 230, violation# : 130, overflow# : 130, conflict# : 174, node#: 21160
+## CPU time: 0:0:50, REAL time: 0:0:51
+ iter = 136/7, route#: 204, violation# : 113, overflow# : 113, conflict# : 156, node#: 21207
+## CPU time: 0:0:51, REAL time: 0:0:51
+ iter = 137/8, route#: 177, violation# : 96, overflow# : 96, conflict# : 136, node#: 21302
+## CPU time: 0:0:51, REAL time: 0:0:52
+ iter = 138/9, route#: 144, violation# : 78, overflow# : 78, conflict# : 112, node#: 21343
+## CPU time: 0:0:51, REAL time: 0:0:52
+ iter = 139/10, route#: 133, violation# : 78, overflow# : 78, conflict# : 117, node#: 21343
+## CPU time: 0:0:51, REAL time: 0:0:52
+ iter = 140/5, route#: 197, violation# : 162, overflow# : 162, conflict# : 191, node#: 21073
+## CPU time: 0:0:52, REAL time: 0:0:52
+ iter = 141/6, route#: 219, violation# : 125, overflow# : 125, conflict# : 169, node#: 21151
+## CPU time: 0:0:52, REAL time: 0:0:53
+ iter = 142/7, route#: 191, violation# : 99, overflow# : 99, conflict# : 151, node#: 21227
+## CPU time: 0:0:52, REAL time: 0:0:53
+ iter = 143/8, route#: 170, violation# : 90, overflow# : 90, conflict# : 137, node#: 21273
+## CPU time: 0:0:52, REAL time: 0:0:53
+ iter = 144/9, route#: 151, violation# : 84, overflow# : 84, conflict# : 122, node#: 21367
+## CPU time: 0:0:52, REAL time: 0:0:53
+ iter = 145/10, route#: 127, violation# : 78, overflow# : 78, conflict# : 110, node#: 21371
+## CPU time: 0:0:53, REAL time: 0:0:54
+ iter = 146/5, route#: 174, violation# : 135, overflow# : 135, conflict# : 179, node#: 21122
+## CPU time: 0:0:53, REAL time: 0:0:54
+ iter = 147/6, route#: 192, violation# : 104, overflow# : 104, conflict# : 148, node#: 21150
+## CPU time: 0:0:53, REAL time: 0:0:54
+ iter = 148/7, route#: 162, violation# : 87, overflow# : 87, conflict# : 136, node#: 21222
+## CPU time: 0:0:54, REAL time: 0:0:54
+ iter = 149/8, route#: 146, violation# : 82, overflow# : 82, conflict# : 123, node#: 21275
+## CPU time: 0:0:54, REAL time: 0:0:55
+ iter = 150/9, route#: 151, violation# : 87, overflow# : 87, conflict# : 127, node#: 21301
+## CPU time: 0:0:54, REAL time: 0:0:55
+ iter = 151/10, route#: 157, violation# : 84, overflow# : 84, conflict# : 120, node#: 21348
+## CPU time: 0:0:54, REAL time: 0:0:55
+ iter = 152/5, route#: 180, violation# : 135, overflow# : 135, conflict# : 165, node#: 21170
+## CPU time: 0:0:54, REAL time: 0:0:55
+ iter = 153/6, route#: 187, violation# : 100, overflow# : 100, conflict# : 143, node#: 21195
+## CPU time: 0:0:55, REAL time: 0:0:56
+ iter = 154/7, route#: 157, violation# : 86, overflow# : 86, conflict# : 121, node#: 21218
+## CPU time: 0:0:55, REAL time: 0:0:56
+ iter = 155/8, route#: 132, violation# : 74, overflow# : 74, conflict# : 110, node#: 21248
+## CPU time: 0:0:55, REAL time: 0:0:56
+ iter = 156/9, route#: 126, violation# : 76, overflow# : 76, conflict# : 112, node#: 21276
+## CPU time: 0:0:55, REAL time: 0:0:56
+ iter = 157/10, route#: 128, violation# : 78, overflow# : 78, conflict# : 112, node#: 21295
+## CPU time: 0:0:55, REAL time: 0:0:56
+ iter = 158/5, route#: 172, violation# : 119, overflow# : 119, conflict# : 169, node#: 21150
+## CPU time: 0:0:56, REAL time: 0:0:57
+ iter = 159/6, route#: 172, violation# : 92, overflow# : 92, conflict# : 134, node#: 21228
+## CPU time: 0:0:56, REAL time: 0:0:57
+ iter = 160/7, route#: 136, violation# : 85, overflow# : 85, conflict# : 120, node#: 21270
+## CPU time: 0:0:56, REAL time: 0:0:57
+ iter = 161/8, route#: 136, violation# : 80, overflow# : 80, conflict# : 113, node#: 21317
+## CPU time: 0:0:56, REAL time: 0:0:57
+ iter = 162/9, route#: 128, violation# : 73, overflow# : 73, conflict# : 104, node#: 21357
+## CPU time: 0:0:56, REAL time: 0:0:57
+ iter = 163/10, route#: 123, violation# : 69, overflow# : 69, conflict# : 107, node#: 21360
+## CPU time: 0:0:57, REAL time: 0:0:57
+ iter = 164/5, route#: 144, violation# : 110, overflow# : 110, conflict# : 136, node#: 21209
+## CPU time: 0:0:57, REAL time: 0:0:58
+ iter = 165/6, route#: 166, violation# : 111, overflow# : 111, conflict# : 151, node#: 21210
+## CPU time: 0:0:57, REAL time: 0:0:58
+ iter = 166/7, route#: 184, violation# : 106, overflow# : 106, conflict# : 146, node#: 21286
+## CPU time: 0:0:57, REAL time: 0:0:58
+ iter = 167/8, route#: 154, violation# : 91, overflow# : 91, conflict# : 131, node#: 21335
+## CPU time: 0:0:58, REAL time: 0:0:58
+ iter = 168/9, route#: 163, violation# : 92, overflow# : 92, conflict# : 126, node#: 21383
+## CPU time: 0:0:58, REAL time: 0:0:59
+ iter = 169/10, route#: 143, violation# : 83, overflow# : 83, conflict# : 114, node#: 21420
+## CPU time: 0:0:58, REAL time: 0:0:59
+ iter = 170/5, route#: 176, violation# : 123, overflow# : 123, conflict# : 159, node#: 21193
+## CPU time: 0:0:58, REAL time: 0:0:59
+ iter = 171/6, route#: 177, violation# : 98, overflow# : 98, conflict# : 140, node#: 21219
+## CPU time: 0:0:59, REAL time: 0:1:0
+ iter = 172/7, route#: 158, violation# : 95, overflow# : 95, conflict# : 131, node#: 21214
+## CPU time: 0:0:59, REAL time: 0:1:0
+ iter = 173/8, route#: 152, violation# : 95, overflow# : 95, conflict# : 130, node#: 21268
+## CPU time: 0:0:59, REAL time: 0:1:0
+ iter = 174/9, route#: 140, violation# : 77, overflow# : 77, conflict# : 113, node#: 21307
+## CPU time: 0:0:59, REAL time: 0:1:0
+ iter = 175/10, route#: 129, violation# : 78, overflow# : 78, conflict# : 117, node#: 21324
+## CPU time: 0:0:59, REAL time: 0:1:0
+ iter = 176/5, route#: 140, violation# : 115, overflow# : 115, conflict# : 138, node#: 21188
+## CPU time: 0:1:0, REAL time: 0:1:1
+ iter = 177/6, route#: 152, violation# : 82, overflow# : 82, conflict# : 115, node#: 21212
+## CPU time: 0:1:0, REAL time: 0:1:1
+ iter = 178/7, route#: 137, violation# : 77, overflow# : 77, conflict# : 106, node#: 21262
+## CPU time: 0:1:0, REAL time: 0:1:1
+ iter = 179/8, route#: 113, violation# : 61, overflow# : 61, conflict# : 95, node#: 21273
+## CPU time: 0:1:0, REAL time: 0:1:1
+ iter = 180/9, route#: 116, violation# : 70, overflow# : 70, conflict# : 98, node#: 21320
+## CPU time: 0:1:0, REAL time: 0:1:1
+ iter = 181/10, route#: 110, violation# : 62, overflow# : 62, conflict# : 93, node#: 21316
+## CPU time: 0:1:1, REAL time: 0:1:2
+ iter = 182/5, route#: 148, violation# : 104, overflow# : 104, conflict# : 133, node#: 21156
+## CPU time: 0:1:1, REAL time: 0:1:2
+ iter = 183/6, route#: 125, violation# : 74, overflow# : 74, conflict# : 102, node#: 21228
+## CPU time: 0:1:1, REAL time: 0:1:2
+ iter = 184/7, route#: 139, violation# : 79, overflow# : 79, conflict# : 109, node#: 21229
+## CPU time: 0:1:1, REAL time: 0:1:2
+ iter = 185/8, route#: 123, violation# : 67, overflow# : 67, conflict# : 93, node#: 21312
+## CPU time: 0:1:2, REAL time: 0:1:2
+ iter = 186/9, route#: 126, violation# : 73, overflow# : 73, conflict# : 102, node#: 21302
+## CPU time: 0:1:2, REAL time: 0:1:3
+ iter = 187/10, route#: 126, violation# : 76, overflow# : 76, conflict# : 106, node#: 21314
+## CPU time: 0:1:2, REAL time: 0:1:3
+ iter = 188/5, route#: 142, violation# : 100, overflow# : 100, conflict# : 131, node#: 21174
+## CPU time: 0:1:2, REAL time: 0:1:3
+ iter = 189/6, route#: 141, violation# : 76, overflow# : 76, conflict# : 111, node#: 21211
+## CPU time: 0:1:3, REAL time: 0:1:3
+ iter = 190/7, route#: 135, violation# : 73, overflow# : 73, conflict# : 107, node#: 21249
+## CPU time: 0:1:3, REAL time: 0:1:4
+ iter = 191/8, route#: 123, violation# : 70, overflow# : 70, conflict# : 102, node#: 21278
+## CPU time: 0:1:3, REAL time: 0:1:4
+ iter = 192/9, route#: 139, violation# : 82, overflow# : 82, conflict# : 113, node#: 21304
+## CPU time: 0:1:3, REAL time: 0:1:4
+ iter = 193/10, route#: 115, violation# : 69, overflow# : 69, conflict# : 95, node#: 21320
+## CPU time: 0:1:3, REAL time: 0:1:4
+ iter = 194/5, route#: 161, violation# : 127, overflow# : 126, conflict# : 154, node#: 21114
+## CPU time: 0:1:4, REAL time: 0:1:5
+ iter = 195/6, route#: 159, violation# : 90, overflow# : 90, conflict# : 129, node#: 21163
+## CPU time: 0:1:4, REAL time: 0:1:5
+ iter = 196/7, route#: 157, violation# : 75, overflow# : 75, conflict# : 110, node#: 21198
+## CPU time: 0:1:4, REAL time: 0:1:5
+ iter = 197/8, route#: 124, violation# : 65, overflow# : 65, conflict# : 93, node#: 21239
+## CPU time: 0:1:4, REAL time: 0:1:5
+ iter = 198/9, route#: 108, violation# : 60, overflow# : 60, conflict# : 85, node#: 21276
+## CPU time: 0:1:4, REAL time: 0:1:5
+ iter = 199/10, route#: 96, violation# : 63, overflow# : 63, conflict# : 88, node#: 21296
+## CPU time: 0:1:5, REAL time: 0:1:6
+ iter = 200/5, route#: 157, violation# : 107, overflow# : 107, conflict# : 132, node#: 21132
+## CPU time: 0:1:5, REAL time: 0:1:6
+ iter = 201/6, route#: 154, violation# : 92, overflow# : 92, conflict# : 124, node#: 21191
+## CPU time: 0:1:5, REAL time: 0:1:6
+ iter = 202/7, route#: 142, violation# : 73, overflow# : 73, conflict# : 108, node#: 21208
+## CPU time: 0:1:5, REAL time: 0:1:6
+ iter = 203/8, route#: 123, violation# : 67, overflow# : 67, conflict# : 102, node#: 21312
+## CPU time: 0:1:6, REAL time: 0:1:6
+ iter = 204/9, route#: 115, violation# : 63, overflow# : 63, conflict# : 97, node#: 21306
+## CPU time: 0:1:6, REAL time: 0:1:7
+ iter = 205/10, route#: 102, violation# : 62, overflow# : 62, conflict# : 89, node#: 21319
+## CPU time: 0:1:6, REAL time: 0:1:7
+ iter = 206/5, route#: 155, violation# : 116, overflow# : 116, conflict# : 154, node#: 21161
+## CPU time: 0:1:6, REAL time: 0:1:7
+ iter = 207/6, route#: 176, violation# : 101, overflow# : 101, conflict# : 142, node#: 21197
+## CPU time: 0:1:6, REAL time: 0:1:7
+ iter = 208/7, route#: 149, violation# : 85, overflow# : 85, conflict# : 126, node#: 21224
+## CPU time: 0:1:7, REAL time: 0:1:8
+ iter = 209/8, route#: 132, violation# : 63, overflow# : 63, conflict# : 99, node#: 21287
+## CPU time: 0:1:7, REAL time: 0:1:8
+ iter = 210/9, route#: 117, violation# : 64, overflow# : 64, conflict# : 98, node#: 21338
+## CPU time: 0:1:7, REAL time: 0:1:8
+ iter = 211/10, route#: 107, violation# : 63, overflow# : 63, conflict# : 93, node#: 21345
+## CPU time: 0:1:7, REAL time: 0:1:8
+ iter = 212/5, route#: 119, violation# : 102, overflow# : 102, conflict# : 128, node#: 21166
+## CPU time: 0:1:8, REAL time: 0:1:8
+ iter = 213/6, route#: 171, violation# : 97, overflow# : 97, conflict# : 134, node#: 21240
+## CPU time: 0:1:8, REAL time: 0:1:9
+ iter = 214/7, route#: 142, violation# : 85, overflow# : 85, conflict# : 121, node#: 21280
+## CPU time: 0:1:8, REAL time: 0:1:9
+ iter = 215/8, route#: 127, violation# : 72, overflow# : 72, conflict# : 101, node#: 21335
+## CPU time: 0:1:8, REAL time: 0:1:9
+ iter = 216/9, route#: 112, violation# : 71, overflow# : 71, conflict# : 102, node#: 21346
+## CPU time: 0:1:8, REAL time: 0:1:9
+ iter = 217/10, route#: 105, violation# : 67, overflow# : 67, conflict# : 97, node#: 21353
+## CPU time: 0:1:9, REAL time: 0:1:10
+ iter = 218/5, route#: 152, violation# : 115, overflow# : 115, conflict# : 135, node#: 21194
+## CPU time: 0:1:9, REAL time: 0:1:10
+ iter = 219/6, route#: 139, violation# : 92, overflow# : 92, conflict# : 122, node#: 21234
+## CPU time: 0:1:9, REAL time: 0:1:10
+ iter = 220/7, route#: 135, violation# : 83, overflow# : 83, conflict# : 116, node#: 21251
+## CPU time: 0:1:9, REAL time: 0:1:10
+ iter = 221/8, route#: 124, violation# : 74, overflow# : 74, conflict# : 106, node#: 21263
+## CPU time: 0:1:10, REAL time: 0:1:11
+ iter = 222/9, route#: 120, violation# : 72, overflow# : 72, conflict# : 106, node#: 21302
+## CPU time: 0:1:10, REAL time: 0:1:11
+ iter = 223/10, route#: 124, violation# : 69, overflow# : 69, conflict# : 102, node#: 21309
+## CPU time: 0:1:10, REAL time: 0:1:11
+ iter = 224/5, route#: 167, violation# : 127, overflow# : 127, conflict# : 155, node#: 21122
+## CPU time: 0:1:11, REAL time: 0:1:11
+ iter = 225/6, route#: 159, violation# : 102, overflow# : 102, conflict# : 136, node#: 21187
+## CPU time: 0:1:11, REAL time: 0:1:12
+ iter = 226/7, route#: 168, violation# : 86, overflow# : 86, conflict# : 133, node#: 21215
+## CPU time: 0:1:11, REAL time: 0:1:12
+ iter = 227/8, route#: 135, violation# : 73, overflow# : 73, conflict# : 117, node#: 21286
+## CPU time: 0:1:11, REAL time: 0:1:12
+ iter = 228/9, route#: 121, violation# : 60, overflow# : 60, conflict# : 102, node#: 21278
+## CPU time: 0:1:11, REAL time: 0:1:12
+ iter = 229/10, route#: 113, violation# : 58, overflow# : 58, conflict# : 102, node#: 21300
+## CPU time: 0:1:12, REAL time: 0:1:13
+ iter = 230/5, route#: 201, violation# : 147, overflow# : 146, conflict# : 182, node#: 21094
+## CPU time: 0:1:12, REAL time: 0:1:13
+ iter = 231/6, route#: 184, violation# : 100, overflow# : 100, conflict# : 138, node#: 21191
+## CPU time: 0:1:12, REAL time: 0:1:13
+ iter = 232/7, route#: 157, violation# : 81, overflow# : 81, conflict# : 119, node#: 21185
+## CPU time: 0:1:13, REAL time: 0:1:14
+ iter = 233/8, route#: 120, violation# : 71, overflow# : 71, conflict# : 103, node#: 21253
+## CPU time: 0:1:13, REAL time: 0:1:14
+ iter = 234/9, route#: 130, violation# : 75, overflow# : 75, conflict# : 107, node#: 21288
+## CPU time: 0:1:13, REAL time: 0:1:14
+ iter = 235/10, route#: 124, violation# : 75, overflow# : 75, conflict# : 103, node#: 21317
+## CPU time: 0:1:14, REAL time: 0:1:14
+ iter = 236/5, route#: 192, violation# : 139, overflow# : 139, conflict# : 176, node#: 21111
+## CPU time: 0:1:14, REAL time: 0:1:15
+ iter = 237/6, route#: 178, violation# : 99, overflow# : 99, conflict# : 141, node#: 21192
+## CPU time: 0:1:14, REAL time: 0:1:15
+ iter = 238/7, route#: 168, violation# : 86, overflow# : 86, conflict# : 134, node#: 21251
+## CPU time: 0:1:14, REAL time: 0:1:15
+ iter = 239/8, route#: 153, violation# : 85, overflow# : 85, conflict# : 127, node#: 21278
+## CPU time: 0:1:14, REAL time: 0:1:15
+ iter = 240/9, route#: 146, violation# : 77, overflow# : 77, conflict# : 116, node#: 21372
+## CPU time: 0:1:15, REAL time: 0:1:16
+ iter = 241/10, route#: 129, violation# : 77, overflow# : 77, conflict# : 113, node#: 21371
+## CPU time: 0:1:15, REAL time: 0:1:16
+ iter = 242/5, route#: 191, violation# : 136, overflow# : 136, conflict# : 166, node#: 21184
+## CPU time: 0:1:15, REAL time: 0:1:16
+ iter = 243/6, route#: 169, violation# : 84, overflow# : 84, conflict# : 129, node#: 21244
+## CPU time: 0:1:16, REAL time: 0:1:16
+ iter = 244/7, route#: 139, violation# : 79, overflow# : 79, conflict# : 118, node#: 21261
+## CPU time: 0:1:16, REAL time: 0:1:17
+ iter = 245/8, route#: 129, violation# : 76, overflow# : 76, conflict# : 118, node#: 21361
+## CPU time: 0:1:16, REAL time: 0:1:17
+ iter = 246/9, route#: 135, violation# : 69, overflow# : 69, conflict# : 109, node#: 21398
+## CPU time: 0:1:16, REAL time: 0:1:17
+ iter = 247/10, route#: 125, violation# : 79, overflow# : 79, conflict# : 117, node#: 21452
+## CPU time: 0:1:16, REAL time: 0:1:17
+ iter = 248/5, route#: 154, violation# : 117, overflow# : 117, conflict# : 152, node#: 21227
+## CPU time: 0:1:17, REAL time: 0:1:18
+ iter = 249/6, route#: 183, violation# : 110, overflow# : 110, conflict# : 147, node#: 21298
+## CPU time: 0:1:17, REAL time: 0:1:18
+ iter = 250/7, route#: 182, violation# : 92, overflow# : 92, conflict# : 133, node#: 21362
+## CPU time: 0:1:17, REAL time: 0:1:18
+ iter = 251/8, route#: 133, violation# : 73, overflow# : 73, conflict# : 110, node#: 21389
+## CPU time: 0:1:17, REAL time: 0:1:18
+ iter = 252/9, route#: 135, violation# : 69, overflow# : 69, conflict# : 110, node#: 21422
+## CPU time: 0:1:17, REAL time: 0:1:18
+ iter = 253/10, route#: 129, violation# : 68, overflow# : 68, conflict# : 111, node#: 21411
+## CPU time: 0:1:18, REAL time: 0:1:19
+ iter = 254/5, route#: 158, violation# : 106, overflow# : 106, conflict# : 149, node#: 21231
+## CPU time: 0:1:18, REAL time: 0:1:19
+ iter = 255/6, route#: 163, violation# : 78, overflow# : 78, conflict# : 118, node#: 21284
+## CPU time: 0:1:18, REAL time: 0:1:19
+ iter = 256/7, route#: 131, violation# : 71, overflow# : 71, conflict# : 108, node#: 21298
+## CPU time: 0:1:19, REAL time: 0:1:20
+ iter = 257/8, route#: 121, violation# : 59, overflow# : 59, conflict# : 94, node#: 21368
+## CPU time: 0:1:19, REAL time: 0:1:20
+ iter = 258/9, route#: 103, violation# : 53, overflow# : 53, conflict# : 84, node#: 21372
+## CPU time: 0:1:19, REAL time: 0:1:20
+ iter = 259/10, route#: 100, violation# : 59, overflow# : 59, conflict# : 91, node#: 21400
+## CPU time: 0:1:19, REAL time: 0:1:20
+ iter = 260/5, route#: 128, violation# : 96, overflow# : 96, conflict# : 124, node#: 21254
+## CPU time: 0:1:19, REAL time: 0:1:20
+ iter = 261/6, route#: 141, violation# : 84, overflow# : 84, conflict# : 116, node#: 21290
+## CPU time: 0:1:20, REAL time: 0:1:21
+ iter = 262/7, route#: 131, violation# : 67, overflow# : 67, conflict# : 109, node#: 21323
+## CPU time: 0:1:20, REAL time: 0:1:21
+ iter = 263/8, route#: 111, violation# : 58, overflow# : 58, conflict# : 87, node#: 21354
+## CPU time: 0:1:20, REAL time: 0:1:21
+ iter = 264/9, route#: 101, violation# : 62, overflow# : 62, conflict# : 91, node#: 21374
+## CPU time: 0:1:20, REAL time: 0:1:21
+ iter = 265/10, route#: 112, violation# : 64, overflow# : 64, conflict# : 99, node#: 21411
+## CPU time: 0:1:20, REAL time: 0:1:21
+ iter = 266/5, route#: 129, violation# : 93, overflow# : 93, conflict# : 111, node#: 21275
+## CPU time: 0:1:20, REAL time: 0:1:21
+ iter = 267/6, route#: 127, violation# : 75, overflow# : 75, conflict# : 106, node#: 21314
+## CPU time: 0:1:21, REAL time: 0:1:22
+ iter = 268/7, route#: 127, violation# : 66, overflow# : 66, conflict# : 101, node#: 21361
+## CPU time: 0:1:21, REAL time: 0:1:22
+ iter = 269/8, route#: 98, violation# : 55, overflow# : 55, conflict# : 85, node#: 21403
+## CPU time: 0:1:21, REAL time: 0:1:22
+ iter = 270/9, route#: 96, violation# : 53, overflow# : 53, conflict# : 85, node#: 21446
+## CPU time: 0:1:21, REAL time: 0:1:22
+ iter = 271/10, route#: 113, violation# : 67, overflow# : 67, conflict# : 94, node#: 21488
+## CPU time: 0:1:21, REAL time: 0:1:22
+ iter = 272/5, route#: 169, violation# : 127, overflow# : 127, conflict# : 154, node#: 21229
+## CPU time: 0:1:22, REAL time: 0:1:23
+ iter = 273/6, route#: 157, violation# : 80, overflow# : 80, conflict# : 117, node#: 21294
+## CPU time: 0:1:22, REAL time: 0:1:23
+ iter = 274/7, route#: 142, violation# : 74, overflow# : 74, conflict# : 110, node#: 21354
+## CPU time: 0:1:22, REAL time: 0:1:23
+ iter = 275/8, route#: 119, violation# : 61, overflow# : 61, conflict# : 87, node#: 21409
+## CPU time: 0:1:22, REAL time: 0:1:23
+ iter = 276/9, route#: 93, violation# : 57, overflow# : 57, conflict# : 78, node#: 21452
+## CPU time: 0:1:22, REAL time: 0:1:23
+ iter = 277/10, route#: 94, violation# : 56, overflow# : 56, conflict# : 81, node#: 21479
+## CPU time: 0:1:23, REAL time: 0:1:24
+ iter = 278/5, route#: 141, violation# : 102, overflow# : 102, conflict# : 123, node#: 21346
+## CPU time: 0:1:23, REAL time: 0:1:24
+ iter = 279/6, route#: 132, violation# : 79, overflow# : 79, conflict# : 104, node#: 21372
+## CPU time: 0:1:23, REAL time: 0:1:24
+ iter = 280/7, route#: 109, violation# : 63, overflow# : 63, conflict# : 88, node#: 21466
+## CPU time: 0:1:23, REAL time: 0:1:24
+ iter = 281/8, route#: 96, violation# : 57, overflow# : 57, conflict# : 84, node#: 21491
+## CPU time: 0:1:23, REAL time: 0:1:24
+ iter = 282/9, route#: 99, violation# : 59, overflow# : 59, conflict# : 89, node#: 21508
+## CPU time: 0:1:23, REAL time: 0:1:24
+ iter = 283/10, route#: 112, violation# : 71, overflow# : 71, conflict# : 98, node#: 21509
+## CPU time: 0:1:24, REAL time: 0:1:25
+ iter = 284/5, route#: 137, violation# : 99, overflow# : 99, conflict# : 128, node#: 21330
+## CPU time: 0:1:24, REAL time: 0:1:25
+ iter = 285/6, route#: 139, violation# : 83, overflow# : 83, conflict# : 112, node#: 21402
+## CPU time: 0:1:24, REAL time: 0:1:25
+ iter = 286/7, route#: 117, violation# : 71, overflow# : 71, conflict# : 102, node#: 21391
+## CPU time: 0:1:24, REAL time: 0:1:25
+ iter = 287/8, route#: 114, violation# : 67, overflow# : 67, conflict# : 95, node#: 21462
+## CPU time: 0:1:24, REAL time: 0:1:25
+ iter = 288/9, route#: 111, violation# : 63, overflow# : 63, conflict# : 92, node#: 21473
+## CPU time: 0:1:25, REAL time: 0:1:26
+ iter = 289/10, route#: 114, violation# : 68, overflow# : 68, conflict# : 101, node#: 21488
+## CPU time: 0:1:25, REAL time: 0:1:26
+ iter = 290/5, route#: 161, violation# : 126, overflow# : 126, conflict# : 156, node#: 21338
+## CPU time: 0:1:25, REAL time: 0:1:26
+ iter = 291/6, route#: 165, violation# : 83, overflow# : 83, conflict# : 114, node#: 21358
+## CPU time: 0:1:25, REAL time: 0:1:26
+ iter = 292/7, route#: 133, violation# : 76, overflow# : 76, conflict# : 113, node#: 21436
+## CPU time: 0:1:26, REAL time: 0:1:27
+ iter = 293/8, route#: 125, violation# : 73, overflow# : 73, conflict# : 105, node#: 21467
+## CPU time: 0:1:26, REAL time: 0:1:27
+ iter = 294/9, route#: 114, violation# : 70, overflow# : 70, conflict# : 97, node#: 21486
+## CPU time: 0:1:26, REAL time: 0:1:27
+ iter = 295/10, route#: 107, violation# : 71, overflow# : 71, conflict# : 103, node#: 21479
+## CPU time: 0:1:26, REAL time: 0:1:27
+ iter = 296/5, route#: 169, violation# : 132, overflow# : 132, conflict# : 156, node#: 21292
+## CPU time: 0:1:26, REAL time: 0:1:28
+ iter = 297/6, route#: 189, violation# : 114, overflow# : 114, conflict# : 150, node#: 21299
+## CPU time: 0:1:27, REAL time: 0:1:28
+ iter = 298/7, route#: 162, violation# : 87, overflow# : 87, conflict# : 122, node#: 21386
+## CPU time: 0:1:27, REAL time: 0:1:28
+ iter = 299/8, route#: 117, violation# : 68, overflow# : 68, conflict# : 102, node#: 21415
+## CPU time: 0:1:27, REAL time: 0:1:28
+ iter = 300/9, route#: 112, violation# : 68, overflow# : 68, conflict# : 102, node#: 21465
+## CPU time: 0:1:27, REAL time: 0:1:28
+ iter = 301/10, route#: 117, violation# : 67, overflow# : 67, conflict# : 102, node#: 21470
+## CPU time: 0:1:28, REAL time: 0:1:29
+ iter = 302/5, route#: 164, violation# : 106, overflow# : 106, conflict# : 141, node#: 21336
+## CPU time: 0:1:28, REAL time: 0:1:29
+ iter = 303/6, route#: 141, violation# : 89, overflow# : 89, conflict# : 121, node#: 21383
+## CPU time: 0:1:28, REAL time: 0:1:29
+ iter = 304/7, route#: 123, violation# : 72, overflow# : 72, conflict# : 99, node#: 21423
+## CPU time: 0:1:28, REAL time: 0:1:29
+ iter = 305/8, route#: 110, violation# : 62, overflow# : 62, conflict# : 92, node#: 21461
+## CPU time: 0:1:28, REAL time: 0:1:29
+ iter = 306/9, route#: 102, violation# : 58, overflow# : 58, conflict# : 90, node#: 21485
+## CPU time: 0:1:28, REAL time: 0:1:30
+ iter = 307/10, route#: 99, violation# : 60, overflow# : 60, conflict# : 93, node#: 21488
+## CPU time: 0:1:29, REAL time: 0:1:30
+ iter = 308/5, route#: 148, violation# : 109, overflow# : 109, conflict# : 139, node#: 21334
+## CPU time: 0:1:29, REAL time: 0:1:30
+ iter = 309/6, route#: 169, violation# : 99, overflow# : 99, conflict# : 145, node#: 21373
+## CPU time: 0:1:29, REAL time: 0:1:30
+ iter = 310/7, route#: 145, violation# : 73, overflow# : 73, conflict# : 112, node#: 21433
+## CPU time: 0:1:30, REAL time: 0:1:31
+ iter = 311/8, route#: 127, violation# : 59, overflow# : 59, conflict# : 95, node#: 21468
+## CPU time: 0:1:30, REAL time: 0:1:31
+ iter = 312/9, route#: 109, violation# : 56, overflow# : 56, conflict# : 88, node#: 21471
+## CPU time: 0:1:30, REAL time: 0:1:31
+ iter = 313/10, route#: 99, violation# : 56, overflow# : 56, conflict# : 89, node#: 21477
+## CPU time: 0:1:30, REAL time: 0:1:31
+ iter = 314/5, route#: 153, violation# : 98, overflow# : 98, conflict# : 127, node#: 21335
+## CPU time: 0:1:30, REAL time: 0:1:31
+ iter = 315/6, route#: 127, violation# : 64, overflow# : 64, conflict# : 100, node#: 21386
+## CPU time: 0:1:31, REAL time: 0:1:32
+ iter = 316/7, route#: 107, violation# : 56, overflow# : 56, conflict# : 84, node#: 21396
+## CPU time: 0:1:31, REAL time: 0:1:32
+ iter = 317/8, route#: 86, violation# : 44, overflow# : 44, conflict# : 73, node#: 21427
+## CPU time: 0:1:31, REAL time: 0:1:32
+ iter = 318/9, route#: 92, violation# : 50, overflow# : 50, conflict# : 83, node#: 21451
+## CPU time: 0:1:31, REAL time: 0:1:32
+ iter = 319/10, route#: 89, violation# : 48, overflow# : 48, conflict# : 79, node#: 21506
+## CPU time: 0:1:31, REAL time: 0:1:32
+ iter = 320/5, route#: 147, violation# : 100, overflow# : 100, conflict# : 128, node#: 21290
+## CPU time: 0:1:32, REAL time: 0:1:33
+ iter = 321/6, route#: 135, violation# : 68, overflow# : 68, conflict# : 96, node#: 21356
+## CPU time: 0:1:32, REAL time: 0:1:33
+ iter = 322/7, route#: 106, violation# : 63, overflow# : 63, conflict# : 94, node#: 21394
+## CPU time: 0:1:32, REAL time: 0:1:33
+ iter = 323/8, route#: 111, violation# : 56, overflow# : 56, conflict# : 83, node#: 21445
+## CPU time: 0:1:32, REAL time: 0:1:33
+ iter = 324/9, route#: 97, violation# : 57, overflow# : 57, conflict# : 81, node#: 21437
+## CPU time: 0:1:32, REAL time: 0:1:33
+ iter = 325/10, route#: 102, violation# : 54, overflow# : 54, conflict# : 80, node#: 21479
+## CPU time: 0:1:33, REAL time: 0:1:34
+ iter = 326/5, route#: 134, violation# : 93, overflow# : 93, conflict# : 123, node#: 21335
+## CPU time: 0:1:33, REAL time: 0:1:34
+ iter = 327/6, route#: 141, violation# : 81, overflow# : 81, conflict# : 114, node#: 21371
+## CPU time: 0:1:33, REAL time: 0:1:34
+ iter = 328/7, route#: 126, violation# : 73, overflow# : 73, conflict# : 105, node#: 21403
+## CPU time: 0:1:33, REAL time: 0:1:34
+ iter = 329/8, route#: 122, violation# : 64, overflow# : 64, conflict# : 95, node#: 21414
+## CPU time: 0:1:33, REAL time: 0:1:34
+ iter = 330/9, route#: 103, violation# : 56, overflow# : 56, conflict# : 84, node#: 21445
+## CPU time: 0:1:34, REAL time: 0:1:35
+ iter = 331/10, route#: 124, violation# : 64, overflow# : 64, conflict# : 93, node#: 21536
+## CPU time: 0:1:34, REAL time: 0:1:35
+ iter = 332/5, route#: 195, violation# : 145, overflow# : 145, conflict# : 168, node#: 21219
+## CPU time: 0:1:34, REAL time: 0:1:35
+ iter = 333/6, route#: 161, violation# : 86, overflow# : 86, conflict# : 114, node#: 21345
+## CPU time: 0:1:35, REAL time: 0:1:36
+ iter = 334/7, route#: 136, violation# : 76, overflow# : 76, conflict# : 109, node#: 21336
+## CPU time: 0:1:35, REAL time: 0:1:36
+ iter = 335/8, route#: 109, violation# : 60, overflow# : 60, conflict# : 89, node#: 21375
+## CPU time: 0:1:35, REAL time: 0:1:36
+ iter = 336/9, route#: 108, violation# : 64, overflow# : 64, conflict# : 98, node#: 21428
+## CPU time: 0:1:35, REAL time: 0:1:36
+ iter = 337/10, route#: 133, violation# : 77, overflow# : 77, conflict# : 109, node#: 21481
+## CPU time: 0:1:36, REAL time: 0:1:37
+ iter = 338/5, route#: 202, violation# : 137, overflow# : 137, conflict# : 168, node#: 21220
+## CPU time: 0:1:36, REAL time: 0:1:37
+ iter = 339/6, route#: 181, violation# : 96, overflow# : 96, conflict# : 139, node#: 21316
+## CPU time: 0:1:36, REAL time: 0:1:37
+ iter = 340/7, route#: 143, violation# : 75, overflow# : 75, conflict# : 118, node#: 21378
+## CPU time: 0:1:36, REAL time: 0:1:37
+ iter = 341/8, route#: 130, violation# : 67, overflow# : 67, conflict# : 103, node#: 21410
+## CPU time: 0:1:37, REAL time: 0:1:38
+ iter = 342/9, route#: 102, violation# : 57, overflow# : 57, conflict# : 87, node#: 21407
+## CPU time: 0:1:37, REAL time: 0:1:38
+ iter = 343/10, route#: 108, violation# : 55, overflow# : 55, conflict# : 85, node#: 21461
+## CPU time: 0:1:37, REAL time: 0:1:38
+ iter = 344/5, route#: 154, violation# : 112, overflow# : 112, conflict# : 145, node#: 21283
+## CPU time: 0:1:37, REAL time: 0:1:38
+ iter = 345/6, route#: 154, violation# : 91, overflow# : 91, conflict# : 126, node#: 21363
+## CPU time: 0:1:38, REAL time: 0:1:39
+ iter = 346/7, route#: 151, violation# : 87, overflow# : 87, conflict# : 125, node#: 21400
+## CPU time: 0:1:38, REAL time: 0:1:39
+ iter = 347/8, route#: 129, violation# : 74, overflow# : 74, conflict# : 107, node#: 21464
+## CPU time: 0:1:38, REAL time: 0:1:39
+ iter = 348/9, route#: 118, violation# : 68, overflow# : 68, conflict# : 104, node#: 21458
+## CPU time: 0:1:38, REAL time: 0:1:39
+ iter = 349/10, route#: 124, violation# : 82, overflow# : 82, conflict# : 111, node#: 21485
+## CPU time: 0:1:39, REAL time: 0:1:40
+ iter = 350/5, route#: 179, violation# : 130, overflow# : 130, conflict# : 167, node#: 21260
+## CPU time: 0:1:39, REAL time: 0:1:40
+ iter = 351/6, route#: 154, violation# : 90, overflow# : 90, conflict# : 129, node#: 21349
+## CPU time: 0:1:39, REAL time: 0:1:40
+ iter = 352/7, route#: 143, violation# : 79, overflow# : 79, conflict# : 118, node#: 21384
+## CPU time: 0:1:39, REAL time: 0:1:40
+ iter = 353/8, route#: 138, violation# : 80, overflow# : 80, conflict# : 114, node#: 21444
+## CPU time: 0:1:40, REAL time: 0:1:41
+ iter = 354/9, route#: 124, violation# : 64, overflow# : 64, conflict# : 99, node#: 21477
+## CPU time: 0:1:40, REAL time: 0:1:41
+ iter = 355/10, route#: 113, violation# : 60, overflow# : 60, conflict# : 95, node#: 21467
+## CPU time: 0:1:40, REAL time: 0:1:41
+ iter = 356/5, route#: 138, violation# : 93, overflow# : 93, conflict# : 126, node#: 21304
+## CPU time: 0:1:40, REAL time: 0:1:41
+ iter = 357/6, route#: 150, violation# : 78, overflow# : 78, conflict# : 115, node#: 21347
+## CPU time: 0:1:41, REAL time: 0:1:42
+ iter = 358/7, route#: 118, violation# : 55, overflow# : 55, conflict# : 91, node#: 21420
+## CPU time: 0:1:41, REAL time: 0:1:42
+ iter = 359/8, route#: 107, violation# : 57, overflow# : 57, conflict# : 92, node#: 21458
+## CPU time: 0:1:41, REAL time: 0:1:42
+ iter = 360/9, route#: 99, violation# : 59, overflow# : 59, conflict# : 89, node#: 21490
+## CPU time: 0:1:41, REAL time: 0:1:42
+ iter = 361/10, route#: 102, violation# : 60, overflow# : 60, conflict# : 92, node#: 21502
+## CPU time: 0:1:41, REAL time: 0:1:43
+ iter = 362/5, route#: 112, violation# : 95, overflow# : 95, conflict# : 116, node#: 21378
+## CPU time: 0:1:42, REAL time: 0:1:43
+ iter = 363/6, route#: 138, violation# : 72, overflow# : 72, conflict# : 109, node#: 21419
+## CPU time: 0:1:42, REAL time: 0:1:43
+ iter = 364/7, route#: 121, violation# : 69, overflow# : 69, conflict# : 106, node#: 21457
+## CPU time: 0:1:42, REAL time: 0:1:43
+ iter = 365/8, route#: 118, violation# : 70, overflow# : 70, conflict# : 101, node#: 21490
+## CPU time: 0:1:42, REAL time: 0:1:43
+ iter = 366/9, route#: 110, violation# : 63, overflow# : 63, conflict# : 99, node#: 21515
+## CPU time: 0:1:42, REAL time: 0:1:43
+ iter = 367/10, route#: 112, violation# : 68, overflow# : 68, conflict# : 102, node#: 21518
+## CPU time: 0:1:43, REAL time: 0:1:44
+ iter = 368/5, route#: 117, violation# : 95, overflow# : 95, conflict# : 125, node#: 21386
+## CPU time: 0:1:43, REAL time: 0:1:44
+ iter = 369/6, route#: 128, violation# : 62, overflow# : 62, conflict# : 94, node#: 21412
+## CPU time: 0:1:43, REAL time: 0:1:44
+ iter = 370/7, route#: 107, violation# : 57, overflow# : 57, conflict# : 87, node#: 21419
+## CPU time: 0:1:43, REAL time: 0:1:44
+ iter = 371/8, route#: 100, violation# : 55, overflow# : 55, conflict# : 79, node#: 21452
+## CPU time: 0:1:43, REAL time: 0:1:44
+ iter = 372/9, route#: 88, violation# : 52, overflow# : 52, conflict# : 80, node#: 21464
+## CPU time: 0:1:44, REAL time: 0:1:45
+ iter = 373/10, route#: 94, violation# : 59, overflow# : 59, conflict# : 92, node#: 21452
+## CPU time: 0:1:44, REAL time: 0:1:45
+ iter = 374/5, route#: 136, violation# : 97, overflow# : 97, conflict# : 120, node#: 21326
+## CPU time: 0:1:44, REAL time: 0:1:45
+ iter = 375/6, route#: 117, violation# : 53, overflow# : 53, conflict# : 83, node#: 21389
+## CPU time: 0:1:44, REAL time: 0:1:45
+ iter = 376/7, route#: 90, violation# : 46, overflow# : 46, conflict# : 74, node#: 21393
+## CPU time: 0:1:44, REAL time: 0:1:45
+ iter = 377/8, route#: 89, violation# : 45, overflow# : 45, conflict# : 73, node#: 21413
+## CPU time: 0:1:44, REAL time: 0:1:45
+ iter = 378/9, route#: 81, violation# : 45, overflow# : 45, conflict# : 69, node#: 21429
+## CPU time: 0:1:45, REAL time: 0:1:46
+ iter = 379/10, route#: 87, violation# : 50, overflow# : 50, conflict# : 76, node#: 21476
+## CPU time: 0:1:45, REAL time: 0:1:46
+ iter = 380/5, route#: 140, violation# : 93, overflow# : 93, conflict# : 122, node#: 21319
+## CPU time: 0:1:45, REAL time: 0:1:46
+ iter = 381/6, route#: 128, violation# : 68, overflow# : 68, conflict# : 98, node#: 21386
+## CPU time: 0:1:45, REAL time: 0:1:46
+ iter = 382/7, route#: 111, violation# : 56, overflow# : 56, conflict# : 90, node#: 21387
+## CPU time: 0:1:45, REAL time: 0:1:46
+ iter = 383/8, route#: 99, violation# : 54, overflow# : 54, conflict# : 88, node#: 21417
+## CPU time: 0:1:45, REAL time: 0:1:46
+ iter = 384/9, route#: 88, violation# : 47, overflow# : 47, conflict# : 77, node#: 21446
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 385/10, route#: 81, violation# : 51, overflow# : 51, conflict# : 78, node#: 21447
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 386/5, route#: 92, violation# : 51, overflow# : 51, conflict# : 80, node#: 21323
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 387/6, route#: 87, violation# : 53, overflow# : 53, conflict# : 78, node#: 21347
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 388/7, route#: 91, violation# : 48, overflow# : 48, conflict# : 72, node#: 21366
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 389/8, route#: 73, violation# : 52, overflow# : 52, conflict# : 70, node#: 21378
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 390/9, route#: 79, violation# : 43, overflow# : 43, conflict# : 68, node#: 21405
+## CPU time: 0:1:46, REAL time: 0:1:47
+ iter = 391/10, route#: 88, violation# : 50, overflow# : 50, conflict# : 73, node#: 21422
+## CPU time: 0:1:47, REAL time: 0:1:48
+ iter = 392/5, route#: 116, violation# : 80, overflow# : 80, conflict# : 112, node#: 21258
+## CPU time: 0:1:47, REAL time: 0:1:48
+ iter = 393/6, route#: 113, violation# : 52, overflow# : 52, conflict# : 81, node#: 21307
+## CPU time: 0:1:47, REAL time: 0:1:48
+ iter = 394/7, route#: 103, violation# : 53, overflow# : 53, conflict# : 81, node#: 21347
+## CPU time: 0:1:47, REAL time: 0:1:48
+ iter = 395/8, route#: 94, violation# : 42, overflow# : 42, conflict# : 68, node#: 21410
+## CPU time: 0:1:47, REAL time: 0:1:48
+ iter = 396/9, route#: 84, violation# : 47, overflow# : 47, conflict# : 71, node#: 21421
+## CPU time: 0:1:47, REAL time: 0:1:48
+ iter = 397/10, route#: 96, violation# : 57, overflow# : 57, conflict# : 79, node#: 21464
+## CPU time: 0:1:48, REAL time: 0:1:49
+ iter = 398/5, route#: 122, violation# : 84, overflow# : 84, conflict# : 111, node#: 21286
+## CPU time: 0:1:48, REAL time: 0:1:49
+ iter = 399/6, route#: 115, violation# : 55, overflow# : 55, conflict# : 89, node#: 21313
+## CPU time: 0:1:48, REAL time: 0:1:49
+ iter = 400/7, route#: 111, violation# : 54, overflow# : 54, conflict# : 80, node#: 21349
+## CPU time: 0:1:48, REAL time: 0:1:49
+ iter = 401/8, route#: 93, violation# : 50, overflow# : 50, conflict# : 77, node#: 21362
+## CPU time: 0:1:48, REAL time: 0:1:49
+ iter = 402/9, route#: 88, violation# : 46, overflow# : 46, conflict# : 74, node#: 21379
+## CPU time: 0:1:48, REAL time: 0:1:49
+ iter = 403/10, route#: 81, violation# : 36, overflow# : 36, conflict# : 62, node#: 21390
+## CPU time: 0:1:48, REAL time: 0:1:50
+ iter = 404/5, route#: 99, violation# : 71, overflow# : 70, conflict# : 96, node#: 21299
+## CPU time: 0:1:49, REAL time: 0:1:50
+ iter = 405/6, route#: 111, violation# : 55, overflow# : 55, conflict# : 81, node#: 21303
+## CPU time: 0:1:49, REAL time: 0:1:50
+ iter = 406/7, route#: 97, violation# : 52, overflow# : 52, conflict# : 76, node#: 21360
+## CPU time: 0:1:49, REAL time: 0:1:50
+ iter = 407/8, route#: 84, violation# : 43, overflow# : 43, conflict# : 68, node#: 21374
+## CPU time: 0:1:49, REAL time: 0:1:50
+ iter = 408/9, route#: 75, violation# : 38, overflow# : 38, conflict# : 59, node#: 21392
+## CPU time: 0:1:49, REAL time: 0:1:50
+ iter = 409/10, route#: 64, violation# : 39, overflow# : 39, conflict# : 59, node#: 21410
+## CPU time: 0:1:49, REAL time: 0:1:50
+ iter = 410/5, route#: 93, violation# : 73, overflow# : 73, conflict# : 91, node#: 21308
+## CPU time: 0:1:49, REAL time: 0:1:51
+ iter = 411/6, route#: 115, violation# : 67, overflow# : 67, conflict# : 95, node#: 21317
+## CPU time: 0:1:50, REAL time: 0:1:51
+ iter = 412/7, route#: 102, violation# : 49, overflow# : 49, conflict# : 72, node#: 21375
+## CPU time: 0:1:50, REAL time: 0:1:51
+ iter = 413/8, route#: 71, violation# : 40, overflow# : 40, conflict# : 62, node#: 21388
+## CPU time: 0:1:50, REAL time: 0:1:51
+ iter = 414/9, route#: 71, violation# : 39, overflow# : 39, conflict# : 65, node#: 21415
+## CPU time: 0:1:50, REAL time: 0:1:51
+ iter = 415/10, route#: 73, violation# : 32, overflow# : 32, conflict# : 50, node#: 21436
+## CPU time: 0:1:50, REAL time: 0:1:51
+ iter = 416/5, route#: 99, violation# : 69, overflow# : 69, conflict# : 92, node#: 21302
+## CPU time: 0:1:51, REAL time: 0:1:52
+ iter = 417/6, route#: 97, violation# : 50, overflow# : 50, conflict# : 75, node#: 21354
+## CPU time: 0:1:51, REAL time: 0:1:52
+ iter = 418/7, route#: 84, violation# : 43, overflow# : 43, conflict# : 63, node#: 21381
+## CPU time: 0:1:51, REAL time: 0:1:52
+ iter = 419/8, route#: 63, violation# : 36, overflow# : 36, conflict# : 55, node#: 21403
+## CPU time: 0:1:51, REAL time: 0:1:52
+ iter = 420/9, route#: 57, violation# : 34, overflow# : 34, conflict# : 54, node#: 21408
+## CPU time: 0:1:51, REAL time: 0:1:52
+ iter = 421/10, route#: 57, violation# : 36, overflow# : 36, conflict# : 50, node#: 21420
+## CPU time: 0:1:51, REAL time: 0:1:52
+ iter = 422/5, route#: 75, violation# : 53, overflow# : 53, conflict# : 70, node#: 21366
+## CPU time: 0:1:51, REAL time: 0:1:53
+ iter = 423/6, route#: 107, violation# : 59, overflow# : 59, conflict# : 85, node#: 21335
+## CPU time: 0:1:52, REAL time: 0:1:53
+ iter = 424/7, route#: 97, violation# : 48, overflow# : 48, conflict# : 74, node#: 21358
+## CPU time: 0:1:52, REAL time: 0:1:53
+ iter = 425/8, route#: 81, violation# : 46, overflow# : 46, conflict# : 72, node#: 21404
+## CPU time: 0:1:52, REAL time: 0:1:53
+ iter = 426/9, route#: 77, violation# : 42, overflow# : 42, conflict# : 60, node#: 21417
+## CPU time: 0:1:52, REAL time: 0:1:53
+ iter = 427/10, route#: 65, violation# : 38, overflow# : 38, conflict# : 61, node#: 21399
+## CPU time: 0:1:52, REAL time: 0:1:53
+ iter = 428/5, route#: 81, violation# : 60, overflow# : 60, conflict# : 83, node#: 21316
+## CPU time: 0:1:52, REAL time: 0:1:53
+ iter = 429/6, route#: 94, violation# : 48, overflow# : 48, conflict# : 71, node#: 21332
+## CPU time: 0:1:52, REAL time: 0:1:54
+ iter = 430/7, route#: 76, violation# : 41, overflow# : 41, conflict# : 65, node#: 21347
+## CPU time: 0:1:53, REAL time: 0:1:54
+ iter = 431/8, route#: 75, violation# : 38, overflow# : 38, conflict# : 61, node#: 21402
+## CPU time: 0:1:53, REAL time: 0:1:54
+ iter = 432/9, route#: 65, violation# : 39, overflow# : 39, conflict# : 61, node#: 21426
+## CPU time: 0:1:53, REAL time: 0:1:54
+ iter = 433/10, route#: 75, violation# : 48, overflow# : 48, conflict# : 70, node#: 21412
+## CPU time: 0:1:53, REAL time: 0:1:54
+ iter = 434/5, route#: 104, violation# : 78, overflow# : 78, conflict# : 100, node#: 21302
+## CPU time: 0:1:53, REAL time: 0:1:54
+ iter = 435/6, route#: 113, violation# : 56, overflow# : 56, conflict# : 85, node#: 21303
+## CPU time: 0:1:53, REAL time: 0:1:55
+ iter = 436/7, route#: 79, violation# : 42, overflow# : 42, conflict# : 63, node#: 21365
+## CPU time: 0:1:54, REAL time: 0:1:55
+ iter = 437/8, route#: 74, violation# : 41, overflow# : 41, conflict# : 67, node#: 21368
+## CPU time: 0:1:54, REAL time: 0:1:55
+ iter = 438/9, route#: 71, violation# : 40, overflow# : 40, conflict# : 67, node#: 21402
+## CPU time: 0:1:54, REAL time: 0:1:55
+ iter = 439/10, route#: 82, violation# : 46, overflow# : 46, conflict# : 75, node#: 21402
+## CPU time: 0:1:54, REAL time: 0:1:55
+ iter = 440/5, route#: 142, violation# : 104, overflow# : 104, conflict# : 132, node#: 21251
+## CPU time: 0:1:54, REAL time: 0:1:56
+ iter = 441/6, route#: 140, violation# : 75, overflow# : 75, conflict# : 101, node#: 21313
+## CPU time: 0:1:55, REAL time: 0:1:56
+ iter = 442/7, route#: 114, violation# : 64, overflow# : 64, conflict# : 90, node#: 21323
+## CPU time: 0:1:55, REAL time: 0:1:56
+ iter = 443/8, route#: 114, violation# : 56, overflow# : 56, conflict# : 87, node#: 21379
+## CPU time: 0:1:55, REAL time: 0:1:56
+ iter = 444/9, route#: 112, violation# : 57, overflow# : 57, conflict# : 82, node#: 21393
+## CPU time: 0:1:55, REAL time: 0:1:56
+ iter = 445/10, route#: 93, violation# : 55, overflow# : 55, conflict# : 83, node#: 21431
+## CPU time: 0:1:55, REAL time: 0:1:57
+ iter = 446/5, route#: 139, violation# : 100, overflow# : 100, conflict# : 125, node#: 21245
+## CPU time: 0:1:56, REAL time: 0:1:57
+ iter = 447/6, route#: 124, violation# : 73, overflow# : 73, conflict# : 104, node#: 21274
+## CPU time: 0:1:56, REAL time: 0:1:57
+ iter = 448/7, route#: 126, violation# : 67, overflow# : 67, conflict# : 98, node#: 21330
+## CPU time: 0:1:56, REAL time: 0:1:57
+ iter = 449/8, route#: 93, violation# : 52, overflow# : 52, conflict# : 80, node#: 21344
+## CPU time: 0:1:56, REAL time: 0:1:57
+ iter = 450/9, route#: 101, violation# : 57, overflow# : 57, conflict# : 86, node#: 21370
+## CPU time: 0:1:56, REAL time: 0:1:58
+ iter = 451/10, route#: 104, violation# : 54, overflow# : 54, conflict# : 89, node#: 21398
+## CPU time: 0:1:57, REAL time: 0:1:58
+ iter = 452/5, route#: 120, violation# : 82, overflow# : 82, conflict# : 109, node#: 21254
+## CPU time: 0:1:57, REAL time: 0:1:58
+ iter = 453/6, route#: 113, violation# : 68, overflow# : 68, conflict# : 91, node#: 21312
+## CPU time: 0:1:57, REAL time: 0:1:58
+ iter = 454/7, route#: 129, violation# : 72, overflow# : 72, conflict# : 101, node#: 21343
+## CPU time: 0:1:57, REAL time: 0:1:58
+ iter = 455/8, route#: 93, violation# : 50, overflow# : 50, conflict# : 71, node#: 21370
+## CPU time: 0:1:58, REAL time: 0:1:59
+ iter = 456/9, route#: 80, violation# : 46, overflow# : 46, conflict# : 62, node#: 21394
+## CPU time: 0:1:58, REAL time: 0:1:59
+ iter = 457/10, route#: 77, violation# : 48, overflow# : 48, conflict# : 68, node#: 21394
+## CPU time: 0:1:58, REAL time: 0:1:59
+ iter = 458/5, route#: 112, violation# : 81, overflow# : 81, conflict# : 104, node#: 21289
+## CPU time: 0:1:58, REAL time: 0:1:59
+ iter = 459/6, route#: 117, violation# : 62, overflow# : 62, conflict# : 89, node#: 21307
+## CPU time: 0:1:58, REAL time: 0:2:0
+ iter = 460/7, route#: 102, violation# : 45, overflow# : 45, conflict# : 68, node#: 21299
+## CPU time: 0:1:59, REAL time: 0:2:0
+ iter = 461/8, route#: 78, violation# : 38, overflow# : 38, conflict# : 62, node#: 21341
+## CPU time: 0:1:59, REAL time: 0:2:0
+ iter = 462/9, route#: 73, violation# : 42, overflow# : 42, conflict# : 60, node#: 21363
+## CPU time: 0:1:59, REAL time: 0:2:0
+ iter = 463/10, route#: 75, violation# : 42, overflow# : 42, conflict# : 65, node#: 21390
+## CPU time: 0:1:59, REAL time: 0:2:0
+ iter = 464/5, route#: 119, violation# : 74, overflow# : 74, conflict# : 101, node#: 21275
+## CPU time: 0:1:59, REAL time: 0:2:0
+ iter = 465/6, route#: 120, violation# : 56, overflow# : 56, conflict# : 91, node#: 21313
+## CPU time: 0:2:0, REAL time: 0:2:1
+ iter = 466/7, route#: 99, violation# : 48, overflow# : 48, conflict# : 73, node#: 21305
+## CPU time: 0:2:0, REAL time: 0:2:1
+ iter = 467/8, route#: 86, violation# : 47, overflow# : 47, conflict# : 71, node#: 21349
+## CPU time: 0:2:0, REAL time: 0:2:1
+ iter = 468/9, route#: 89, violation# : 45, overflow# : 45, conflict# : 72, node#: 21400
+## CPU time: 0:2:0, REAL time: 0:2:1
+ iter = 469/10, route#: 86, violation# : 44, overflow# : 44, conflict# : 70, node#: 21433
+## CPU time: 0:2:0, REAL time: 0:2:1
+ iter = 470/5, route#: 125, violation# : 96, overflow# : 96, conflict# : 127, node#: 21301
+## CPU time: 0:2:0, REAL time: 0:2:2
+ iter = 471/6, route#: 135, violation# : 68, overflow# : 68, conflict# : 102, node#: 21326
+## CPU time: 0:2:1, REAL time: 0:2:2
+ iter = 472/7, route#: 102, violation# : 61, overflow# : 61, conflict# : 88, node#: 21371
+## CPU time: 0:2:1, REAL time: 0:2:2
+ iter = 473/8, route#: 103, violation# : 54, overflow# : 54, conflict# : 85, node#: 21399
+## CPU time: 0:2:1, REAL time: 0:2:2
+ iter = 474/9, route#: 95, violation# : 54, overflow# : 54, conflict# : 78, node#: 21442
+## CPU time: 0:2:1, REAL time: 0:2:2
+ iter = 475/10, route#: 94, violation# : 54, overflow# : 54, conflict# : 81, node#: 21456
+## CPU time: 0:2:1, REAL time: 0:2:3
+ iter = 476/5, route#: 143, violation# : 108, overflow# : 108, conflict# : 135, node#: 21312
+## CPU time: 0:2:2, REAL time: 0:2:3
+ iter = 477/6, route#: 148, violation# : 97, overflow# : 97, conflict# : 126, node#: 21318
+## CPU time: 0:2:2, REAL time: 0:2:3
+ iter = 478/7, route#: 151, violation# : 90, overflow# : 90, conflict# : 118, node#: 21374
+## CPU time: 0:2:2, REAL time: 0:2:3
+ iter = 479/8, route#: 137, violation# : 74, overflow# : 74, conflict# : 103, node#: 21481
+## CPU time: 0:2:2, REAL time: 0:2:4
+ iter = 480/9, route#: 123, violation# : 71, overflow# : 71, conflict# : 100, node#: 21508
+## CPU time: 0:2:3, REAL time: 0:2:4
+ iter = 481/10, route#: 117, violation# : 70, overflow# : 70, conflict# : 101, node#: 21551
+## CPU time: 0:2:3, REAL time: 0:2:4
+ iter = 482/5, route#: 178, violation# : 128, overflow# : 128, conflict# : 162, node#: 21305
+## CPU time: 0:2:3, REAL time: 0:2:4
+ iter = 483/6, route#: 170, violation# : 92, overflow# : 92, conflict# : 132, node#: 21361
+## CPU time: 0:2:4, REAL time: 0:2:5
+ iter = 484/7, route#: 149, violation# : 73, overflow# : 73, conflict# : 107, node#: 21419
+## CPU time: 0:2:4, REAL time: 0:2:5
+ iter = 485/8, route#: 123, violation# : 69, overflow# : 69, conflict# : 99, node#: 21474
+## CPU time: 0:2:4, REAL time: 0:2:5
+ iter = 486/9, route#: 111, violation# : 68, overflow# : 68, conflict# : 97, node#: 21473
+## CPU time: 0:2:4, REAL time: 0:2:5
+ iter = 487/10, route#: 119, violation# : 60, overflow# : 60, conflict# : 96, node#: 21542
+## CPU time: 0:2:4, REAL time: 0:2:5
+ iter = 488/5, route#: 160, violation# : 111, overflow# : 111, conflict# : 147, node#: 21335
+## CPU time: 0:2:5, REAL time: 0:2:6
+ iter = 489/6, route#: 155, violation# : 77, overflow# : 77, conflict# : 119, node#: 21381
+## CPU time: 0:2:5, REAL time: 0:2:6
+ iter = 490/7, route#: 129, violation# : 61, overflow# : 61, conflict# : 104, node#: 21416
+## CPU time: 0:2:5, REAL time: 0:2:6
+ iter = 491/8, route#: 116, violation# : 59, overflow# : 59, conflict# : 96, node#: 21463
+## CPU time: 0:2:5, REAL time: 0:2:6
+ iter = 492/9, route#: 110, violation# : 58, overflow# : 58, conflict# : 90, node#: 21498
+## CPU time: 0:2:5, REAL time: 0:2:6
+ iter = 493/10, route#: 114, violation# : 57, overflow# : 57, conflict# : 95, node#: 21534
+## CPU time: 0:2:6, REAL time: 0:2:7
+ iter = 494/5, route#: 135, violation# : 94, overflow# : 94, conflict# : 135, node#: 21418
+## CPU time: 0:2:6, REAL time: 0:2:7
+ iter = 495/6, route#: 138, violation# : 78, overflow# : 78, conflict# : 116, node#: 21464
+## CPU time: 0:2:6, REAL time: 0:2:7
+ iter = 496/7, route#: 133, violation# : 68, overflow# : 68, conflict# : 114, node#: 21479
+## CPU time: 0:2:6, REAL time: 0:2:7
+ iter = 497/8, route#: 117, violation# : 55, overflow# : 55, conflict# : 97, node#: 21512
+## CPU time: 0:2:6, REAL time: 0:2:7
+ iter = 498/9, route#: 113, violation# : 55, overflow# : 55, conflict# : 86, node#: 21538
+## CPU time: 0:2:6, REAL time: 0:2:8
+ iter = 499/10, route#: 94, violation# : 47, overflow# : 47, conflict# : 79, node#: 21572
+## CPU time: 0:2:7, REAL time: 0:2:8
+ iter = 500/5, route#: 99, violation# : 73, overflow# : 73, conflict# : 106, node#: 21484
+## CPU time: 0:2:7, REAL time: 0:2:8
+ iter = 501/6, route#: 122, violation# : 69, overflow# : 69, conflict# : 104, node#: 21496
+## CPU time: 0:2:7, REAL time: 0:2:8
+ iter = 502/7, route#: 110, violation# : 59, overflow# : 59, conflict# : 93, node#: 21517
+## CPU time: 0:2:7, REAL time: 0:2:8
+ iter = 503/8, route#: 99, violation# : 54, overflow# : 54, conflict# : 87, node#: 21532
+## CPU time: 0:2:7, REAL time: 0:2:8
+ iter = 504/9, route#: 97, violation# : 63, overflow# : 63, conflict# : 92, node#: 21550
+## CPU time: 0:2:7, REAL time: 0:2:9
+ iter = 505/10, route#: 99, violation# : 57, overflow# : 57, conflict# : 89, node#: 21578
+## CPU time: 0:2:8, REAL time: 0:2:9
+ iter = 506/5, route#: 129, violation# : 100, overflow# : 100, conflict# : 129, node#: 21465
+## CPU time: 0:2:8, REAL time: 0:2:9
+ iter = 507/6, route#: 161, violation# : 84, overflow# : 84, conflict# : 120, node#: 21458
+## CPU time: 0:2:8, REAL time: 0:2:9
+ iter = 508/7, route#: 145, violation# : 82, overflow# : 82, conflict# : 117, node#: 21496
+## CPU time: 0:2:8, REAL time: 0:2:10
+ iter = 509/8, route#: 133, violation# : 60, overflow# : 60, conflict# : 94, node#: 21523
+## CPU time: 0:2:9, REAL time: 0:2:10
+ iter = 510/9, route#: 112, violation# : 70, overflow# : 70, conflict# : 98, node#: 21603
+## CPU time: 0:2:9, REAL time: 0:2:10
+ iter = 511/10, route#: 106, violation# : 60, overflow# : 60, conflict# : 95, node#: 21604
+## CPU time: 0:2:9, REAL time: 0:2:10
+ iter = 512/5, route#: 141, violation# : 95, overflow# : 95, conflict# : 127, node#: 21428
+## CPU time: 0:2:9, REAL time: 0:2:10
+ iter = 513/6, route#: 130, violation# : 63, overflow# : 63, conflict# : 94, node#: 21481
+## CPU time: 0:2:9, REAL time: 0:2:11
+ iter = 514/7, route#: 108, violation# : 54, overflow# : 54, conflict# : 88, node#: 21487
+## CPU time: 0:2:10, REAL time: 0:2:11
+ iter = 515/8, route#: 101, violation# : 54, overflow# : 54, conflict# : 86, node#: 21544
+## CPU time: 0:2:10, REAL time: 0:2:11
+ iter = 516/9, route#: 109, violation# : 70, overflow# : 70, conflict# : 98, node#: 21581
+## CPU time: 0:2:10, REAL time: 0:2:11
+ iter = 517/10, route#: 111, violation# : 59, overflow# : 59, conflict# : 93, node#: 21577
+## CPU time: 0:2:10, REAL time: 0:2:11
+ iter = 518/5, route#: 170, violation# : 127, overflow# : 127, conflict# : 160, node#: 21395
+## CPU time: 0:2:11, REAL time: 0:2:12
+ iter = 519/6, route#: 162, violation# : 83, overflow# : 83, conflict# : 127, node#: 21439
+## CPU time: 0:2:11, REAL time: 0:2:12
+ iter = 520/7, route#: 136, violation# : 72, overflow# : 72, conflict# : 105, node#: 21459
+## CPU time: 0:2:11, REAL time: 0:2:12
+ iter = 521/8, route#: 118, violation# : 51, overflow# : 51, conflict# : 84, node#: 21496
+## CPU time: 0:2:11, REAL time: 0:2:12
+ iter = 522/9, route#: 99, violation# : 50, overflow# : 50, conflict# : 81, node#: 21550
+## CPU time: 0:2:11, REAL time: 0:2:13
+ iter = 523/10, route#: 85, violation# : 47, overflow# : 47, conflict# : 76, node#: 21518
+## CPU time: 0:2:12, REAL time: 0:2:13
+ iter = 524/5, route#: 112, violation# : 90, overflow# : 90, conflict# : 114, node#: 21403
+## CPU time: 0:2:12, REAL time: 0:2:13
+ iter = 525/6, route#: 127, violation# : 67, overflow# : 67, conflict# : 101, node#: 21431
+## CPU time: 0:2:12, REAL time: 0:2:13
+ iter = 526/7, route#: 115, violation# : 59, overflow# : 59, conflict# : 89, node#: 21464
+## CPU time: 0:2:12, REAL time: 0:2:13
+ iter = 527/8, route#: 108, violation# : 56, overflow# : 56, conflict# : 84, node#: 21523
+## CPU time: 0:2:12, REAL time: 0:2:14
+ iter = 528/9, route#: 96, violation# : 53, overflow# : 53, conflict# : 81, node#: 21524
+## CPU time: 0:2:13, REAL time: 0:2:14
+ iter = 529/10, route#: 104, violation# : 55, overflow# : 55, conflict# : 90, node#: 21579
+## CPU time: 0:2:13, REAL time: 0:2:14
+ iter = 530/5, route#: 199, violation# : 135, overflow# : 135, conflict# : 171, node#: 21295
+## CPU time: 0:2:13, REAL time: 0:2:15
+ iter = 531/6, route#: 197, violation# : 82, overflow# : 82, conflict# : 125, node#: 21364
+## CPU time: 0:2:14, REAL time: 0:2:15
+ iter = 532/7, route#: 141, violation# : 68, overflow# : 68, conflict# : 106, node#: 21394
+## CPU time: 0:2:14, REAL time: 0:2:15
+ iter = 533/8, route#: 127, violation# : 60, overflow# : 60, conflict# : 98, node#: 21462
+## CPU time: 0:2:14, REAL time: 0:2:15
+ iter = 534/9, route#: 108, violation# : 59, overflow# : 59, conflict# : 91, node#: 21499
+## CPU time: 0:2:14, REAL time: 0:2:15
+ iter = 535/10, route#: 96, violation# : 47, overflow# : 47, conflict# : 82, node#: 21502
+## CPU time: 0:2:15, REAL time: 0:2:16
+ iter = 536/5, route#: 151, violation# : 104, overflow# : 104, conflict# : 137, node#: 21263
+## CPU time: 0:2:15, REAL time: 0:2:16
+ iter = 537/6, route#: 143, violation# : 69, overflow# : 69, conflict# : 109, node#: 21327
+## CPU time: 0:2:15, REAL time: 0:2:16
+ iter = 538/7, route#: 136, violation# : 69, overflow# : 69, conflict# : 106, node#: 21362
+## CPU time: 0:2:15, REAL time: 0:2:16
+ iter = 539/8, route#: 105, violation# : 54, overflow# : 54, conflict# : 86, node#: 21390
+## CPU time: 0:2:15, REAL time: 0:2:16
+ iter = 540/9, route#: 97, violation# : 57, overflow# : 57, conflict# : 85, node#: 21398
+## CPU time: 0:2:15, REAL time: 0:2:17
+ iter = 541/10, route#: 94, violation# : 51, overflow# : 51, conflict# : 85, node#: 21448
+## CPU time: 0:2:16, REAL time: 0:2:17
+ iter = 542/5, route#: 190, violation# : 121, overflow# : 121, conflict# : 164, node#: 21262
+## CPU time: 0:2:16, REAL time: 0:2:17
+ iter = 543/6, route#: 163, violation# : 77, overflow# : 77, conflict# : 124, node#: 21396
+## CPU time: 0:2:16, REAL time: 0:2:17
+ iter = 544/7, route#: 136, violation# : 68, overflow# : 68, conflict# : 111, node#: 21433
+## CPU time: 0:2:16, REAL time: 0:2:18
+ iter = 545/8, route#: 117, violation# : 55, overflow# : 55, conflict# : 96, node#: 21460
+## CPU time: 0:2:17, REAL time: 0:2:18
+ iter = 546/9, route#: 98, violation# : 58, overflow# : 58, conflict# : 90, node#: 21477
+## CPU time: 0:2:17, REAL time: 0:2:18
+ iter = 547/10, route#: 105, violation# : 59, overflow# : 59, conflict# : 93, node#: 21505
+## CPU time: 0:2:17, REAL time: 0:2:18
+ iter = 548/5, route#: 131, violation# : 93, overflow# : 93, conflict# : 129, node#: 21393
+## CPU time: 0:2:17, REAL time: 0:2:18
+ iter = 549/6, route#: 140, violation# : 69, overflow# : 69, conflict# : 118, node#: 21434
+## CPU time: 0:2:17, REAL time: 0:2:19
+ iter = 550/7, route#: 135, violation# : 65, overflow# : 65, conflict# : 99, node#: 21499
+## CPU time: 0:2:18, REAL time: 0:2:19
+ iter = 551/8, route#: 120, violation# : 62, overflow# : 62, conflict# : 97, node#: 21529
+## CPU time: 0:2:18, REAL time: 0:2:19
+ iter = 552/9, route#: 117, violation# : 61, overflow# : 61, conflict# : 85, node#: 21575
+## CPU time: 0:2:18, REAL time: 0:2:19
+ iter = 553/10, route#: 98, violation# : 52, overflow# : 52, conflict# : 81, node#: 21552
+## CPU time: 0:2:18, REAL time: 0:2:19
+ iter = 554/5, route#: 155, violation# : 108, overflow# : 108, conflict# : 139, node#: 21377
+## CPU time: 0:2:18, REAL time: 0:2:20
+ iter = 555/6, route#: 144, violation# : 53, overflow# : 53, conflict# : 91, node#: 21441
+## CPU time: 0:2:19, REAL time: 0:2:20
+ iter = 556/7, route#: 104, violation# : 45, overflow# : 45, conflict# : 73, node#: 21454
+## CPU time: 0:2:19, REAL time: 0:2:20
+ iter = 557/8, route#: 79, violation# : 43, overflow# : 43, conflict# : 65, node#: 21506
+## CPU time: 0:2:19, REAL time: 0:2:20
+ iter = 558/9, route#: 99, violation# : 50, overflow# : 50, conflict# : 78, node#: 21538
+## CPU time: 0:2:19, REAL time: 0:2:20
+ iter = 559/10, route#: 87, violation# : 39, overflow# : 39, conflict# : 64, node#: 21529
+## CPU time: 0:2:19, REAL time: 0:2:20
+ iter = 560/5, route#: 76, violation# : 56, overflow# : 56, conflict# : 84, node#: 21476
+## CPU time: 0:2:19, REAL time: 0:2:21
+ iter = 561/6, route#: 104, violation# : 52, overflow# : 52, conflict# : 82, node#: 21446
+## CPU time: 0:2:20, REAL time: 0:2:21
+ iter = 562/7, route#: 91, violation# : 46, overflow# : 46, conflict# : 75, node#: 21485
+## CPU time: 0:2:20, REAL time: 0:2:21
+ iter = 563/8, route#: 84, violation# : 42, overflow# : 42, conflict# : 69, node#: 21543
+## CPU time: 0:2:20, REAL time: 0:2:21
+ iter = 564/9, route#: 78, violation# : 40, overflow# : 40, conflict# : 67, node#: 21587
+## CPU time: 0:2:20, REAL time: 0:2:21
+ iter = 565/10, route#: 68, violation# : 35, overflow# : 35, conflict# : 61, node#: 21590
+## CPU time: 0:2:20, REAL time: 0:2:21
+ iter = 566/5, route#: 88, violation# : 56, overflow# : 56, conflict# : 81, node#: 21522
+## CPU time: 0:2:20, REAL time: 0:2:22
+ iter = 567/6, route#: 89, violation# : 56, overflow# : 56, conflict# : 77, node#: 21524
+## CPU time: 0:2:21, REAL time: 0:2:22
+ iter = 568/7, route#: 87, violation# : 53, overflow# : 53, conflict# : 76, node#: 21557
+## CPU time: 0:2:21, REAL time: 0:2:22
+ iter = 569/8, route#: 84, violation# : 44, overflow# : 44, conflict# : 70, node#: 21612
+## CPU time: 0:2:21, REAL time: 0:2:22
+ iter = 570/9, route#: 74, violation# : 37, overflow# : 37, conflict# : 61, node#: 21624
+## CPU time: 0:2:21, REAL time: 0:2:22
+ iter = 571/10, route#: 74, violation# : 40, overflow# : 40, conflict# : 61, node#: 21635
+## CPU time: 0:2:21, REAL time: 0:2:22
+ iter = 572/5, route#: 73, violation# : 51, overflow# : 51, conflict# : 75, node#: 21601
+## CPU time: 0:2:21, REAL time: 0:2:23
+ iter = 573/6, route#: 90, violation# : 50, overflow# : 50, conflict# : 75, node#: 21599
+## CPU time: 0:2:22, REAL time: 0:2:23
+ iter = 574/7, route#: 104, violation# : 62, overflow# : 62, conflict# : 88, node#: 21578
+## CPU time: 0:2:22, REAL time: 0:2:23
+ iter = 575/8, route#: 86, violation# : 45, overflow# : 45, conflict# : 71, node#: 21649
+## CPU time: 0:2:22, REAL time: 0:2:23
+ iter = 576/9, route#: 85, violation# : 47, overflow# : 47, conflict# : 74, node#: 21654
+## CPU time: 0:2:22, REAL time: 0:2:23
+ iter = 577/10, route#: 87, violation# : 49, overflow# : 49, conflict# : 77, node#: 21667
+## CPU time: 0:2:22, REAL time: 0:2:23
+ iter = 578/5, route#: 104, violation# : 65, overflow# : 65, conflict# : 100, node#: 21540
+## CPU time: 0:2:22, REAL time: 0:2:24
+ iter = 579/6, route#: 128, violation# : 58, overflow# : 58, conflict# : 98, node#: 21564
+## CPU time: 0:2:23, REAL time: 0:2:24
+ iter = 580/7, route#: 105, violation# : 46, overflow# : 46, conflict# : 76, node#: 21617
+## CPU time: 0:2:23, REAL time: 0:2:24
+ iter = 581/8, route#: 80, violation# : 47, overflow# : 47, conflict# : 75, node#: 21612
+## CPU time: 0:2:23, REAL time: 0:2:24
+ iter = 582/9, route#: 77, violation# : 37, overflow# : 37, conflict# : 64, node#: 21662
+## CPU time: 0:2:23, REAL time: 0:2:24
+ iter = 583/10, route#: 74, violation# : 41, overflow# : 41, conflict# : 67, node#: 21663
+## CPU time: 0:2:23, REAL time: 0:2:24
+ iter = 584/5, route#: 130, violation# : 93, overflow# : 93, conflict# : 121, node#: 21497
+## CPU time: 0:2:24, REAL time: 0:2:25
+ iter = 585/6, route#: 130, violation# : 73, overflow# : 73, conflict# : 105, node#: 21539
+## CPU time: 0:2:24, REAL time: 0:2:25
+ iter = 586/7, route#: 108, violation# : 62, overflow# : 62, conflict# : 92, node#: 21594
+## CPU time: 0:2:24, REAL time: 0:2:25
+ iter = 587/8, route#: 98, violation# : 56, overflow# : 56, conflict# : 84, node#: 21606
+## CPU time: 0:2:24, REAL time: 0:2:25
+ iter = 588/9, route#: 96, violation# : 54, overflow# : 54, conflict# : 84, node#: 21633
+## CPU time: 0:2:24, REAL time: 0:2:25
+ iter = 589/10, route#: 86, violation# : 53, overflow# : 53, conflict# : 79, node#: 21651
+## CPU time: 0:2:24, REAL time: 0:2:26
+ iter = 590/5, route#: 118, violation# : 93, overflow# : 93, conflict# : 120, node#: 21540
+## CPU time: 0:2:25, REAL time: 0:2:26
+ iter = 591/6, route#: 139, violation# : 80, overflow# : 80, conflict# : 122, node#: 21553
+## CPU time: 0:2:25, REAL time: 0:2:26
+ iter = 592/7, route#: 130, violation# : 70, overflow# : 70, conflict# : 106, node#: 21589
+## CPU time: 0:2:25, REAL time: 0:2:26
+ iter = 593/8, route#: 119, violation# : 55, overflow# : 55, conflict# : 89, node#: 21645
+## CPU time: 0:2:25, REAL time: 0:2:26
+ iter = 594/9, route#: 99, violation# : 56, overflow# : 56, conflict# : 85, node#: 21666
+## CPU time: 0:2:25, REAL time: 0:2:26
+ iter = 595/10, route#: 97, violation# : 51, overflow# : 51, conflict# : 82, node#: 21656
+## CPU time: 0:2:25, REAL time: 0:2:27
+ iter = 596/5, route#: 118, violation# : 81, overflow# : 81, conflict# : 117, node#: 21515
+## CPU time: 0:2:26, REAL time: 0:2:27
+ iter = 597/6, route#: 128, violation# : 70, overflow# : 70, conflict# : 108, node#: 21537
+## CPU time: 0:2:26, REAL time: 0:2:27
+ iter = 598/7, route#: 118, violation# : 65, overflow# : 65, conflict# : 100, node#: 21575
+## CPU time: 0:2:26, REAL time: 0:2:27
+ iter = 599/8, route#: 101, violation# : 58, overflow# : 58, conflict# : 86, node#: 21628
+## CPU time: 0:2:26, REAL time: 0:2:27
+ iter = 600/9, route#: 93, violation# : 49, overflow# : 49, conflict# : 79, node#: 21632
+## CPU time: 0:2:26, REAL time: 0:2:27
+ iter = 601/10, route#: 83, violation# : 49, overflow# : 49, conflict# : 79, node#: 21624
+## CPU time: 0:2:27, REAL time: 0:2:28
+ iter = 602/5, route#: 102, violation# : 74, overflow# : 74, conflict# : 108, node#: 21543
+## CPU time: 0:2:27, REAL time: 0:2:28
+ iter = 603/6, route#: 130, violation# : 67, overflow# : 67, conflict# : 107, node#: 21556
+## CPU time: 0:2:27, REAL time: 0:2:28
+ iter = 604/7, route#: 112, violation# : 60, overflow# : 60, conflict# : 95, node#: 21601
+## CPU time: 0:2:27, REAL time: 0:2:28
+ iter = 605/8, route#: 95, violation# : 53, overflow# : 53, conflict# : 85, node#: 21619
+## CPU time: 0:2:27, REAL time: 0:2:28
+ iter = 606/9, route#: 98, violation# : 54, overflow# : 54, conflict# : 86, node#: 21628
+## CPU time: 0:2:27, REAL time: 0:2:28
+ iter = 607/10, route#: 89, violation# : 53, overflow# : 53, conflict# : 80, node#: 21620
+## CPU time: 0:2:27, REAL time: 0:2:29
+ iter = 608/5, route#: 114, violation# : 78, overflow# : 78, conflict# : 107, node#: 21543
+## CPU time: 0:2:28, REAL time: 0:2:29
+ iter = 609/6, route#: 102, violation# : 49, overflow# : 49, conflict# : 74, node#: 21539
+## CPU time: 0:2:28, REAL time: 0:2:29
+ iter = 610/7, route#: 81, violation# : 41, overflow# : 41, conflict# : 66, node#: 21544
+## CPU time: 0:2:28, REAL time: 0:2:29
+ iter = 611/8, route#: 73, violation# : 40, overflow# : 40, conflict# : 65, node#: 21556
+## CPU time: 0:2:28, REAL time: 0:2:29
+ iter = 612/9, route#: 67, violation# : 39, overflow# : 39, conflict# : 63, node#: 21576
+## CPU time: 0:2:28, REAL time: 0:2:29
+ iter = 613/10, route#: 70, violation# : 44, overflow# : 44, conflict# : 69, node#: 21560
+## CPU time: 0:2:28, REAL time: 0:2:30
+ iter = 614/5, route#: 129, violation# : 99, overflow# : 99, conflict# : 130, node#: 21473
+## CPU time: 0:2:29, REAL time: 0:2:30
+ iter = 615/6, route#: 143, violation# : 70, overflow# : 70, conflict# : 107, node#: 21480
+## CPU time: 0:2:29, REAL time: 0:2:30
+ iter = 616/7, route#: 112, violation# : 60, overflow# : 60, conflict# : 94, node#: 21513
+## CPU time: 0:2:29, REAL time: 0:2:30
+ iter = 617/8, route#: 91, violation# : 49, overflow# : 49, conflict# : 81, node#: 21567
+## CPU time: 0:2:29, REAL time: 0:2:30
+ iter = 618/9, route#: 97, violation# : 43, overflow# : 43, conflict# : 68, node#: 21593
+## CPU time: 0:2:29, REAL time: 0:2:30
+ iter = 619/10, route#: 84, violation# : 46, overflow# : 46, conflict# : 71, node#: 21610
+## CPU time: 0:2:29, REAL time: 0:2:31
+ iter = 620/5, route#: 124, violation# : 80, overflow# : 80, conflict# : 111, node#: 21506
+## CPU time: 0:2:30, REAL time: 0:2:31
+ iter = 621/6, route#: 132, violation# : 74, overflow# : 74, conflict# : 104, node#: 21504
+## CPU time: 0:2:30, REAL time: 0:2:31
+ iter = 622/7, route#: 116, violation# : 60, overflow# : 60, conflict# : 92, node#: 21538
+## CPU time: 0:2:30, REAL time: 0:2:31
+ iter = 623/8, route#: 109, violation# : 45, overflow# : 45, conflict# : 71, node#: 21621
+## CPU time: 0:2:30, REAL time: 0:2:31
+ iter = 624/9, route#: 82, violation# : 49, overflow# : 49, conflict# : 76, node#: 21594
+## CPU time: 0:2:30, REAL time: 0:2:31
+ iter = 625/10, route#: 91, violation# : 50, overflow# : 50, conflict# : 78, node#: 21640
+## CPU time: 0:2:30, REAL time: 0:2:32
+ iter = 626/5, route#: 134, violation# : 83, overflow# : 83, conflict# : 118, node#: 21448
+## CPU time: 0:2:31, REAL time: 0:2:32
+ iter = 627/6, route#: 116, violation# : 51, overflow# : 51, conflict# : 86, node#: 21470
+## CPU time: 0:2:31, REAL time: 0:2:32
+ iter = 628/7, route#: 98, violation# : 47, overflow# : 47, conflict# : 77, node#: 21497
+## CPU time: 0:2:31, REAL time: 0:2:32
+ iter = 629/8, route#: 77, violation# : 36, overflow# : 36, conflict# : 62, node#: 21517
+## CPU time: 0:2:31, REAL time: 0:2:32
+ iter = 630/9, route#: 87, violation# : 50, overflow# : 50, conflict# : 77, node#: 21526
+## CPU time: 0:2:31, REAL time: 0:2:32
+ iter = 631/10, route#: 81, violation# : 43, overflow# : 43, conflict# : 71, node#: 21541
+## CPU time: 0:2:31, REAL time: 0:2:33
+ iter = 632/5, route#: 114, violation# : 79, overflow# : 79, conflict# : 111, node#: 21447
+## CPU time: 0:2:32, REAL time: 0:2:33
+ iter = 633/6, route#: 119, violation# : 62, overflow# : 62, conflict# : 99, node#: 21466
+## CPU time: 0:2:32, REAL time: 0:2:33
+ iter = 634/7, route#: 98, violation# : 46, overflow# : 46, conflict# : 78, node#: 21480
+## CPU time: 0:2:32, REAL time: 0:2:33
+ iter = 635/8, route#: 90, violation# : 47, overflow# : 47, conflict# : 75, node#: 21534
+## CPU time: 0:2:32, REAL time: 0:2:33
+ iter = 636/9, route#: 79, violation# : 40, overflow# : 40, conflict# : 68, node#: 21573
+## CPU time: 0:2:32, REAL time: 0:2:33
+ iter = 637/10, route#: 80, violation# : 45, overflow# : 45, conflict# : 74, node#: 21602
+## CPU time: 0:2:32, REAL time: 0:2:33
+ iter = 638/5, route#: 105, violation# : 71, overflow# : 71, conflict# : 104, node#: 21440
+## CPU time: 0:2:32, REAL time: 0:2:34
+ iter = 639/6, route#: 118, violation# : 65, overflow# : 65, conflict# : 101, node#: 21466
+## CPU time: 0:2:33, REAL time: 0:2:34
+ iter = 640/7, route#: 106, violation# : 57, overflow# : 57, conflict# : 86, node#: 21486
+## CPU time: 0:2:33, REAL time: 0:2:34
+ iter = 641/8, route#: 96, violation# : 56, overflow# : 56, conflict# : 88, node#: 21510
+## CPU time: 0:2:33, REAL time: 0:2:34
+ iter = 642/9, route#: 100, violation# : 60, overflow# : 60, conflict# : 90, node#: 21518
+## CPU time: 0:2:33, REAL time: 0:2:34
+ iter = 643/10, route#: 89, violation# : 51, overflow# : 51, conflict# : 79, node#: 21532
+## CPU time: 0:2:33, REAL time: 0:2:34
+ iter = 644/5, route#: 108, violation# : 83, overflow# : 83, conflict# : 112, node#: 21435
+## CPU time: 0:2:33, REAL time: 0:2:35
+ iter = 645/6, route#: 128, violation# : 68, overflow# : 68, conflict# : 100, node#: 21487
+## CPU time: 0:2:34, REAL time: 0:2:35
+ iter = 646/7, route#: 107, violation# : 64, overflow# : 64, conflict# : 93, node#: 21488
+## CPU time: 0:2:34, REAL time: 0:2:35
+ iter = 647/8, route#: 98, violation# : 49, overflow# : 49, conflict# : 78, node#: 21525
+## CPU time: 0:2:34, REAL time: 0:2:35
+ iter = 648/9, route#: 83, violation# : 50, overflow# : 50, conflict# : 79, node#: 21531
+## CPU time: 0:2:34, REAL time: 0:2:35
+ iter = 649/10, route#: 83, violation# : 49, overflow# : 49, conflict# : 72, node#: 21549
+## CPU time: 0:2:34, REAL time: 0:2:35
+ iter = 650/5, route#: 112, violation# : 96, overflow# : 96, conflict# : 117, node#: 21444
+## CPU time: 0:2:34, REAL time: 0:2:35
+ iter = 651/6, route#: 137, violation# : 81, overflow# : 81, conflict# : 109, node#: 21485
+## CPU time: 0:2:34, REAL time: 0:2:36
+ iter = 652/7, route#: 118, violation# : 70, overflow# : 70, conflict# : 96, node#: 21514
+## CPU time: 0:2:35, REAL time: 0:2:36
+ iter = 653/8, route#: 104, violation# : 67, overflow# : 67, conflict# : 90, node#: 21536
+## CPU time: 0:2:35, REAL time: 0:2:36
+ iter = 654/9, route#: 93, violation# : 57, overflow# : 57, conflict# : 77, node#: 21584
+## CPU time: 0:2:35, REAL time: 0:2:36
+ iter = 655/10, route#: 84, violation# : 55, overflow# : 55, conflict# : 79, node#: 21540
+## CPU time: 0:2:35, REAL time: 0:2:36
+ iter = 656/5, route#: 123, violation# : 107, overflow# : 107, conflict# : 131, node#: 21440
+## CPU time: 0:2:35, REAL time: 0:2:37
+ iter = 657/6, route#: 151, violation# : 86, overflow# : 86, conflict# : 119, node#: 21467
+## CPU time: 0:2:36, REAL time: 0:2:37
+ iter = 658/7, route#: 126, violation# : 72, overflow# : 72, conflict# : 95, node#: 21525
+## CPU time: 0:2:36, REAL time: 0:2:37
+ iter = 659/8, route#: 109, violation# : 64, overflow# : 64, conflict# : 90, node#: 21552
+## CPU time: 0:2:36, REAL time: 0:2:37
+ iter = 660/9, route#: 96, violation# : 58, overflow# : 58, conflict# : 80, node#: 21568
+## CPU time: 0:2:36, REAL time: 0:2:37
+ iter = 661/10, route#: 90, violation# : 53, overflow# : 53, conflict# : 73, node#: 21573
+## CPU time: 0:2:36, REAL time: 0:2:38
+ iter = 662/5, route#: 121, violation# : 88, overflow# : 88, conflict# : 115, node#: 21440
+## CPU time: 0:2:37, REAL time: 0:2:38
+ iter = 663/6, route#: 110, violation# : 68, overflow# : 68, conflict# : 95, node#: 21465
+## CPU time: 0:2:37, REAL time: 0:2:38
+ iter = 664/7, route#: 110, violation# : 58, overflow# : 58, conflict# : 82, node#: 21487
+## CPU time: 0:2:37, REAL time: 0:2:38
+ iter = 665/8, route#: 83, violation# : 41, overflow# : 41, conflict# : 60, node#: 21537
+## CPU time: 0:2:37, REAL time: 0:2:38
+ iter = 666/9, route#: 62, violation# : 38, overflow# : 38, conflict# : 59, node#: 21536
+## CPU time: 0:2:37, REAL time: 0:2:38
+ iter = 667/10, route#: 69, violation# : 43, overflow# : 43, conflict# : 67, node#: 21527
+## CPU time: 0:2:38, REAL time: 0:2:39
+ iter = 668/5, route#: 119, violation# : 88, overflow# : 88, conflict# : 117, node#: 21420
+## CPU time: 0:2:38, REAL time: 0:2:39
+ iter = 669/6, route#: 128, violation# : 62, overflow# : 62, conflict# : 97, node#: 21472
+## CPU time: 0:2:38, REAL time: 0:2:39
+ iter = 670/7, route#: 102, violation# : 50, overflow# : 50, conflict# : 77, node#: 21494
+## CPU time: 0:2:38, REAL time: 0:2:39
+ iter = 671/8, route#: 78, violation# : 45, overflow# : 45, conflict# : 70, node#: 21507
+## CPU time: 0:2:38, REAL time: 0:2:39
+ iter = 672/9, route#: 81, violation# : 53, overflow# : 53, conflict# : 75, node#: 21519
+## CPU time: 0:2:38, REAL time: 0:2:39
+ iter = 673/10, route#: 70, violation# : 39, overflow# : 39, conflict# : 64, node#: 21506
+## CPU time: 0:2:38, REAL time: 0:2:40
+ iter = 674/5, route#: 78, violation# : 78, overflow# : 78, conflict# : 94, node#: 21421
+## CPU time: 0:2:39, REAL time: 0:2:40
+ iter = 675/6, route#: 113, violation# : 68, overflow# : 68, conflict# : 97, node#: 21430
+## CPU time: 0:2:39, REAL time: 0:2:40
+ iter = 676/7, route#: 104, violation# : 61, overflow# : 61, conflict# : 86, node#: 21456
+## CPU time: 0:2:39, REAL time: 0:2:40
+ iter = 677/8, route#: 84, violation# : 51, overflow# : 51, conflict# : 74, node#: 21502
+## CPU time: 0:2:39, REAL time: 0:2:40
+ iter = 678/9, route#: 78, violation# : 47, overflow# : 47, conflict# : 70, node#: 21506
+## CPU time: 0:2:39, REAL time: 0:2:40
+ iter = 679/10, route#: 78, violation# : 52, overflow# : 52, conflict# : 73, node#: 21506
+## CPU time: 0:2:39, REAL time: 0:2:40
+ iter = 680/5, route#: 105, violation# : 83, overflow# : 83, conflict# : 105, node#: 21454
+## CPU time: 0:2:39, REAL time: 0:2:41
+ iter = 681/6, route#: 109, violation# : 75, overflow# : 75, conflict# : 97, node#: 21460
+## CPU time: 0:2:40, REAL time: 0:2:41
+ iter = 682/7, route#: 103, violation# : 65, overflow# : 65, conflict# : 92, node#: 21453
+## CPU time: 0:2:40, REAL time: 0:2:41
+ iter = 683/8, route#: 91, violation# : 60, overflow# : 60, conflict# : 81, node#: 21489
+## CPU time: 0:2:40, REAL time: 0:2:41
+ iter = 684/9, route#: 93, violation# : 57, overflow# : 57, conflict# : 82, node#: 21555
+## CPU time: 0:2:40, REAL time: 0:2:41
+ iter = 685/10, route#: 87, violation# : 52, overflow# : 52, conflict# : 75, node#: 21553
+## CPU time: 0:2:40, REAL time: 0:2:41
+ iter = 686/5, route#: 93, violation# : 79, overflow# : 79, conflict# : 99, node#: 21465
+## CPU time: 0:2:40, REAL time: 0:2:41
+ iter = 687/6, route#: 104, violation# : 55, overflow# : 55, conflict# : 82, node#: 21471
+## CPU time: 0:2:40, REAL time: 0:2:42
+ iter = 688/7, route#: 80, violation# : 48, overflow# : 48, conflict# : 73, node#: 21491
+## CPU time: 0:2:40, REAL time: 0:2:42
+ iter = 689/8, route#: 80, violation# : 46, overflow# : 46, conflict# : 66, node#: 21491
+## CPU time: 0:2:41, REAL time: 0:2:42
+ iter = 690/9, route#: 72, violation# : 48, overflow# : 48, conflict# : 68, node#: 21526
+## CPU time: 0:2:41, REAL time: 0:2:42
+ iter = 691/10, route#: 70, violation# : 49, overflow# : 49, conflict# : 66, node#: 21538
+## CPU time: 0:2:41, REAL time: 0:2:42
+ iter = 692/5, route#: 80, violation# : 68, overflow# : 68, conflict# : 86, node#: 21449
+## CPU time: 0:2:41, REAL time: 0:2:42
+ iter = 693/6, route#: 80, violation# : 55, overflow# : 55, conflict# : 71, node#: 21499
+## CPU time: 0:2:41, REAL time: 0:2:42
+ iter = 694/7, route#: 72, violation# : 49, overflow# : 49, conflict# : 62, node#: 21518
+## CPU time: 0:2:41, REAL time: 0:2:42
+ iter = 695/8, route#: 81, violation# : 53, overflow# : 53, conflict# : 70, node#: 21554
+## CPU time: 0:2:41, REAL time: 0:2:43
+ iter = 696/9, route#: 70, violation# : 51, overflow# : 51, conflict# : 66, node#: 21561
+## CPU time: 0:2:41, REAL time: 0:2:43
+ iter = 697/10, route#: 74, violation# : 48, overflow# : 48, conflict# : 69, node#: 21572
+## CPU time: 0:2:42, REAL time: 0:2:43
+ iter = 698/5, route#: 96, violation# : 84, overflow# : 84, conflict# : 113, node#: 21456
+## CPU time: 0:2:42, REAL time: 0:2:43
+ iter = 699/6, route#: 145, violation# : 86, overflow# : 86, conflict# : 114, node#: 21451
+## CPU time: 0:2:42, REAL time: 0:2:43
+ iter = 700/7, route#: 112, violation# : 65, overflow# : 65, conflict# : 88, node#: 21511
+## CPU time: 0:2:42, REAL time: 0:2:43
+ iter = 701/8, route#: 93, violation# : 63, overflow# : 63, conflict# : 83, node#: 21538
+## CPU time: 0:2:42, REAL time: 0:2:44
+ iter = 702/9, route#: 113, violation# : 63, overflow# : 63, conflict# : 92, node#: 21607
+## CPU time: 0:2:43, REAL time: 0:2:44
+ iter = 703/10, route#: 113, violation# : 72, overflow# : 72, conflict# : 98, node#: 21641
+## CPU time: 0:2:43, REAL time: 0:2:44
+ iter = 704/5, route#: 148, violation# : 103, overflow# : 103, conflict# : 138, node#: 21413
+## CPU time: 0:2:43, REAL time: 0:2:44
+ iter = 705/6, route#: 168, violation# : 90, overflow# : 90, conflict# : 128, node#: 21409
+## CPU time: 0:2:43, REAL time: 0:2:45
+ iter = 706/7, route#: 134, violation# : 69, overflow# : 69, conflict# : 99, node#: 21476
+## CPU time: 0:2:44, REAL time: 0:2:45
+ iter = 707/8, route#: 96, violation# : 53, overflow# : 53, conflict# : 80, node#: 21526
+## CPU time: 0:2:44, REAL time: 0:2:45
+ iter = 708/9, route#: 91, violation# : 55, overflow# : 55, conflict# : 85, node#: 21563
+## CPU time: 0:2:44, REAL time: 0:2:45
+ iter = 709/10, route#: 95, violation# : 49, overflow# : 49, conflict# : 80, node#: 21571
+## CPU time: 0:2:44, REAL time: 0:2:45
+ iter = 710/5, route#: 136, violation# : 100, overflow# : 100, conflict# : 131, node#: 21445
+## CPU time: 0:2:44, REAL time: 0:2:46
+ iter = 711/6, route#: 139, violation# : 86, overflow# : 86, conflict# : 117, node#: 21474
+## CPU time: 0:2:45, REAL time: 0:2:46
+ iter = 712/7, route#: 124, violation# : 66, overflow# : 66, conflict# : 96, node#: 21519
+## CPU time: 0:2:45, REAL time: 0:2:46
+ iter = 713/8, route#: 120, violation# : 66, overflow# : 66, conflict# : 98, node#: 21555
+## CPU time: 0:2:45, REAL time: 0:2:46
+ iter = 714/9, route#: 95, violation# : 55, overflow# : 55, conflict# : 84, node#: 21555
+## CPU time: 0:2:45, REAL time: 0:2:46
+ iter = 715/10, route#: 98, violation# : 52, overflow# : 52, conflict# : 86, node#: 21567
+## CPU time: 0:2:45, REAL time: 0:2:47
+ iter = 716/5, route#: 138, violation# : 96, overflow# : 96, conflict# : 124, node#: 21437
+## CPU time: 0:2:46, REAL time: 0:2:47
+ iter = 717/6, route#: 135, violation# : 78, overflow# : 78, conflict# : 120, node#: 21486
+## CPU time: 0:2:46, REAL time: 0:2:47
+ iter = 718/7, route#: 128, violation# : 63, overflow# : 63, conflict# : 96, node#: 21548
+## CPU time: 0:2:46, REAL time: 0:2:47
+ iter = 719/8, route#: 109, violation# : 64, overflow# : 64, conflict# : 90, node#: 21575
+## CPU time: 0:2:46, REAL time: 0:2:47
+ iter = 720/9, route#: 107, violation# : 60, overflow# : 60, conflict# : 92, node#: 21612
+## CPU time: 0:2:46, REAL time: 0:2:47
+ iter = 721/10, route#: 99, violation# : 59, overflow# : 59, conflict# : 91, node#: 21647
+## CPU time: 0:2:46, REAL time: 0:2:48
+ iter = 722/5, route#: 132, violation# : 104, overflow# : 104, conflict# : 134, node#: 21474
+## CPU time: 0:2:47, REAL time: 0:2:48
+ iter = 723/6, route#: 139, violation# : 78, overflow# : 78, conflict# : 112, node#: 21537
+## CPU time: 0:2:47, REAL time: 0:2:48
+ iter = 724/7, route#: 107, violation# : 63, overflow# : 63, conflict# : 85, node#: 21568
+## CPU time: 0:2:47, REAL time: 0:2:48
+ iter = 725/8, route#: 90, violation# : 58, overflow# : 58, conflict# : 81, node#: 21607
+## CPU time: 0:2:47, REAL time: 0:2:48
+ iter = 726/9, route#: 83, violation# : 53, overflow# : 53, conflict# : 72, node#: 21617
+## CPU time: 0:2:47, REAL time: 0:2:48
+ iter = 727/10, route#: 85, violation# : 47, overflow# : 47, conflict# : 67, node#: 21659
+## CPU time: 0:2:47, REAL time: 0:2:49
+ iter = 728/5, route#: 96, violation# : 77, overflow# : 77, conflict# : 102, node#: 21591
+## CPU time: 0:2:48, REAL time: 0:2:49
+ iter = 729/6, route#: 126, violation# : 69, overflow# : 69, conflict# : 105, node#: 21552
+## CPU time: 0:2:48, REAL time: 0:2:49
+ iter = 730/7, route#: 105, violation# : 61, overflow# : 61, conflict# : 94, node#: 21600
+## CPU time: 0:2:48, REAL time: 0:2:49
+ iter = 731/8, route#: 98, violation# : 52, overflow# : 52, conflict# : 79, node#: 21645
+## CPU time: 0:2:48, REAL time: 0:2:49
+ iter = 732/9, route#: 95, violation# : 52, overflow# : 52, conflict# : 76, node#: 21631
+## CPU time: 0:2:48, REAL time: 0:2:49
+ iter = 733/10, route#: 78, violation# : 46, overflow# : 46, conflict# : 73, node#: 21655
+## CPU time: 0:2:48, REAL time: 0:2:50
+ iter = 734/5, route#: 121, violation# : 88, overflow# : 88, conflict# : 111, node#: 21507
+## CPU time: 0:2:49, REAL time: 0:2:50
+ iter = 735/6, route#: 114, violation# : 63, overflow# : 63, conflict# : 91, node#: 21546
+## CPU time: 0:2:49, REAL time: 0:2:50
+ iter = 736/7, route#: 102, violation# : 53, overflow# : 53, conflict# : 80, node#: 21535
+## CPU time: 0:2:49, REAL time: 0:2:50
+ iter = 737/8, route#: 89, violation# : 53, overflow# : 53, conflict# : 77, node#: 21567
+## CPU time: 0:2:49, REAL time: 0:2:50
+ iter = 738/9, route#: 77, violation# : 45, overflow# : 45, conflict# : 67, node#: 21592
+## CPU time: 0:2:49, REAL time: 0:2:50
+ iter = 739/10, route#: 71, violation# : 44, overflow# : 44, conflict# : 66, node#: 21606
+## CPU time: 0:2:49, REAL time: 0:2:51
+ iter = 740/5, route#: 102, violation# : 83, overflow# : 83, conflict# : 107, node#: 21467
+## CPU time: 0:2:50, REAL time: 0:2:51
+ iter = 741/6, route#: 125, violation# : 65, overflow# : 65, conflict# : 97, node#: 21487
+## CPU time: 0:2:50, REAL time: 0:2:51
+ iter = 742/7, route#: 103, violation# : 59, overflow# : 59, conflict# : 88, node#: 21510
+## CPU time: 0:2:50, REAL time: 0:2:51
+ iter = 743/8, route#: 87, violation# : 45, overflow# : 45, conflict# : 71, node#: 21540
+## CPU time: 0:2:50, REAL time: 0:2:51
+ iter = 744/9, route#: 74, violation# : 43, overflow# : 43, conflict# : 72, node#: 21532
+## CPU time: 0:2:50, REAL time: 0:2:51
+ iter = 745/10, route#: 78, violation# : 42, overflow# : 42, conflict# : 67, node#: 21552
+## CPU time: 0:2:50, REAL time: 0:2:51
+ iter = 746/5, route#: 87, violation# : 65, overflow# : 65, conflict# : 88, node#: 21496
+## CPU time: 0:2:50, REAL time: 0:2:52
+ iter = 747/6, route#: 103, violation# : 73, overflow# : 73, conflict# : 100, node#: 21523
+## CPU time: 0:2:51, REAL time: 0:2:52
+ iter = 748/7, route#: 119, violation# : 72, overflow# : 72, conflict# : 98, node#: 21512
+## CPU time: 0:2:51, REAL time: 0:2:52
+ iter = 749/8, route#: 101, violation# : 56, overflow# : 56, conflict# : 83, node#: 21581
+## CPU time: 0:2:51, REAL time: 0:2:52
+ iter = 750/9, route#: 93, violation# : 62, overflow# : 62, conflict# : 89, node#: 21580
+## CPU time: 0:2:51, REAL time: 0:2:52
+ iter = 751/10, route#: 106, violation# : 62, overflow# : 62, conflict# : 95, node#: 21602
+## CPU time: 0:2:51, REAL time: 0:2:53
+ iter = 752/1, route#: 2589, violation# : 2526, overflow# : 2070, conflict# : 1490, node#: 16210
+## CPU time: 0:2:52, REAL time: 0:2:53
+ iter = 753/2, route#: 1297, violation# : 1723, overflow# : 1641, conflict# : 1105, node#: 17558
+## CPU time: 0:2:53, REAL time: 0:2:54
+ iter = 754/3, route#: 1092, violation# : 1153, overflow# : 1142, conflict# : 891, node#: 18466
+## CPU time: 0:2:53, REAL time: 0:2:54
+ iter = 755/4, route#: 805, violation# : 566, overflow# : 565, conflict# : 569, node#: 19294
+## CPU time: 0:2:54, REAL time: 0:2:55
+ iter = 756/5, route#: 638, violation# : 393, overflow# : 393, conflict# : 457, node#: 19699
+## CPU time: 0:2:54, REAL time: 0:2:56
+ iter = 757/6, route#: 533, violation# : 285, overflow# : 285, conflict# : 375, node#: 20008
+## CPU time: 0:2:55, REAL time: 0:2:56
+ iter = 758/7, route#: 509, violation# : 235, overflow# : 235, conflict# : 317, node#: 20230
+## CPU time: 0:2:55, REAL time: 0:2:57
+ iter = 759/8, route#: 473, violation# : 219, overflow# : 219, conflict# : 290, node#: 20369
+## CPU time: 0:2:56, REAL time: 0:2:57
+ iter = 760/9, route#: 489, violation# : 228, overflow# : 228, conflict# : 290, node#: 20514
+## CPU time: 0:2:56, REAL time: 0:2:58
+ iter = 761/10, route#: 475, violation# : 213, overflow# : 213, conflict# : 268, node#: 20553
+## CPU time: 0:2:57, REAL time: 0:2:58
+ iter = 762/11, route#: 467, violation# : 195, overflow# : 195, conflict# : 252, node#: 20610
+## CPU time: 0:2:57, REAL time: 0:2:58
+ iter = 763/12, route#: 478, violation# : 208, overflow# : 208, conflict# : 265, node#: 20656
+## CPU time: 0:2:57, REAL time: 0:2:59
+ iter = 764/13, route#: 464, violation# : 192, overflow# : 192, conflict# : 248, node#: 20731
+## CPU time: 0:2:58, REAL time: 0:2:59
+ iter = 765/4, route#: 643, violation# : 532, overflow# : 526, conflict# : 511, node#: 19588
+## CPU time: 0:2:59, REAL time: 0:3:0
+ iter = 766/5, route#: 559, violation# : 315, overflow# : 315, conflict# : 378, node#: 19974
+## CPU time: 0:2:59, REAL time: 0:3:1
+ iter = 767/6, route#: 506, violation# : 225, overflow# : 225, conflict# : 301, node#: 20179
+## CPU time: 0:3:0, REAL time: 0:3:1
+ iter = 768/7, route#: 460, violation# : 184, overflow# : 184, conflict# : 263, node#: 20344
+## CPU time: 0:3:0, REAL time: 0:3:2
+ iter = 769/8, route#: 444, violation# : 170, overflow# : 170, conflict# : 241, node#: 20548
+## CPU time: 0:3:1, REAL time: 0:3:2
+ iter = 770/9, route#: 454, violation# : 172, overflow# : 172, conflict# : 243, node#: 20646
+## CPU time: 0:3:2, REAL time: 0:3:3
+ iter = 771/4, route#: 582, violation# : 472, overflow# : 468, conflict# : 444, node#: 19722
+## CPU time: 0:3:2, REAL time: 0:3:3
+ iter = 772/5, route#: 529, violation# : 248, overflow# : 248, conflict# : 326, node#: 20063
+## CPU time: 0:3:3, REAL time: 0:3:4
+ iter = 773/6, route#: 452, violation# : 197, overflow# : 197, conflict# : 264, node#: 20226
+## CPU time: 0:3:3, REAL time: 0:3:5
+ iter = 774/7, route#: 447, violation# : 157, overflow# : 157, conflict# : 227, node#: 20429
+## CPU time: 0:3:4, REAL time: 0:3:5
+ iter = 775/8, route#: 408, violation# : 139, overflow# : 139, conflict# : 199, node#: 20584
+## CPU time: 0:3:4, REAL time: 0:3:5
+ iter = 776/9, route#: 412, violation# : 122, overflow# : 122, conflict# : 180, node#: 20647
+## CPU time: 0:3:4, REAL time: 0:3:6
+ iter = 777/5, route#: 260, violation# : 195, overflow# : 195, conflict# : 230, node#: 20385
+## CPU time: 0:3:5, REAL time: 0:3:6
+ iter = 778/6, route#: 244, violation# : 147, overflow# : 147, conflict# : 209, node#: 20524
+## CPU time: 0:3:5, REAL time: 0:3:6
+ iter = 779/7, route#: 246, violation# : 142, overflow# : 142, conflict# : 189, node#: 20543
+## CPU time: 0:3:5, REAL time: 0:3:7
+ iter = 780/8, route#: 214, violation# : 126, overflow# : 126, conflict# : 186, node#: 20659
+## CPU time: 0:3:6, REAL time: 0:3:7
+ iter = 781/9, route#: 207, violation# : 112, overflow# : 112, conflict# : 175, node#: 20751
+## CPU time: 0:3:6, REAL time: 0:3:7
+ iter = 782/10, route#: 202, violation# : 122, overflow# : 122, conflict# : 168, node#: 20836
+## CPU time: 0:3:6, REAL time: 0:3:8
+ iter = 783/5, route#: 266, violation# : 191, overflow# : 191, conflict# : 241, node#: 20490
+## CPU time: 0:3:7, REAL time: 0:3:8
+ iter = 784/6, route#: 260, violation# : 136, overflow# : 136, conflict# : 208, node#: 20639
+## CPU time: 0:3:7, REAL time: 0:3:8
+ iter = 785/7, route#: 222, violation# : 106, overflow# : 106, conflict# : 169, node#: 20717
+## CPU time: 0:3:7, REAL time: 0:3:9
+ iter = 786/8, route#: 197, violation# : 119, overflow# : 119, conflict# : 166, node#: 20761
+## CPU time: 0:3:8, REAL time: 0:3:9
+ iter = 787/9, route#: 179, violation# : 110, overflow# : 110, conflict# : 157, node#: 20808
+## CPU time: 0:3:8, REAL time: 0:3:9
+ iter = 788/10, route#: 177, violation# : 113, overflow# : 113, conflict# : 160, node#: 20865
+## CPU time: 0:3:8, REAL time: 0:3:9
+ iter = 789/5, route#: 226, violation# : 189, overflow# : 188, conflict# : 225, node#: 20605
+## CPU time: 0:3:9, REAL time: 0:3:10
+ iter = 790/6, route#: 231, violation# : 158, overflow# : 158, conflict# : 210, node#: 20714
+## CPU time: 0:3:9, REAL time: 0:3:10
+ iter = 791/7, route#: 246, violation# : 134, overflow# : 134, conflict# : 190, node#: 20788
+## CPU time: 0:3:9, REAL time: 0:3:10
+ iter = 792/8, route#: 208, violation# : 119, overflow# : 119, conflict# : 175, node#: 20857
+## CPU time: 0:3:9, REAL time: 0:3:11
+ iter = 793/9, route#: 219, violation# : 132, overflow# : 132, conflict# : 187, node#: 20937
+## CPU time: 0:3:10, REAL time: 0:3:11
+ iter = 794/10, route#: 223, violation# : 135, overflow# : 135, conflict# : 188, node#: 21003
+## CPU time: 0:3:10, REAL time: 0:3:11
+ iter = 795/5, route#: 256, violation# : 198, overflow# : 198, conflict# : 255, node#: 20724
+## CPU time: 0:3:11, REAL time: 0:3:12
+ iter = 796/6, route#: 277, violation# : 147, overflow# : 147, conflict# : 219, node#: 20741
+## CPU time: 0:3:11, REAL time: 0:3:12
+ iter = 797/7, route#: 229, violation# : 114, overflow# : 114, conflict# : 174, node#: 20823
+## CPU time: 0:3:11, REAL time: 0:3:12
+ iter = 798/8, route#: 190, violation# : 111, overflow# : 111, conflict# : 159, node#: 20941
+## CPU time: 0:3:11, REAL time: 0:3:13
+ iter = 799/9, route#: 183, violation# : 108, overflow# : 108, conflict# : 160, node#: 20949
+## CPU time: 0:3:12, REAL time: 0:3:13
+ iter = 800/10, route#: 184, violation# : 103, overflow# : 103, conflict# : 159, node#: 21001
+## CPU time: 0:3:12, REAL time: 0:3:13
+ iter = 801/5, route#: 260, violation# : 202, overflow# : 202, conflict# : 241, node#: 20693
+## CPU time: 0:3:12, REAL time: 0:3:14
+ iter = 802/6, route#: 257, violation# : 150, overflow# : 150, conflict# : 208, node#: 20781
+## CPU time: 0:3:13, REAL time: 0:3:14
+ iter = 803/7, route#: 242, violation# : 119, overflow# : 119, conflict# : 175, node#: 20865
+## CPU time: 0:3:13, REAL time: 0:3:14
+ iter = 804/8, route#: 189, violation# : 107, overflow# : 107, conflict# : 158, node#: 20960
+## CPU time: 0:3:13, REAL time: 0:3:15
+ iter = 805/9, route#: 178, violation# : 99, overflow# : 99, conflict# : 148, node#: 21001
+## CPU time: 0:3:13, REAL time: 0:3:15
+ iter = 806/10, route#: 186, violation# : 119, overflow# : 119, conflict# : 164, node#: 21022
+## CPU time: 0:3:14, REAL time: 0:3:15
+ iter = 807/5, route#: 254, violation# : 192, overflow# : 192, conflict# : 231, node#: 20700
+## CPU time: 0:3:14, REAL time: 0:3:16
+ iter = 808/6, route#: 241, violation# : 139, overflow# : 139, conflict# : 196, node#: 20751
+## CPU time: 0:3:15, REAL time: 0:3:16
+ iter = 809/7, route#: 217, violation# : 113, overflow# : 113, conflict# : 167, node#: 20846
+## CPU time: 0:3:15, REAL time: 0:3:16
+ iter = 810/8, route#: 184, violation# : 104, overflow# : 104, conflict# : 152, node#: 20989
+## CPU time: 0:3:15, REAL time: 0:3:16
+ iter = 811/9, route#: 171, violation# : 104, overflow# : 104, conflict# : 152, node#: 21008
+## CPU time: 0:3:15, REAL time: 0:3:17
+ iter = 812/10, route#: 200, violation# : 118, overflow# : 118, conflict# : 171, node#: 21051
+## CPU time: 0:3:16, REAL time: 0:3:17
+ iter = 813/5, route#: 247, violation# : 171, overflow# : 171, conflict# : 218, node#: 20711
+## CPU time: 0:3:16, REAL time: 0:3:17
+ iter = 814/6, route#: 221, violation# : 124, overflow# : 124, conflict# : 184, node#: 20799
+## CPU time: 0:3:16, REAL time: 0:3:18
+ iter = 815/7, route#: 213, violation# : 112, overflow# : 112, conflict# : 166, node#: 20873
+## CPU time: 0:3:17, REAL time: 0:3:18
+ iter = 816/8, route#: 196, violation# : 107, overflow# : 107, conflict# : 158, node#: 21037
+## CPU time: 0:3:17, REAL time: 0:3:18
+ iter = 817/9, route#: 201, violation# : 123, overflow# : 123, conflict# : 175, node#: 21050
+## CPU time: 0:3:17, REAL time: 0:3:18
+ iter = 818/10, route#: 204, violation# : 123, overflow# : 123, conflict# : 173, node#: 21156
+## CPU time: 0:3:18, REAL time: 0:3:19
+ iter = 819/5, route#: 257, violation# : 201, overflow# : 201, conflict# : 237, node#: 20798
+## CPU time: 0:3:18, REAL time: 0:3:19
+ iter = 820/6, route#: 242, violation# : 130, overflow# : 130, conflict# : 181, node#: 20868
+## CPU time: 0:3:18, REAL time: 0:3:20
+ iter = 821/7, route#: 197, violation# : 102, overflow# : 102, conflict# : 153, node#: 20924
+## CPU time: 0:3:18, REAL time: 0:3:20
+ iter = 822/8, route#: 176, violation# : 106, overflow# : 106, conflict# : 152, node#: 21035
+## CPU time: 0:3:19, REAL time: 0:3:20
+ iter = 823/9, route#: 170, violation# : 93, overflow# : 93, conflict# : 137, node#: 21089
+## CPU time: 0:3:19, REAL time: 0:3:20
+ iter = 824/10, route#: 166, violation# : 95, overflow# : 95, conflict# : 143, node#: 21065
+## CPU time: 0:3:19, REAL time: 0:3:21
+ iter = 825/5, route#: 218, violation# : 163, overflow# : 163, conflict# : 204, node#: 20876
+## CPU time: 0:3:19, REAL time: 0:3:21
+ iter = 826/6, route#: 217, violation# : 117, overflow# : 117, conflict# : 174, node#: 20964
+## CPU time: 0:3:20, REAL time: 0:3:21
+ iter = 827/7, route#: 183, violation# : 96, overflow# : 96, conflict# : 145, node#: 21040
+## CPU time: 0:3:20, REAL time: 0:3:21
+ iter = 828/8, route#: 154, violation# : 88, overflow# : 88, conflict# : 134, node#: 21067
+## CPU time: 0:3:20, REAL time: 0:3:22
+ iter = 829/9, route#: 156, violation# : 86, overflow# : 86, conflict# : 131, node#: 21097
+## CPU time: 0:3:20, REAL time: 0:3:22
+ iter = 830/10, route#: 158, violation# : 89, overflow# : 89, conflict# : 131, node#: 21195
+## CPU time: 0:3:21, REAL time: 0:3:22
+ iter = 831/5, route#: 204, violation# : 141, overflow# : 141, conflict# : 189, node#: 20911
+## CPU time: 0:3:21, REAL time: 0:3:22
+ iter = 832/6, route#: 189, violation# : 111, overflow# : 111, conflict# : 157, node#: 20991
+## CPU time: 0:3:21, REAL time: 0:3:23
+ iter = 833/7, route#: 171, violation# : 83, overflow# : 83, conflict# : 139, node#: 21046
+## CPU time: 0:3:21, REAL time: 0:3:23
+ iter = 834/8, route#: 151, violation# : 78, overflow# : 78, conflict# : 122, node#: 21133
+## CPU time: 0:3:22, REAL time: 0:3:23
+ iter = 835/9, route#: 133, violation# : 73, overflow# : 73, conflict# : 115, node#: 21136
+## CPU time: 0:3:22, REAL time: 0:3:23
+ iter = 836/10, route#: 127, violation# : 67, overflow# : 67, conflict# : 109, node#: 21186
+## CPU time: 0:3:22, REAL time: 0:3:23
+ iter = 837/5, route#: 156, violation# : 117, overflow# : 117, conflict# : 160, node#: 21040
+## CPU time: 0:3:22, REAL time: 0:3:24
+ iter = 838/6, route#: 170, violation# : 100, overflow# : 100, conflict# : 143, node#: 21063
+## CPU time: 0:3:22, REAL time: 0:3:24
+ iter = 839/7, route#: 157, violation# : 93, overflow# : 93, conflict# : 125, node#: 21124
+## CPU time: 0:3:23, REAL time: 0:3:24
+ iter = 840/8, route#: 145, violation# : 80, overflow# : 80, conflict# : 114, node#: 21194
+## CPU time: 0:3:23, REAL time: 0:3:24
+ iter = 841/9, route#: 148, violation# : 98, overflow# : 98, conflict# : 123, node#: 21237
+## CPU time: 0:3:23, REAL time: 0:3:24
+ iter = 842/10, route#: 149, violation# : 88, overflow# : 88, conflict# : 127, node#: 21254
+## CPU time: 0:3:23, REAL time: 0:3:25
+ iter = 843/5, route#: 225, violation# : 181, overflow# : 181, conflict# : 212, node#: 20968
+## CPU time: 0:3:24, REAL time: 0:3:25
+ iter = 844/6, route#: 223, violation# : 131, overflow# : 131, conflict# : 175, node#: 21050
+## CPU time: 0:3:24, REAL time: 0:3:26
+ iter = 845/7, route#: 210, violation# : 110, overflow# : 110, conflict# : 153, node#: 21100
+## CPU time: 0:3:24, REAL time: 0:3:26
+ iter = 846/8, route#: 180, violation# : 104, overflow# : 104, conflict# : 153, node#: 21148
+## CPU time: 0:3:25, REAL time: 0:3:26
+ iter = 847/9, route#: 191, violation# : 103, overflow# : 103, conflict# : 153, node#: 21184
+## CPU time: 0:3:25, REAL time: 0:3:26
+ iter = 848/10, route#: 172, violation# : 115, overflow# : 115, conflict# : 160, node#: 21267
+## CPU time: 0:3:25, REAL time: 0:3:27
+ iter = 849/5, route#: 215, violation# : 162, overflow# : 162, conflict# : 201, node#: 20963
+## CPU time: 0:3:26, REAL time: 0:3:27
+ iter = 850/6, route#: 229, violation# : 126, overflow# : 126, conflict# : 179, node#: 21001
+## CPU time: 0:3:26, REAL time: 0:3:27
+ iter = 851/7, route#: 204, violation# : 108, overflow# : 108, conflict# : 160, node#: 21119
+## CPU time: 0:3:26, REAL time: 0:3:28
+ iter = 852/8, route#: 173, violation# : 97, overflow# : 97, conflict# : 144, node#: 21184
+## CPU time: 0:3:26, REAL time: 0:3:28
+ iter = 853/9, route#: 176, violation# : 99, overflow# : 99, conflict# : 151, node#: 21196
+## CPU time: 0:3:27, REAL time: 0:3:28
+ iter = 854/10, route#: 159, violation# : 90, overflow# : 90, conflict# : 135, node#: 21276
+## CPU time: 0:3:27, REAL time: 0:3:28
+ iter = 855/5, route#: 201, violation# : 152, overflow# : 152, conflict# : 186, node#: 21032
+## CPU time: 0:3:27, REAL time: 0:3:29
+ iter = 856/6, route#: 185, violation# : 92, overflow# : 92, conflict# : 132, node#: 21112
+## CPU time: 0:3:27, REAL time: 0:3:29
+ iter = 857/7, route#: 147, violation# : 87, overflow# : 87, conflict# : 127, node#: 21125
+## CPU time: 0:3:28, REAL time: 0:3:29
+ iter = 858/8, route#: 141, violation# : 81, overflow# : 81, conflict# : 118, node#: 21203
+## CPU time: 0:3:28, REAL time: 0:3:29
+ iter = 859/9, route#: 151, violation# : 86, overflow# : 86, conflict# : 122, node#: 21208
+## CPU time: 0:3:28, REAL time: 0:3:30
+ iter = 860/10, route#: 143, violation# : 86, overflow# : 86, conflict# : 124, node#: 21247
+## CPU time: 0:3:29, REAL time: 0:3:30
+ iter = 861/5, route#: 245, violation# : 188, overflow# : 188, conflict# : 224, node#: 20950
+## CPU time: 0:3:29, REAL time: 0:3:31
+ iter = 862/6, route#: 237, violation# : 123, overflow# : 123, conflict# : 169, node#: 21050
+## CPU time: 0:3:29, REAL time: 0:3:31
+ iter = 863/7, route#: 193, violation# : 103, overflow# : 103, conflict# : 147, node#: 21103
+## CPU time: 0:3:30, REAL time: 0:3:31
+ iter = 864/8, route#: 175, violation# : 90, overflow# : 90, conflict# : 134, node#: 21195
+## CPU time: 0:3:30, REAL time: 0:3:31
+ iter = 865/9, route#: 142, violation# : 81, overflow# : 81, conflict# : 122, node#: 21218
+## CPU time: 0:3:30, REAL time: 0:3:31
+ iter = 866/10, route#: 142, violation# : 80, overflow# : 80, conflict# : 126, node#: 21233
+## CPU time: 0:3:30, REAL time: 0:3:32
+ iter = 867/5, route#: 233, violation# : 171, overflow# : 171, conflict# : 203, node#: 20943
+## CPU time: 0:3:31, REAL time: 0:3:32
+ iter = 868/6, route#: 200, violation# : 116, overflow# : 116, conflict# : 155, node#: 20986
+## CPU time: 0:3:31, REAL time: 0:3:33
+ iter = 869/7, route#: 163, violation# : 89, overflow# : 89, conflict# : 130, node#: 21083
+## CPU time: 0:3:31, REAL time: 0:3:33
+ iter = 870/8, route#: 147, violation# : 87, overflow# : 87, conflict# : 124, node#: 21150
+## CPU time: 0:3:32, REAL time: 0:3:33
+ iter = 871/9, route#: 134, violation# : 80, overflow# : 80, conflict# : 115, node#: 21198
+## CPU time: 0:3:32, REAL time: 0:3:33
+ iter = 872/10, route#: 137, violation# : 89, overflow# : 89, conflict# : 118, node#: 21219
+## CPU time: 0:3:32, REAL time: 0:3:34
+ iter = 873/5, route#: 170, violation# : 122, overflow# : 122, conflict# : 150, node#: 21066
+## CPU time: 0:3:32, REAL time: 0:3:34
+ iter = 874/6, route#: 176, violation# : 102, overflow# : 102, conflict# : 149, node#: 21073
+## CPU time: 0:3:33, REAL time: 0:3:34
+ iter = 875/7, route#: 183, violation# : 92, overflow# : 92, conflict# : 133, node#: 21111
+## CPU time: 0:3:33, REAL time: 0:3:34
+ iter = 876/8, route#: 153, violation# : 83, overflow# : 83, conflict# : 122, node#: 21181
+## CPU time: 0:3:33, REAL time: 0:3:35
+ iter = 877/9, route#: 146, violation# : 84, overflow# : 84, conflict# : 120, node#: 21194
+## CPU time: 0:3:33, REAL time: 0:3:35
+ iter = 878/10, route#: 140, violation# : 83, overflow# : 83, conflict# : 117, node#: 21277
+## CPU time: 0:3:34, REAL time: 0:3:35
+ iter = 879/5, route#: 200, violation# : 141, overflow# : 141, conflict# : 178, node#: 21049
+## CPU time: 0:3:34, REAL time: 0:3:36
+ iter = 880/6, route#: 173, violation# : 94, overflow# : 94, conflict# : 136, node#: 21096
+## CPU time: 0:3:34, REAL time: 0:3:36
+ iter = 881/7, route#: 149, violation# : 90, overflow# : 90, conflict# : 131, node#: 21140
+## CPU time: 0:3:34, REAL time: 0:3:36
+ iter = 882/8, route#: 142, violation# : 83, overflow# : 83, conflict# : 127, node#: 21215
+## CPU time: 0:3:35, REAL time: 0:3:36
+ iter = 883/9, route#: 139, violation# : 74, overflow# : 74, conflict# : 118, node#: 21277
+## CPU time: 0:3:35, REAL time: 0:3:36
+ iter = 884/10, route#: 139, violation# : 82, overflow# : 82, conflict# : 122, node#: 21258
+## CPU time: 0:3:35, REAL time: 0:3:37
+ iter = 885/5, route#: 179, violation# : 139, overflow# : 139, conflict# : 180, node#: 21070
+## CPU time: 0:3:36, REAL time: 0:3:37
+ iter = 886/6, route#: 204, violation# : 99, overflow# : 99, conflict# : 148, node#: 21110
+## CPU time: 0:3:36, REAL time: 0:3:37
+ iter = 887/7, route#: 170, violation# : 81, overflow# : 81, conflict# : 123, node#: 21168
+## CPU time: 0:3:36, REAL time: 0:3:37
+ iter = 888/8, route#: 145, violation# : 77, overflow# : 77, conflict# : 119, node#: 21216
+## CPU time: 0:3:36, REAL time: 0:3:38
+ iter = 889/9, route#: 129, violation# : 71, overflow# : 71, conflict# : 112, node#: 21252
+## CPU time: 0:3:36, REAL time: 0:3:38
+ iter = 890/10, route#: 135, violation# : 68, overflow# : 68, conflict# : 109, node#: 21256
+## CPU time: 0:3:37, REAL time: 0:3:38
+ iter = 891/5, route#: 176, violation# : 147, overflow# : 147, conflict# : 179, node#: 21091
+## CPU time: 0:3:37, REAL time: 0:3:38
+ iter = 892/6, route#: 186, violation# : 102, overflow# : 102, conflict# : 150, node#: 21109
+## CPU time: 0:3:37, REAL time: 0:3:39
+ iter = 893/7, route#: 152, violation# : 81, overflow# : 81, conflict# : 114, node#: 21171
+## CPU time: 0:3:37, REAL time: 0:3:39
+ iter = 894/8, route#: 135, violation# : 72, overflow# : 72, conflict# : 116, node#: 21206
+## CPU time: 0:3:38, REAL time: 0:3:39
+ iter = 895/9, route#: 136, violation# : 77, overflow# : 77, conflict# : 113, node#: 21241
+## CPU time: 0:3:38, REAL time: 0:3:39
+ iter = 896/10, route#: 120, violation# : 67, overflow# : 67, conflict# : 103, node#: 21279
+## CPU time: 0:3:38, REAL time: 0:3:40
+ iter = 897/5, route#: 138, violation# : 112, overflow# : 112, conflict# : 144, node#: 21102
+## CPU time: 0:3:38, REAL time: 0:3:40
+ iter = 898/6, route#: 163, violation# : 98, overflow# : 98, conflict# : 134, node#: 21171
+## CPU time: 0:3:39, REAL time: 0:3:40
+ iter = 899/7, route#: 155, violation# : 96, overflow# : 96, conflict# : 137, node#: 21245
+## CPU time: 0:3:39, REAL time: 0:3:40
+ iter = 900/8, route#: 159, violation# : 82, overflow# : 82, conflict# : 124, node#: 21338
+## CPU time: 0:3:39, REAL time: 0:3:40
+ iter = 901/9, route#: 135, violation# : 72, overflow# : 72, conflict# : 107, node#: 21377
+## CPU time: 0:3:39, REAL time: 0:3:41
+ iter = 902/10, route#: 132, violation# : 72, overflow# : 72, conflict# : 106, node#: 21434
+## CPU time: 0:3:39, REAL time: 0:3:41
+ iter = 903/5, route#: 146, violation# : 103, overflow# : 103, conflict# : 134, node#: 21275
+## CPU time: 0:3:40, REAL time: 0:3:41
+ iter = 904/6, route#: 144, violation# : 91, overflow# : 91, conflict# : 134, node#: 21348
+## CPU time: 0:3:40, REAL time: 0:3:41
+ iter = 905/7, route#: 134, violation# : 72, overflow# : 72, conflict# : 111, node#: 21375
+## CPU time: 0:3:40, REAL time: 0:3:41
+ iter = 906/8, route#: 130, violation# : 71, overflow# : 71, conflict# : 109, node#: 21452
+## CPU time: 0:3:40, REAL time: 0:3:42
+ iter = 907/9, route#: 111, violation# : 63, overflow# : 63, conflict# : 100, node#: 21422
+## CPU time: 0:3:40, REAL time: 0:3:42
+ iter = 908/10, route#: 128, violation# : 67, overflow# : 67, conflict# : 103, node#: 21461
+## CPU time: 0:3:41, REAL time: 0:3:42
+ iter = 909/5, route#: 171, violation# : 136, overflow# : 136, conflict# : 178, node#: 21246
+## CPU time: 0:3:41, REAL time: 0:3:42
+ iter = 910/6, route#: 185, violation# : 110, overflow# : 110, conflict# : 154, node#: 21242
+## CPU time: 0:3:41, REAL time: 0:3:43
+ iter = 911/7, route#: 162, violation# : 80, overflow# : 80, conflict# : 120, node#: 21316
+## CPU time: 0:3:41, REAL time: 0:3:43
+ iter = 912/8, route#: 127, violation# : 71, overflow# : 71, conflict# : 106, node#: 21335
+## CPU time: 0:3:41, REAL time: 0:3:43
+ iter = 913/9, route#: 120, violation# : 66, overflow# : 66, conflict# : 98, node#: 21416
+## CPU time: 0:3:42, REAL time: 0:3:43
+ iter = 914/10, route#: 133, violation# : 78, overflow# : 78, conflict# : 113, node#: 21447
+## CPU time: 0:3:42, REAL time: 0:3:43
+ iter = 915/5, route#: 129, violation# : 109, overflow# : 109, conflict# : 136, node#: 21303
+## CPU time: 0:3:42, REAL time: 0:3:44
+ iter = 916/6, route#: 152, violation# : 99, overflow# : 99, conflict# : 128, node#: 21317
+## CPU time: 0:3:42, REAL time: 0:3:44
+ iter = 917/7, route#: 142, violation# : 73, overflow# : 73, conflict# : 110, node#: 21348
+## CPU time: 0:3:42, REAL time: 0:3:44
+ iter = 918/8, route#: 141, violation# : 73, overflow# : 73, conflict# : 107, node#: 21436
+## CPU time: 0:3:43, REAL time: 0:3:44
+ iter = 919/9, route#: 128, violation# : 73, overflow# : 73, conflict# : 109, node#: 21457
+## CPU time: 0:3:43, REAL time: 0:3:44
+ iter = 920/10, route#: 116, violation# : 71, overflow# : 71, conflict# : 104, node#: 21504
+## CPU time: 0:3:43, REAL time: 0:3:45
+ iter = 921/5, route#: 184, violation# : 144, overflow# : 144, conflict# : 185, node#: 21222
+## CPU time: 0:3:44, REAL time: 0:3:45
+ iter = 922/6, route#: 204, violation# : 126, overflow# : 126, conflict# : 157, node#: 21269
+## CPU time: 0:3:44, REAL time: 0:3:45
+ iter = 923/7, route#: 185, violation# : 96, overflow# : 96, conflict# : 135, node#: 21333
+## CPU time: 0:3:44, REAL time: 0:3:46
+ iter = 924/8, route#: 162, violation# : 104, overflow# : 104, conflict# : 133, node#: 21404
+## CPU time: 0:3:44, REAL time: 0:3:46
+ iter = 925/9, route#: 167, violation# : 98, overflow# : 98, conflict# : 140, node#: 21471
+## CPU time: 0:3:44, REAL time: 0:3:46
+ iter = 926/10, route#: 157, violation# : 82, overflow# : 82, conflict# : 124, node#: 21522
+## CPU time: 0:3:45, REAL time: 0:3:46
+ iter = 927/5, route#: 196, violation# : 142, overflow# : 142, conflict# : 176, node#: 21302
+## CPU time: 0:3:45, REAL time: 0:3:47
+ iter = 928/6, route#: 193, violation# : 102, overflow# : 102, conflict# : 144, node#: 21316
+## CPU time: 0:3:45, REAL time: 0:3:47
+ iter = 929/7, route#: 157, violation# : 81, overflow# : 81, conflict# : 121, node#: 21392
+## CPU time: 0:3:46, REAL time: 0:3:47
+ iter = 930/8, route#: 145, violation# : 75, overflow# : 75, conflict# : 122, node#: 21439
+## CPU time: 0:3:46, REAL time: 0:3:47
+ iter = 931/9, route#: 127, violation# : 66, overflow# : 66, conflict# : 107, node#: 21490
+## CPU time: 0:3:46, REAL time: 0:3:47
+ iter = 932/10, route#: 131, violation# : 60, overflow# : 60, conflict# : 101, node#: 21526
+## CPU time: 0:3:46, REAL time: 0:3:48
+ iter = 933/5, route#: 176, violation# : 126, overflow# : 126, conflict# : 154, node#: 21315
+## CPU time: 0:3:47, REAL time: 0:3:48
+ iter = 934/6, route#: 174, violation# : 100, overflow# : 100, conflict# : 144, node#: 21368
+## CPU time: 0:3:47, REAL time: 0:3:48
+ iter = 935/7, route#: 150, violation# : 71, overflow# : 71, conflict# : 113, node#: 21396
+## CPU time: 0:3:47, REAL time: 0:3:49
+ iter = 936/8, route#: 124, violation# : 62, overflow# : 62, conflict# : 100, node#: 21442
+## CPU time: 0:3:47, REAL time: 0:3:49
+ iter = 937/9, route#: 111, violation# : 63, overflow# : 63, conflict# : 96, node#: 21453
+## CPU time: 0:3:47, REAL time: 0:3:49
+ iter = 938/10, route#: 108, violation# : 64, overflow# : 64, conflict# : 101, node#: 21465
+## CPU time: 0:3:48, REAL time: 0:3:49
+ iter = 939/5, route#: 131, violation# : 89, overflow# : 89, conflict# : 124, node#: 21324
+## CPU time: 0:3:48, REAL time: 0:3:49
+ iter = 940/6, route#: 118, violation# : 67, overflow# : 67, conflict# : 101, node#: 21347
+## CPU time: 0:3:48, REAL time: 0:3:50
+ iter = 941/7, route#: 134, violation# : 72, overflow# : 72, conflict# : 107, node#: 21384
+## CPU time: 0:3:48, REAL time: 0:3:50
+ iter = 942/8, route#: 125, violation# : 62, overflow# : 62, conflict# : 98, node#: 21434
+## CPU time: 0:3:48, REAL time: 0:3:50
+ iter = 943/9, route#: 119, violation# : 63, overflow# : 63, conflict# : 103, node#: 21490
+## CPU time: 0:3:49, REAL time: 0:3:50
+ iter = 944/10, route#: 124, violation# : 66, overflow# : 66, conflict# : 105, node#: 21510
+## CPU time: 0:3:49, REAL time: 0:3:50
+ iter = 945/5, route#: 136, violation# : 99, overflow# : 99, conflict# : 138, node#: 21394
+## CPU time: 0:3:49, REAL time: 0:3:50
+ iter = 946/6, route#: 140, violation# : 80, overflow# : 80, conflict# : 116, node#: 21435
+## CPU time: 0:3:49, REAL time: 0:3:51
+ iter = 947/7, route#: 124, violation# : 65, overflow# : 65, conflict# : 99, node#: 21485
+## CPU time: 0:3:49, REAL time: 0:3:51
+ iter = 948/8, route#: 111, violation# : 65, overflow# : 65, conflict# : 103, node#: 21494
+## CPU time: 0:3:49, REAL time: 0:3:51
+ iter = 949/9, route#: 112, violation# : 61, overflow# : 61, conflict# : 102, node#: 21514
+## CPU time: 0:3:50, REAL time: 0:3:51
+ iter = 950/10, route#: 109, violation# : 62, overflow# : 62, conflict# : 98, node#: 21537
+## CPU time: 0:3:50, REAL time: 0:3:51
+ iter = 951/5, route#: 131, violation# : 98, overflow# : 98, conflict# : 125, node#: 21386
+## CPU time: 0:3:50, REAL time: 0:3:52
+ iter = 952/6, route#: 138, violation# : 76, overflow# : 76, conflict# : 114, node#: 21393
+## CPU time: 0:3:50, REAL time: 0:3:52
+ iter = 953/7, route#: 115, violation# : 68, overflow# : 68, conflict# : 101, node#: 21401
+## CPU time: 0:3:50, REAL time: 0:3:52
+ iter = 954/8, route#: 115, violation# : 66, overflow# : 66, conflict# : 97, node#: 21450
+## CPU time: 0:3:51, REAL time: 0:3:52
+ iter = 955/9, route#: 109, violation# : 65, overflow# : 65, conflict# : 98, node#: 21450
+## CPU time: 0:3:51, REAL time: 0:3:52
+ iter = 956/10, route#: 119, violation# : 69, overflow# : 69, conflict# : 102, node#: 21491
+## CPU time: 0:3:51, REAL time: 0:3:53
+ iter = 957/5, route#: 148, violation# : 127, overflow# : 127, conflict# : 159, node#: 21282
+## CPU time: 0:3:51, REAL time: 0:3:53
+ iter = 958/6, route#: 190, violation# : 107, overflow# : 107, conflict# : 150, node#: 21397
+## CPU time: 0:3:52, REAL time: 0:3:53
+ iter = 959/7, route#: 163, violation# : 87, overflow# : 87, conflict# : 124, node#: 21395
+## CPU time: 0:3:52, REAL time: 0:3:53
+ iter = 960/8, route#: 141, violation# : 80, overflow# : 80, conflict# : 125, node#: 21489
+## CPU time: 0:3:52, REAL time: 0:3:54
+ iter = 961/9, route#: 155, violation# : 90, overflow# : 90, conflict# : 141, node#: 21582
+## CPU time: 0:3:52, REAL time: 0:3:54
+ iter = 962/10, route#: 157, violation# : 89, overflow# : 89, conflict# : 125, node#: 21625
+## CPU time: 0:3:53, REAL time: 0:3:54
+ iter = 963/5, route#: 200, violation# : 130, overflow# : 130, conflict# : 182, node#: 21342
+## CPU time: 0:3:53, REAL time: 0:3:54
+ iter = 964/6, route#: 184, violation# : 92, overflow# : 92, conflict# : 144, node#: 21388
+## CPU time: 0:3:53, REAL time: 0:3:55
+ iter = 965/7, route#: 170, violation# : 83, overflow# : 83, conflict# : 128, node#: 21447
+## CPU time: 0:3:53, REAL time: 0:3:55
+ iter = 966/8, route#: 138, violation# : 68, overflow# : 68, conflict# : 110, node#: 21472
+## CPU time: 0:3:53, REAL time: 0:3:55
+ iter = 967/9, route#: 120, violation# : 62, overflow# : 62, conflict# : 103, node#: 21519
+## CPU time: 0:3:54, REAL time: 0:3:55
+ iter = 968/10, route#: 130, violation# : 70, overflow# : 70, conflict# : 111, node#: 21592
+## CPU time: 0:3:54, REAL time: 0:3:55
+ iter = 969/5, route#: 181, violation# : 136, overflow# : 136, conflict# : 171, node#: 21349
+## CPU time: 0:3:54, REAL time: 0:3:56
+ iter = 970/6, route#: 180, violation# : 107, overflow# : 107, conflict# : 150, node#: 21354
+## CPU time: 0:3:54, REAL time: 0:3:56
+ iter = 971/7, route#: 194, violation# : 96, overflow# : 96, conflict# : 137, node#: 21434
+## CPU time: 0:3:55, REAL time: 0:3:56
+ iter = 972/8, route#: 150, violation# : 88, overflow# : 88, conflict# : 131, node#: 21497
+## CPU time: 0:3:55, REAL time: 0:3:56
+ iter = 973/9, route#: 147, violation# : 84, overflow# : 84, conflict# : 123, node#: 21502
+## CPU time: 0:3:55, REAL time: 0:3:57
+ iter = 974/10, route#: 138, violation# : 79, overflow# : 79, conflict# : 121, node#: 21497
+## CPU time: 0:3:55, REAL time: 0:3:57
+ iter = 975/5, route#: 168, violation# : 117, overflow# : 117, conflict# : 163, node#: 21346
+## CPU time: 0:3:56, REAL time: 0:3:57
+ iter = 976/6, route#: 157, violation# : 78, overflow# : 78, conflict# : 122, node#: 21376
+## CPU time: 0:3:56, REAL time: 0:3:57
+ iter = 977/7, route#: 131, violation# : 61, overflow# : 61, conflict# : 101, node#: 21416
+## CPU time: 0:3:56, REAL time: 0:3:58
+ iter = 978/8, route#: 122, violation# : 73, overflow# : 73, conflict# : 112, node#: 21481
+## CPU time: 0:3:56, REAL time: 0:3:58
+ iter = 979/9, route#: 118, violation# : 66, overflow# : 66, conflict# : 103, node#: 21499
+## CPU time: 0:3:56, REAL time: 0:3:58
+ iter = 980/10, route#: 118, violation# : 73, overflow# : 73, conflict# : 110, node#: 21528
+## CPU time: 0:3:57, REAL time: 0:3:58
+ iter = 981/5, route#: 155, violation# : 113, overflow# : 113, conflict# : 147, node#: 21344
+## CPU time: 0:3:57, REAL time: 0:3:58
+ iter = 982/6, route#: 156, violation# : 88, overflow# : 88, conflict# : 130, node#: 21417
+## CPU time: 0:3:57, REAL time: 0:3:59
+ iter = 983/7, route#: 165, violation# : 81, overflow# : 81, conflict# : 125, node#: 21479
+## CPU time: 0:3:57, REAL time: 0:3:59
+ iter = 984/8, route#: 145, violation# : 82, overflow# : 82, conflict# : 124, node#: 21520
+## CPU time: 0:3:57, REAL time: 0:3:59
+ iter = 985/9, route#: 144, violation# : 73, overflow# : 73, conflict# : 113, node#: 21549
+## CPU time: 0:3:58, REAL time: 0:3:59
+ iter = 986/10, route#: 127, violation# : 69, overflow# : 69, conflict# : 110, node#: 21542
+## CPU time: 0:3:58, REAL time: 0:3:59
+ iter = 987/5, route#: 174, violation# : 123, overflow# : 123, conflict# : 159, node#: 21326
+## CPU time: 0:3:58, REAL time: 0:4:0
+ iter = 988/6, route#: 156, violation# : 89, overflow# : 89, conflict# : 124, node#: 21380
+## CPU time: 0:3:58, REAL time: 0:4:0
+ iter = 989/7, route#: 129, violation# : 68, overflow# : 68, conflict# : 102, node#: 21415
+## CPU time: 0:3:59, REAL time: 0:4:0
+ iter = 990/8, route#: 128, violation# : 69, overflow# : 69, conflict# : 106, node#: 21464
+## CPU time: 0:3:59, REAL time: 0:4:0
+ iter = 991/9, route#: 126, violation# : 73, overflow# : 73, conflict# : 112, node#: 21483
+## CPU time: 0:3:59, REAL time: 0:4:0
+ iter = 992/10, route#: 136, violation# : 72, overflow# : 72, conflict# : 110, node#: 21535
+## CPU time: 0:3:59, REAL time: 0:4:1
+ iter = 993/5, route#: 190, violation# : 126, overflow# : 126, conflict# : 167, node#: 21326
+## CPU time: 0:4:0, REAL time: 0:4:1
+ iter = 994/6, route#: 171, violation# : 97, overflow# : 97, conflict# : 143, node#: 21348
+## CPU time: 0:4:0, REAL time: 0:4:1
+ iter = 995/7, route#: 166, violation# : 84, overflow# : 84, conflict# : 121, node#: 21372
+## CPU time: 0:4:0, REAL time: 0:4:2
+ iter = 996/8, route#: 146, violation# : 83, overflow# : 83, conflict# : 120, node#: 21434
+## CPU time: 0:4:0, REAL time: 0:4:2
+ iter = 997/9, route#: 128, violation# : 72, overflow# : 72, conflict# : 109, node#: 21468
+## CPU time: 0:4:0, REAL time: 0:4:2
+ iter = 998/10, route#: 116, violation# : 76, overflow# : 76, conflict# : 108, node#: 21504
+## CPU time: 0:4:1, REAL time: 0:4:2
+ iter = 999/5, route#: 166, violation# : 130, overflow# : 130, conflict# : 165, node#: 21331
+## CPU time: 0:4:1, REAL time: 0:4:3
+ iter = 1000/6, route#: 168, violation# : 103, overflow# : 103, conflict# : 135, node#: 21385
+## CPU time: 0:4:1, REAL time: 0:4:3
+ iter = 1001/7, route#: 152, violation# : 88, overflow# : 88, conflict# : 121, node#: 21423
+## CPU time: 0:4:1, REAL time: 0:4:3
+ iter = 1002/8, route#: 130, violation# : 74, overflow# : 74, conflict# : 118, node#: 21469
+## CPU time: 0:4:2, REAL time: 0:4:3
+ iter = 1003/9, route#: 129, violation# : 75, overflow# : 75, conflict# : 115, node#: 21479
+## CPU time: 0:4:2, REAL time: 0:4:3
+ iter = 1004/10, route#: 145, violation# : 89, overflow# : 89, conflict# : 127, node#: 21500
+## CPU time: 0:4:2, REAL time: 0:4:4
+ iter = 1005/5, route#: 164, violation# : 115, overflow# : 115, conflict# : 155, node#: 21384
+## CPU time: 0:4:2, REAL time: 0:4:4
+ iter = 1006/6, route#: 165, violation# : 89, overflow# : 89, conflict# : 134, node#: 21373
+## CPU time: 0:4:3, REAL time: 0:4:4
+ iter = 1007/7, route#: 140, violation# : 73, overflow# : 73, conflict# : 112, node#: 21415
+## CPU time: 0:4:3, REAL time: 0:4:4
+ iter = 1008/8, route#: 139, violation# : 77, overflow# : 77, conflict# : 122, node#: 21442
+## CPU time: 0:4:3, REAL time: 0:4:5
+ iter = 1009/9, route#: 132, violation# : 71, overflow# : 71, conflict# : 117, node#: 21459
+## CPU time: 0:4:3, REAL time: 0:4:5
+ iter = 1010/10, route#: 142, violation# : 82, overflow# : 82, conflict# : 119, node#: 21526
+## CPU time: 0:4:3, REAL time: 0:4:5
+ iter = 1011/5, route#: 162, violation# : 122, overflow# : 122, conflict# : 163, node#: 21382
+## CPU time: 0:4:4, REAL time: 0:4:5
+ iter = 1012/6, route#: 167, violation# : 93, overflow# : 93, conflict# : 132, node#: 21436
+## CPU time: 0:4:4, REAL time: 0:4:6
+ iter = 1013/7, route#: 157, violation# : 87, overflow# : 87, conflict# : 130, node#: 21448
+## CPU time: 0:4:4, REAL time: 0:4:6
+ iter = 1014/8, route#: 141, violation# : 88, overflow# : 88, conflict# : 129, node#: 21513
+## CPU time: 0:4:4, REAL time: 0:4:6
+ iter = 1015/9, route#: 146, violation# : 88, overflow# : 88, conflict# : 126, node#: 21542
+## CPU time: 0:4:4, REAL time: 0:4:6
+ iter = 1016/10, route#: 139, violation# : 77, overflow# : 77, conflict# : 113, node#: 21547
+## CPU time: 0:4:5, REAL time: 0:4:6
+ iter = 1017/5, route#: 151, violation# : 116, overflow# : 116, conflict# : 152, node#: 21424
+## CPU time: 0:4:5, REAL time: 0:4:7
+ iter = 1018/6, route#: 165, violation# : 106, overflow# : 106, conflict# : 152, node#: 21445
+## CPU time: 0:4:5, REAL time: 0:4:7
+ iter = 1019/7, route#: 173, violation# : 85, overflow# : 85, conflict# : 132, node#: 21470
+## CPU time: 0:4:6, REAL time: 0:4:7
+ iter = 1020/8, route#: 142, violation# : 79, overflow# : 79, conflict# : 126, node#: 21540
+## CPU time: 0:4:6, REAL time: 0:4:7
+ iter = 1021/9, route#: 136, violation# : 80, overflow# : 80, conflict# : 126, node#: 21542
+## CPU time: 0:4:6, REAL time: 0:4:8
+ iter = 1022/10, route#: 148, violation# : 85, overflow# : 85, conflict# : 131, node#: 21549
+## CPU time: 0:4:6, REAL time: 0:4:8
+ iter = 1023/5, route#: 222, violation# : 146, overflow# : 146, conflict# : 186, node#: 21280
+## CPU time: 0:4:7, REAL time: 0:4:8
+ iter = 1024/6, route#: 186, violation# : 93, overflow# : 93, conflict# : 137, node#: 21361
+## CPU time: 0:4:7, REAL time: 0:4:8
+ iter = 1025/7, route#: 149, violation# : 71, overflow# : 71, conflict# : 111, node#: 21438
+## CPU time: 0:4:7, REAL time: 0:4:9
+ iter = 1026/8, route#: 135, violation# : 71, overflow# : 71, conflict# : 111, node#: 21489
+## CPU time: 0:4:7, REAL time: 0:4:9
+ iter = 1027/9, route#: 127, violation# : 70, overflow# : 70, conflict# : 106, node#: 21518
+## CPU time: 0:4:7, REAL time: 0:4:9
+ iter = 1028/10, route#: 132, violation# : 71, overflow# : 71, conflict# : 112, node#: 21571
+## CPU time: 0:4:8, REAL time: 0:4:9
+ iter = 1029/5, route#: 193, violation# : 138, overflow# : 138, conflict# : 177, node#: 21332
+## CPU time: 0:4:8, REAL time: 0:4:10
+ iter = 1030/6, route#: 186, violation# : 100, overflow# : 100, conflict# : 148, node#: 21366
+## CPU time: 0:4:8, REAL time: 0:4:10
+ iter = 1031/7, route#: 144, violation# : 80, overflow# : 80, conflict# : 113, node#: 21395
+## CPU time: 0:4:8, REAL time: 0:4:10
+ iter = 1032/8, route#: 128, violation# : 67, overflow# : 67, conflict# : 100, node#: 21457
+## CPU time: 0:4:9, REAL time: 0:4:10
+ iter = 1033/9, route#: 116, violation# : 72, overflow# : 72, conflict# : 99, node#: 21484
+## CPU time: 0:4:9, REAL time: 0:4:11
+ iter = 1034/10, route#: 133, violation# : 84, overflow# : 84, conflict# : 114, node#: 21549
+## CPU time: 0:4:9, REAL time: 0:4:11
+ iter = 1035/5, route#: 186, violation# : 126, overflow# : 126, conflict# : 175, node#: 21344
+## CPU time: 0:4:10, REAL time: 0:4:11
+ iter = 1036/6, route#: 169, violation# : 95, overflow# : 95, conflict# : 145, node#: 21397
+## CPU time: 0:4:10, REAL time: 0:4:12
+ iter = 1037/7, route#: 152, violation# : 88, overflow# : 88, conflict# : 129, node#: 21403
+## CPU time: 0:4:10, REAL time: 0:4:12
+ iter = 1038/8, route#: 151, violation# : 83, overflow# : 83, conflict# : 119, node#: 21467
+## CPU time: 0:4:10, REAL time: 0:4:12
+ iter = 1039/9, route#: 130, violation# : 78, overflow# : 78, conflict# : 117, node#: 21510
+## CPU time: 0:4:10, REAL time: 0:4:12
+ iter = 1040/10, route#: 131, violation# : 79, overflow# : 79, conflict# : 111, node#: 21545
+## CPU time: 0:4:11, REAL time: 0:4:12
+ iter = 1041/5, route#: 180, violation# : 149, overflow# : 149, conflict# : 183, node#: 21318
+## CPU time: 0:4:11, REAL time: 0:4:13
+ iter = 1042/6, route#: 187, violation# : 103, overflow# : 103, conflict# : 136, node#: 21394
+## CPU time: 0:4:11, REAL time: 0:4:13
+ iter = 1043/7, route#: 146, violation# : 79, overflow# : 79, conflict# : 117, node#: 21481
+## CPU time: 0:4:12, REAL time: 0:4:13
+ iter = 1044/8, route#: 151, violation# : 81, overflow# : 81, conflict# : 117, node#: 21610
+## CPU time: 0:4:12, REAL time: 0:4:13
+ iter = 1045/9, route#: 145, violation# : 76, overflow# : 76, conflict# : 121, node#: 21624
+## CPU time: 0:4:12, REAL time: 0:4:14
+ iter = 1046/10, route#: 135, violation# : 87, overflow# : 87, conflict# : 127, node#: 21635
+## CPU time: 0:4:12, REAL time: 0:4:14
+ iter = 1047/5, route#: 198, violation# : 139, overflow# : 139, conflict# : 175, node#: 21379
+## CPU time: 0:4:13, REAL time: 0:4:14
+ iter = 1048/6, route#: 184, violation# : 105, overflow# : 105, conflict# : 145, node#: 21387
+## CPU time: 0:4:13, REAL time: 0:4:15
+ iter = 1049/7, route#: 161, violation# : 73, overflow# : 73, conflict# : 106, node#: 21425
+## CPU time: 0:4:13, REAL time: 0:4:15
+ iter = 1050/8, route#: 115, violation# : 66, overflow# : 66, conflict# : 104, node#: 21451
+## CPU time: 0:4:13, REAL time: 0:4:15
+ iter = 1051/9, route#: 118, violation# : 69, overflow# : 69, conflict# : 101, node#: 21471
+## CPU time: 0:4:13, REAL time: 0:4:15
+ iter = 1052/10, route#: 104, violation# : 66, overflow# : 66, conflict# : 94, node#: 21485
+## CPU time: 0:4:14, REAL time: 0:4:15
+ iter = 1053/5, route#: 173, violation# : 125, overflow# : 125, conflict# : 157, node#: 21307
+## CPU time: 0:4:14, REAL time: 0:4:16
+ iter = 1054/6, route#: 160, violation# : 98, overflow# : 98, conflict# : 132, node#: 21355
+## CPU time: 0:4:14, REAL time: 0:4:16
+ iter = 1055/7, route#: 152, violation# : 81, overflow# : 81, conflict# : 116, node#: 21395
+## CPU time: 0:4:14, REAL time: 0:4:16
+ iter = 1056/8, route#: 142, violation# : 83, overflow# : 83, conflict# : 128, node#: 21468
+## CPU time: 0:4:15, REAL time: 0:4:16
+ iter = 1057/9, route#: 154, violation# : 89, overflow# : 89, conflict# : 129, node#: 21505
+## CPU time: 0:4:15, REAL time: 0:4:17
+ iter = 1058/10, route#: 144, violation# : 89, overflow# : 89, conflict# : 131, node#: 21567
+## CPU time: 0:4:15, REAL time: 0:4:17
+ iter = 1059/5, route#: 198, violation# : 147, overflow# : 147, conflict# : 185, node#: 21307
+## CPU time: 0:4:16, REAL time: 0:4:17
+ iter = 1060/6, route#: 201, violation# : 88, overflow# : 88, conflict# : 134, node#: 21390
+## CPU time: 0:4:16, REAL time: 0:4:17
+ iter = 1061/7, route#: 146, violation# : 80, overflow# : 80, conflict# : 120, node#: 21436
+## CPU time: 0:4:16, REAL time: 0:4:18
+ iter = 1062/8, route#: 140, violation# : 82, overflow# : 82, conflict# : 124, node#: 21453
+## CPU time: 0:4:16, REAL time: 0:4:18
+ iter = 1063/9, route#: 139, violation# : 77, overflow# : 77, conflict# : 118, node#: 21520
+## CPU time: 0:4:16, REAL time: 0:4:18
+ iter = 1064/10, route#: 131, violation# : 75, overflow# : 75, conflict# : 115, node#: 21555
+## CPU time: 0:4:17, REAL time: 0:4:18
+ iter = 1065/5, route#: 175, violation# : 132, overflow# : 132, conflict# : 172, node#: 21379
+## CPU time: 0:4:17, REAL time: 0:4:19
+ iter = 1066/6, route#: 168, violation# : 92, overflow# : 92, conflict# : 138, node#: 21444
+## CPU time: 0:4:17, REAL time: 0:4:19
+ iter = 1067/7, route#: 155, violation# : 83, overflow# : 83, conflict# : 127, node#: 21486
+## CPU time: 0:4:17, REAL time: 0:4:19
+ iter = 1068/8, route#: 139, violation# : 73, overflow# : 73, conflict# : 111, node#: 21547
+## CPU time: 0:4:18, REAL time: 0:4:19
+ iter = 1069/9, route#: 138, violation# : 77, overflow# : 77, conflict# : 117, node#: 21575
+## CPU time: 0:4:18, REAL time: 0:4:20
+ iter = 1070/10, route#: 125, violation# : 70, overflow# : 70, conflict# : 109, node#: 21596
+## CPU time: 0:4:18, REAL time: 0:4:20
+ iter = 1071/5, route#: 170, violation# : 131, overflow# : 131, conflict# : 172, node#: 21407
+## CPU time: 0:4:18, REAL time: 0:4:20
+ iter = 1072/6, route#: 183, violation# : 97, overflow# : 97, conflict# : 141, node#: 21436
+## CPU time: 0:4:19, REAL time: 0:4:20
+ iter = 1073/7, route#: 166, violation# : 89, overflow# : 89, conflict# : 131, node#: 21531
+## CPU time: 0:4:19, REAL time: 0:4:21
+ iter = 1074/8, route#: 145, violation# : 91, overflow# : 91, conflict# : 132, node#: 21551
+## CPU time: 0:4:19, REAL time: 0:4:21
+ iter = 1075/9, route#: 151, violation# : 85, overflow# : 85, conflict# : 129, node#: 21573
+## CPU time: 0:4:19, REAL time: 0:4:21
+ iter = 1076/10, route#: 138, violation# : 76, overflow# : 76, conflict# : 115, node#: 21584
+## CPU time: 0:4:20, REAL time: 0:4:21
+ iter = 1077/5, route#: 187, violation# : 139, overflow# : 139, conflict# : 171, node#: 21366
+## CPU time: 0:4:20, REAL time: 0:4:22
+ iter = 1078/6, route#: 196, violation# : 109, overflow# : 109, conflict# : 150, node#: 21410
+## CPU time: 0:4:20, REAL time: 0:4:22
+ iter = 1079/7, route#: 174, violation# : 79, overflow# : 79, conflict# : 114, node#: 21473
+## CPU time: 0:4:20, REAL time: 0:4:22
+ iter = 1080/8, route#: 145, violation# : 86, overflow# : 86, conflict# : 118, node#: 21540
+## CPU time: 0:4:21, REAL time: 0:4:22
+ iter = 1081/9, route#: 150, violation# : 95, overflow# : 95, conflict# : 125, node#: 21576
+## CPU time: 0:4:21, REAL time: 0:4:23
+ iter = 1082/10, route#: 147, violation# : 91, overflow# : 91, conflict# : 125, node#: 21643
+## CPU time: 0:4:21, REAL time: 0:4:23
+ iter = 1083/5, route#: 215, violation# : 153, overflow# : 153, conflict# : 189, node#: 21340
+## CPU time: 0:4:22, REAL time: 0:4:23
+ iter = 1084/6, route#: 193, violation# : 105, overflow# : 105, conflict# : 139, node#: 21415
+## CPU time: 0:4:22, REAL time: 0:4:24
+ iter = 1085/7, route#: 141, violation# : 71, overflow# : 71, conflict# : 109, node#: 21477
+## CPU time: 0:4:22, REAL time: 0:4:24
+ iter = 1086/8, route#: 130, violation# : 77, overflow# : 77, conflict# : 115, node#: 21527
+## CPU time: 0:4:22, REAL time: 0:4:24
+ iter = 1087/9, route#: 137, violation# : 83, overflow# : 83, conflict# : 115, node#: 21560
+## CPU time: 0:4:22, REAL time: 0:4:24
+ iter = 1088/10, route#: 133, violation# : 79, overflow# : 79, conflict# : 118, node#: 21579
+## CPU time: 0:4:23, REAL time: 0:4:25
+ iter = 1089/5, route#: 242, violation# : 179, overflow# : 179, conflict# : 212, node#: 21304
+## CPU time: 0:4:23, REAL time: 0:4:25
+ iter = 1090/6, route#: 203, violation# : 103, overflow# : 103, conflict# : 146, node#: 21377
+## CPU time: 0:4:23, REAL time: 0:4:25
+ iter = 1091/7, route#: 161, violation# : 92, overflow# : 92, conflict# : 135, node#: 21425
+## CPU time: 0:4:24, REAL time: 0:4:25
+ iter = 1092/8, route#: 148, violation# : 80, overflow# : 80, conflict# : 123, node#: 21526
+## CPU time: 0:4:24, REAL time: 0:4:26
+ iter = 1093/9, route#: 147, violation# : 76, overflow# : 76, conflict# : 119, node#: 21598
+## CPU time: 0:4:24, REAL time: 0:4:26
+ iter = 1094/10, route#: 122, violation# : 69, overflow# : 69, conflict# : 111, node#: 21637
+## CPU time: 0:4:24, REAL time: 0:4:26
+ iter = 1095/5, route#: 208, violation# : 140, overflow# : 140, conflict# : 176, node#: 21354
+## CPU time: 0:4:25, REAL time: 0:4:27
+ iter = 1096/6, route#: 187, violation# : 110, overflow# : 110, conflict# : 154, node#: 21429
+## CPU time: 0:4:25, REAL time: 0:4:27
+ iter = 1097/7, route#: 172, violation# : 95, overflow# : 95, conflict# : 136, node#: 21507
+## CPU time: 0:4:25, REAL time: 0:4:27
+ iter = 1098/8, route#: 156, violation# : 90, overflow# : 90, conflict# : 125, node#: 21620
+## CPU time: 0:4:25, REAL time: 0:4:27
+ iter = 1099/9, route#: 156, violation# : 98, overflow# : 98, conflict# : 137, node#: 21626
+## CPU time: 0:4:26, REAL time: 0:4:28
+ iter = 1100/10, route#: 155, violation# : 93, overflow# : 93, conflict# : 134, node#: 21676
+## CPU time: 0:4:26, REAL time: 0:4:28
+ iter = 1101/5, route#: 209, violation# : 149, overflow# : 149, conflict# : 194, node#: 21381
+## CPU time: 0:4:26, REAL time: 0:4:28
+ iter = 1102/6, route#: 215, violation# : 106, overflow# : 106, conflict# : 155, node#: 21450
+## CPU time: 0:4:27, REAL time: 0:4:28
+ iter = 1103/7, route#: 179, violation# : 76, overflow# : 76, conflict# : 122, node#: 21524
+## CPU time: 0:4:27, REAL time: 0:4:29
+ iter = 1104/8, route#: 124, violation# : 70, overflow# : 70, conflict# : 111, node#: 21561
+## CPU time: 0:4:27, REAL time: 0:4:29
+ iter = 1105/9, route#: 130, violation# : 75, overflow# : 75, conflict# : 114, node#: 21561
+## CPU time: 0:4:27, REAL time: 0:4:29
+ iter = 1106/10, route#: 137, violation# : 78, overflow# : 78, conflict# : 123, node#: 21586
+## CPU time: 0:4:27, REAL time: 0:4:29
+ iter = 1107/5, route#: 158, violation# : 131, overflow# : 131, conflict# : 158, node#: 21420
+## CPU time: 0:4:28, REAL time: 0:4:30
+ iter = 1108/6, route#: 164, violation# : 92, overflow# : 92, conflict# : 135, node#: 21519
+## CPU time: 0:4:28, REAL time: 0:4:30
+ iter = 1109/7, route#: 147, violation# : 67, overflow# : 67, conflict# : 104, node#: 21537
+## CPU time: 0:4:28, REAL time: 0:4:30
+ iter = 1110/8, route#: 117, violation# : 67, overflow# : 67, conflict# : 102, node#: 21561
+## CPU time: 0:4:28, REAL time: 0:4:30
+ iter = 1111/9, route#: 126, violation# : 69, overflow# : 69, conflict# : 113, node#: 21663
+## CPU time: 0:4:28, REAL time: 0:4:30
+ iter = 1112/10, route#: 122, violation# : 68, overflow# : 68, conflict# : 107, node#: 21652
+## CPU time: 0:4:29, REAL time: 0:4:31
+ iter = 1113/5, route#: 145, violation# : 100, overflow# : 100, conflict# : 137, node#: 21505
+## CPU time: 0:4:29, REAL time: 0:4:31
+ iter = 1114/6, route#: 134, violation# : 77, overflow# : 77, conflict# : 112, node#: 21551
+## CPU time: 0:4:29, REAL time: 0:4:31
+ iter = 1115/7, route#: 124, violation# : 61, overflow# : 61, conflict# : 99, node#: 21563
+## CPU time: 0:4:29, REAL time: 0:4:31
+ iter = 1116/8, route#: 109, violation# : 55, overflow# : 55, conflict# : 90, node#: 21623
+## CPU time: 0:4:29, REAL time: 0:4:31
+ iter = 1117/9, route#: 99, violation# : 58, overflow# : 58, conflict# : 92, node#: 21635
+## CPU time: 0:4:30, REAL time: 0:4:31
+ iter = 1118/10, route#: 103, violation# : 59, overflow# : 59, conflict# : 93, node#: 21648
+## CPU time: 0:4:30, REAL time: 0:4:32
+ iter = 1119/5, route#: 128, violation# : 96, overflow# : 96, conflict# : 129, node#: 21464
+## CPU time: 0:4:30, REAL time: 0:4:32
+ iter = 1120/6, route#: 146, violation# : 79, overflow# : 79, conflict# : 112, node#: 21494
+## CPU time: 0:4:30, REAL time: 0:4:32
+ iter = 1121/7, route#: 121, violation# : 63, overflow# : 63, conflict# : 88, node#: 21564
+## CPU time: 0:4:30, REAL time: 0:4:32
+ iter = 1122/8, route#: 105, violation# : 60, overflow# : 60, conflict# : 88, node#: 21592
+## CPU time: 0:4:31, REAL time: 0:4:32
+ iter = 1123/9, route#: 102, violation# : 63, overflow# : 63, conflict# : 89, node#: 21625
+## CPU time: 0:4:31, REAL time: 0:4:33
+ iter = 1124/10, route#: 104, violation# : 62, overflow# : 62, conflict# : 94, node#: 21637
+## CPU time: 0:4:31, REAL time: 0:4:33
+ iter = 1125/5, route#: 130, violation# : 88, overflow# : 88, conflict# : 121, node#: 21520
+## CPU time: 0:4:31, REAL time: 0:4:33
+ iter = 1126/6, route#: 134, violation# : 74, overflow# : 74, conflict# : 111, node#: 21556
+## CPU time: 0:4:32, REAL time: 0:4:33
+ iter = 1127/7, route#: 129, violation# : 61, overflow# : 61, conflict# : 94, node#: 21587
+## CPU time: 0:4:32, REAL time: 0:4:34
+ iter = 1128/8, route#: 117, violation# : 61, overflow# : 61, conflict# : 92, node#: 21623
+## CPU time: 0:4:32, REAL time: 0:4:34
+ iter = 1129/9, route#: 98, violation# : 51, overflow# : 51, conflict# : 82, node#: 21641
+## CPU time: 0:4:32, REAL time: 0:4:34
+ iter = 1130/10, route#: 84, violation# : 49, overflow# : 49, conflict# : 77, node#: 21668
+## CPU time: 0:4:32, REAL time: 0:4:34
+ iter = 1131/5, route#: 129, violation# : 93, overflow# : 93, conflict# : 119, node#: 21474
+## CPU time: 0:4:32, REAL time: 0:4:34
+ iter = 1132/6, route#: 128, violation# : 74, overflow# : 74, conflict# : 102, node#: 21487
+## CPU time: 0:4:33, REAL time: 0:4:35
+ iter = 1133/7, route#: 108, violation# : 57, overflow# : 57, conflict# : 81, node#: 21529
+## CPU time: 0:4:33, REAL time: 0:4:35
+ iter = 1134/8, route#: 101, violation# : 66, overflow# : 66, conflict# : 93, node#: 21550
+## CPU time: 0:4:33, REAL time: 0:4:35
+ iter = 1135/9, route#: 105, violation# : 68, overflow# : 68, conflict# : 91, node#: 21583
+## CPU time: 0:4:33, REAL time: 0:4:35
+ iter = 1136/10, route#: 91, violation# : 58, overflow# : 58, conflict# : 81, node#: 21606
+## CPU time: 0:4:33, REAL time: 0:4:35
+ iter = 1137/5, route#: 147, violation# : 100, overflow# : 100, conflict# : 124, node#: 21463
+## CPU time: 0:4:34, REAL time: 0:4:36
+ iter = 1138/6, route#: 130, violation# : 75, overflow# : 75, conflict# : 102, node#: 21515
+## CPU time: 0:4:34, REAL time: 0:4:36
+ iter = 1139/7, route#: 121, violation# : 62, overflow# : 62, conflict# : 90, node#: 21561
+## CPU time: 0:4:34, REAL time: 0:4:36
+ iter = 1140/8, route#: 96, violation# : 52, overflow# : 52, conflict# : 80, node#: 21595
+## CPU time: 0:4:34, REAL time: 0:4:36
+ iter = 1141/9, route#: 91, violation# : 50, overflow# : 50, conflict# : 78, node#: 21587
+## CPU time: 0:4:34, REAL time: 0:4:36
+ iter = 1142/10, route#: 81, violation# : 48, overflow# : 48, conflict# : 78, node#: 21608
+## CPU time: 0:4:35, REAL time: 0:4:37
+ iter = 1143/5, route#: 120, violation# : 80, overflow# : 80, conflict# : 105, node#: 21507
+## CPU time: 0:4:35, REAL time: 0:4:37
+ iter = 1144/6, route#: 116, violation# : 66, overflow# : 66, conflict# : 99, node#: 21496
+## CPU time: 0:4:35, REAL time: 0:4:37
+ iter = 1145/7, route#: 96, violation# : 48, overflow# : 48, conflict# : 80, node#: 21549
+## CPU time: 0:4:35, REAL time: 0:4:37
+ iter = 1146/8, route#: 99, violation# : 46, overflow# : 46, conflict# : 73, node#: 21599
+## CPU time: 0:4:35, REAL time: 0:4:37
+ iter = 1147/9, route#: 82, violation# : 46, overflow# : 46, conflict# : 74, node#: 21632
+## CPU time: 0:4:35, REAL time: 0:4:37
+ iter = 1148/10, route#: 90, violation# : 50, overflow# : 50, conflict# : 76, node#: 21667
+## CPU time: 0:4:36, REAL time: 0:4:37
+ iter = 1149/5, route#: 113, violation# : 91, overflow# : 91, conflict# : 121, node#: 21528
+## CPU time: 0:4:36, REAL time: 0:4:38
+ iter = 1150/6, route#: 128, violation# : 75, overflow# : 75, conflict# : 105, node#: 21599
+## CPU time: 0:4:36, REAL time: 0:4:38
+ iter = 1151/7, route#: 109, violation# : 56, overflow# : 56, conflict# : 82, node#: 21601
+## CPU time: 0:4:36, REAL time: 0:4:38
+ iter = 1152/8, route#: 94, violation# : 51, overflow# : 51, conflict# : 81, node#: 21649
+## CPU time: 0:4:36, REAL time: 0:4:38
+ iter = 1153/9, route#: 90, violation# : 52, overflow# : 52, conflict# : 79, node#: 21685
+## CPU time: 0:4:36, REAL time: 0:4:38
+ iter = 1154/10, route#: 92, violation# : 52, overflow# : 52, conflict# : 82, node#: 21723
+## CPU time: 0:4:37, REAL time: 0:4:39
+ iter = 1155/5, route#: 141, violation# : 102, overflow# : 102, conflict# : 131, node#: 21491
+## CPU time: 0:4:37, REAL time: 0:4:39
+ iter = 1156/6, route#: 144, violation# : 85, overflow# : 85, conflict# : 115, node#: 21589
+## CPU time: 0:4:37, REAL time: 0:4:39
+ iter = 1157/7, route#: 116, violation# : 65, overflow# : 65, conflict# : 94, node#: 21612
+## CPU time: 0:4:37, REAL time: 0:4:39
+ iter = 1158/8, route#: 99, violation# : 61, overflow# : 61, conflict# : 88, node#: 21690
+## CPU time: 0:4:37, REAL time: 0:4:39
+ iter = 1159/9, route#: 90, violation# : 56, overflow# : 56, conflict# : 89, node#: 21666
+## CPU time: 0:4:38, REAL time: 0:4:40
+ iter = 1160/10, route#: 91, violation# : 53, overflow# : 53, conflict# : 82, node#: 21666
+## CPU time: 0:4:38, REAL time: 0:4:40
+ iter = 1161/5, route#: 118, violation# : 84, overflow# : 84, conflict# : 113, node#: 21518
+## CPU time: 0:4:38, REAL time: 0:4:40
+ iter = 1162/6, route#: 130, violation# : 76, overflow# : 76, conflict# : 106, node#: 21565
+## CPU time: 0:4:38, REAL time: 0:4:40
+ iter = 1163/7, route#: 133, violation# : 72, overflow# : 72, conflict# : 107, node#: 21603
+## CPU time: 0:4:39, REAL time: 0:4:40
+ iter = 1164/8, route#: 104, violation# : 56, overflow# : 56, conflict# : 86, node#: 21600
+## CPU time: 0:4:39, REAL time: 0:4:41
+ iter = 1165/9, route#: 105, violation# : 58, overflow# : 58, conflict# : 92, node#: 21623
+## CPU time: 0:4:39, REAL time: 0:4:41
+ iter = 1166/10, route#: 98, violation# : 55, overflow# : 55, conflict# : 83, node#: 21637
+## CPU time: 0:4:39, REAL time: 0:4:41
+ iter = 1167/5, route#: 138, violation# : 103, overflow# : 103, conflict# : 128, node#: 21522
+## CPU time: 0:4:40, REAL time: 0:4:41
+ iter = 1168/6, route#: 146, violation# : 86, overflow# : 86, conflict# : 118, node#: 21586
+## CPU time: 0:4:40, REAL time: 0:4:42
+ iter = 1169/7, route#: 122, violation# : 77, overflow# : 77, conflict# : 100, node#: 21625
+## CPU time: 0:4:40, REAL time: 0:4:42
+ iter = 1170/8, route#: 122, violation# : 74, overflow# : 74, conflict# : 101, node#: 21687
+## CPU time: 0:4:40, REAL time: 0:4:42
+ iter = 1171/9, route#: 130, violation# : 76, overflow# : 76, conflict# : 103, node#: 21708
+## CPU time: 0:4:40, REAL time: 0:4:42
+ iter = 1172/10, route#: 119, violation# : 75, overflow# : 75, conflict# : 103, node#: 21785
+## CPU time: 0:4:41, REAL time: 0:4:43
+ iter = 1173/5, route#: 211, violation# : 132, overflow# : 132, conflict# : 164, node#: 21479
+## CPU time: 0:4:41, REAL time: 0:4:43
+ iter = 1174/6, route#: 159, violation# : 95, overflow# : 95, conflict# : 131, node#: 21516
+## CPU time: 0:4:41, REAL time: 0:4:43
+ iter = 1175/7, route#: 135, violation# : 71, overflow# : 71, conflict# : 106, node#: 21559
+## CPU time: 0:4:42, REAL time: 0:4:43
+ iter = 1176/8, route#: 117, violation# : 63, overflow# : 63, conflict# : 99, node#: 21654
+## CPU time: 0:4:42, REAL time: 0:4:44
+ iter = 1177/9, route#: 113, violation# : 59, overflow# : 59, conflict# : 94, node#: 21675
+## CPU time: 0:4:42, REAL time: 0:4:44
+ iter = 1178/10, route#: 95, violation# : 64, overflow# : 64, conflict# : 89, node#: 21681
+## CPU time: 0:4:42, REAL time: 0:4:44
+ iter = 1179/5, route#: 142, violation# : 105, overflow# : 105, conflict# : 137, node#: 21538
+## CPU time: 0:4:42, REAL time: 0:4:44
+ iter = 1180/6, route#: 140, violation# : 86, overflow# : 86, conflict# : 110, node#: 21584
+## CPU time: 0:4:43, REAL time: 0:4:45
+ iter = 1181/7, route#: 125, violation# : 69, overflow# : 69, conflict# : 108, node#: 21613
+## CPU time: 0:4:43, REAL time: 0:4:45
+ iter = 1182/8, route#: 106, violation# : 59, overflow# : 59, conflict# : 95, node#: 21665
+## CPU time: 0:4:43, REAL time: 0:4:45
+ iter = 1183/9, route#: 105, violation# : 58, overflow# : 58, conflict# : 96, node#: 21642
+## CPU time: 0:4:43, REAL time: 0:4:45
+ iter = 1184/10, route#: 105, violation# : 56, overflow# : 56, conflict# : 96, node#: 21659
+## CPU time: 0:4:43, REAL time: 0:4:45
+ iter = 1185/5, route#: 153, violation# : 119, overflow# : 119, conflict# : 146, node#: 21524
+## CPU time: 0:4:44, REAL time: 0:4:46
+ iter = 1186/6, route#: 161, violation# : 90, overflow# : 90, conflict# : 129, node#: 21544
+## CPU time: 0:4:44, REAL time: 0:4:46
+ iter = 1187/7, route#: 143, violation# : 76, overflow# : 76, conflict# : 117, node#: 21580
+## CPU time: 0:4:44, REAL time: 0:4:46
+ iter = 1188/8, route#: 126, violation# : 70, overflow# : 70, conflict# : 111, node#: 21618
+## CPU time: 0:4:44, REAL time: 0:4:46
+ iter = 1189/9, route#: 111, violation# : 61, overflow# : 61, conflict# : 95, node#: 21652
+## CPU time: 0:4:44, REAL time: 0:4:46
+ iter = 1190/10, route#: 100, violation# : 55, overflow# : 55, conflict# : 91, node#: 21662
+## CPU time: 0:4:44, REAL time: 0:4:46
+ iter = 1191/5, route#: 115, violation# : 85, overflow# : 85, conflict# : 121, node#: 21580
+## CPU time: 0:4:45, REAL time: 0:4:47
+ iter = 1192/6, route#: 143, violation# : 74, overflow# : 74, conflict# : 120, node#: 21585
+## CPU time: 0:4:45, REAL time: 0:4:47
+ iter = 1193/7, route#: 126, violation# : 62, overflow# : 62, conflict# : 104, node#: 21612
+## CPU time: 0:4:45, REAL time: 0:4:47
+ iter = 1194/8, route#: 103, violation# : 54, overflow# : 54, conflict# : 96, node#: 21650
+## CPU time: 0:4:45, REAL time: 0:4:47
+ iter = 1195/9, route#: 104, violation# : 54, overflow# : 54, conflict# : 86, node#: 21693
+## CPU time: 0:4:45, REAL time: 0:4:47
+ iter = 1196/10, route#: 99, violation# : 58, overflow# : 58, conflict# : 89, node#: 21697
+## CPU time: 0:4:46, REAL time: 0:4:48
+ iter = 1197/5, route#: 113, violation# : 81, overflow# : 81, conflict# : 112, node#: 21565
+## CPU time: 0:4:46, REAL time: 0:4:48
+ iter = 1198/6, route#: 126, violation# : 73, overflow# : 73, conflict# : 103, node#: 21559
+## CPU time: 0:4:46, REAL time: 0:4:48
+ iter = 1199/7, route#: 107, violation# : 56, overflow# : 56, conflict# : 88, node#: 21584
+## CPU time: 0:4:46, REAL time: 0:4:48
+ iter = 1200/8, route#: 101, violation# : 62, overflow# : 62, conflict# : 96, node#: 21594
+## CPU time: 0:4:46, REAL time: 0:4:48
+ iter = 1201/9, route#: 108, violation# : 64, overflow# : 64, conflict# : 101, node#: 21609
+## CPU time: 0:4:46, REAL time: 0:4:48
+ iter = 1202/10, route#: 106, violation# : 66, overflow# : 66, conflict# : 103, node#: 21600
+## CPU time: 0:4:47, REAL time: 0:4:49
+ iter = 1203/5, route#: 163, violation# : 106, overflow# : 106, conflict# : 140, node#: 21499
+## CPU time: 0:4:47, REAL time: 0:4:49
+ iter = 1204/6, route#: 147, violation# : 86, overflow# : 86, conflict# : 114, node#: 21514
+## CPU time: 0:4:47, REAL time: 0:4:49
+ iter = 1205/7, route#: 131, violation# : 70, overflow# : 70, conflict# : 99, node#: 21536
+## CPU time: 0:4:47, REAL time: 0:4:49
+ iter = 1206/8, route#: 113, violation# : 62, overflow# : 62, conflict# : 92, node#: 21595
+## CPU time: 0:4:47, REAL time: 0:4:50
+ iter = 1207/9, route#: 103, violation# : 68, overflow# : 68, conflict# : 95, node#: 21619
+## CPU time: 0:4:48, REAL time: 0:4:50
+ iter = 1208/10, route#: 111, violation# : 72, overflow# : 72, conflict# : 105, node#: 21637
+## CPU time: 0:4:48, REAL time: 0:4:50
+ iter = 1209/5, route#: 157, violation# : 112, overflow# : 112, conflict# : 142, node#: 21529
+## CPU time: 0:4:48, REAL time: 0:4:50
+ iter = 1210/6, route#: 151, violation# : 90, overflow# : 90, conflict# : 125, node#: 21543
+## CPU time: 0:4:48, REAL time: 0:4:51
+ iter = 1211/7, route#: 138, violation# : 75, overflow# : 75, conflict# : 106, node#: 21601
+## CPU time: 0:4:49, REAL time: 0:4:51
+ iter = 1212/8, route#: 116, violation# : 64, overflow# : 64, conflict# : 99, node#: 21637
+## CPU time: 0:4:49, REAL time: 0:4:51
+ iter = 1213/9, route#: 111, violation# : 70, overflow# : 70, conflict# : 105, node#: 21660
+## CPU time: 0:4:49, REAL time: 0:4:51
+ iter = 1214/10, route#: 134, violation# : 82, overflow# : 82, conflict# : 121, node#: 21755
+## CPU time: 0:4:49, REAL time: 0:4:51
+ iter = 1215/5, route#: 175, violation# : 123, overflow# : 123, conflict# : 157, node#: 21465
+## CPU time: 0:4:50, REAL time: 0:4:52
+ iter = 1216/6, route#: 168, violation# : 99, overflow# : 99, conflict# : 137, node#: 21569
+## CPU time: 0:4:50, REAL time: 0:4:52
+ iter = 1217/7, route#: 145, violation# : 75, overflow# : 75, conflict# : 107, node#: 21609
+## CPU time: 0:4:50, REAL time: 0:4:52
+ iter = 1218/8, route#: 120, violation# : 72, overflow# : 72, conflict# : 102, node#: 21689
+## CPU time: 0:4:50, REAL time: 0:4:52
+ iter = 1219/9, route#: 121, violation# : 77, overflow# : 77, conflict# : 110, node#: 21704
+## CPU time: 0:4:50, REAL time: 0:4:52
+ iter = 1220/10, route#: 124, violation# : 74, overflow# : 74, conflict# : 105, node#: 21748
+## CPU time: 0:4:51, REAL time: 0:4:53
+ iter = 1221/5, route#: 175, violation# : 113, overflow# : 113, conflict# : 143, node#: 21541
+## CPU time: 0:4:51, REAL time: 0:4:53
+ iter = 1222/6, route#: 153, violation# : 89, overflow# : 89, conflict# : 129, node#: 21593
+## CPU time: 0:4:51, REAL time: 0:4:53
+ iter = 1223/7, route#: 141, violation# : 81, overflow# : 81, conflict# : 118, node#: 21651
+## CPU time: 0:4:51, REAL time: 0:4:53
+ iter = 1224/8, route#: 131, violation# : 78, overflow# : 78, conflict# : 120, node#: 21674
+## CPU time: 0:4:51, REAL time: 0:4:53
+ iter = 1225/9, route#: 128, violation# : 81, overflow# : 81, conflict# : 119, node#: 21716
+## CPU time: 0:4:52, REAL time: 0:4:54
+ iter = 1226/10, route#: 141, violation# : 74, overflow# : 74, conflict# : 119, node#: 21717
+## CPU time: 0:4:52, REAL time: 0:4:54
+ iter = 1227/5, route#: 161, violation# : 124, overflow# : 124, conflict# : 160, node#: 21533
+## CPU time: 0:4:52, REAL time: 0:4:54
+ iter = 1228/6, route#: 165, violation# : 80, overflow# : 80, conflict# : 127, node#: 21544
+## CPU time: 0:4:52, REAL time: 0:4:54
+ iter = 1229/7, route#: 130, violation# : 62, overflow# : 62, conflict# : 101, node#: 21589
+## CPU time: 0:4:53, REAL time: 0:4:55
+ iter = 1230/8, route#: 113, violation# : 62, overflow# : 62, conflict# : 92, node#: 21641
+## CPU time: 0:4:53, REAL time: 0:4:55
+ iter = 1231/9, route#: 105, violation# : 54, overflow# : 54, conflict# : 89, node#: 21676
+## CPU time: 0:4:53, REAL time: 0:4:55
+ iter = 1232/10, route#: 101, violation# : 51, overflow# : 51, conflict# : 84, node#: 21719
+## CPU time: 0:4:53, REAL time: 0:4:55
+ iter = 1233/5, route#: 119, violation# : 81, overflow# : 81, conflict# : 114, node#: 21574
+## CPU time: 0:4:53, REAL time: 0:4:55
+ iter = 1234/6, route#: 129, violation# : 83, overflow# : 83, conflict# : 114, node#: 21610
+## CPU time: 0:4:53, REAL time: 0:4:56
+ iter = 1235/7, route#: 135, violation# : 70, overflow# : 70, conflict# : 109, node#: 21640
+## CPU time: 0:4:54, REAL time: 0:4:56
+ iter = 1236/8, route#: 132, violation# : 73, overflow# : 73, conflict# : 108, node#: 21707
+## CPU time: 0:4:54, REAL time: 0:4:56
+ iter = 1237/9, route#: 119, violation# : 70, overflow# : 70, conflict# : 107, node#: 21743
+## CPU time: 0:4:54, REAL time: 0:4:56
+ iter = 1238/10, route#: 113, violation# : 61, overflow# : 61, conflict# : 96, node#: 21732
+## CPU time: 0:4:54, REAL time: 0:4:56
+ iter = 1239/5, route#: 144, violation# : 96, overflow# : 96, conflict# : 129, node#: 21565
+## CPU time: 0:4:55, REAL time: 0:4:57
+ iter = 1240/6, route#: 133, violation# : 74, overflow# : 74, conflict# : 113, node#: 21603
+## CPU time: 0:4:55, REAL time: 0:4:57
+ iter = 1241/7, route#: 122, violation# : 65, overflow# : 65, conflict# : 101, node#: 21633
+## CPU time: 0:4:55, REAL time: 0:4:57
+ iter = 1242/8, route#: 110, violation# : 63, overflow# : 63, conflict# : 98, node#: 21657
+## CPU time: 0:4:55, REAL time: 0:4:57
+ iter = 1243/9, route#: 120, violation# : 74, overflow# : 74, conflict# : 108, node#: 21713
+## CPU time: 0:4:55, REAL time: 0:4:57
+ iter = 1244/10, route#: 115, violation# : 67, overflow# : 67, conflict# : 101, node#: 21708
+## CPU time: 0:4:55, REAL time: 0:4:57
+ iter = 1245/5, route#: 138, violation# : 98, overflow# : 98, conflict# : 131, node#: 21568

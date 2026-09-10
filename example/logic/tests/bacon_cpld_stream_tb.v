@@ -168,7 +168,8 @@ module bacon_cpld_stream_tb;
             $fatal(1,"timed out flags=%02x mask=%02x",flags,mask);
         end
     endtask
-    task begin_stream(input [7:0] op,input integer addr,n,page,input corrupt);
+    // expected_error: 1 corrupts CRC; 2 preserves CRC for invalid-field tests.
+    task begin_stream(input [7:0] op,input integer addr,n,page,input [1:0] expected_error);
         integer k;
         begin
             enable=0; #200; enable=1; #200;
@@ -177,9 +178,9 @@ module bacon_cpld_stream_tb;
             for(k=0;k<20;k=k+1) bytes[k]=0;
             put32(0,32'h31435342); bytes[4]=op;
             bytes[6]=page ? page-1 : 0; bytes[7]=page ? (page-1)>>8 : 0;
-            put32(8,addr); put32(12,n); put32(16,crc_bytes(16)^corrupt);
+            put32(8,addr); put32(12,n); put32(16,crc_bytes(16)^(expected_error==1));
             send_packet(20);
-            if(!corrupt) wait_flag(2);
+            if(expected_error==0) wait_flag(2);
         end
     endtask
     task receive_block(input integer address,n);
@@ -252,6 +253,8 @@ module bacon_cpld_stream_tb;
                 $fatal(1,"GB NOR data mismatch byte %0d",i);
 
         count_before=writes;
+        begin_stream(3,32'h1fffffe,32'h2000002,1024,2); status();
+        if(error!=5 || writes!=count_before) $fatal(1,"overflowing descriptor range accepted");
         begin_stream(3,0,512,512,1); status();
         if(!error || writes!=count_before) $fatal(1,"bad descriptor touched WR");
         begin_stream(3,0,512,512,0); payload(0,512,1); status();

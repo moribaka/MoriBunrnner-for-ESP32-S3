@@ -9,6 +9,7 @@ set_global_assignment -name SEARCH_PATH bacon
 # Optional simulator library path is machine-local; keep it out of the public project file.
 set_global_assignment -name VERILOG_FILE example_board.v
 set_global_assignment -name VERILOG_FILE bacon.v
+set_global_assignment -name VERILOG_FILE bacon_cpld_stream.v
 
 set_global_assignment -name SDC_FILE example_board.sdc
 
@@ -60,7 +61,9 @@ set_global_assignment -name IO_PLACEMENT_OPTIMIZATION ON
 set_global_assignment -name SEED 1
 set_global_assignment -name FIT_ONLY_ONE_ATTEMPT OFF
 set_global_assignment -name MAX_GLOBAL_CLOCKS_ALLOWED 6
-set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC ON
+# Quartus targets a proxy Cyclone floorplan. Leave speed-driven replication
+# to Supra on the actual AG32 fabric instead of expanding its input netlist.
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC OFF
 #set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
 #set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA ON

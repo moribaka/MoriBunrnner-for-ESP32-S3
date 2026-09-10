@@ -1,0 +1,58 @@
+2026-09-10 14:40:58 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-10 14:40:58 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-10 14:40:58 I (1283) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-10 14:40:58 I (1292) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-10 14:40:58 I (1299) main: timezone configured: CST-8
+2026-09-10 14:40:58 I (1303) main: boot step: mount assets
+2026-09-10 14:40:58 I (1398) assets: mounted /assets: total=1438481 used=763291
+2026-09-10 14:40:58 I (1399) main: boot step: mount sdcard
+2026-09-10 14:40:58 I (1447) SDCARD: SD card mounted
+2026-09-10 14:40:58 I (1448) SDCARD: Total: 59638MB
+2026-09-10 14:40:58 W (1609) main: repaired legacy lang_zh_cn.ini
+2026-09-10 14:40:58 I (3412) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=3v3 settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=legacy
+2026-09-10 14:40:58 I (3419) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-10 14:40:58 I (3430) main: UI language=1 (zh)
+2026-09-10 14:40:58 I (3438) main: boot step: init i2c peripherals
+2026-09-10 14:40:58 W (3439) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-10 14:40:58 I (3449) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-10 14:40:58 I (3457) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-10 14:40:58 I (3460) power_manager: detected AXP209 at 0x34
+2026-09-10 14:40:58 I (3464) main: AXP209 power manager ready at 0x34
+2026-09-10 14:40:58 I (3469) tca9555: TCA9555 ready at 0x20
+2026-09-10 14:40:58 I (3477) main: tca9555.ini apply=0, skip register apply
+2026-09-10 14:40:58 I (3479) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-10 14:40:58 I (3482) tca9555: IRQ enabled on GPIO 17
+2026-09-10 14:40:58 I (3485) main: boot step: init usb msc manager
+2026-09-10 14:40:58 I (3489) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-10 14:40:58 I (3495) main: USB MSC manager ready, pass-through default is disabled
+2026-09-10 14:40:58 I (3501) main: boot step: init nvs
+2026-09-10 14:40:58 I (3532) main: boot step: init mcu debug
+2026-09-10 14:40:58 I (3533) main: boot step: init lvgl/display
+2026-09-10 14:40:58 I (3777) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-10 14:40:58 I (3778) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-10 14:40:58 I (3782) lvgl_port: using single LVGL draw buffer (
+2026-09-10 14:40:58 @mori {"event":"status","version":"v2.32-97-g1b4f7f9-dirty","uptime_ms":146346,"internal_free":101955,"internal_largest":31744,"psram_free":7557356,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"legacy","ag32_link_active":"unknown","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-10 14:40:58 I (147886) power_manager: CPU perf lock acquired by bacon_check
+2026-09-10 14:40:58 I (147887) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 14:40:58 I (147891) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 14:40:58 I (147896) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 14:40:59 I (148107) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 14:40:59 I (148109) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 14:40:59 I (148110) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 14:40:59 I (148112) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 14:40:59 I (148117) mcu_debug: DMI DMSTATUS before halt=0x000f0ca2
+2026-09-10 14:40:59 I (148123) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 14:40:59 I (148131) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 14:40:59 I (148136) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 14:40:59 I (148156) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-10 14:40:59 I (148158) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-10 14:40:59 I (148160) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-10 14:40:59 I (148161) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-10 14:40:59 I (148168) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-10 14:40:59 I (148174) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
+2026-09-10 14:40:59 I (148180) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-10 14:40:59 I (148188) power_manager: CPU perf lock released by bacon_check
+2026-09-10 14:40:59 
+2026-09-10 14:40:59 @mori {"event":"bacon_check","ok":true,"error":"ESP_OK","preference":"legacy","mcu_halted_during_reads":true,"mcu_resumed":true,"samples":256,"mean_us":40.2421875,"p50_us":36,"p95_us":37,"max_us":547}
+2026-09-10 14:40:59 
+2026-09-10 14:40:59 @mori {"event":"cpld_info","ok":false,"error":"ESP_ERR_NOT_SUPPORTED","block_bytes":1024}

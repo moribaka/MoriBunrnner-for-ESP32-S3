@@ -15,7 +15,7 @@ Use this skill for the physical `F:\dev\esp32\moriburnner` board workflow. It is
 - Last verified board MAC: `a4:cb:8f:f2:c4:c0`, VID303A/PID1001. COM19 (VIDCAFE) is another device. Discover HTTP IP each session; the observed `192.168.1.134` is DHCP, not a permanent address.
 - The companion AG32 is updated by ESP32 over onboard SWD. Never connect an external SWD tool while the ESP32 is in SWD mode.
 - Bacon SPI must remain at 40 MHz. Do not lower the clock to hide timing errors.
-- Primary cartridge I/O is pure CPLD Bacon. Both legacy and auto select it without MCU negotiation or request allocation. The MCU transport is an explicit experimental option; do not restore MCU as the default after diagnostics.
+- Primary cartridge I/O is pure CPLD: original Bacon for small accesses and the BSC1 extension for supported bulk operations. Legacy explicitly selects original Bacon; auto can select the extension before an operation after capability/recipe checks. Neither path negotiates with the MCU. The MCU transport is experimental; do not restore it as the default after diagnostics.
 - AG32 MCU firmware disables only `JTDI`, `JTDO`, and `NJTRST`; `JTCK`/`JTMS` remain available for SWD.
 - The AG32 batch is `example/moriburnner_ag32_batch.bin`; validate it before programming.
 
@@ -89,9 +89,22 @@ Older ESP firmware copied the report only at job completion: while `state=runnin
 
 Do not write through the MCU transport while its PING fails. MCU readiness is not a prerequisite for pure-CPLD Bacon operation. Do not add retries, clock reduction, or mid-operation protocol switching to conceal a framing/timing bug.
 
-The CPLD continuous extension is described in shared/BACON_CPLD_STREAM_DESIGN.md
-and is still a design, not an implemented bitstream. Do not claim the prior
-MCU Stream implements that hardware path.
+The CPLD continuous extension is implemented in bacon_cpld_stream.v and its
+ESP driver. Read shared/BACON_CPLD_STREAM_DESIGN.md for the actual BSC1 wire
+contract and docs/cpld_stream_implementation_20260910.md for current board
+qualification, source and artifact evidence. Implementation or simulation
+alone does not establish a usable routed bitstream. Do not claim the prior
+MCU Stream implements this hardware path.
+
+Use `cpld-info` for read-only extension identity/capability probing. On old
+AG32 firmware, ESP_ERR_NOT_SUPPORTED is expected. `cpld-check` compares eight
+64KiB reads against original Bacon while the MCU is halted; require ok=true,
+passes=8 and mcu_resumed=true. It reports elapsed time and first-buffer
+readiness separately from the single-word latency measured by bacon-check.
+Before a first CPLD write, pass this check and a full32MiB comparison against
+the preserved cartridge backup. Select `ag32-link cpld` explicitly for its
+benchmark. Current pure-CPLD builds omit the experimental MCU transport via
+ENABLE_MCU_TRANSPORT=0; MCU PING is therefore not an applicable readiness test.
 
 ## Build evidence
 

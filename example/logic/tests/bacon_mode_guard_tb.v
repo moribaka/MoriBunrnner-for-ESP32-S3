@@ -69,10 +69,16 @@ module bacon_mode_guard_tb;
     endtask
 
     reg [31:0] status;
+    integer key_bit;
     initial begin
         #30 resetn = 1'b1;
         #30;
         if (mcu_mode !== 1'b0) $fatal(1, "MCU mode must default off");
+
+        for (key_bit=0; key_bit<64; key_bit=key_bit+1) begin
+            mode_bytes(64'h4d4f52493243504c ^ (64'd1 << key_bit));
+            if (mcu_mode || cpld_mode) $fatal(1,"corrupt key accepted at bit %0d",key_bit);
+        end
 
         mode_bytes(64'h4d4f5249324d4354);
         if (mcu_mode !== 1'b0) $fatal(1, "near-match entered MCU mode");

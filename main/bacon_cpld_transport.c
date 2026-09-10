@@ -28,8 +28,10 @@ static esp_err_t read_status(cpld_status_t *status)
     memset(tx, 0x0f, sizeof(tx));
     esp_err_t err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_2, tx, rx, sizeof(rx));
     if (err != ESP_OK) return err;
-    if (rx[4] != 0xba || rx[5] != 0xce || rx[6] != 1 || !(rx[7] & BACON_CPLD_MODE))
+    if (rx[4] != 0xba || rx[5] != 0xce || rx[6] != 1 || !(rx[7] & BACON_CPLD_MODE)) {
+        ESP_LOGW(TAG, "status identity=%02x%02x%02x flags=%02x",rx[4],rx[5],rx[6],rx[7]);
         return ESP_ERR_NOT_SUPPORTED;
+    }
     status->flags = rx[7];
     status->completed = ag32_mcu_read_le32(rx + 8);
     status->error = ag32_mcu_read_le32(rx + 12);
@@ -135,8 +137,15 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
         if (reading) {
             memset(wire, 0, padded + 8);
             err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_1, wire, wire, padded + 8);
-            if (err == ESP_OK && ag32_mcu_crc32(wire + 4, count) != ag32_mcu_read_le32(wire + 4 + padded))
-                err = ESP_ERR_INVALID_CRC;
+            if (err == ESP_OK) {
+                uint32_t computed = ag32_mcu_crc32(wire + 4, count);
+                uint32_t received = ag32_mcu_read_le32(wire + 4 + padded);
+                if (computed != received) {
+                    ESP_LOGE(TAG, "read CRC @0x%08" PRIx32 " bytes=%u computed=%08" PRIx32 " received=%08" PRIx32,
+                        byte_address + (uint32_t)transferred, (unsigned)count, computed, received);
+                    err = ESP_ERR_INVALID_CRC;
+                }
+            }
             if (err == ESP_OK) memcpy((uint8_t *)data + transferred, wire + 4, count);
         } else {
             memcpy(wire, (const uint8_t *)data + transferred, count);

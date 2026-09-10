@@ -281,11 +281,11 @@ module bacon_mode_guard(
     output reg mcu_mode,
     output status_miso
 );
-    localparam [63:0] ENTER_MAGIC = 64'h4d4f5249324d4355; // MORI2MCU
-    localparam [63:0] EXIT_MAGIC  = 64'h4d4f5249324c4547; // MORI2LEG
-
-    reg [63:0] mode_shift = 64'd0;
-    reg [6:0] mode_bit_count = 7'd0;
+    // Match the same aligned eight-byte keys without storing all 64 bits.
+    reg [6:0] mode_shift = 7'd0;
+    reg [2:0] mode_bit_count = 3'd0, mode_byte_count = 3'd0;
+    reg [2:0] mode_candidates = 3'd0; // CPL, LEG, MCU
+    wire [7:0] mode_byte = {mode_shift,spi_mosi};
     reg enter_toggle = 1'b0;
     reg exit_toggle = 1'b0;
     reg cpld_toggle = 1'b0;
@@ -308,26 +308,39 @@ module bacon_mode_guard(
 
     always @(posedge spi_sck or negedge resetn) begin
         if (!resetn) begin
-            mode_shift <= 64'd0;
-            mode_bit_count <= 7'd0;
+            mode_shift <= 0;
+            mode_bit_count <= 0;
+            mode_byte_count <= 0;
+            mode_candidates <= 0;
             enter_toggle <= 1'b0;
             exit_toggle <= 1'b0;
             cpld_toggle <= 1'b0;
         end else if (!(spi_cs0 && spi_cs1)) begin
-            mode_shift <= 64'd0;
-            mode_bit_count <= 7'd0;
+            mode_shift <= 0;
+            mode_bit_count <= 0;
+            mode_byte_count <= 0;
+            mode_candidates <= 0;
         end else begin
-            mode_shift <= {mode_shift[62:0], spi_mosi};
-            if (mode_bit_count == 7'd63) begin
-                mode_bit_count <= 7'd0;
-                if ({mode_shift[62:0], spi_mosi} == ENTER_MAGIC)
-                    enter_toggle <= ~enter_toggle;
-                else if ({mode_shift[62:0], spi_mosi} == EXIT_MAGIC)
-                    exit_toggle <= ~exit_toggle;
-                else if ({mode_shift[62:0], spi_mosi} == 64'h4d4f52493243504c)
-                    cpld_toggle <= ~cpld_toggle;
-            end else begin
-                mode_bit_count <= mode_bit_count + 7'd1;
+            mode_shift <= {mode_shift[5:0], spi_mosi};
+            mode_bit_count <= mode_bit_count + 3'd1;
+            if (mode_bit_count == 7) begin
+                mode_byte_count <= mode_byte_count + 3'd1;
+                case (mode_byte_count)
+                    0: mode_candidates <= {3{mode_byte == 8'h4d}}; // M
+                    1: mode_candidates <= mode_candidates & {3{mode_byte == 8'h4f}}; // O
+                    2: mode_candidates <= mode_candidates & {3{mode_byte == 8'h52}}; // R
+                    3: mode_candidates <= mode_candidates & {3{mode_byte == 8'h49}}; // I
+                    4: mode_candidates <= mode_candidates & {3{mode_byte == 8'h32}}; // 2
+                    5: mode_candidates <= mode_candidates &
+                        {mode_byte == 8'h43,mode_byte == 8'h4c,mode_byte == 8'h4d};
+                    6: mode_candidates <= mode_candidates &
+                        {mode_byte == 8'h50,mode_byte == 8'h45,mode_byte == 8'h43};
+                    7: begin
+                        if (mode_candidates[0] && mode_byte == 8'h55) enter_toggle <= ~enter_toggle;
+                        if (mode_candidates[1] && mode_byte == 8'h47) exit_toggle <= ~exit_toggle;
+                        if (mode_candidates[2] && mode_byte == 8'h4c) cpld_toggle <= ~cpld_toggle;
+                    end
+                endcase
             end
         end
     end
