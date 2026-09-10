@@ -171,6 +171,7 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"Version", "Version"},
     {"VOL +/- volume  B back", "VOL +/- volume  B back"},
     {"Voltage", "Voltage"},
+    {"A: switch", "A: switch"},
     {"Voltage settle", "Voltage settle"},
     {"Voltage settle changed", "Voltage settle changed"},
     {"Volume", "Volume"},

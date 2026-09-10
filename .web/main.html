@@ -3338,6 +3338,14 @@
                             <button class="btn btn-primary" id="modeGbaBtn" onclick="setCartMode('gba')">📦 GBA 卡带</button>
                             <button class="btn" id="modeMbc5Btn" onclick="setCartMode('mbc5')">🎮 GB/GBC 卡带 (MBC5)</button>
                         </div>
+                        <div id="gbcVoltageSection" style="display: none; margin-bottom: 16px;">
+                            <label class="setting-label" for="burnGbcVoltage">GB/GBC 供电电压</label>
+                            <select id="burnGbcVoltage" class="input" style="max-width: 180px;" disabled onchange="setGbcVoltage(this.value)">
+                                <option value="3v3">3.3V</option>
+                                <option value="5v">5V</option>
+                            </select>
+                            <span class="setting-desc">选择后自动保存，下次卡带操作生效。</span>
+                        </div>
                         <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
                             <div class="setting-item" style="flex: 1; min-width: 220px;">
                                 <label class="setting-label">识别配方</label>
@@ -3615,6 +3623,41 @@
                 loadGbxProfiles(state.cartMode, false);
             }
             refreshBurnStatusSnapshot();
+            refreshGbcVoltage();
+        }
+
+        async function refreshGbcVoltage() {
+            const select = document.getElementById('burnGbcVoltage');
+            if (!select) return;
+            select.disabled = true;
+            try {
+                const response = await apiCall('/api/burn/core_config');
+                const data = await readApiPayload(response);
+                if (!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
+                state.gbcVoltage = data.gbc_voltage;
+                select.value = state.gbcVoltage;
+                select.disabled = false;
+            } catch (error) {
+                showToast('读取 GBC 电压失败: ' + error.message, 'error');
+            }
+        }
+
+        async function setGbcVoltage(voltage) {
+            const select = document.getElementById('burnGbcVoltage');
+            if (!select || (voltage !== '3v3' && voltage !== '5v')) return;
+            select.disabled = true;
+            try {
+                const response = await apiCall(`/api/burn/core_config?gbc_voltage=${voltage}`, { method: 'POST' });
+                const data = await readApiPayload(response);
+                if (!response.ok || !data.ok) throw new Error(data.message || `HTTP ${response.status}`);
+                state.gbcVoltage = data.gbc_voltage;
+                showToast(`GBC 电压已保存为 ${state.gbcVoltage === '5v' ? '5V' : '3.3V'}`, 'success');
+            } catch (error) {
+                showToast('保存 GBC 电压失败: ' + error.message, 'error');
+            } finally {
+                select.value = state.gbcVoltage;
+                select.disabled = false;
+            }
         }
 
         function setCartMode(mode) {
@@ -4655,6 +4698,8 @@
             const mbc5Btn = document.getElementById('modeMbc5Btn');
             const gbaSection = document.getElementById('gbaMultiCartSection');
             const mbc5Section = document.getElementById('mbc5MultiCartSection');
+            const voltageSection = document.getElementById('gbcVoltageSection');
+            if (voltageSection) voltageSection.style.display = state.cartMode === 'mbc5' ? 'block' : 'none';
 
             if (gbaBtn) {
                 gbaBtn.classList.add('btn');
@@ -6757,14 +6802,6 @@
                                     <option value="1000">1000 ms</option>
                                 </select>
                                 <span class="setting-desc">关电后与上目标电压后的等待时间</span>
-                            </div>
-                            <div class="setting-item">
-                                <label class="setting-label" for="burnGbcVoltage">GBC 电压</label>
-                                <select id="burnGbcVoltage" class="input">
-                                    <option value="3v3">3.3V</option>
-                                    <option value="5v">5V</option>
-                                </select>
-                                <span class="setting-desc">MBC5/GB/GBC 卡带默认供电电压</span>
                             </div>
                             <div class="setting-item">
                                 <label class="setting-label" for="burnGbaFixedEraseWindow">GBA 固定擦除窗口</label>
@@ -9977,10 +10014,9 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
-            const gbcVoltageEl = document.getElementById('burnGbcVoltage');
             const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
             const ag32LinkEl = document.getElementById('burnAg32Link');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbcVoltageEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -10003,7 +10039,6 @@
                 setDumpChunkKb(data.dump_chunk_kb || 64);
                 state.gbcVoltage = String(data.gbc_voltage || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
                 state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, true);
-                gbcVoltageEl.value = state.gbcVoltage;
                 gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 ag32LinkEl.value = String(data.ag32_link || 'legacy').toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);
@@ -10018,10 +10053,9 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
-            const gbcVoltageEl = document.getElementById('burnGbcVoltage');
             const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
             const ag32LinkEl = document.getElementById('burnAg32Link');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbcVoltageEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
 
             const erase = String(eraseEl.value || 'auto').toLowerCase();
             const tf = String(tfEl.value || 'auto').toLowerCase();
@@ -10033,7 +10067,6 @@
             const psramMb = String(getPsramWindowMb());
             const mbc5ChunkKb = String(getMbc5ChunkKb());
             const dumpChunkKb = String(getDumpChunkKb());
-            const gbcVoltage = String(gbcVoltageEl.value || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
             const gbaFixedEraseWindow = parseApiBoolean(gbaFixedEraseWindowEl.value, true) ? 'true' : 'false';
             const ag32Link = String(ag32LinkEl.value || 'legacy').toLowerCase();
             statusEl.textContent = '应用中...';
@@ -10050,7 +10083,6 @@
                 query.set('psram_mb', psramMb);
                 query.set('mbc5_chunk_kb', mbc5ChunkKb);
                 query.set('dump_chunk_kb', dumpChunkKb);
-                query.set('gbc_voltage', gbcVoltage);
                 query.set('gba_fixed_erase_window', gbaFixedEraseWindow);
                 query.set('ag32_link', ag32Link);
                 const response = await apiCall(`/api/burn/core_config?${query.toString()}`, { method: 'POST' });
@@ -10072,9 +10104,8 @@
                 setPsramWindowMb(data.psram_mb !== undefined ? data.psram_mb : 0);
                 setMbc5ChunkKb(data.mbc5_chunk_kb || 16);
                 setDumpChunkKb(data.dump_chunk_kb || 64);
-                state.gbcVoltage = String(data.gbc_voltage || gbcVoltage).toLowerCase() === '5v' ? '5v' : '3v3';
+                state.gbcVoltage = data.gbc_voltage;
                 state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, parseApiBoolean(gbaFixedEraseWindow, true));
-                gbcVoltageEl.value = state.gbcVoltage;
                 gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 ag32LinkEl.value = String(data.ag32_link || ag32Link).toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);

@@ -110,9 +110,6 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
         } else if (index == 4U) {
             snprintf(title, title_len, "%s", ui_tr("Dump chunk"));
             snprintf(hint, hint_len, "%" PRIu32 " KB", s_dump_chunk_kb);
-        } else if (s_cart_mode == BURNER_CART_MODE_MBC5) {
-            snprintf(title, title_len, "%s", ui_tr("Voltage"));
-            snprintf(hint, hint_len, "%s", ui_mbc5_voltage_label());
         } else {
             snprintf(title, title_len, "--");
             if (hint_len > 0U) {
@@ -162,6 +159,11 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                 snprintf(hint, hint_len, "%u", (unsigned)s_ram_latency);
                 break;
         }
+        return;
+    }
+    if (ui_burn_rom_op_for_index(index) == UI_BURN_ROM_OP_GBC_VOLTAGE) {
+        snprintf(title, title_len, "GBC %s: %s", ui_tr("Voltage"), ui_mbc5_voltage_label());
+        snprintf(hint, hint_len, "%s", ui_tr("A: switch"));
         return;
     }
     if (ui_burn_rom_op_for_index(index) == UI_BURN_ROM_OP_RECIPE_MODE) {
@@ -294,9 +296,7 @@ static void ui_fill_burn_rom_row(const ui_model_t *model, uint16_t index, char *
                 hint,
                 hint_len,
                 "%s",
-                (s_cart_mode == BURNER_CART_MODE_MBC5) ?
-                    ui_tr("erase/PSRAM/chunk/voltage") :
-                    ui_tr("erase/PSRAM/dump"));
+                ui_tr("erase/PSRAM/dump"));
             return;
         case UI_BURN_ROM_OP_ANALYZE:
         case UI_BURN_ROM_OP_INVALID:

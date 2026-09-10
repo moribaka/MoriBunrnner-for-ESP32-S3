@@ -28,15 +28,27 @@ def run(board, rom):
     board.select(14, lambda s: s["selected"] == 1, "right")
     state = board.key("a")
     assert state["page"] == 15 and state["selected"] == 0, state
+    state = board.key("down")
+    assert state["selected"] == 1 and state["selection"].startswith("GBC "), state
+    initial_voltage = state["selection"]
+    state = board.key("a")
+    assert state["selection"] != initial_voltage, state
+    state = board.key("a")
+    assert state["selection"] == initial_voltage, state
+    board.select(15, lambda s: s["selected"] == 0)
     board.key("a")  # Analyze only.
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         state = board.ui()
-        if state["count"] == 10:
+        if state["count"] == 12:
             break
         time.sleep(0.2)
-    assert state["page"] == 15 and state["count"] == 10, state
-    board.select(15, lambda s: s["selected"] == 1)
+    assert state["page"] == 15 and state["count"] == 12, state
+    board.select(15, lambda s: s["selection"] in ("Settings", "设置"))
+    state = board.key("a")
+    assert state["count"] == 5, state  # Voltage was moved out of this submenu.
+    board.key("b")
+    board.select(15, lambda s: s["selected"] == 2)
     state = board.key("a")
     assert state["page"] == 6, state
     for part in rom.removeprefix("/sdcard/").split("/"):
@@ -45,8 +57,8 @@ def run(board, rom):
     assert state["page"] == 15 and state["count"] == 2, state
     board.select(15, lambda s: s["selected"] == 0)
     state = board.key("a")  # MBC5 mapper selection, not write.
-    assert state["page"] == 15 and state["count"] == 10, state
-    board.select(15, lambda s: s["selected"] == 3)
+    assert state["page"] == 15 and state["count"] == 12, state
+    board.select(15, lambda s: s["selected"] == 4)
     state = board.key("a")  # Open write options, never activate its row.
     snapshots = [state]
     for key in ("down", "up", "right", "left", "down", "up"):
@@ -56,7 +68,7 @@ def run(board, rom):
         snapshots.append(state)
     assert state["page"] == 15 and state["count"] == 1 and state["selected"] == 0, state
     state = board.key("b")
-    assert state["page"] == 15 and state["count"] == 10, state
+    assert state["page"] == 15 and state["count"] == 12, state
     for _ in range(8):
         if state["page"] == 0:
             break

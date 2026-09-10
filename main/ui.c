@@ -133,12 +133,10 @@
 #define UI_BURN_ROM_DUMP_KEY_COUNT 13
 #define UI_BURN_ROM_MAPPER_ITEM_COUNT 2
 #define UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT 5
-#define UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT 6
 #define UI_BURN_ROM_ERASE_CONFIRM_ITEM_COUNT 2
 #define UI_BURN_RAM_ITEM_COUNT 8
 #define UI_BURN_ROM_CUSTOM_SIZE_TEXT_MAX 16
 #define UI_BURN_ROM_GBA_WITH_ROM_ITEM_COUNT 9
-#define UI_BURN_ROM_MBC5_WITH_ROM_ITEM_COUNT 10
 #define UI_BURN_ROM_ACTION_ROWS UI_LIST_VISIBLE_COUNT
 #define UI_BURN_SPLIT_GAP 8
 #define UI_BURN_SIDE_MARGIN 4
@@ -327,6 +325,7 @@ typedef enum {
 typedef enum {
     UI_BURN_ROM_OP_RECIPE_MODE = 0,
     UI_BURN_ROM_OP_ANALYZE,
+    UI_BURN_ROM_OP_GBC_VOLTAGE,
     UI_BURN_ROM_OP_CHOOSE_ROM,
     UI_BURN_ROM_OP_ROM_MAPPER,
     UI_BURN_ROM_OP_WRITE_ROM,
@@ -5568,12 +5567,6 @@ static void ui_select_locked(
                         1);
                     ui_persist_burn_settings_locked(model);
                     ui_set_status_locked(model, ui_tr("dump chunk changed"));
-                } else if (s_cart_mode == BURNER_CART_MODE_MBC5) {
-                    s_mbc5_power_5v_enabled = (s_mbc5_power_5v_enabled == 0u) ? 1u : 0u;
-                    ui_persist_burn_settings_locked(model);
-                    ui_set_status_locked(model, s_mbc5_power_5v_enabled != 0u ?
-                                                   ui_tr("GBC voltage: 5V") :
-                                                   ui_tr("GBC voltage: 3V3"));
                 }
             } else if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_ERASE_CONFIRM) {
                 s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
@@ -5670,6 +5663,18 @@ static void ui_select_locked(
                     case UI_BURN_ROM_OP_ANALYZE:
                         *work_type = UI_WORK_BURN_READ_ID;
                         *start_work = true;
+                        break;
+                    case UI_BURN_ROM_OP_GBC_VOLTAGE:
+                        s_mbc5_power_5v_enabled ^= 1u;
+                        if (burner_save_burn_config() != ESP_OK) {
+                            s_mbc5_power_5v_enabled ^= 1u;
+                            ui_set_status_locked(model, ui_tr("save failed"));
+                            break;
+                        }
+                        ui_set_status_locked(model, s_mbc5_power_5v_enabled != 0u ?
+                                                       ui_tr("GBC voltage: 5V") :
+                                                       ui_tr("GBC voltage: 3V3"));
+                        ui_mark_content_dirty(model);
                         break;
                     case UI_BURN_ROM_OP_CHOOSE_ROM:
                     case UI_BURN_ROM_OP_CHOOSE_SAVE:

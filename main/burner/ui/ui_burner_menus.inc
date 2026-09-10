@@ -75,6 +75,9 @@ static ui_burn_rom_op_t ui_burn_rom_op_for_index(uint16_t index)
     if (index == cursor++) {
         return UI_BURN_ROM_OP_ANALYZE;
     }
+    if (s_cart_mode == BURNER_CART_MODE_MBC5 && index == cursor++) {
+        return UI_BURN_ROM_OP_GBC_VOLTAGE;
+    }
     if (!ui_cart_is_unlocked()) {
         if (ui_burn_rom_has_recipe_mode_row() && index == cursor++) {
             return UI_BURN_ROM_OP_RECIPE_MODE;

@@ -158,6 +158,7 @@ const ui_text_entry_t g_ui_text_zh[] = {
     {"Verify save", "校验存档"},
     {"Version", "版本"},
     {"Voltage", "电压"},
+    {"A: switch", "A键切换"},
     {"Voltage settle", "切压延时"},
     {"Voltage settle changed", "切压延时已改变"},
     {"Web deploy", "网页部署"},

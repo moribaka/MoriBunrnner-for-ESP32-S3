@@ -1,8 +1,6 @@
 static uint16_t ui_burn_rom_settings_item_count(void)
 {
-    return (s_cart_mode == BURNER_CART_MODE_MBC5) ?
-               UI_BURN_ROM_MBC5_SETTINGS_ITEM_COUNT :
-               UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT;
+    return UI_BURN_ROM_GBA_SETTINGS_ITEM_COUNT;
 }
 
 static const char *ui_mbc5_voltage_label(void)
