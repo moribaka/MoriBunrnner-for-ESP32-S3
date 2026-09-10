@@ -318,6 +318,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     char psram_mb_arg[16] = {0};
     char mbc5_chunk_kb_arg[16] = {0};
     char force_no_cfi_arg[16] = {0};
+    char sram_patch_arg[16] = {0};
     char waitcnt_patch_arg[16] = {0};
     char batteryless_patch_arg[16] = {0};
     char resp[BURNER_JSON_RESP_LEN] = {0};
@@ -326,6 +327,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     uint32_t mbc5_chunk_kb = s_burn_mbc5_chunk_kb;
     uint32_t psram_mb = s_burn_psram_window_mb;
     bool gba_force_no_cfi = false;
+    bool apply_gba_sram_patch = true;
     bool apply_gba_waitcnt_patch = false;
     bool apply_gba_batteryless_patch = false;
     bool erase_always = (s_burn_erase_always != 0u);
@@ -379,6 +381,9 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (!burner_get_query_arg(req, "waitcnt", waitcnt_patch_arg, sizeof(waitcnt_patch_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid waitcnt query");
     }
+    if (!burner_get_query_arg(req, "sram", sram_patch_arg, sizeof(sram_patch_arg), false)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid sram query");
+    }
     if (!burner_get_query_arg(req, "batteryless", batteryless_patch_arg, sizeof(batteryless_patch_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid batteryless query");
     }
@@ -416,6 +421,9 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     if (waitcnt_patch_arg[0] != '\0' && !burner_parse_bool_text(waitcnt_patch_arg, &apply_gba_waitcnt_patch)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "waitcnt must be true/false/1/0");
     }
+    if (sram_patch_arg[0] != '\0' && !burner_parse_bool_text(sram_patch_arg, &apply_gba_sram_patch)) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "sram must be true/false/1/0");
+    }
     if (batteryless_patch_arg[0] != '\0' && !burner_parse_bool_text(batteryless_patch_arg, &apply_gba_batteryless_patch)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "batteryless must be true/false/1/0");
     }
@@ -433,7 +441,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
         psram_mb,
         mbc5_chunk_kb,
         gba_force_no_cfi,
-        true,
+        apply_gba_sram_patch,
         apply_gba_waitcnt_patch,
         apply_gba_batteryless_patch,
         gbx_profile_arg,
@@ -445,19 +453,20 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     }
     ui_show_burn_task_status_with_patches(
         result.effective_size,
-        true,
+        apply_gba_sram_patch,
         apply_gba_batteryless_patch,
         apply_gba_waitcnt_patch);
 
     n = snprintf(
         resp,
         sizeof(resp),
-        "{\"ok\":true,\"mode\":\"%s\",\"write_path\":\"%s\",\"mbc5_chunk_kb\":%" PRIu32 ",\"psram_mb\":%" PRIu32 ",\"force_no_cfi\":%s,\"waitcnt\":%s,\"batteryless\":%s,\"message\":\"burn started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
+        "{\"ok\":true,\"mode\":\"%s\",\"write_path\":\"%s\",\"mbc5_chunk_kb\":%" PRIu32 ",\"psram_mb\":%" PRIu32 ",\"force_no_cfi\":%s,\"sram\":%s,\"waitcnt\":%s,\"batteryless\":%s,\"message\":\"burn started\",\"path\":\"%s\",\"size\":%" PRIu32 "}",
         (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
         burner_write_path_to_str(write_path),
         result.mbc5_chunk_kb,
         result.psram_mb,
         result.gba_force_no_cfi ? "true" : "false",
+        apply_gba_sram_patch ? "true" : "false",
         apply_gba_waitcnt_patch ? "true" : "false",
         apply_gba_batteryless_patch ? "true" : "false",
         result.full_path,

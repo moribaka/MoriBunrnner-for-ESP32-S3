@@ -188,6 +188,9 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
             diag_addr);
         return ESP_FAIL;
     }
+    if (job->gba_patch_plan) {
+        burner_apply_gba_patch_plan(rom_buf, diag_len, 0u, job->gba_patch_plan);
+    }
     (void)burner_gba_apply_header_checksum_fix(rom_buf, diag_len, 0u, false);
 
     burner_spi_lock_take();

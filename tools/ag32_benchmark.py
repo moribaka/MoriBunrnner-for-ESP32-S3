@@ -22,11 +22,11 @@ def capture_serial(port_name, path, stop, reports):
     port.dtr = port.rts = False
     try:
         port.open()
-        with path.open("a", encoding="utf-8") as output:
+        with path.open("a", encoding="utf-8", newline="\n") as output:
             while not stop.is_set():
                 line = port.readline().decode("utf-8", errors="replace")
                 if line:
-                    output.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line)
+                    output.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line.rstrip("\r\n") + "\n")
                     output.flush()
                     if any(marker in line for marker in ("summary:", "program profile:", "panic", "abort")):
                         print(line.rstrip(), flush=True)
@@ -55,7 +55,7 @@ def job(args, action, rom):
     params = {"mode": "gba", "name": rom.removeprefix("/sdcard/"), "recipe_mode": args.recipe}
     if action == "write":
         params.update(write_path=args.write_path, pipeline_erase="force",
-                      waitcnt=int(args.waitcnt), batteryless=int(args.batteryless))
+                      sram=int(not args.no_sram), waitcnt=int(args.waitcnt), batteryless=int(args.batteryless))
     if action == "read":
         params.update(size="32MB", dump_chunk_kb=64)
     start = time.monotonic()
@@ -94,9 +94,11 @@ def main():
     parser.add_argument("--recipe", choices=("chis", "chislink", "gbx"), default="chis")
     parser.add_argument("--waitcnt", action="store_true")
     parser.add_argument("--batteryless", action="store_true")
+    parser.add_argument("--no-sram", action="store_true", help="Write without an SRAM patch (including backup restoration)")
     parser.add_argument("--timeout", type=float, default=1800)
     parser.add_argument("--results", required=True)
     parser.add_argument("--port", help="Optional sole-owner serial capture during this run")
+    parser.add_argument("--label", default="", help="Firmware/experiment label recorded with the measurement")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     result = {"configuration": vars(args), "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}

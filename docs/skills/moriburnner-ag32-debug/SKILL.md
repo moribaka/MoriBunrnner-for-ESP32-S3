@@ -51,7 +51,7 @@ python tools/serial_debug.py --port COM26 ag32-ping
 
 SPI is initialized lazily. Diagnostics must call `burner_spi_init()` under the SPI lock before transactions. `ESP_ERR_INVALID_STATE` without a wire status is not evidence of failed mode entry. A successful HTTP SWD probe used to hide this bug by initializing SPI on exit.
 
-`ag32-test` checks 100 echo transactions from 1 to 8192 bytes without touching cartridge contents. `ag32-regs` halts the MCU, snapshots transport registers and the first 12 words of each buffer, resumes, and restores SPI. Do not run either SWD probe/snapshot during a flash/burn job. Treat JSON `ok:false` as failure even if the command returned a terminal event.
+`ag32-test` checks 100 framed echo transactions from 1 to 8192 bytes. `ag32-stream-test` checks raw streaming echo, including block boundaries and odd final lengths. Neither touches cartridge contents. `ag32-regs` halts the MCU, snapshots transport registers and the first 12 words of each buffer, resumes, and restores SPI. Do not run either SWD probe/snapshot during a flash/burn job. Treat JSON `ok:false` as failure even if the command returned a terminal event. `ag32-link` sets a preference; its active field describes the selected backend, not the instantaneous pin mode.
 
 ## AG32 batch update
 
@@ -87,7 +87,15 @@ Do not test destructive cartridge erase/program operations while the MCU transpo
 
 ## Build evidence
 
-For CPLD/AG32 source changes, use the `chisflash-ag32-batch` flow: `pio prelogic`, AG32 release build, `quartus_sh -t af_quartus.tcl`, Supra `af_run.tcl` with `MODE QUARTUS`, `FLOW ALL`, seed 42, `FITTING timing_more`, `EFFORT highest`, then `pio buildbatch`. Record actual logic/tile/LUT/register/BRAM/PLL/pin counts and setup/hold margins.
+For CPLD/interface changes, use the `chisflash-ag32-batch` flow: `pio prelogic`, AG32 release build, `quartus_sh -t af_quartus.tcl`, Supra `af_run.tcl` with `MODE QUARTUS`, `FLOW ALL`, seed 42, `FITTING timing_more`, `EFFORT highest`, then `pio buildbatch`. Record actual logic/tile/LUT/register/BRAM/PLL/pin counts and setup/hold margins. MCU-only builds may reuse the routed CPLD when matching source/settings and bitstream hashes are recorded before and after compilation/packaging.
+
+## Cartridge measurements
+
+Use `tools/ag32_benchmark.py --url URL --action write --link mcu --rom /sdcard/game.gba --verify-rom /sdcard/game.patched.gba --write-path psram --results docs/run.jsonl --port COM26 --label LABEL` for an authorized write comparison. It forces erase, captures serial summaries, and performs full verification. Select legacy/direct/pipeline explicitly; it never retries a failed write through another protocol. The serial port must have no other owner.
+
+For runtime patch tests, first export the matching expected image with `patch-save FLAGS PATH`. The burn uses the original file and matching patch flags; verification uses the exported image. SRAM defaults on in the write API, while `--no-sram` sends `sram=0`, useful for restoring a retained baseline without adding patches. HTTP TF paths are relative to the TF root; the benchmark client normalizes an explicit /sdcard/ prefix.
+
+Use device `task_time_ms` for the burn task and the separate verify task time. Planning/probing before task start is included only in client wall time. NOR program duration comes from the serial summary, captured in `program_reports.program_ms`. Existing HTTP `write_time_ms` measures TF/phase time, not NOR program time. For pipeline erase, use HTTP `erase_time_ms`; the serial summary's erase field covers only the initial synchronous erase. Overlapped component times need not sum to wall time.
 
 ## Evidence and regression scope
 

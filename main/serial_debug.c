@@ -565,7 +565,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-link [auto|legacy|mcu] | ag32-ping | ag32-probe | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | ag32-link [auto|legacy|mcu] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {
