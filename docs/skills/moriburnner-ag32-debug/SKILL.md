@@ -156,24 +156,19 @@ Use device `task_time_ms` for the burn task and the separate verify task time. P
 
 ### Write pipeline and measurements
 
-Standard GBA/GBC writes compare final transformed sector data before erasing.
-PSRAM/pipeline use two whole-sector buffers and one persistent TF reader;
-direct uses one sector buffer with synchronous TF reads. Equal sectors are
-skipped unless force erase is selected. Partial sectors retain bytes outside
-the requested range. GBA programming page size comes from
-`program_buffer_write_bytes`; GBC uses `buffer_write_bytes` (the former may be
-zero). Do not substitute byte programming when the GBC buffered geometry is valid.
-
-Cartridge burning, dump and verification are separate user operations.
-The user rejected mandatory post-write verification added in v2.32.113;
-v2.32.114 removes it, its 80/20 progress split and its status/UI fields.
-Burns finish after programming and bus cleanup, with progress reaching 100%.
-Do not add automatic verification or an automatic-verification setting when
-optimizing dump/verify. AG32 firmware-programmer verification is a separate
-workflow and is unaffected by this cartridge-flow correction.
-`task_time_ms` measures the burn task; `write_time_ms` measures programming
-only. `write_matched_bytes` counts identical target bytes;
-`write_skipped_bytes` counts omitted FF programming pages.
+The user rejected the v113/v114 cartridge write-engine rewrite as outside
+the requested dump/verify optimization. v2.32.115 restores the GBA/GBC burn
+implementations, prefetch, direct/PSRAM/pipeline paths and window UI from
+commit 641f4e6. The added shared sector-comparison engine and matched-byte
+statistic are removed. Do not reintroduce that rewrite, whole-sector equality
+reads or mandatory post-write verification when working on dump/verify.
+Preserve the chosen write path, erase policy and window behavior unless the
+user explicitly requests changes to them. Cartridge burning, dump and verify
+remain separate operations. AG32 firmware verification is unaffected.
+The upload-error and power-cleanup fixes are retained independently of the
+reverted cartridge data path. `task_time_ms` measures the burn task;
+`write_time_ms` measures programming only, and `write_skipped_bytes` counts
+omitted FF programming bytes under the existing writer.
 The benchmark script explicitly starts an independent verify after a burn
 for test evidence; this is not part of device burn behavior. For runtime
 patch tests, compare independently against an exported patched reference.
@@ -188,9 +183,9 @@ error instead of a stale receiving state.
 For the requested minimal release, run `tools/package_minimal.ps1 -Version vX.Y.Z`
 after a matching build. It validates all ten merged flash segments and packages
 exactly a complete 16 MiB ESP32 BIN and the AG32 batch BIN, then checks ZIP
-readback hashes. See `docs/write_flow_v114_20260911.md` for the current
-separate-operation behavior and `docs/write_pipeline_v113_20260911.md` for
-historical sector-engine coverage and limitations.
+readback hashes. See `docs/rollback_v115_20260911.md` for the restored write
+flow. The v113/v114 reports document rejected historical implementations,
+not the current cartridge programming contract.
 
 Read the current project evidence before stating board qualification. SWD batch success, simulated SPI correctness, PING, echo stress, cartridge reads and verified burns are separate milestones.
 

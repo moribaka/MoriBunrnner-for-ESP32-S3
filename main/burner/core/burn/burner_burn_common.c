@@ -1,7 +1,4 @@
 #include "../burner_source_reader.h"
-static void burner_apply_write_transform(const burner_task_param_t *job,
-    uint8_t *data, size_t bytes, uint32_t file_offset);
-#include "burner_write_expected.c"
 
 /* Burn pipeline helpers shared by MBC5/GBC and GBA job paths. */
 
@@ -402,6 +399,14 @@ static esp_err_t burner_dump_read_block_gba(
 #include "burner_dump_stream.c"
 #include "burner_verify_stream.c"
 
+typedef struct {
+    FILE *fp;
+    uint8_t *dst;
+    size_t bytes;
+    size_t read_len;
+    esp_err_t err;
+    SemaphoreHandle_t done;
+} burner_tf_prefetch_ctx_t;
 
 typedef enum {
     BURNER_ERASE_OP_MBC5_RANGE = 0,
@@ -430,8 +435,6 @@ typedef struct {
     esp_err_t err;
     bool stop;
     bool running;
-    bool inflight;
-    uint64_t read_us;
     TaskHandle_t task;
     SemaphoreHandle_t request;
     SemaphoreHandle_t done;
@@ -513,6 +516,36 @@ static esp_err_t burner_tf_write_exact(burner_tf_writer_ctx_t *ctx)
     return ESP_OK;
 }
 
+static void burner_tf_prefetch_task(void *arg)
+{
+    burner_tf_prefetch_ctx_t *ctx = (burner_tf_prefetch_ctx_t *)arg;
+    uint64_t read_start_us = 0u;
+    uint64_t read_elapsed_us = 0u;
+
+    if (ctx == NULL || ctx->fp == NULL || ctx->dst == NULL || ctx->bytes == 0u || ctx->done == NULL) {
+        if (ctx != NULL) {
+            ctx->err = ESP_ERR_INVALID_ARG;
+        }
+        vTaskDelete(NULL);
+        return;
+    }
+
+    if (usb_msc_tf_in_use_by_host()) {
+        ctx->err = ESP_ERR_INVALID_STATE;
+    } else {
+        read_start_us = (uint64_t)esp_timer_get_time();
+        ctx->err = burner_tf_read_exact(ctx->fp, ctx->dst, ctx->bytes);
+        ctx->read_len = ctx->err == ESP_OK ? ctx->bytes : 0;
+        read_elapsed_us = (uint64_t)esp_timer_get_time() - read_start_us;
+        if (ctx->err == ESP_OK && ctx->read_len > 0u && read_elapsed_us > 0u) {
+            burner_status_record_tf_to_psram_copy((uint32_t)ctx->read_len, read_elapsed_us);
+            burner_gba_chis_diag_add_tf_read(read_elapsed_us);
+        }
+    }
+
+    xSemaphoreGive(ctx->done);
+    vTaskDelete(NULL);
+}
 
 void burner_tf_writer_task(void *arg)
 {
@@ -668,7 +701,66 @@ static esp_err_t burner_run_erase_task(burner_erase_task_ctx_t *ctx)
     return ctx->err;
 }
 
+static esp_err_t burner_run_mbc5_range_erase(
+    uint32_t addr_begin,
+    uint32_t addr_end,
+    uint32_t sector_size,
+    bool sample_blank_sectors,
+    bool erase_always)
+{
+    uint32_t planned_sectors = burner_nor_geometry_sector_count_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
+    uint32_t planned_bytes = burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
+    uint32_t tracked_sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
+    burner_erase_task_ctx_t ctx = {
+        .op = BURNER_ERASE_OP_MBC5_RANGE,
+        .addr_begin = addr_begin,
+        .addr_end = addr_end,
+        .sector_size = sector_size,
+        .gba_multi = false,
+        .sample_blank_sectors = sample_blank_sectors,
+        .erase_always = erase_always,
+        .err = ESP_FAIL,
+        .done = NULL,
+    };
+    burner_status_begin_erase_phase(planned_sectors, planned_bytes, tracked_sector_size);
+    esp_err_t err = burner_run_erase_task(&ctx);
 
+    if (err == ESP_OK) {
+        burner_status_record_erase_sectors(planned_sectors, tracked_sector_size);
+    }
+    return err;
+}
+
+static esp_err_t burner_run_gba_range_erase(
+    uint32_t addr_begin,
+    uint32_t addr_end,
+    uint32_t sector_size,
+    bool gba_multi,
+    bool sample_blank_sectors,
+    bool erase_always)
+{
+    uint32_t planned_sectors = burner_nor_geometry_sector_count_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
+    uint32_t planned_bytes = burner_nor_geometry_erase_bytes_from_range(&s_cart_ctx.geometry, addr_begin, addr_end);
+    uint32_t tracked_sector_size = burner_nor_geometry_report_sector_size(&s_cart_ctx.geometry);
+    burner_erase_task_ctx_t ctx = {
+        .op = BURNER_ERASE_OP_GBA_RANGE,
+        .addr_begin = addr_begin,
+        .addr_end = addr_end,
+        .sector_size = sector_size,
+        .gba_multi = gba_multi,
+        .sample_blank_sectors = sample_blank_sectors,
+        .erase_always = erase_always,
+        .err = ESP_FAIL,
+        .done = NULL,
+    };
+    burner_status_begin_erase_phase(planned_sectors, planned_bytes, tracked_sector_size);
+    esp_err_t err = burner_run_erase_task(&ctx);
+
+    if (err == ESP_OK) {
+        burner_status_record_erase_sectors(planned_sectors, tracked_sector_size);
+    }
+    return err;
+}
 
 static esp_err_t burner_run_mbc5_chip_erase(void)
 {
@@ -761,9 +853,7 @@ static void burner_tf_reader_task(void *arg)
             continue;
         }
 
-        uint64_t started = esp_timer_get_time();
         ctx->err = burner_tf_read_exact(ctx->fp, ctx->dst, ctx->bytes);
-        ctx->read_us = esp_timer_get_time() - started;
         ctx->read_len = ctx->err == ESP_OK ? ctx->bytes : 0;
         xSemaphoreGive(ctx->done);
     }
@@ -781,6 +871,10 @@ static esp_err_t burner_tf_reader_start(burner_tf_reader_ctx_t *ctx, FILE *fp)
 
     memset(ctx, 0, sizeof(*ctx));
     ctx->fp = fp;
+
+    if (s_burn_core_cfg.tf_core == BURNER_CORE_AFFINITY_AUTO) {
+        return ESP_OK;
+    }
 
     ctx->request = xSemaphoreCreateBinary();
     ctx->done = xSemaphoreCreateBinary();
@@ -817,14 +911,16 @@ static esp_err_t burner_tf_reader_start(burner_tf_reader_ctx_t *ctx, FILE *fp)
     return ESP_OK;
 }
 
-static esp_err_t burner_tf_reader_submit(burner_tf_reader_ctx_t *ctx, uint8_t *dst, size_t bytes)
+static esp_err_t burner_tf_reader_read(burner_tf_reader_ctx_t *ctx, uint8_t *dst, size_t bytes)
 {
     if (ctx == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!ctx->running || !ctx->request || !ctx->done || ctx->inflight || !dst || !bytes)
-        return ESP_ERR_INVALID_STATE;
+    if (s_burn_core_cfg.tf_core == BURNER_CORE_AFFINITY_AUTO || !ctx->running || ctx->request == NULL ||
+        ctx->done == NULL) {
+        return burner_tf_read_exact(ctx->fp, dst, bytes);
+    }
 
     if (burner_cancel_is_requested()) {
         return ESP_ERR_INVALID_STATE;
@@ -834,26 +930,12 @@ static esp_err_t burner_tf_reader_submit(burner_tf_reader_ctx_t *ctx, uint8_t *d
     ctx->bytes = bytes;
     ctx->read_len = 0u;
     ctx->err = ESP_FAIL;
-    ctx->inflight = true;
     xSemaphoreGive(ctx->request);
-    return ESP_OK;
-}
-
-static esp_err_t burner_tf_reader_wait(burner_tf_reader_ctx_t *ctx)
-{
-    if (!ctx || !ctx->inflight) return ESP_ERR_INVALID_STATE;
     xSemaphoreTake(ctx->done, portMAX_DELAY);
-    ctx->inflight = false;
     if (ctx->err != ESP_OK) {
         return ctx->err;
     }
-    return (ctx->read_len == ctx->bytes) ? ESP_OK : ESP_FAIL;
-}
-
-static esp_err_t burner_tf_reader_read(burner_tf_reader_ctx_t *ctx, uint8_t *dst, size_t bytes)
-{
-    esp_err_t err = burner_tf_reader_submit(ctx, dst, bytes);
-    return err == ESP_OK ? burner_tf_reader_wait(ctx) : err;
+    return (ctx->read_len == bytes) ? ESP_OK : ESP_FAIL;
 }
 
 static void burner_tf_reader_stop(burner_tf_reader_ctx_t *ctx)
@@ -863,7 +945,6 @@ static void burner_tf_reader_stop(burner_tf_reader_ctx_t *ctx)
     }
 
     if (ctx->running && ctx->request != NULL && ctx->done != NULL) {
-        if (ctx->inflight) (void)burner_tf_reader_wait(ctx);
         ctx->stop = true;
         xSemaphoreGive(ctx->request);
         xSemaphoreTake(ctx->done, portMAX_DELAY);

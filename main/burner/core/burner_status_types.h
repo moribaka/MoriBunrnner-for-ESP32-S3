@@ -49,7 +49,6 @@ typedef struct {
     uint32_t mbc5_buffer_write_ok_count;
     uint32_t mbc5_buffer_fallback_count;
     uint32_t write_skipped_bytes;
-    uint32_t write_matched_bytes;
     uint32_t write_speed_total_bytes;
     uint64_t write_speed_total_us;
     uint32_t tf_to_psram_total_bytes;

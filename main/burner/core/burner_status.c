@@ -152,7 +152,6 @@ void burner_status_phase_reset_locked(void)
     s_status.mbc5_buffer_write_ok_count = 0u;
     s_status.mbc5_buffer_fallback_count = 0u;
     s_status.write_skipped_bytes = 0u;
-    s_status.write_matched_bytes = 0;
     s_status.write_speed_total_bytes = 0u;
     s_status.write_speed_total_us = 0u;
     s_status.tf_to_psram_total_bytes = 0u;
@@ -685,14 +684,6 @@ void burner_status_record_write_skipped(uint32_t bytes)
     xSemaphoreTake(s_status_lock, portMAX_DELAY);
     uint64_t total = (uint64_t)s_status.write_skipped_bytes + bytes;
     s_status.write_skipped_bytes = total > UINT32_MAX ? UINT32_MAX : (uint32_t)total;
-    xSemaphoreGive(s_status_lock);
-}
-
-void burner_status_record_write_matched(uint32_t bytes)
-{
-    if (!s_status_lock) return;
-    xSemaphoreTake(s_status_lock, portMAX_DELAY);
-    s_status.write_matched_bytes += bytes;
     xSemaphoreGive(s_status_lock);
 }
 

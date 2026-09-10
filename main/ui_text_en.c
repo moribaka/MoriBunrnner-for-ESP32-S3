@@ -24,7 +24,6 @@ const ui_text_entry_t g_ui_text_en[] = {
     {"Burner", "Burner"},
     {"Bytes", "Bytes"},
     {"Skipped blank data", "Skipped blank data"},
-    {"Skipped identical data", "Skipped identical data"},
     {"Capacity", "Capacity"},
     {"Capacity:", "Capacity:"},
     {"Cart", "Cart"},

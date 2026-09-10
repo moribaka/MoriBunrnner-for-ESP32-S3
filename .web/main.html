@@ -2315,7 +2315,7 @@
                 <div style="margin: 14px 0 8px; text-align: left;">
                     <label class="setting-label" for="fileActionWritePathSelect" style="display:block; margin-bottom: 6px;">烧录路径</label>
                     <select class="input" id="fileActionWritePathSelect" onchange="setWritePathMode(this.value)">
-                        <option value="psram">PSRAM 双缓冲扇区写入（推荐）</option>
+                        <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带（默认推荐）</option>
                         <option value="pipeline">流水: 边擦边写</option>
                         <option value="direct">直接: TF -> 卡带（兼容）</option>
                     </select>
@@ -2325,6 +2325,20 @@
                     <select class="input" id="fileActionPipelineEraseSelect" onchange="setPipelineEraseMode(this.value)">
                         <option value="smart">智能跳过空白扇区（默认）</option>
                         <option value="force">强制每扇区先擦除</option>
+                    </select>
+                </div>
+                <div style="margin: 0 0 8px; text-align: left;">
+                    <label class="setting-label" for="fileActionPsramMbSelect" style="display:block; margin-bottom: 6px;">PSRAM 流水窗口 (MB)</label>
+                    <select class="input" id="fileActionPsramMbSelect" onchange="setPsramWindowMb(this.value)">
+                        <option value="0">Auto</option>
+                        <option value="1">1 MB</option>
+                        <option value="2">2 MB</option>
+                        <option value="3">3 MB</option>
+                        <option value="4" selected>4 MB</option>
+                        <option value="5">5 MB</option>
+                        <option value="6">6 MB</option>
+                        <option value="7">7 MB</option>
+                        <option value="8">8 MB</option>
                     </select>
                 </div>
                 <label id="fileActionWaitcntSection" style="display:flex; align-items:center; gap:8px; margin: 8px 0 16px; text-align:left;">
@@ -3347,7 +3361,7 @@
                             <div class="setting-item" style="flex: 1; min-width: 280px;">
                                 <label class="setting-label">烧录路径</label>
                                 <select class="input" id="writePathModeSelect" onchange="setWritePathMode(this.value)">
-                                    <option value="psram">PSRAM 双缓冲扇区写入（推荐）</option>
+                                    <option value="psram">PSRAM: TF -> PSRAM(1~8MB流水) -> 卡带（默认推荐）</option>
                                     <option value="pipeline">流水: 边擦边写</option>
                                     <option value="direct">直接: TF -> 卡带（兼容）</option>
                                 </select>
@@ -3363,6 +3377,23 @@
                                 </select>
                                 <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
                                     对按扇区写入的烧录流程生效。
+                                </div>
+                            </div>
+                            <div class="setting-item" style="flex: 1; min-width: 220px;" id="psramWindowMbSection">
+                                <label class="setting-label">PSRAM 流水窗口 (MB)</label>
+                                <select class="input" id="psramWindowMbSelect" onchange="setPsramWindowMb(this.value)">
+                                    <option value="0">Auto</option>
+                                    <option value="1">1 MB</option>
+                                    <option value="2">2 MB</option>
+                                    <option value="3">3 MB</option>
+                                    <option value="4" selected>4 MB</option>
+                                    <option value="5">5 MB</option>
+                                    <option value="6">6 MB</option>
+                                    <option value="7">7 MB</option>
+                                    <option value="8">8 MB</option>
+                                </select>
+                                <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
+                                    仅在 <code>write_path=psram</code> 生效。范围 1~8 MB。
                                 </div>
                             </div>
                             <div class="setting-item" style="flex: 1; min-width: 220px;">
@@ -3670,20 +3701,68 @@
         }
 
         function updateWritePathControls(modeOverride) {
-            const effective = getEffectiveWritePath(modeOverride || state.cartMode || 'gba', state.writePathMode || 'psram');
-            state.writePathMode = effective;
-            for (const id of ['writePathModeSelect', 'fileActionWritePathSelect']) {
-                const el = document.getElementById(id);
-                if (el) el.value = effective;
-            }
-            for (const id of ['pipelineEraseModeSelect', 'fileActionPipelineEraseSelect']) {
-                const el = document.getElementById(id);
-                if (el) { el.value = getPipelineEraseMode(); el.disabled = false; }
-            }
+            const mode = modeOverride || state.cartMode || 'gba';
+            const effective = getEffectiveWritePath(mode, state.writePathMode || 'psram');
+            const select = document.getElementById('writePathModeSelect');
+            const fileActionSelect = document.getElementById('fileActionWritePathSelect');
             const hint = document.getElementById('writePathModeHint');
-            if (hint) hint.textContent = (effective === 'direct' ? '单缓冲按扇区处理。' : 'PSRAM 双缓冲：预读下一扇区，同时处理当前扇区。') +
-                (getPipelineEraseMode() === 'force' ? '强制擦除目标扇区。' : '跳过内容相同的扇区，空白扇区无需擦除。') +
-                '写完自动全量校验。';
+            const pipelineSection = document.getElementById('pipelineEraseModeSection');
+            const pipelineSelect = document.getElementById('pipelineEraseModeSelect');
+            const fileActionPipelineSection = document.getElementById('fileActionPipelineEraseSection');
+            const fileActionPipelineSelect = document.getElementById('fileActionPipelineEraseSelect');
+            const psramSection = document.getElementById('psramWindowMbSection');
+            const psramSelect = document.getElementById('psramWindowMbSelect');
+            const fileActionPsramSelect = document.getElementById('fileActionPsramMbSelect');
+            const psramMb = getPsramWindowMb();
+            const psramLabel = psramMb === 0 ? 'Auto' : `${psramMb}MB`;
+            const pipelineEraseMode = getPipelineEraseMode();
+            const pipelineEnabled = effective === 'pipeline';
+            const psramEnabled = effective === 'psram';
+
+            state.writePathMode = effective;
+
+            [select, fileActionSelect].forEach((el) => {
+                if (!el) return;
+                if (el.value !== effective) {
+                    el.value = effective;
+                }
+            });
+
+            [pipelineSelect, fileActionPipelineSelect].forEach((el) => {
+                if (!el) return;
+                if (el.value !== pipelineEraseMode) {
+                    el.value = pipelineEraseMode;
+                }
+                el.disabled = !pipelineEnabled;
+            });
+            [pipelineSection, fileActionPipelineSection].forEach((el) => {
+                if (!el) return;
+                el.style.opacity = pipelineEnabled ? '1' : '0.6';
+            });
+
+            [psramSelect, fileActionPsramSelect].forEach((el) => {
+                if (!el) return;
+                if (el.value !== String(psramMb)) {
+                    el.value = String(psramMb);
+                }
+                el.disabled = !psramEnabled;
+            });
+            if (psramSection) {
+                psramSection.style.opacity = psramEnabled ? '1' : '0.6';
+            }
+
+            if (hint) {
+                if (effective === 'pipeline') {
+                    hint.textContent =
+                        pipelineEraseMode === 'force'
+                            ? '流水模式会对每个扇区先擦再写，不跳过空白扇区。'
+                            : '流水模式会按扇区边擦边写，并智能跳过看起来已空白的扇区。';
+                } else if (effective === 'psram') {
+                    hint.textContent = `PSRAM 模式当前按 ${psramLabel} 循环：先搬运到 PSRAM，再写卡带；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}；这是当前默认推荐模式。`;
+                } else {
+                    hint.textContent = `直接模式不做流水 staging，按 TF -> 卡带直接写入；当前擦除策略为${pipelineEraseMode === 'force' ? '强制擦除' : '智能跳过'}。`;
+                }
+            }
         }
 
         function setWritePathMode(mode) {
@@ -3701,9 +3780,9 @@
                 if (effective === 'pipeline') {
                     message = '烧录路径切换为 Pipeline: 边擦边写';
                 } else if (effective === 'psram') {
-                    message = '烧录路径切换为 PSRAM 双缓冲扇区写入';
+                    message = `烧录路径切换为 PSRAM: ${getPsramWindowMb()}MB staging（默认推荐）`;
                 } else {
-                    message = '烧录路径切换为单缓冲扇区写入';
+                    message = '烧录路径切换为 Direct: TF->卡带';
                 }
                 addBurnLog(message, 'info');
             }
@@ -6724,6 +6803,14 @@
                                 </select>
                                 <span class="setting-desc">关电后与上目标电压后的等待时间</span>
                             </div>
+                            <div class="setting-item">
+                                <label class="setting-label" for="burnGbaFixedEraseWindow">GBA 固定擦除窗口</label>
+                                <select id="burnGbaFixedEraseWindow" class="input">
+                                    <option value="true">开启</option>
+                                    <option value="false">关闭</option>
+                                </select>
+                                <span class="setting-desc">控制 GBA 擦除阶段是否固定使用 4MB 擦除窗口</span>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="applyBurnCoreConfig()">✓ 应用</button>
@@ -9303,7 +9390,6 @@
                             烧录文件: ${data.rom || '--'}<br>
                             已处理 / 总计: ${formatSize(data.processed || 0)} / ${formatSize(data.total || 0)}<br>
                             ${Number(data.write_skipped_bytes || 0) > 0 ? `跳过空白数据: ${formatSize(data.write_skipped_bytes)}<br>` : ''}
-                            ${Number(data.write_matched_bytes || 0) > 0 ? `跳过相同数据: ${formatSize(data.write_matched_bytes)}<br>` : ''}
                             Bacon SPI: ${spiClockText}${spiRequestedText}
                         </div>
                     </div>
@@ -9911,9 +9997,11 @@
                 `默认烧录路径: ${writePath}`,
                 `默认识别配方: ${formatRecipeModeLabel(recipeMode)}`,
                 `擦除策略: ${pipelineErase}`,
+                `PSRAM 窗口: ${psramLabel}`,
                 `MBC5 写入块: ${mbc5ChunkKb} KB`,
                 `ROM 导出块: ${dumpChunkKb} KB`,
                 `GBC 电压: ${gbcVoltage}`,
+                `GBA 固定擦除窗口: ${gbaFixedEraseWindow ? '开启' : '关闭'}`,
                 `AG32 链路: ${ag32Link} (active: ${ag32Active})`,
                 ...(ag32Link === 'mcu' || ag32Active === 'mcu' ?
                     [`MCU capability: ${ag32CapsKnown ? '0x' + ag32Capabilities.toString(16).padStart(8, '0') : '尚未握手'}`] : [])
@@ -9926,8 +10014,9 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
+            const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
             const ag32LinkEl = document.getElementById('burnAg32Link');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !ag32LinkEl) return;
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -9950,6 +10039,7 @@
                 setDumpChunkKb(data.dump_chunk_kb || 64);
                 state.gbcVoltage = String(data.gbc_voltage || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
                 state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, true);
+                gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 ag32LinkEl.value = String(data.ag32_link || 'legacy').toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);
             } catch (error) {
@@ -9963,8 +10053,9 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
+            const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
             const ag32LinkEl = document.getElementById('burnAg32Link');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !ag32LinkEl) return;
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
 
             const erase = String(eraseEl.value || 'auto').toLowerCase();
             const tf = String(tfEl.value || 'auto').toLowerCase();
@@ -9976,6 +10067,7 @@
             const psramMb = String(getPsramWindowMb());
             const mbc5ChunkKb = String(getMbc5ChunkKb());
             const dumpChunkKb = String(getDumpChunkKb());
+            const gbaFixedEraseWindow = parseApiBoolean(gbaFixedEraseWindowEl.value, true) ? 'true' : 'false';
             const ag32Link = String(ag32LinkEl.value || 'legacy').toLowerCase();
             statusEl.textContent = '应用中...';
 
@@ -9991,6 +10083,7 @@
                 query.set('psram_mb', psramMb);
                 query.set('mbc5_chunk_kb', mbc5ChunkKb);
                 query.set('dump_chunk_kb', dumpChunkKb);
+                query.set('gba_fixed_erase_window', gbaFixedEraseWindow);
                 query.set('ag32_link', ag32Link);
                 const response = await apiCall(`/api/burn/core_config?${query.toString()}`, { method: 'POST' });
                 const data = await readApiPayload(response);
@@ -10012,7 +10105,8 @@
                 setMbc5ChunkKb(data.mbc5_chunk_kb || 16);
                 setDumpChunkKb(data.dump_chunk_kb || 64);
                 state.gbcVoltage = data.gbc_voltage;
-                state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, true);
+                state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, parseApiBoolean(gbaFixedEraseWindow, true));
+                gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 ag32LinkEl.value = String(data.ag32_link || ag32Link).toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);
                 showToast('烧录配置已更新', 'success');

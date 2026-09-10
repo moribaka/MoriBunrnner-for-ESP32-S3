@@ -69,6 +69,8 @@
 #define BURN_ROM_DUMP_CHUNK_MAX_BYTES (256U * 1024U)
 #define BURN_ERASE_ALWAYS_DEFAULT 1U
 #define BURN_ERASE_PROBE_BYTES 512U
+#define BURN_BLANK_SAMPLE_BYTES 2U
+#define BURN_BLANK_SAMPLE_POINTS 4U
 #define BURN_MBC5_RAM_CHUNK_BYTES 4096U
 #define BURN_GBA_PROGRAM_CHUNK_BYTES 65536U
 #define BURN_GBA_DUMP_CHUNK_BYTES 65536U
@@ -482,9 +484,6 @@ typedef struct burner_task_param {
     bool rom_preerased;
     /* Owned by the burn task; probe jobs carry no patch payload. */
     burner_gba_patch_plan_t *gba_patch_plan;
-    uint32_t source_size;
-    uint8_t gba_header_checksum;
-    bool gba_header_checksum_valid;
     bool task_with_caps;
 } burner_task_param_t;
 _Static_assert(sizeof(burner_task_param_t) <= 1024,
@@ -894,7 +893,6 @@ uint64_t burner_status_mark_write_end(void);
 void burner_status_mark_write_manual_begin(void);
 void burner_status_record_write_sample(uint32_t bytes, uint64_t elapsed_us);
 void burner_status_record_write_skipped(uint32_t bytes);
-void burner_status_record_write_matched(uint32_t bytes);
 void burner_status_mark_task_begin(void);
 void burner_status_mark_task_end(void);
 uint32_t burner_erase_sector_count_from_bytes(uint64_t bytes, uint32_t sector_size);
@@ -1251,7 +1249,6 @@ esp_err_t burner_ensure_rom_output_dir(void);
 esp_err_t burner_run_write_job(const burner_task_param_t *job);
 esp_err_t burner_run_read_job(const burner_task_param_t *job);
 esp_err_t burner_run_verify_rom_job(const burner_task_param_t *job);
-esp_err_t burner_prepare_write_source(burner_task_param_t *job);
 esp_err_t burner_run_erase_rom_job(const burner_task_param_t *job);
 esp_err_t burner_run_write_ram_job(const burner_task_param_t *job);
 esp_err_t burner_run_read_ram_job(const burner_task_param_t *job);

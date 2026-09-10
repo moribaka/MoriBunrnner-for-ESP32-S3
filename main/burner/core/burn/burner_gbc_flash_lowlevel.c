@@ -1510,6 +1510,49 @@ static esp_err_t burner_buffer_all_ff(const uint8_t *buf, size_t len, bool *all_
     return ESP_OK;
 }
 
+static bool burner_blank_sample_offset_seen(const uint32_t *offsets, size_t count, uint32_t offset)
+{
+    for (size_t i = 0u; i < count; ++i) {
+        if (offsets[i] == offset) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static size_t burner_build_blank_sample_offsets(
+    uint32_t region_size,
+    size_t sample_len,
+    uint32_t align_mask,
+    uint32_t offsets[BURN_BLANK_SAMPLE_POINTS])
+{
+    uint32_t candidates[BURN_BLANK_SAMPLE_POINTS];
+    uint32_t max_offset;
+    size_t count = 0u;
+
+    if (offsets == NULL || region_size == 0u || sample_len == 0u) {
+        return 0u;
+    }
+
+    max_offset = (region_size > (uint32_t)sample_len) ? (region_size - (uint32_t)sample_len) : 0u;
+    candidates[0] = 0u;
+    candidates[1] = (uint32_t)(((uint64_t)max_offset * 30u) / 100u);
+    candidates[2] = (uint32_t)(((uint64_t)max_offset * 70u) / 100u);
+    candidates[3] = max_offset;
+
+    for (size_t i = 0u; i < BURN_BLANK_SAMPLE_POINTS; ++i) {
+        uint32_t offset = candidates[i];
+
+        if (align_mask != 0u) {
+            offset &= ~align_mask;
+        }
+        if (!burner_blank_sample_offset_seen(offsets, count, offset)) {
+            offsets[count++] = offset;
+        }
+    }
+
+    return count;
+}
 
 static esp_err_t burner_gbc_blank_read(uint8_t *out, size_t size, uint32_t address)
 {

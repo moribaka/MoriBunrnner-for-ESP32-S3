@@ -18,7 +18,6 @@ const ui_text_entry_t g_ui_text_zh[] = {
     {"Burner", "烧录器"},
     {"Bytes", "字节"},
     {"Skipped blank data", "跳过空白数据"},
-    {"Skipped identical data", "跳过相同数据"},
     {"Capacity", "容量"},
     {"Capacity:", "容量:"},
     {"Cart", "卡带"},

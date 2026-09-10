@@ -2841,7 +2841,6 @@ esp_err_t burner_ensure_rom_dir(void)
 #include "burn/burner_cart_runtime.c"
 
 #include "burn/burner_burn_common.c"
-#include "burn/burner_write_pipeline.c"
 #include "burn/burner_gbc_burn.c"
 #include "burn/burner_gba_burn.c"
 

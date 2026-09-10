@@ -534,6 +534,36 @@ static esp_err_t burner_nor_geometry_sector_bounds_in_cursor(
     return ESP_OK;
 }
 
+static esp_err_t burner_nor_geometry_stage_bytes_in_cursor(
+    const burner_nor_region_cursor_t *cursor,
+    uint32_t addr,
+    uint32_t remaining_bytes,
+    uint32_t *stage_bytes_out)
+{
+    uint32_t sector_end = 0u;
+    uint32_t stage_bytes;
+    esp_err_t err;
+
+    if (stage_bytes_out == NULL || remaining_bytes == 0u) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = burner_nor_geometry_sector_bounds_in_cursor(cursor, addr, NULL, &sector_end, NULL);
+    if (err != ESP_OK || sector_end <= addr) {
+        return (err == ESP_OK) ? ESP_ERR_INVALID_SIZE : err;
+    }
+
+    stage_bytes = sector_end - addr;
+    if (stage_bytes > remaining_bytes) {
+        stage_bytes = remaining_bytes;
+    }
+    if (stage_bytes == 0u) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    *stage_bytes_out = stage_bytes;
+    return ESP_OK;
+}
 
 static esp_err_t burner_nor_geometry_limit_prefix(
     burner_nor_geometry_t *geometry,
@@ -754,4 +784,48 @@ static uint32_t burner_nor_geometry_erase_bytes_from_range(
     }
 
     return (uint32_t)total_bytes;
+}
+
+static uint32_t burner_nor_geometry_planned_stage_erase_sector_count(
+    const burner_nor_geometry_t *geometry,
+    uint32_t addr_begin,
+    uint32_t total_bytes,
+    uint32_t stage_capacity)
+{
+    uint32_t processed = 0u;
+    uint64_t total_sectors = 0u;
+
+    if (!burner_nor_geometry_is_valid(geometry) || total_bytes == 0u || stage_capacity == 0u) {
+        return 0u;
+    }
+
+    while (processed < total_bytes) {
+        uint32_t stage_addr = addr_begin + processed;
+        uint32_t stage_bytes = total_bytes - processed;
+        uint32_t stage_erase_begin = stage_addr;
+        uint32_t stage_erase_end;
+
+        if (stage_bytes > stage_capacity) {
+            stage_bytes = stage_capacity;
+        }
+        stage_erase_end = stage_addr + stage_bytes - 1u;
+        if (processed > 0u) {
+            if (burner_nor_geometry_sector_begin_ceil(geometry, stage_addr, &stage_erase_begin) != ESP_OK ||
+                stage_erase_begin > stage_erase_end) {
+                processed += stage_bytes;
+                continue;
+            }
+        }
+
+        total_sectors += burner_nor_geometry_sector_count_from_range(
+            geometry,
+            stage_erase_begin,
+            stage_erase_end);
+        if (total_sectors > UINT32_MAX) {
+            return UINT32_MAX;
+        }
+        processed += stage_bytes;
+    }
+
+    return (uint32_t)total_sectors;
 }

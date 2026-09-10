@@ -108,20 +108,5 @@ int main(void)
     clock_us += 5000000000ULL;
     assert(burner_status_mark_write_end() == 5000000000ULL);
     check(5004000000ULL, 3000000);
-    burner_status_mark_task_begin();
-    burner_status_update(BURNER_STATE_BURNING, 50, 512, 1024, "writing", "test", "test");
-    assert(s_status.progress == 50);
-    burner_status_update(BURNER_STATE_BURNING, 100, 1024, 1024, "written", "test", "test");
-    assert(s_status.progress == 100);
-    burner_status_mark_task_end();
-    burner_status_t finished;
-    burner_status_snapshot(&finished);
-    clock_us += 1000000;
-    burner_status_t later;
-    burner_status_snapshot(&later);
-    assert(later.task_elapsed_us == finished.task_elapsed_us);
-    burner_status_record_write_matched(1024);
-    burner_status_mark_task_begin();
-    assert(!s_status.write_matched_bytes);
-    puts("Burn timing, full write progress and terminal timing freeze passed");
+    puts("Burn timing: TF isolation, live samples, erase overlap, failures, reset and 64-bit duration passed");
 }

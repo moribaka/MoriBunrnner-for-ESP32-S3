@@ -88,14 +88,6 @@ static void burner_task(void *param)
         job->rom_name,
         job->rom_path);
 
-    if (job->mode == BURNER_JOB_WRITE_ROM) {
-        err = burner_prepare_write_source(job);
-        if (err != ESP_OK) {
-            burner_status_update(BURNER_STATE_ERROR, 0, 0, job->total_bytes,
-                "prepare expected ROM failed", job->rom_name, job->rom_path);
-            goto task_done;
-        }
-    }
     err = burner_spi_init();
     if (err != ESP_OK) {
         burner_status_update(
