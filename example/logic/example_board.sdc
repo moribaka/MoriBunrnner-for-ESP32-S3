@@ -18,4 +18,9 @@ derive_pll_clocks -create_base_clocks
 set_false_path -from rv32|resetn_out
 # pio_end
 
+# External ESP32 master is fixed at 40 MHz. SRAM/FIFO handshakes cross to
+# the independent MCU PLL domain; do not treat the SPI pin as a 1 MHz clock.
+create_clock -name ESP_SPI_SCK -period 25.0 [get_ports MCU_SPI_CLK]
+set_clock_groups -asynchronous -group ESP_SPI_SCK
+
 derive_pll_clocks -create_base_clocks

@@ -294,15 +294,16 @@ module bacon_mcu_transport_tb;
 
         // 8192 bytes repeatedly wrap both FIFO slots. Alternate last bits
         // and sample after the edge so an early word replacement is visible.
-        for (i = 0; i < 2048; i = i + 1)
+        sram[1024] = 0;
+        for (i = 1; i <= 2048; i = i + 1)
             sram[1024+i] = (32'h9e3779b9 * i) ^ 32'h8147ab33;
         ahb_write(32'h6002_0010, 32'h2000_1000);
-        ahb_write(32'h6002_0014, 32'd2048);
+        ahb_write(32'h6002_0014, 32'd2049);
         ahb_write(32'h6002_0000, 32'h0000_0004);
         wait(response_ready);
         spi_cs1 = 0;
         #30;
-        for (i = 0; i < 8192; i = i + 1) begin
+        for (i = 0; i < 8196; i = i + 1) begin
             spi_recv_byte(bulk_byte);
             expected_word = sram[1024+i/4] >> (8*(i%4));
             if (bulk_byte !== expected_word[7:0])

@@ -1,0 +1,7 @@
+2026-09-10 09:04:17 I (972897) ag32_mcu_link: MCU protocol v1 capabilities=0x000000fe
+2026-09-10 09:04:17 
+2026-09-10 09:04:17 @mori {"event":"ag32_ping","ok":true,"error":"ESP_OK","used_mcu":true,"preference":"mcu","active":"mcu","capabilities":254,"protocol_version":1,"max_payload":8192,"ag32_clock_hz":150000000,"identity":827671373}
+2026-09-10 09:04:18 
+2026-09-10 09:04:18 @mori {"event":"ag32_stream_test","ok":true,"error":"ESP_OK","passes":100,"bytes_each_direction":131590,"elapsed_ms":532.607}
+2026-09-10 09:04:31 
+2026-09-10 09:04:31 @mori {"event":"ag32_test","ok":true,"error":"ESP_OK","passes":100,"bytes_each_direction":131590,"elapsed_ms":472.421}

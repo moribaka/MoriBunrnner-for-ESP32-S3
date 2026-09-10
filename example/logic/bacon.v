@@ -29,7 +29,7 @@ module bacon(
     output tri0         ESP32_SPI2_MISO,
     input               ESP32_SPI2_MOSI,
     input               ESP32_SPI_CS1,
-    inout               MCU_SPI_CLK,
+    input               MCU_SPI_CLK,
 
     /* 平台时钟与控制信号 */
     input               sys_clock,
@@ -397,6 +397,8 @@ module bacon_mcu_transport(
     reg [5:0] rx_bit_count;
     reg [12:0] rx_wire_words;
     reg mcu_mode_d;
+    reg [1:0] ahb_phase;
+    reg [31:0] ahb_address;
 
     wire rx_selected = mcu_mode && !cs0_sync[2] && cs1_sync[2];
     wire tx_selected = mcu_mode && cs0_sync[2] && !cs1_sync[2];
@@ -508,6 +510,8 @@ module bacon_mcu_transport(
             rx_bit_count <= 6'd0;
             rx_wire_words <= 13'd0;
             mcu_mode_d <= 0;
+            ahb_phase <= 0;
+            ahb_address <= 0;
         end else begin
             force_legacy <= 1'b0;
             tx_retry_reset <= 1'b0;
@@ -586,9 +590,13 @@ module bacon_mcu_transport(
             if (mem_ahb_hready && ahb_hreadyout_reg && mem_ahb_htrans[1]) begin
                 ahb_hreadyout_reg <= 1'b0;
                 ahb_write_reg <= mem_ahb_hwrite;
+                ahb_address <= mem_ahb_haddr;
+                ahb_phase <= 1;
+            end else if (ahb_phase == 1) begin
+                ahb_phase <= 2;
                 ahb_register_select_reg <= 11'd0;
-                if (mem_ahb_haddr[31:12] == 20'h60020) begin
-                    case (mem_ahb_haddr[11:2])
+                if (ahb_address[31:12] == 20'h60020) begin
+                    case (ahb_address[11:2])
                         REG_CTRL[11:2]:      ahb_register_select_reg <= 11'b00000000001;
                         REG_RX_ADDR[11:2]:   ahb_register_select_reg <= 11'b00000000010;
                         REG_RX_LIMIT[11:2]:  ahb_register_select_reg <= 11'b00000000100;
@@ -603,11 +611,12 @@ module bacon_mcu_transport(
                         default: begin end
                     endcase
                 end
-            end else if (!ahb_hreadyout_reg) begin
+            end else if (ahb_phase == 2) begin
                 ahb_hreadyout_reg <= 1'b1;
+                ahb_phase <= 0;
             end
 
-            if (!ahb_hreadyout_reg && ahb_write_reg) begin
+            if (ahb_phase == 2 && ahb_write_reg) begin
                     case (1'b1)
                         ahb_register_select_reg[0]: begin
                             if (mem_ahb_hwdata[0]) begin
@@ -659,7 +668,7 @@ module bacon_mcu_transport(
     always @(posedge sys_clock or negedge resetn) begin
         if (!resetn) begin
             mem_ahb_hrdata <= 32'd0;
-        end else if (!ahb_hreadyout_reg && !ahb_write_reg) begin
+        end else if (ahb_phase == 2 && !ahb_write_reg) begin
             case (1'b1)
                 ahb_register_select_reg[0]: mem_ahb_hrdata <= {
                     20'd0, tx_consumed, transport_error, mcu_busy, tx_published,
@@ -813,13 +822,12 @@ module bacon_spi_stream_core(
     reg [1:0] tx_read_gray;
     reg [1:0] tx_gray_meta, tx_gray_sync;
     reg [1:0] tx_write_count;
-    reg tx_bit;
-    wire [4:0] tx_next_bit_index = 5'd30 - tx_native_bit_count;
+    reg [31:0] tx_shift;
     wire [1:0] tx_consumed_count = {tx_gray_sync[1], tx_gray_sync[1] ^ tx_gray_sync[0]};
     wire [1:0] tx_pending = tx_write_count - tx_consumed_count;
     wire tx_resetn = resetn && tx_en;
 
-    assign miso = tx_native_bit_count == 0 ? tx_words[tx_read_count[0]][31] : tx_bit;
+    assign miso = tx_shift[31];
     assign tx_ready = tx_en && tx_pending < 2;
 
     always @(posedge sck or posedge csn or negedge resetn) begin
@@ -888,11 +896,15 @@ module bacon_spi_stream_core(
             tx_native_bit_count <= 5'd0;
             tx_read_count <= 2'd0;
             tx_read_gray <= 2'd0;
-            tx_bit <= 0;
+            tx_shift <= 0;
         end else if (!tx_csn) begin
             tx_native_bit_count <= tx_native_bit_count + 5'd1;
-            tx_bit <= tx_words[tx_read_count[0]][tx_next_bit_index];
+            tx_shift <= {tx_shift[30:0], 1'b0};
             if (tx_native_bit_count == 5'd31) begin
+                // Every response starts with a zero dummy word. This lets
+                // the first real word load synchronously at this boundary,
+                // keeping only a flip-flop output on the MISO data path.
+                tx_shift <= tx_words[!tx_read_count[0]];
                 tx_read_count <= tx_read_count + 2'd1;
                 tx_read_gray <= ((tx_read_count + 2'd1) >> 1) ^ (tx_read_count + 2'd1);
             end

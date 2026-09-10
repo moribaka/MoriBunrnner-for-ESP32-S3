@@ -51,5 +51,37 @@ Mode guard and basic legacy power compatibility tests pass. Those do not
 substitute for cartridge read/erase/program regression.
 Shared protocol host tests, batch payload comparison and patch host tests pass.
 
-No cartridge erase/program test has been performed at this checkpoint.
-32 MiB burn comparisons and stream board qualification remain pending.
+## Registered output candidate and read qualification
+
+The first stream candidate exposed route-dependent MISO corruption again.
+SWD confirmed a valid request and response in SRAM. Replaced output selection
+with a native falling-edge shift register; the mandatory dummy word provides
+synchronous preload. Captured AHB register address before decoding it to
+remove the >20% setup deficit on MCU address→register-select. Declared the
+external SCK pin as input (it was never driven), so the real 25 ns constraint
+now reaches Supra rather than an unused inout alias.
+
+Current batch SHA256
+9987DA3E97700C3DD531B1FEA90E704492E8BA00CEB994FF97BE8CEAB2521CDD.
+Programmed/verified 107816 bytes through onboard SWD. Route: 1392/2112 logic,
+98/132 tiles, 1240 LUTs, 939 registers, 0 BRAM, 1 PLL, 44 pins.
+SPI setup +8.394 ns / hold +0.603 ns; system setup -0.609 ns / hold +0.377 ns.
+Auto hold -1.426 ns on the legacy CS path remains; board testing is separate
+from complete external I/O timing qualification. User constraint coverage83%.
+
+- PING passed, capabilities0xfe. Normal echo100/100, 131590 bytes/direction,
+  472.421 ms. Raw-stream echo100/100, same data volume, 532.607 ms.
+- HTTP legacy cartridge ID/CFI plus ROM analysis passed after removing the
+  large embedded patch plan; no reboot.
+- Legacy dumped first32MiB to `/sdcard/ROM_OUTPUT/ag32_baseline32_0910.gba`.
+  Device time112164ms, bus reading26615ms, TF writing84673ms.
+- MCU stream compared all33554432 bytes with that legacy dump successfully,
+  including the final byte. Device time53393ms. Full status is preserved in
+  `ag32_benchmark_0910.jsonl`.
+- Legacy on this same final routing also verified all32MiB against the
+  baseline successfully, device time33918ms. At this checkpoint MCU read
+  verification is slower (53.4s vs33.9s); do not claim speedup from protocol
+  overhead reduction alone.
+
+32MiB erase/program comparisons remain pending. The test ROM Mother3 was
+analyzed: FLASH512, five SRAM patch operations, output remains33554432 bytes.
