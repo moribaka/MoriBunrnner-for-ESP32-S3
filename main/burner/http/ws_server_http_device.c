@@ -51,7 +51,10 @@ static bool burner_music_is_audio_name(const char *name)
     return strcasecmp(ext, "mp3") == 0 ||
            strcasecmp(ext, "aac") == 0 ||
            strcasecmp(ext, "flac") == 0 ||
-           strcasecmp(ext, "wav") == 0;
+           strcasecmp(ext, "wav") == 0 || strcasecmp(ext, "m4a") == 0 ||
+           strcasecmp(ext, "ogg") == 0 || strcasecmp(ext, "opus") == 0 ||
+           strcasecmp(ext, "aiff") == 0 || strcasecmp(ext, "aif") == 0 ||
+           strcasecmp(ext, "aifc") == 0;
 }
 
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req)

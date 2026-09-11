@@ -1,0 +1,56 @@
+
+@mori {"event":"play","message":"ESP_OK"}
+I (142266) lyra.audio: playing /sdcard/diag_lyra_opus.opus (48000 Hz, 2 channel, 16-bit)
+I (142905) lyra.audio: audio worker free stack=2764 bytes
+I (142906) lyra.audio: read-ahead: max=0 us avg=0 us lock-max=0 us lock-avg=0 us low=0 bytes underruns=0; pcm-low=2080 bytes pcm-underruns=0; buffers read-ahead=psram pcm=psram stereo=psram
+I (143068) lyra.audio: OPUS seek 3479 ms using OGG page at 144000 samples (base=2994 ms discard=93216 bytes)
+I (143086) lyra.audio: playing /sdcard/diag_lyra_opus.opus (48000 Hz, 2 channel, 16-bit)
+I (148009) lyra.audio: finished /sdcard/diag_lyra_opus.opus
+I (148010) lyra.audio: audio worker free stack=2764 bytes
+I (148011) lyra.audio: read-ahead: max=0 us avg=0 us lock-max=0 us lock-avg=0 us low=0 bytes underruns=0; pcm-low=0 bytes pcm-underruns=0; buffers read-ahead=psram pcm=psram stereo=psram
+
+@mori {"event":"play","message":"ESP_OK"}
+I (152820) lyra.audio: playing /sdcard/diag_lyra_pcm.aiff (44100 Hz, 2 channel, 16-bit)
+I (153189) lyra.audio: audio worker free stack=2764 bytes
+I (153190) lyra.audio: read-ahead: max=47790 us avg=31830 us lock-max=15 us lock-avg=8 us low=225280 bytes underruns=0; pcm-low=0 bytes pcm-underruns=1; buffers read-ahead=psram pcm=psram stereo=psram
+I (153467) lyra.audio: playing /sdcard/diag_lyra_pcm.aiff (44100 Hz, 2 channel, 16-bit)
+I (158186) lyra.audio: finished /sdcard/diag_lyra_pcm.aiff
+I (158187) lyra.audio: audio worker free stack=2764 bytes
+I (158188) lyra.audio: read-ahead: max=49013 us avg=31314 us lock-max=11 us lock-avg=8 us low=0 bytes underruns=0; pcm-low=0 bytes pcm-underruns=1; buffers read-ahead=psram pcm=psram stereo=psram
+
+@mori {"event":"play","message":"ESP_OK"}
+I (159301) lyra.audio: playing /sdcard/diag_lyra_low.wav (8000 Hz, 1 channel, 8-bit)
+I (159635) lyra.audio: audio worker free stack=2764 bytes
+I (159636) lyra.audio: read-ahead: max=33440 us avg=30050 us lock-max=18 us lock-avg=12 us low=19022 bytes underruns=0; pcm-low=0 bytes pcm-underruns=1; buffers read-ahead=psram pcm=psram stereo=psram
+I (159738) lyra.audio: WAV seek 7750 ms replaying and discarding 62000 bytes
+I (159740) lyra.audio: playing /sdcard/diag_lyra_low.wav (8000 Hz, 1 channel, 8-bit)
+I (160272) lyra.audio: finished /sdcard/diag_lyra_low.wav
+I (160273) lyra.audio: audio worker free stack=2764 bytes
+I (160275) lyra.audio: read-ahead: max=33605 us avg=29884 us lock-max=8 us lock-avg=8 us low=0 bytes underruns=0; pcm-low=0 bytes pcm-underruns=0; buffers read-ahead=psram pcm=psram stereo=psram
+
+@mori {"event":"play","message":"ESP_OK"}
+I (163518) AUD_Dec_Parse: FLAC sample_rate 96000 duration:8000 max_frame:7261
+I (163622) lyra.audio: playing /sdcard/diag_lyra_96.flac (96000 Hz, 2 channel, 24-bit)
+I (164041) lyra.audio: audio worker free stack=2764 bytes
+I (164042) lyra.audio: read-ahead: max=67789 us avg=59858 us lock-max=10 us lock-avg=8 us low=192554 bytes underruns=0; pcm-low=2728 bytes pcm-underruns=0; buffers read-ahead=psram pcm=psram stereo=psram
+I (164346) lyra.audio: FLAC seek 3178 ms using frame at 274837 (discard=0 bytes)
+I (164527) AUD_Dec_Parse: FLAC sample_rate 96000 duration:8000 max_frame:7261
+I (164633) lyra.audio: playing /sdcard/diag_lyra_96.flac (96000 Hz, 2 channel, 24-bit)
+I (169652) lyra.audio: finished /sdcard/diag_lyra_96.flac
+I (169653) lyra.audio: audio worker free stack=2764 bytes
+I (169655) lyra.audio: read-ahead: max=79444 us avg=57987 us lock-max=10 us lock-avg=8 us low=0 bytes underruns=0; pcm-low=0 bytes pcm-underruns=1; buffers read-ahead=psram pcm=psram stereo=psram
+
+@mori {"event":"play","message":"ESP_OK"}
+I (173271) M4A_PARSE: Get channel 2 bits:24 sample_rate 44100
+Spec info length 36
+I (173295) lyra.audio: playing /sdcard/diag_lyra_alac.m4a (44100 Hz, 2 channel, 24-bit)
+I (173931) lyra.audio: audio worker free stack=2764 bytes
+I (173932) lyra.audio: read-ahead: max=238183 us avg=238183 us lock-max=8 us lock-avg=8 us low=110591 bytes underruns=0; pcm-low=2728 bytes pcm-underruns=0; buffers read-ahead=psram pcm=psram stereo=psram
+I (174210) M4A_PARSE: Get channel 2 bits:24 sample_rate 44100
+Spec info length 36
+I (174234) lyra.audio: M4A seek 4244 ms replaying and discarding 1122960 bytes
+I (174236) lyra.audio: playing /sdcard/diag_lyra_alac.m4a (44100 Hz, 2 channel, 24-bit)
+I (177420) M4A_PARSE: All sample sent
+I (178968) lyra.audio: finished /sdcard/diag_lyra_alac.m4a
+I (178969) lyra.audio: audio worker free stack=2764 bytes
+I (178970) lyra.audio: read-ahead: max=240752 us avg=235652 us lock-max=10 us lock-avg=9 us low=0 bytes underruns=0; pcm-low=0 bytes pcm-underruns=0; buffers read-ahead=psram pcm=psram stereo=psram

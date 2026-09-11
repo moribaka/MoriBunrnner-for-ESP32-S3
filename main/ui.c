@@ -3215,7 +3215,10 @@ static ui_file_kind_t ui_file_kind_from_name(const char *name)
     if (strcasecmp(ext, "mp3") == 0 ||
         strcasecmp(ext, "aac") == 0 ||
         strcasecmp(ext, "flac") == 0 ||
-        strcasecmp(ext, "wav") == 0) {
+        strcasecmp(ext, "wav") == 0 || strcasecmp(ext, "m4a") == 0 ||
+        strcasecmp(ext, "ogg") == 0 || strcasecmp(ext, "opus") == 0 ||
+        strcasecmp(ext, "aiff") == 0 || strcasecmp(ext, "aif") == 0 ||
+        strcasecmp(ext, "aifc") == 0) {
         return UI_FILE_KIND_AUDIO;
     }
     if (ui_reader_native_file_supported_name(name)) {
