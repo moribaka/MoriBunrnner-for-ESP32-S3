@@ -99,6 +99,7 @@ uint32_t s_equalizer_generation = 1;
 
 char s_requested_path[lyra::audio::kMaxPath];
 uint32_t s_request_generation;
+uint32_t s_stopped_generation;
 uint32_t s_requested_seek_ms;
 uint32_t s_requested_start_byte;
 bool s_requested_pause_after_seek;
@@ -3765,6 +3766,7 @@ void audio_task(void *)
             s_status.position_ms = 0;
             s_status.duration_ms = 0;
             s_status.path[0] = '\0';
+            s_stopped_generation = generation;
             xSemaphoreGive(s_state_mutex);
             continue;
         }
@@ -3956,6 +3958,22 @@ esp_err_t stop()
     xSemaphoreGive(s_state_mutex);
     xTaskNotifyGive(s_audio_task);
     return ESP_OK;
+}
+
+esp_err_t stop_and_wait()
+{
+    esp_err_t err = stop();
+    if (err != ESP_OK) return err;
+    xSemaphoreTake(s_state_mutex, portMAX_DELAY);
+    const uint32_t generation = s_request_generation;
+    xSemaphoreGive(s_state_mutex);
+    for (;;) {
+        xSemaphoreTake(s_state_mutex, portMAX_DELAY);
+        bool stopped = s_stopped_generation == generation;
+        xSemaphoreGive(s_state_mutex);
+        if (stopped) return ESP_OK;
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
 }
 
 esp_err_t seek(uint32_t position_ms)

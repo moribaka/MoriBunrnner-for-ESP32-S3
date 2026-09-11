@@ -54,6 +54,10 @@ esp_err_t music_player_toggle_pause(void);
 esp_err_t music_player_seek_relative(int32_t delta_bytes);
 esp_err_t music_player_set_volume(uint8_t volume_percent);
 void music_player_get_snapshot(music_player_snapshot_t *snapshot);
+/* Reference-counted exclusive resource gate for cartridge/AG32 jobs.
+ * Acquire waits for audio cleanup; release never resumes playback. */
+esp_err_t music_player_acquire_burn_priority(void);
+void music_player_release_burn_priority(void);
 
 #ifdef __cplusplus
 }

@@ -12,6 +12,7 @@
 #include "esp_heap_caps.h"
 #include "power_manager.h"
 #include "lvgl_port.h"
+#include "music/music_player.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -396,6 +397,12 @@ esp_err_t ag32_batch_program_file(
     }
     memset(report, 0, sizeof(*report));
     if (error != NULL && error_size != 0u) error[0] = '\0';
+    err = music_player_acquire_burn_priority();
+    if (err != ESP_OK) {
+        report->error = err;
+        snprintf(report->phase, sizeof(report->phase), "pause_music");
+        return set_error(err, error, error_size, "cannot pause music");
+    }
     program_phase(report, progress, progress_context, "load", 0u);
     file = fopen(path, "rb");
     if (file == NULL) {
@@ -555,6 +562,7 @@ out:
     free(buffer);
     if (file != NULL) fclose(file);
     free(image);
+    music_player_release_burn_priority();
     if (err != ESP_OK && error != NULL && error_size && !error[0])
         set_error(err, error, error_size, "%s", esp_err_to_name(err));
     ESP_LOGI(AG32_PROGRAM_TAG,

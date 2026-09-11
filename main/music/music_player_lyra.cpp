@@ -18,6 +18,9 @@ bool ready;
 uint8_t volume = 1;
 music_player_source_t source = MUSIC_PLAYER_SOURCE_TF;
 uint32_t file_size;
+uint32_t burn_owners;
+bool saved_pause;
+lyra::audio::Status paused_track;
 void lock() {
     if (!mutex)
         mutex = xSemaphoreCreateMutexStatic(&mutex_storage);
@@ -51,8 +54,13 @@ esp_err_t begin(const char *path, uint32_t size, uint32_t byte_position,
     if (err != ESP_OK)
         return err;
     lock();
+    if (burn_owners) {
+        unlock();
+        return ESP_ERR_INVALID_STATE;
+    }
     err = lyra::audio::play_from(full, 0, byte_position);
     if (err == ESP_OK) {
+        saved_pause = false;
         source = kind;
         file_size = size;
     }
@@ -62,6 +70,7 @@ esp_err_t begin(const char *path, uint32_t size, uint32_t byte_position,
 } // namespace
 extern "C" esp_err_t music_player_init() {
     lock();
+    if (burn_owners) { unlock(); return ESP_ERR_INVALID_STATE; }
     esp_err_t err = ESP_OK;
     if (!ready) {
         err = lyra::audio::init();
@@ -85,12 +94,20 @@ extern "C" esp_err_t music_player_play_smb(const char *p, uint32_t n) {
 }
 extern "C" esp_err_t music_player_stop() {
     lock();
+    saved_pause = false;
     auto e = ready ? lyra::audio::stop() : ESP_OK;
     unlock();
     return e;
 }
 extern "C" esp_err_t music_player_toggle_pause() {
     lock();
+    if (burn_owners) { unlock(); return ESP_ERR_INVALID_STATE; }
+    if (saved_pause) {
+        auto e = lyra::audio::play_from(paused_track.path, paused_track.position_ms);
+        if (e == ESP_OK) saved_pause = false;
+        unlock();
+        return e;
+    }
     auto e = ready ? lyra::audio::toggle_pause() : ESP_ERR_INVALID_STATE;
     unlock();
     return e;
@@ -104,7 +121,7 @@ extern "C" esp_err_t music_player_set_volume(uint8_t v) {
 }
 extern "C" esp_err_t music_player_seek_relative(int32_t delta) {
     lock();
-    if (!ready) {
+    if (!ready || burn_owners || saved_pause) {
         unlock();
         return ESP_ERR_INVALID_STATE;
     }
@@ -126,7 +143,7 @@ extern "C" void music_player_get_snapshot(music_player_snapshot_t *out) {
     *out = {};
     out->volume_percent = volume;
     if (ready) {
-        auto s = lyra::audio::status();
+        auto s = saved_pause ? paused_track : lyra::audio::status();
         out->source = source;
         out->file_size = file_size;
         out->state = s.last_error != ESP_OK ? MUSIC_PLAYER_STATE_ERROR
@@ -155,5 +172,30 @@ extern "C" void music_player_get_snapshot(music_player_snapshot_t *out) {
             std::snprintf(out->message, sizeof(out->message), "Lyra: %s",
                           esp_err_to_name(s.last_error));
     }
+    unlock();
+}
+
+extern "C" esp_err_t music_player_acquire_burn_priority() {
+    lock();
+    if (!burn_owners && ready) {
+        auto s = lyra::audio::status();
+        if (!saved_pause && s.playing && s.last_error == ESP_OK && s.path[0]) {
+            paused_track = s;
+            paused_track.paused = true;
+            saved_pause = true;
+        }
+        // Holding this adapter lock excludes new play/seek requests until
+        // the Lyra worker acknowledges input, decoder and I2S cleanup.
+        auto err = lyra::audio::stop_and_wait();
+        if (err != ESP_OK) { unlock(); return err; }
+    }
+    ++burn_owners;
+    unlock();
+    return ESP_OK;
+}
+
+extern "C" void music_player_release_burn_priority() {
+    lock();
+    if (burn_owners) --burn_owners;
     unlock();
 }

@@ -1,4 +1,5 @@
 #include "ws_server_http_burn.h"
+#include "music_player.h"
 
 static esp_err_t burner_resolve_input_file(
     const char *raw_name,
@@ -789,7 +790,7 @@ static esp_err_t burner_send_start_error(httpd_req_t *req, esp_err_t err, const 
     return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, msg);
 }
 
-esp_err_t burner_start_write_from_tf(
+static esp_err_t burner_start_write_from_tf_impl(
     const char *raw_name,
     burner_cart_mode_t cart_mode,
     burner_recipe_mode_t recipe_mode,
@@ -1009,6 +1010,32 @@ esp_err_t burner_start_write_from_tf(
         (uint32_t)(mbc5_program_chunk_bytes / 1024u),
         gba_force_no_cfi);
     return ESP_OK;
+}
+
+esp_err_t burner_start_write_from_tf(
+    const char *raw_name,
+    burner_cart_mode_t cart_mode,
+    burner_recipe_mode_t recipe_mode,
+    uint32_t slot,
+    burner_write_path_t write_path,
+    bool erase_always,
+    uint32_t psram_mb,
+    uint32_t mbc5_chunk_kb,
+    bool gba_force_no_cfi,
+    bool apply_gba_sram_patch,
+    bool apply_gba_waitcnt_patch,
+    bool apply_gba_batteryless_patch,
+    const char *gbx_profile_file,
+    burner_task_start_result_t *result,
+    char *error_msg,
+    size_t error_msg_len)
+{
+    esp_err_t err = music_player_acquire_burn_priority();
+    if (err != ESP_OK) return burner_start_error(err, "cannot pause music", error_msg, error_msg_len);
+    err = burner_start_write_from_tf_impl(raw_name, cart_mode, recipe_mode, slot, write_path, erase_always, psram_mb, mbc5_chunk_kb, gba_force_no_cfi, apply_gba_sram_patch, apply_gba_waitcnt_patch, apply_gba_batteryless_patch, gbx_profile_file, result, error_msg, error_msg_len);
+    // The accepted task owns its own reference; failures release preparation too.
+    music_player_release_burn_priority();
+    return err;
 }
 
 esp_err_t burner_start_verify_from_tf(

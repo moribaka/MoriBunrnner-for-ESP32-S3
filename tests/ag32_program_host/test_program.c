@@ -16,6 +16,9 @@ esp_err_t burner_backend_init(void) { return ESP_OK; }
 esp_err_t power_manager_perf_lock_acquire(const char *s) { (void)s; return ESP_OK; }
 void power_manager_perf_lock_release(const char *s) { (void)s; }
 void lvgl_port_set_idle_dim_suspended(bool b) { (void)b; }
+static unsigned music_owners;
+esp_err_t music_player_acquire_burn_priority(void) { ++music_owners; return ESP_OK; }
+void music_player_release_burn_priority(void) { assert(music_owners); --music_owners; }
 esp_err_t burner_spi_enter_swd_mode(void);
 esp_err_t burner_spi_leave_swd_mode(bool restore);
 void burner_spi_block_swd_restore(void);
@@ -47,7 +50,7 @@ static const char *remove_source;
 
 bool usb_msc_tf_in_use_by_host(void) { return usb_busy; }
 esp_err_t burner_spi_enter_swd_mode(void)
-{ ++enters; if (fault == ENTER) return ESP_FAIL; assert(!held); held = true; return ESP_OK; }
+{ assert(music_owners); ++enters; if (fault == ENTER) return ESP_FAIL; assert(!held); held = true; return ESP_OK; }
 esp_err_t burner_spi_leave_swd_mode(bool restore)
 {
     assert(held); held = false;
@@ -151,7 +154,7 @@ static ag32_batch_program_report_t run(const char *path, enum fault injected, bo
     if (err != expected || report.error != expected || held || session)
         fprintf(stderr, "fault=%d expected=%d actual=%d report=%d phase=%s text=%s held=%d session=%d\n",
             injected, expected, err, report.error, report.phase, error, held, session);
-    assert(err == expected && report.error == expected && !held && !session);
+    assert(err == expected && report.error == expected && !held && !session && !music_owners);
     assert(!strstr(error, "stale error"));
     if (err != ESP_OK) assert(error[0]);
     return report;

@@ -77,6 +77,8 @@ esp_err_t play(const char *path);
 // MoriBurnner: set the initial resume position in the same request generation.
 esp_err_t play_from(const char *path, uint32_t start_ms, uint32_t start_byte = 0);
 esp_err_t stop();
+// Wait until the audio worker has closed its input/decoder and released PCM buffers.
+esp_err_t stop_and_wait();
 esp_err_t toggle_pause();
 esp_err_t seek(uint32_t position_ms);
 esp_err_t set_volume(uint8_t volume_percent);

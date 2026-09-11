@@ -2,6 +2,7 @@
 #include "ag32_batch_programmer.h"
 #include "lvgl_port.h"
 #include "power_manager.h"
+#include "music_player.h"
 
 static void burner_task(void *param)
 {
@@ -243,6 +244,7 @@ task_done:
     } else {
         s_burn_task = NULL;
     }
+    music_player_release_burn_priority();
     if (task_with_caps) {
         vTaskDeleteWithCaps(NULL);
     } else {
@@ -311,10 +313,16 @@ esp_err_t burner_start_task_ex(
         return ESP_ERR_INVALID_STATE;
     }
 
+    esp_err_t audio_err = music_player_acquire_burn_priority();
+    if (audio_err != ESP_OK) {
+        burner_set_starting(false);
+        return audio_err;
+    }
     burner_cancel_reset();
 
     job = (burner_task_param_t *)calloc(1, sizeof(*job));
     if (job == NULL) {
+        music_player_release_burn_priority();
         burner_set_starting(false);
         return ESP_ERR_NO_MEM;
     }
@@ -353,6 +361,7 @@ esp_err_t burner_start_task_ex(
             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (job->gba_patch_plan == NULL) {
             free(job);
+            music_player_release_burn_priority();
             burner_set_starting(false);
             return ESP_ERR_NO_MEM;
         }
@@ -406,6 +415,7 @@ esp_err_t burner_start_task_ex(
         free(job->gba_patch_plan);
         free(job);
         s_burn_task = NULL;
+        music_player_release_burn_priority();
         burner_set_starting(false);
         return ESP_FAIL;
     }
