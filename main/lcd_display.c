@@ -75,6 +75,9 @@ static bool s_lcd_ready = false;
 static SemaphoreHandle_t s_flush_done_sem = NULL;
 static bool s_backlight_pwm_ready = false;
 static uint8_t s_backlight_brightness = MORI_LCD_BK_BRIGHTNESS_DEFAULT;
+static bool s_backlight_suspended;
+static StaticSemaphore_t s_backlight_lock_storage;
+static SemaphoreHandle_t s_backlight_lock;
 
 static void *lcd_alloc_dma_buffer(size_t size, const char *tag)
 {
@@ -249,6 +252,7 @@ static esp_err_t lcd_backlight_pwm_init(void)
 esp_err_t lcd_display_init(void)
 {
     esp_err_t err;
+    if (!s_backlight_lock) s_backlight_lock = xSemaphoreCreateMutexStatic(&s_backlight_lock_storage);
     spi_bus_config_t bus_config = {
         .sclk_io_num = MORI_PIN_LCD_CLK,
         .mosi_io_num = MORI_PIN_LCD_MOSI,
@@ -414,25 +418,7 @@ esp_err_t lcd_display_draw_bitmap(int x_start, int y_start, int x_end, int y_end
     return ESP_OK;
 }
 
-esp_err_t lcd_display_set_brightness(uint8_t brightness)
-{
-    esp_err_t err;
-
-    s_backlight_brightness = brightness;
-
-    err = lcd_backlight_pwm_init();
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    lcd_backlight_set(true);
-    return ESP_OK;
-}
-
-uint8_t lcd_display_get_brightness(void)
-{
-    return s_backlight_brightness;
-}
+#include "lcd_backlight_api.inc"
 
 int lcd_display_width(void)
 {

@@ -8,6 +8,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "lcd_display.h"
 #include "lvgl.h"
 #include "ui.h"
@@ -22,7 +23,6 @@
 #define LVGL_TASK_CORE_ID 0
 #define LVGL_PSRAM_POOL_COUNT 4
 #define LVGL_PSRAM_POOL_CHUNK_BYTES (48U * 1024U)
-#define LVGL_IDLE_BRIGHTNESS 0U
 
 static lv_display_t *s_display = NULL;
 static TaskHandle_t s_lvgl_task = NULL;
@@ -33,7 +33,8 @@ static lv_mem_pool_t s_lvgl_psram_mem_pools[LVGL_PSRAM_POOL_COUNT] = {0};
 static bool s_inited = false;
 static int64_t s_last_activity_us = 0;
 static bool s_idle_dimmed = false;
-static uint8_t s_active_brightness = 0;
+static StaticSemaphore_t s_idle_lock_storage;
+static SemaphoreHandle_t s_idle_lock;
 static volatile uint32_t s_idle_dim_suspend_count = 0;
 static volatile uint16_t s_idle_dim_timeout_minutes = LVGL_IDLE_DIM_TIMEOUT_DEFAULT_MIN;
 
@@ -97,18 +98,18 @@ static void lvgl_task(void *arg)
     }
 }
 
-void lvgl_port_mark_activity(void)
+static void lvgl_mark_activity_locked(void)
 {
     int64_t now_us = esp_timer_get_time();
 
     s_last_activity_us = now_us;
     if (s_idle_dimmed) {
         s_idle_dimmed = false;
-        (void)lcd_display_set_brightness(s_active_brightness);
+        (void)lcd_display_set_backlight_suspended(false);
     }
 }
 
-void lvgl_port_set_idle_dim_suspended(bool suspended)
+static void lvgl_set_idle_dim_suspended_locked(bool suspended)
 {
     if (suspended) {
         if (s_idle_dim_suspend_count < UINT32_MAX) {
@@ -116,7 +117,7 @@ void lvgl_port_set_idle_dim_suspended(bool suspended)
         }
         if (s_idle_dimmed) {
             s_idle_dimmed = false;
-            (void)lcd_display_set_brightness(s_active_brightness);
+            (void)lcd_display_set_backlight_suspended(false);
         }
         return;
     }
@@ -129,7 +130,7 @@ void lvgl_port_set_idle_dim_suspended(bool suspended)
     }
 }
 
-void lvgl_port_set_idle_dim_timeout_minutes(uint16_t minutes)
+static void lvgl_set_idle_dim_timeout_minutes_locked(uint16_t minutes)
 {
     s_idle_dim_timeout_minutes = minutes;
     if (minutes == 0U) {
@@ -137,7 +138,7 @@ void lvgl_port_set_idle_dim_timeout_minutes(uint16_t minutes)
     }
 }
 
-bool lvgl_port_is_idle_dimmed(void)
+static bool lvgl_is_idle_dimmed_locked(void)
 {
     int64_t now_us;
     uint16_t timeout_minutes = s_idle_dim_timeout_minutes;
@@ -156,23 +157,52 @@ bool lvgl_port_is_idle_dimmed(void)
     if (timeout_minutes == 0U) {
         if (s_idle_dimmed) {
             s_idle_dimmed = false;
-            (void)lcd_display_set_brightness(s_active_brightness);
+            (void)lcd_display_set_backlight_suspended(false);
         }
         return false;
     }
     if (!s_idle_dimmed &&
         (uint64_t)(now_us - s_last_activity_us) >= ((uint64_t)timeout_minutes * 60ULL * 1000ULL * 1000ULL)) {
-        s_active_brightness = lcd_display_get_brightness();
         s_idle_dimmed = true;
-        (void)lcd_display_set_brightness(LVGL_IDLE_BRIGHTNESS);
+        (void)lcd_display_set_backlight_suspended(true);
     }
 
     return s_idle_dimmed;
 }
 
+void lvgl_port_mark_activity(void)
+{
+    if (s_idle_lock) xSemaphoreTakeRecursive(s_idle_lock, portMAX_DELAY);
+    lvgl_mark_activity_locked();
+    if (s_idle_lock) xSemaphoreGiveRecursive(s_idle_lock);
+}
+
+void lvgl_port_set_idle_dim_suspended(bool suspended)
+{
+    if (s_idle_lock) xSemaphoreTakeRecursive(s_idle_lock, portMAX_DELAY);
+    lvgl_set_idle_dim_suspended_locked(suspended);
+    if (s_idle_lock) xSemaphoreGiveRecursive(s_idle_lock);
+}
+
+void lvgl_port_set_idle_dim_timeout_minutes(uint16_t minutes)
+{
+    if (s_idle_lock) xSemaphoreTakeRecursive(s_idle_lock, portMAX_DELAY);
+    lvgl_set_idle_dim_timeout_minutes_locked(minutes);
+    if (s_idle_lock) xSemaphoreGiveRecursive(s_idle_lock);
+}
+
+bool lvgl_port_is_idle_dimmed(void)
+{
+    if (s_idle_lock) xSemaphoreTakeRecursive(s_idle_lock, portMAX_DELAY);
+    bool dimmed = lvgl_is_idle_dimmed_locked();
+    if (s_idle_lock) xSemaphoreGiveRecursive(s_idle_lock);
+    return dimmed;
+}
+
 esp_err_t lvgl_port_init(void)
 {
     esp_err_t err;
+    if (!s_idle_lock) s_idle_lock = xSemaphoreCreateRecursiveMutexStatic(&s_idle_lock_storage);
     int width;
     int height;
     uint32_t draw_buf_size;
@@ -254,7 +284,6 @@ esp_err_t lvgl_port_init(void)
         return err;
     }
 
-    s_active_brightness = lcd_display_get_brightness();
     s_last_activity_us = esp_timer_get_time();
     s_idle_dimmed = false;
 
