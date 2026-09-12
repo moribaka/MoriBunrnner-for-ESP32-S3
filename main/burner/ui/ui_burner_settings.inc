@@ -273,6 +273,34 @@ static void ui_format_probe_id(const burner_status_t *status, char *out, size_t 
     }
 }
 
+/* Formats a slice of the raw probe ID bytes, e.g. manufacturer/device words. */
+static void ui_format_probe_id_part(
+    const burner_status_t *status,
+    size_t start,
+    size_t count,
+    char *out,
+    size_t out_len)
+{
+    if (out == NULL || out_len == 0U) {
+        return;
+    }
+    if (status == NULL || !status->probe_valid || start >= sizeof(status->probe_id)) {
+        snprintf(out, out_len, "--");
+        return;
+    }
+
+    out[0] = '\0';
+    for (size_t i = start; i < (start + count) && i < sizeof(status->probe_id); ++i) {
+        char part[4];
+
+        snprintf(part, sizeof(part), "%02X", status->probe_id[i]);
+        strncat(out, part, out_len - strlen(out) - 1U);
+        if (i + 1U < (start + count) && i + 1U < sizeof(status->probe_id)) {
+            strncat(out, " ", out_len - strlen(out) - 1U);
+        }
+    }
+}
+
 static const char *ui_nor_cmdset_label(burner_nor_cmdset_t cmdset)
 {
     switch (cmdset) {
@@ -308,6 +336,34 @@ static const burner_nor_family_t *ui_probe_family(const burner_status_t *status)
         return burner_gba_family_from_id(status->probe_id);
     }
     return burner_mbc5_family_from_id(status->probe_id);
+}
+
+/* Identified NOR model from the ID database, or NULL when it is unknown.
+   Unlike probe_chip_name this never falls back to a generic "CFI <cmdset>" name. */
+static const char *ui_probe_nor_model(const burner_status_t *status)
+{
+    const char *name;
+
+    if (status == NULL || !status->probe_valid) {
+        return NULL;
+    }
+    name = (status->probe_cart_mode == BURNER_CART_MODE_GBA) ?
+               burner_gba_chip_name(status->probe_id) :
+               burner_mbc5_chip_name(status->probe_id);
+    if (name == NULL || name[0] == '\0' || strcmp(name, "unknown") == 0) {
+        return NULL;
+    }
+    return name;
+}
+
+static const char *ui_nor_model_label(const burner_status_t *status)
+{
+    const char *model = ui_probe_nor_model(status);
+
+    if (model != NULL) {
+        return model;
+    }
+    return ui_lang_is_zh() ? "未知NOR" : "Unknown NOR";
 }
 
 static void ui_format_probe_family_text(const burner_status_t *status, char *out, size_t out_len)

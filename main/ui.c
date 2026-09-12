@@ -142,6 +142,8 @@
 #define UI_BURN_SIDE_MARGIN 4
 #define UI_BURN_INFO_W 146
 #define UI_BURN_OPS_W (UI_CANVAS_W - (UI_BURN_SIDE_MARGIN * 2) - UI_BURN_SPLIT_GAP - UI_BURN_INFO_W)
+/* First info row baseline inside the cart-info panel: title (8px) + title line + 2px gap. */
+#define UI_BURN_INFO_ROW_Y0 (8 + UI_LIST_LINE_H + 2)
 #define UI_BURN_SAVE_ITEM_COUNT 8
 #define UI_SETTINGS_ITEM_COUNT 11
 #define UI_TASK_STATUS_ITEM_COUNT 12
@@ -1716,8 +1718,10 @@ static ui_nav_entry_t s_nav_stack[8];
 static uint8_t s_nav_depth = 0;
 static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
-static bool s_burner_info_detail = false;
 static bool s_burner_focus_info = false;
+static uint16_t s_burner_info_selected = 0;
+static uint16_t s_burner_info_scroll = 0;
+static bool s_burner_info_nor_detail = false;
 static burner_write_path_t s_write_path = BURNER_WRITE_PATH_DIRECT;
 static burner_recipe_mode_t s_recipe_mode = BURNER_RECIPE_MODE_CHIS;
 static bool s_ram_fram = false;
@@ -4430,6 +4434,7 @@ static void ui_open_page_locked(ui_model_t *model, ui_page_t page)
         s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
         s_burn_rom_write_prompt_until_ms = 0;
         s_burn_rom_verify_prompt_until_ms = 0;
+        s_burner_info_nor_detail = false;
     }
     if (page != UI_PAGE_FILES && page != UI_PAGE_FILE_ACTIONS) {
         model->file_book_scope = false;
@@ -4471,6 +4476,7 @@ static void ui_open_root_locked(ui_model_t *model)
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_NONE;
     s_burn_rom_write_prompt_until_ms = 0;
     s_burn_rom_verify_prompt_until_ms = 0;
+    s_burner_info_nor_detail = false;
     ui_music_set_drawer_open_locked(model, false);
     ui_clear_task_result_runtime_locked(model);
     s_nav_depth = 0;
@@ -4932,6 +4938,12 @@ static void ui_back_locked(ui_model_t *model)
     }
     if (model->page == UI_PAGE_MUSIC_FILES && model->parent_page == UI_PAGE_MUSIC_FILES) {
         ui_open_root_locked(model);
+        return;
+    }
+    if (model->page == UI_PAGE_BURN_ROM && s_burner_info_nor_detail) {
+        /* The NOR detail list lives in the info panel; B returns to the summary
+           list instead of leaving the burn page. */
+        ui_burn_info_nor_close_locked(model);
         return;
     }
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_CUSTOM) {
@@ -6127,14 +6139,43 @@ static void ui_handle_page_button_action_locked(
         return;
     }
 
-    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_NONE &&
-        (action == UI_INPUT_ACTION_LEFT || action == UI_INPUT_ACTION_RIGHT)) {
-        /* The burn page is a two-panel layout. LEFT/RIGHT move focus without
-           changing the panel positions. */
-        s_burner_focus_info = action == UI_INPUT_ACTION_LEFT;
-        s_burner_info_detail = s_burner_focus_info;
-        model->dirty = true;
-        return;
+    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_NONE) {
+        if (action == UI_INPUT_ACTION_LEFT || action == UI_INPUT_ACTION_RIGHT) {
+            /* The burn page is a two-panel layout. LEFT/RIGHT move the cursor to
+               the panel on that side without changing the panel positions. */
+            bool focus_info = ((action == UI_INPUT_ACTION_LEFT) == s_burner_info_left);
+
+            if (s_burner_focus_info != focus_info) {
+                s_burner_focus_info = focus_info;
+                ui_burn_info_ensure_visible();
+                ui_mark_content_dirty(model);
+            }
+            return;
+        }
+        if (s_burner_focus_info &&
+            (action == UI_INPUT_ACTION_UP || action == UI_INPUT_ACTION_DOWN)) {
+            uint16_t count = ui_burn_info_item_count();
+
+            if (count > 0U) {
+                ui_burn_info_move((action == UI_INPUT_ACTION_UP) ? -1 : 1);
+                s_burner_info_scroll = ui_scroll_for_selected_rows(
+                    s_burner_info_selected,
+                    s_burner_info_scroll,
+                    count,
+                    ui_burn_info_visible_rows());
+                ui_mark_content_dirty(model);
+            }
+            return;
+        }
+        if (s_burner_focus_info && action == UI_INPUT_ACTION_SELECT) {
+            /* The cart-info panel is read-only except the "NOR:" row, which
+               opens the NOR detail list. Never fire the operation cursor that
+               is hidden behind the panel. */
+            if (ui_cart_is_unlocked() && s_burner_info_selected == ui_burn_info_nor_index()) {
+                ui_burn_rom_open_nor_info_locked(model);
+            }
+            return;
+        }
     }
 
     switch (action) {
@@ -8934,6 +8975,24 @@ void ui_get_runtime_stats(ui_runtime_stats_t *out)
     out->selected = (s_model.page == UI_PAGE_FILES || s_model.page == UI_PAGE_MUSIC_FILES)
         ? s_model.file_selected : s_model.selected;
     out->item_count = ui_page_item_count(&s_model);
+    out->burn_info_focus = s_burner_focus_info ? 1U : 0U;
+    out->burn_info_selected = s_burner_info_selected;
+    out->burn_info_count = ui_burn_info_item_count();
+    out->burn_info_nor_detail = s_burner_info_nor_detail ? 1U : 0U;
+    {
+        burner_status_t probe_status = {0};
+        const char *model;
+
+        burner_status_snapshot(&probe_status);
+        model = ui_probe_nor_model(&probe_status);
+        snprintf(out->nor_model, sizeof(out->nor_model), "%s", (model != NULL) ? model : "");
+        if (probe_status.probe_valid) {
+            ui_format_probe_id(&probe_status, out->nor_id, sizeof(out->nor_id));
+            out->nor_device_size = probe_status.probe_device_size;
+            out->nor_sector_size = probe_status.probe_sector_size;
+            out->nor_buffer_bytes = probe_status.probe_buffer_write_bytes;
+        }
+    }
     snprintf(out->status, sizeof(out->status), "%s", s_model.status_text);
     if (s_model.page == UI_PAGE_ROOT) {
         const ui_menu_item_t *item = ui_home_item_at(s_model.selected);

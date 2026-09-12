@@ -72,9 +72,13 @@ typedef struct {
     uint32_t directory_scans, directory_cache_hits;
     uint32_t model_bytes, page, selected, item_count;
     uint32_t preview_generation, file_worker_stack_free;
+    uint32_t burn_info_focus, burn_info_selected, burn_info_count, burn_info_nor_detail;
+    uint32_t nor_device_size, nor_sector_size, nor_buffer_bytes;
     bool file_start_active, preview_active, preview_done, preview_available, screen_dimmed;
     char selection[128];
     char status[96];
+    char nor_model[48];
+    char nor_id[32];
 } ui_runtime_stats_t;
 void ui_get_runtime_stats(ui_runtime_stats_t *out);
 

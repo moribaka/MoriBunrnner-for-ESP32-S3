@@ -704,6 +704,10 @@ static void dispatch(char *line)
             cJSON_AddNumberToObject(json, "count", stats.item_count);
             cJSON_AddNumberToObject(json, "preview_generation", stats.preview_generation);
             cJSON_AddNumberToObject(json, "file_worker_stack_free", stats.file_worker_stack_free);
+            cJSON_AddNumberToObject(json, "burn_info_focus", stats.burn_info_focus);
+            cJSON_AddNumberToObject(json, "burn_info_selected", stats.burn_info_selected);
+            cJSON_AddNumberToObject(json, "burn_info_count", stats.burn_info_count);
+            cJSON_AddNumberToObject(json, "burn_info_nor_detail", stats.burn_info_nor_detail);
             cJSON_AddBoolToObject(json, "file_start_active", stats.file_start_active);
             cJSON_AddBoolToObject(json, "preview_active", stats.preview_active);
             cJSON_AddBoolToObject(json, "preview_done", stats.preview_done);
@@ -711,6 +715,11 @@ static void dispatch(char *line)
             cJSON_AddBoolToObject(json, "screen_dimmed", stats.screen_dimmed);
             cJSON_AddStringToObject(json, "selection", stats.selection);
             cJSON_AddStringToObject(json, "status", stats.status);
+            cJSON_AddStringToObject(json, "nor_model", stats.nor_model);
+            cJSON_AddStringToObject(json, "nor_id", stats.nor_id);
+            cJSON_AddNumberToObject(json, "nor_device_size", stats.nor_device_size);
+            cJSON_AddNumberToObject(json, "nor_sector_size", stats.nor_sector_size);
+            cJSON_AddNumberToObject(json, "nor_buffer_bytes", stats.nor_buffer_bytes);
         }
         reply(json);
         return;

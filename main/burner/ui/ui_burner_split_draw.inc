@@ -40,121 +40,74 @@ static void ui_px_info_line(int32_t x, int32_t y, int32_t w, const char *label, 
     ui_px_text_clipped(x + label_w, y, w - label_w, value, true);
 }
 
-static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x, int32_t y, int32_t w, int32_t h)
+typedef struct {
+    int32_t x;
+    int32_t y;
+    int32_t w;
+} ui_burn_info_draw_ctx_t;
+
+static void ui_burn_info_draw_emit(
+    void *ctx_ptr,
+    uint16_t index,
+    const char *label,
+    const char *value,
+    ui_burn_info_kind_t kind)
 {
-    burner_status_t status = {0};
-    char size_text[24] = {0};
-    char sector_text[24] = {0};
-    char sector_count_text[32] = {0};
-    char d0d1_text[24] = {0};
-    char save_size_text[24] = {0};
-    char id_text[32] = {0};
-    int32_t text_x = x + 5;
-    int32_t text_w = w - 10;
-    int32_t yy = y + 8;
+    ui_burn_info_draw_ctx_t *ctx = (ui_burn_info_draw_ctx_t *)ctx_ptr;
+    int32_t row;
+    int32_t row_y;
+    int32_t text_x;
+    int32_t text_w;
 
-    (void)model;
-    burner_status_snapshot(&status);
-    ui_px_frame(x, y, w, h, true);
-    ui_px_text_clipped(text_x, yy, text_w, s_burner_focus_info ? "> Cart info" : "Cart info", true);
-    if (s_burner_focus_info) {
-        /* Use the same inverted selector treatment as the operation list so
-           the cursor visibly moves onto the information panel. */
-        ui_px_invert_rect(x + 1, y + 4, w - 2, UI_LIST_LINE_H - 1);
-    }
-    yy += UI_LIST_LINE_H + 2;
-    ui_px_hline(x + 4, yy - 4, w - 8, true);
-
-    if (!ui_cart_is_unlocked()) {
-        ui_px_text_clipped(text_x, yy, text_w, ui_tr("Analyze first"), true);
-        yy += UI_LIST_LINE_H;
-        ui_px_text_clipped(text_x, yy, text_w, ui_tr("Then operations unlock"), true);
+    if (ctx == NULL || index < s_burner_info_scroll) {
         return;
     }
-
-    ui_px_info_line(text_x, yy, text_w, ui_tr("Type:"), ui_probe_type_label(&status, s_cart_mode));
-    yy += UI_LIST_LINE_H;
-    if (status.probe_valid && status.probe_cart_mode == s_cart_mode) {
-        ui_px_text_clipped(text_x, yy, text_w, ui_probe_chip_name(&status), true);
-        yy += UI_LIST_LINE_H;
-    } else if (s_analyzed_cart_info[0] != '\0') {
-        ui_px_text_clipped(text_x, yy, text_w, s_analyzed_cart_info, true);
-        yy += UI_LIST_LINE_H;
+    row = (int32_t)(index - s_burner_info_scroll);
+    if (row >= (int32_t)ui_burn_info_visible_rows()) {
+        return;
     }
+    row_y = ctx->y + UI_BURN_INFO_ROW_Y0 + row * UI_LIST_LINE_H;
+    text_x = ctx->x + 5;
+    text_w = ctx->w - 10;
 
-    if (status.probe_valid && status.probe_cart_mode == s_cart_mode) {
-        ui_format_bytes_text(status.probe_device_size, size_text, sizeof(size_text));
-        ui_format_bytes_text(status.probe_sector_size, sector_text, sizeof(sector_text));
-        if (status.probe_sector_size > 0U) {
-            snprintf(sector_count_text, sizeof(sector_count_text), "%" PRIu32, status.probe_device_size / status.probe_sector_size);
-        } else {
-            snprintf(sector_count_text, sizeof(sector_count_text), "--");
-        }
-        ui_format_probe_id(&status, id_text, sizeof(id_text));
-        ui_format_gba_d0d1_text(&status, d0d1_text, sizeof(d0d1_text));
+    if (kind == UI_BURN_INFO_ROW_GAP) {
+        return;
+    }
+    if (kind == UI_BURN_INFO_ROW_HEADER) {
+        /* Section divider above a non-selectable header row. */
+        ui_px_hline(ctx->x + 4, row_y - 3, ctx->w - 8, true);
+    }
+    if (label != NULL && label[0] != '\0' && value != NULL && value[0] != '\0') {
+        ui_px_info_line(text_x, row_y, text_w, label, value);
+    } else if (label != NULL && label[0] != '\0') {
+        ui_px_text_clipped(text_x, row_y, text_w, label, true);
+    } else if (value != NULL) {
+        ui_px_text_clipped(text_x, row_y, text_w, value, true);
+    }
+    if (ui_burn_info_kind_selectable(kind) && s_burner_focus_info && index == s_burner_info_selected) {
+        /* Invert after the text so the row shows white background with black
+           glyphs, matching the operation list selector. */
+        ui_px_invert_rect(ctx->x + 1, row_y - 2, ctx->w - 2, UI_LIST_LINE_H - 1);
+    }
+}
 
-        if (!s_burner_info_detail) {
-            ui_px_info_line(text_x, yy, text_w, ui_tr("Capacity:"), size_text);
-            yy += UI_LIST_LINE_H;
-            ui_px_info_line(text_x, yy, text_w, "NOR:", "Right = details");
-            return;
-        }
+static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    ui_burn_info_draw_ctx_t ctx = {.x = x, .y = y, .w = w};
+    int32_t text_x = x + 5;
+    int32_t text_w = w - 10;
 
-        if (status.probe_cart_mode == BURNER_CART_MODE_GBA) {
-            ui_px_info_line(text_x, yy, text_w, ui_tr("D1/D0:"), d0d1_text);
-            yy += UI_LIST_LINE_H;
-            if (status.probe_gba_save_detected && status.probe_gba_save_size > 0u) {
-                ui_format_bytes_text(status.probe_gba_save_size, save_size_text, sizeof(save_size_text));
-            } else {
-                snprintf(save_size_text, sizeof(save_size_text), "--");
-            }
-            ui_px_info_line(text_x, yy, text_w, ui_tr("Save:"), ui_gba_save_type_probe_label(&status));
-            yy += UI_LIST_LINE_H;
-            ui_px_info_line(text_x, yy, text_w, ui_tr("Size:"), save_size_text);
-            yy += UI_LIST_LINE_H;
-            if (status.probe_gba_batteryless_region_found) {
-                char batteryless_address_text[24] = {0};
-                snprintf(
-                    batteryless_address_text,
-                    sizeof(batteryless_address_text),
-                    "0x%06" PRIX32,
-                    status.probe_gba_batteryless_save_address);
-                ui_px_info_line(text_x, yy, text_w, "Save area:", batteryless_address_text);
-                yy += UI_LIST_LINE_H;
-                ui_px_info_line(
-                    text_x,
-                    yy,
-                    text_w,
-                    "Save data:",
-                    status.probe_gba_batteryless_data_present ? "present" : "empty");
-                yy += UI_LIST_LINE_H;
-            }
-            ui_px_info_line(text_x, yy, text_w, ui_tr("SRAM patch:"), ui_gba_sram_patch_label(&status));
-            yy += UI_LIST_LINE_H;
-        }
-        ui_px_info_line(text_x, yy, text_w, ui_tr("Capacity:"), size_text);
-        yy += UI_LIST_LINE_H;
-        ui_px_info_line(text_x, yy, text_w, ui_tr("Sector:"), sector_text);
-        yy += UI_LIST_LINE_H;
-        ui_px_info_line(text_x, yy, text_w, ui_tr("Count:"), sector_count_text);
-        yy += UI_LIST_LINE_H;
-        ui_px_text_clipped(text_x, yy, text_w, "NOR ID", true);
-        yy += UI_LIST_LINE_H;
-        ui_px_text_clipped(text_x, yy, text_w, id_text, true);
-        yy += UI_LIST_LINE_H;
+    (void)model;
+    ui_px_frame(x, y, w, h, true);
+    if (s_burner_info_nor_detail) {
+        ui_px_text_clipped(text_x, y + 8, text_w, s_burner_focus_info ? "> NOR" : "NOR", true);
     } else {
-        ui_px_text_clipped(text_x, yy, text_w, ui_tr("No probe detail"), true);
-        yy += UI_LIST_LINE_H;
+        ui_px_text_clipped(text_x, y + 8, text_w, s_burner_focus_info ? "> Cart info" : "Cart info", true);
     }
-    {
-        const ui_file_entry_t *rom_file = ui_last_rom_file_for_mode(s_cart_mode);
+    ui_px_hline(x + 4, y + 22, w - 8, true);
 
-        if (rom_file->path[0] != '\0' && yy + (UI_LIST_LINE_H * 2) <= y + h - 2) {
-            ui_px_info_line(text_x, yy, text_w, ui_tr("File:"), "");
-            yy += UI_LIST_LINE_H;
-            ui_px_text_clipped(text_x, yy, text_w, rom_file->name, true);
-        }
-    }
+    ui_burn_info_ensure_visible();
+    (void)ui_burn_info_enumerate(ui_burn_info_draw_emit, &ctx);
 }
 
 static const char *ui_probe_chip_name(const burner_status_t *status)
