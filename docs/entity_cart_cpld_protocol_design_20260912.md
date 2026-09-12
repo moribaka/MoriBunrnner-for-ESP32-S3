@@ -32,9 +32,15 @@ Bacon 原有 CS0/CS1 逐字节路径、40 MHz 设置和写入时序保持不变�
 
 ## 当前状态
 
-ESP32 侧 `shared/entity_cart_protocol.h` 已固定 ABI；Retro-Go 仍使用旧 CPLD/BSC1
-访问路径。CPLD 新模块尚未接入顶层、尚未完成 Quartus/Supra 路由、尚未刷写，
-因此当前设备继续使用已恢复的旧版实体卡固件。
+ESP32 侧 `shared/entity_cart_protocol.h` 已固定 ABI。审查发现板载 BSC1 CPLD
+扩展已经原生支持 `GB_READ`，因此不需要另刷一套 CPLD bitstream；Retro-Go 已
+改用现有 BSC1 连续读通道，保留旧 Bacon 作为 MBC 写入和兼容路径。
+
+Retro-Go 提交 `d96b798`，产物 SHA256：
+`50B862429580ED0CB9A0BFB1CE6CFC06C71702E3830181809178A436526A7481`。
+已刷入 COM26 的 Retro-Go 分区 `0xAE0000`，esptool 报告 `Hash of data verified`。
+CPLD 未重刷，因为当前 BSC1 bitstream 已包含 GB_READ 状态机；仍需插卡完成实机
+bank/帧率验证。
 
 ## 验收门槛
 
@@ -43,4 +49,3 @@ ESP32 侧 `shared/entity_cart_protocol.h` 已固定 ABI；Retro-Go 仍使用旧 
 - ESP32 端连续读与旧路径逐字节 hash 一致；
 - 真实游戏启动后记录 bank miss、帧时间和有效吞吐；
 - Bacon GBA/GBC 烧录回归保持通过。
-
