@@ -166,3 +166,5 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
     s_stats.elapsed_us = esp_timer_get_time() - started;
     return err == ESP_OK ? exit_err : err;
 }
+
+#include "bacon_cpld_read_experiment.inc"

@@ -292,8 +292,11 @@ static void bacon_check(void)
     reply(json);
 }
 
+#include "serial_cpld_read_bench.inc"
+
 static void dispatch(char *line)
 {
+    if (strcmp(line, "cpld-read-bench-gba") == 0) { cpld_read_bench(); return; }
     if (strcmp(line, "cpld-info") == 0) {
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
             message("error", "cartridge or firmware job is running"); return;

@@ -49,6 +49,7 @@ def run(args):
             "ag32-stream-test": "ag32_stream_test",
             "bacon-check": "bacon_check",
             "cpld-info": "cpld_info", "cpld-check": "cpld_check",
+            "cpld-read-bench-gba": "cpld_read_bench",
             "ag32-batch": "ag32_batch_started", "ag32-batch-status": "ag32_batch_status",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:
