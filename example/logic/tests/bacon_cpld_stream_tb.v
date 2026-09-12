@@ -3,6 +3,7 @@ module bacon_cpld_stream_tb;
     // Characterization budget, not a measured board delay. A 14ns return
     // delay exposes the old half-period launch margin at fixed 40MHz.
     parameter MISO_DELAY_NS=0;
+    parameter PROTOCOL_V2=0;
     reg clk=0, resetn=1, enable=0, abort_request=0;
     always #3.333 clk=~clk;
     reg cs0=1, cs1=1, sck=0, mosi=0;
@@ -144,7 +145,7 @@ module bacon_cpld_stream_tb;
         integer k;
         begin
             cs0=0; #100; cs1=1; #100;
-            for(k=0;k<n;k=k+1) transfer_byte(bytes[k],ignored);
+            for(k=0;k<n;k=k+1) transfer_byte(bytes[k],received[k]);
             cs0=1; #200;
         end
     endtask
@@ -175,14 +176,18 @@ module bacon_cpld_stream_tb;
         end
     endtask
     // expected_error: 1 corrupts CRC; 2 preserves CRC for invalid-field tests.
+    reg v2_stream=0, next_credit=0;
+    integer credits_used=0;
     task begin_stream(input [7:0] op,input integer addr,n,page,input [1:0] expected_error);
         integer k;
         begin
             enable=0; #200; enable=1; #200;
             byte_mode=op>=4; raw_mode=op==2 || op==5;
+            v2_stream=PROTOCOL_V2 && op==3; next_credit=0;
             status();
             for(k=0;k<20;k=k+1) bytes[k]=0;
             put32(0,32'h31435342); bytes[4]=op;
+            if(v2_stream) bytes[3]=8'h32;
             bytes[6]=page ? page-1 : 0; bytes[7]=page ? (page-1)>>8 : 0;
             put32(8,addr); put32(12,n); put32(16,crc_bytes(16)^(expected_error==1));
             send_packet(20);
@@ -209,9 +214,16 @@ module bacon_cpld_stream_tb;
     task payload(input integer offset,n,input corrupt);
         integer k,padded;
         begin
-            wait_flag(16); padded=(n+3)&~3;
+            if(v2_stream && next_credit) credits_used=credits_used+1;
+            else wait_flag(16);
+            padded=(n+3)&~3;
             for(k=0;k<padded;k=k+1) bytes[k]=k<n?pattern(offset+k):0;
             put32(padded,crc_bytes(n)^corrupt); send_packet(padded+4);
+            if(v2_stream) begin
+                if({received[4],received[5],received[6]} !== 24'hbace01)
+                    $fatal(1,"BSC2 full-duplex status prefix mismatch");
+                next_credit=received[7][7];
+            end
         end
     endtask
     integer i, count_before, offset,n;
@@ -293,7 +305,28 @@ module bacon_cpld_stream_tb;
         wait(safe_to_exit); enable=0; #100; abort_request=0;
         if(!wr || !rd || !cs) $fatal(1,"abort did not release bus");
 
-        $display("CPLD stream passed: GBA/GB reads, raw writes, AMD pages, CRC, overlap, short frames, abort");
+        if(PROTOCOL_V2) begin
+            if(credits_used==0) $fatal(1,"BSC2 did not exercise a credited packet");
+            begin_stream(3,0,1026,1024,0);
+            payload(0,1024,0); payload(1024,2,0); wait_flag(4);
+            if(completed!=1026 || memory[512] !== {pattern(1025),pattern(1024)})
+                $fatal(1,"BSC2 minimum 8-byte frame failed");
+            // A malicious extra packet must not overwrite either occupied slot.
+            begin_stream(3,0,3072,1024,0); stuck_busy=1;
+            payload(0,1024,0); payload(1024,1024,0);
+            if(next_credit) $fatal(1,"BSC2 granted a credit with both slots occupied");
+            count_before=writes;
+            bytes[0]=0; send_packet(1); status();
+            if(error!=3 || writes!=count_before) $fatal(1,"BSC2 queue overflow was not rejected");
+            busy=0; stuck_busy=0;
+            // New magic must not silently select an unsupported read/GB recipe.
+            begin_stream(3,0,16,16,0);
+            enable=0; #200; enable=1; #200;
+            bytes[4]=1; put32(16,crc_bytes(16)); count_before=writes;
+            send_packet(20); status();
+            if(error!=5 || writes!=count_before) $fatal(1,"BSC2 unsupported operation accepted");
+        end
+        $display("CPLD stream passed: v2=%0d credits=%0d GBA/GB reads, raw writes, AMD pages, CRC, overlap, short frames, abort",PROTOCOL_V2,credits_used);
         $finish;
     end
     initial begin #20000000; $fatal(1,"test watchdog"); end

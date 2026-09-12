@@ -27,7 +27,7 @@ module bacon_cpld_stream #(
         faults[6] ? 8'd7 : faults[5] ? 8'd6 : faults[4] ? 8'd5 :
         faults[3] ? 8'd4 : faults[2] ? 8'd3 : faults[1] ? 8'd2 :
         faults[0] ? 8'd1 : 8'd0;
-    reg byte_bus, reading, programming;
+    reg byte_bus, reading, programming, bsc2;
     wire [1:0] stride = byte_bus ? 2'd1 : 2'd2;
     reg [25:0] completed_bytes, receive_remaining;
     reg remaining_nonzero, more_after_chunk, last_in_cycle;
@@ -63,7 +63,9 @@ module bacon_cpld_stream #(
     /* Native RX holds a complete byte while a toggle crosses to sys clock. */
     wire rx_csn = !enable || cs0 || !cs1;
     wire tx_csn = !enable || !cs0 || cs1;
-    wire status_csn = !enable || cs0 || cs1;
+    // BSC2 writes return a frozen status concurrently with MOSI payload.
+    // BSC1 retains its original dual-low status selection and wire format.
+    wire status_csn = !enable || cs0 || (cs1 && !bsc2);
     reg [2:0] rx_bit;
     reg [7:0] rx_shift, rx_byte;
     reg rx_toggle;
@@ -160,7 +162,11 @@ module bacon_cpld_stream #(
     end
 
     /* Status is frozen before its dummy word ends. No data FIFO clocking. */
-    wire [7:0] flags = {1'b0, state != IDLE,
+    // Before configuration bit7 advertises BSC2. During a BSC2 packet it
+    // reserves the OTHER free slot for the next packet. Only the host can
+    // fill that slot; the consumer can only free it, making the credit safe
+    // even if its snapshot is old. This is not an acknowledgement of WR.
+    wire [7:0] flags = {!configured || (bsc2 && !valid[!producer]), state != IDLE,
         configured && reading && valid[consumer],
         configured && !reading && rx_armed && !valid[producer],
         error_code != 0, done, configured, enable};
@@ -264,7 +270,7 @@ module bacon_cpld_stream #(
 
     always @(posedge clk or negedge resetn) begin
         if (!resetn) begin
-            configured<=0; done<=0; faults<=0; byte_bus<=0; reading<=0; programming<=0;
+            configured<=0; done<=0; faults<=0; byte_bus<=0; reading<=0; programming<=0; bsc2<=0;
             remaining_nonzero<=0;
             completed_bytes<=0; receive_remaining<=0;
             receive_offset<=0; address<=0; valid<=0; producer<=0; consumer<=0;
@@ -285,7 +291,7 @@ module bacon_cpld_stream #(
             ram_we0<=0; ram_we1<=0;
             crc_rx_pending<=0; crc_read_pending<=0; crc_reload_pending<=0;
             if (!enable) begin
-                configured<=0; done<=0; faults<=0; valid<=0; producer<=0; consumer<=0;
+                configured<=0; done<=0; faults<=0; valid<=0; producer<=0; consumer<=0; bsc2<=0;
                 remaining_nonzero<=0;
                 rx_partial_bits<=0; tx_wire_bits<=0; rx_index<=0; received_crc<=0;
                 state<=IDLE;
@@ -295,6 +301,7 @@ module bacon_cpld_stream #(
             end else begin
                 range_end <= {1'b0,address} + receive_remaining;
                 descriptor_invalid <= descriptor_bad || receive_remaining == 0 ||
+                    (bsc2 && (!programming || byte_bus)) ||
                     (!byte_bus && (address[0] || receive_remaining[0] || range_end > 26'h2000000)) ||
                     (byte_bus && (address[24:16] != 0 || range_end > 65536)) ||
                     (programming && (page_mask == 0 || (byte_bus && page_mask[9:8] != 0) ||
@@ -334,7 +341,10 @@ module bacon_cpld_stream #(
                                 0: if (rx_byte != 8'h42) descriptor_bad<=1;
                                 1: if (rx_byte != 8'h53) descriptor_bad<=1;
                                 2: if (rx_byte != 8'h43) descriptor_bad<=1;
-                                3: if (rx_byte != 8'h31) descriptor_bad<=1;
+                                3: begin
+                                    bsc2<=rx_byte == 8'h32;
+                                    if (rx_byte != 8'h31 && rx_byte != 8'h32) descriptor_bad<=1;
+                                end
                                 4: begin
                                     byte_bus<=rx_byte[2];
                                     reading<=rx_byte == 1 || rx_byte == 4;

@@ -9,6 +9,10 @@
 static int s_available = -1;
 static const char *TAG = "bacon_cpld";
 static bacon_cpld_stats_t s_stats;
+static bacon_cpld_write_profile_t s_write_profile;
+static uint8_t s_enter_flags;
+static esp_err_t bsc2_program_locked(uint32_t address, const void *data,
+    size_t size, uint16_t page_bytes, uint32_t timeout_ms);
 // Separate TX clocks from RX storage so DMA never reads a buffer it is writing.
 static DMA_ATTR uint8_t s_read_clocks[BACON_CPLD_BLOCK_BYTES + 8];
 void bacon_cpld_get_stats(bacon_cpld_stats_t *out) { if (out) *out = s_stats; }
@@ -57,12 +61,15 @@ static esp_err_t enter(void)
     if (err == ESP_OK) err = mode_key(BACON_CPLD_ENTER_MAGIC);
     cpld_status_t status;
     if (err == ESP_OK) err = read_status(&status);
+    if (err == ESP_OK) s_enter_flags = status.flags;
     return err;
 }
 
 esp_err_t bacon_cpld_probe_locked(void)
 {
     esp_err_t err = enter();
+    if (err == ESP_OK && s_write_profile.mode == 2 &&
+        !(s_enter_flags & BACON_CPLD_V2_CAP_OR_CREDIT)) err = ESP_ERR_NOT_SUPPORTED;
     if (err == ESP_OK) s_available = 1;
     else if (err == ESP_ERR_NOT_SUPPORTED) s_available = 0;
     esp_err_t exit_err = mode_key(BACON_CPLD_EXIT_MAGIC);
@@ -110,6 +117,10 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
         (programming && (page_bytes < 2 || page_bytes > (gb ? 256 : 1024) ||
                         (page_bytes & (page_bytes - 1))))) return ESP_ERR_INVALID_ARG;
 
+    if (operation == BACON_CPLD_GBA_PROGRAM && s_write_profile.mode == 2)
+        return bsc2_program_locked(byte_address, data, size, page_bytes, timeout_ms);
+    bool profile_write = operation == BACON_CPLD_GBA_PROGRAM && s_write_profile.mode == 1;
+
     memset(&s_stats, 0, sizeof(s_stats));
     int64_t started = esp_timer_get_time();
     esp_err_t err = enter();
@@ -136,7 +147,9 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
             (reading ? BACON_CPLD_READ_BYTES : BACON_CPLD_BLOCK_BYTES);
         if (count > limit) count = limit;
         size_t padded = (count + 3u) & ~(size_t)3u;
+        int64_t stage = profile_write ? esp_timer_get_time() : 0;
         err = wait_flag(reading ? BACON_CPLD_TX_READY : BACON_CPLD_RX_READY, size, deadline);
+        if (profile_write) s_write_profile.ready_us += esp_timer_get_time() - stage;
         if (err != ESP_OK) break;
         if (transferred == 0) s_stats.first_ready_us = esp_timer_get_time() - started;
         if (reading) {
@@ -152,19 +165,32 @@ esp_err_t bacon_cpld_try_transfer_locked(uint8_t operation, uint32_t byte_addres
             }
             if (err == ESP_OK) memcpy((uint8_t *)data + transferred, wire + 4, count);
         } else {
+            stage = profile_write ? esp_timer_get_time() : 0;
             memcpy(wire, (const uint8_t *)data + transferred, count);
             memset(wire + count, 0, padded - count);
             ag32_mcu_write_le32(wire + padded, esp_rom_crc32_le(0, wire, count));
+            if (profile_write) { s_write_profile.prepare_us += esp_timer_get_time() - stage; stage = esp_timer_get_time(); }
             err = burner_spi_transfer_cs(BURNER_SPI_CS_MODE_0, wire, NULL, padded + 4);
+            if (profile_write) s_write_profile.tx_us += esp_timer_get_time() - stage;
         }
         if (err == ESP_OK) { transferred += count; ++s_stats.packets; }
         if (err == ESP_OK) err = burner_cancel_poll();
     }
     deadline = esp_timer_get_time() + (int64_t)(timeout_ms ? timeout_ms : 2000) * 1000;
+    int64_t done_start = profile_write ? esp_timer_get_time() : 0;
     if (err == ESP_OK) err = wait_flag(BACON_CPLD_DONE, size, deadline);
+    if (profile_write) s_write_profile.done_us += esp_timer_get_time() - done_start;
     esp_err_t exit_err = mode_key(BACON_CPLD_EXIT_MAGIC);
     s_stats.elapsed_us = esp_timer_get_time() - started;
+    if (profile_write) {
+        ++s_write_profile.streams;
+        s_write_profile.elapsed_us += s_stats.elapsed_us;
+        s_write_profile.packets += s_stats.packets;
+        s_write_profile.status_polls += s_stats.status_polls;
+        if (err == ESP_OK && exit_err == ESP_OK) s_write_profile.bytes += size;
+    }
     return err == ESP_OK ? exit_err : err;
 }
 
 #include "bacon_cpld_read_experiment.inc"
+#include "bacon_cpld_write_experiment.inc"

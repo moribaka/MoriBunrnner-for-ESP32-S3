@@ -71,6 +71,9 @@ static void status(void)
     cJSON *json = event("status");
     if (json == NULL) return;
     cJSON_AddStringToObject(json, "version", esp_app_get_description()->version);
+    char sta_ip[16] = {0};
+    if (wifi_maneger_get_sta_ip(sta_ip, sizeof(sta_ip)) == ESP_OK)
+        cJSON_AddStringToObject(json, "sta_ip", sta_ip);
     cJSON_AddNumberToObject(json, "uptime_ms", esp_timer_get_time() / 1000);
     cJSON_AddNumberToObject(json, "internal_free", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     cJSON_AddNumberToObject(json, "internal_largest", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
@@ -296,6 +299,48 @@ static void bacon_check(void)
 
 static void dispatch(char *line)
 {
+    if (strcmp(line, "wifi-connect-saved") == 0) {
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "cartridge or firmware job is running"); return;
+        }
+        esp_err_t err = wifi_maneger_connect_saved(10000);
+        cJSON *json = event("wifi_connect");
+        if (json) { cJSON_AddBoolToObject(json, "ok", err == ESP_OK); cJSON_AddStringToObject(json, "error", esp_err_to_name(err)); }
+        reply(json); return;
+    }
+    if (strncmp(line, "cpld-write-experiment ", 22) == 0) {
+        const char *choice = line + 22;
+        unsigned mode = !strcmp(choice, "off") ? 0 : !strcmp(choice, "baseline") ? 1 : !strcmp(choice, "bsc2") ? 2 : 3;
+        if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
+            message("error", "cartridge or firmware job is running"); return;
+        }
+        burner_spi_lock_take();
+        esp_err_t err = burner_task_is_running_snapshot() || ag32_batch_program_is_running()
+            ? ESP_ERR_INVALID_STATE : bacon_cpld_write_experiment_configure_locked(mode);
+        burner_spi_lock_give();
+        cJSON *json = event("cpld_write_experiment");
+        if (json) { cJSON_AddBoolToObject(json, "ok", err == ESP_OK); cJSON_AddStringToObject(json, "error", esp_err_to_name(err)); cJSON_AddNumberToObject(json, "requested_mode", mode); }
+        reply(json); return;
+    }
+    if (strcmp(line, "cpld-write-profile") == 0) {
+        bacon_cpld_write_profile_t p;
+        burner_spi_lock_take(); bacon_cpld_write_experiment_profile_locked(&p); burner_spi_lock_give();
+        cJSON *json = event("cpld_write_profile");
+        if (json) {
+            cJSON_AddNumberToObject(json, "mode", p.mode);
+            cJSON_AddNumberToObject(json, "bytes", p.bytes);
+            cJSON_AddNumberToObject(json, "streams", p.streams);
+            cJSON_AddNumberToObject(json, "packets", p.packets);
+            cJSON_AddNumberToObject(json, "status_polls", p.status_polls);
+            cJSON_AddNumberToObject(json, "credits", p.credits);
+            cJSON_AddNumberToObject(json, "elapsed_us", p.elapsed_us);
+            cJSON_AddNumberToObject(json, "ready_us", p.ready_us);
+            cJSON_AddNumberToObject(json, "prepare_us", p.prepare_us);
+            cJSON_AddNumberToObject(json, "tx_us", p.tx_us);
+            cJSON_AddNumberToObject(json, "done_us", p.done_us);
+        }
+        reply(json); return;
+    }
     if (strcmp(line, "cpld-read-bench-gba") == 0) { cpld_read_bench(); return; }
     if (strcmp(line, "cpld-info") == 0) {
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
