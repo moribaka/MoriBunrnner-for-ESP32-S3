@@ -64,3 +64,12 @@ COM26 已确认仍运行 `retro-core` 分区，串口 debug 输出稳定在约 1
 已补齐该序列并重新刷写，提交为 `5d45b49`，固件 SHA256：
 `FDE5461C55E56DEFE8204AA2E0AD1529C0D668D55376F2ACFEFD18228D1E07E2`。
 刷写地址仍为 `0xAE0000`，esptool 已报告 `Hash of data verified`。
+
+## 载入卡住修复
+
+实机反馈显示 BSC1 失败后仍在启动阶段等待，实体卡界面卡在载入。因此将
+`CART_USE_BSC1` 暂设为 0，保留 BSC1 实现但恢复旧 GB 读取作为默认启动路径，
+避免未确认 CPLD bitstream 时阻塞游戏启动。新固件已刷写并校验：
+
+- Retro-Go 提交：`d673ece`
+- SHA256：`580C095EDB9F6283444992BE9841ED586463CDC47CF5AAB075A3D5C4DA125849`
