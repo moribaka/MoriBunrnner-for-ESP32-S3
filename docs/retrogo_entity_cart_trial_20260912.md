@@ -42,6 +42,13 @@ Retro-Go 仓库已经包含一套针对 MoriBurnner 的实体 GB/GBC 卡入口�
 
 本次只完成构建，没有刷写设备；实体卡方案仍未宣称实机通过。
 
+## 设备刷写
+
+2026-09-12 已确认 COM26 为目标 ESP32-S3（MAC `a4:cb:8f:f2:c4:c0`），将该
+`retro-core.bin` 写入双系统 Retro-Go 分区 `0xAE0000`。esptool 报告：
+`Hash of data verified`，写入 1,257,808 bytes，耗时 6.7 秒。重启后设备返回
+`version=v2.32.119`，Retro-Go 分区正常启动；尚未插卡执行实体卡游戏验证。
+
 ## 已知限制
 
 - 当前缓存上限为 512 个 16 KiB bank，且会预留 PSRAM 空间；大容量 MBC5 卡可能
