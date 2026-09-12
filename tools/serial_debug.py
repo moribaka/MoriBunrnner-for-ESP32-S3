@@ -52,6 +52,8 @@ def run(args):
             "cpld-read-bench-gba": "cpld_read_bench",
             "cpld-write-experiment": "cpld_write_experiment",
             "cpld-write-profile": "cpld_write_profile", "wifi-connect-saved": "wifi_connect",
+            "bsc2-cart": "bsc2_job_started", "bsc2-job-status": "bsc2_job_status",
+            "bsc2-backup-hash": "bsc2_backup_hash",
             "ag32-batch": "ag32_batch_started", "ag32-batch-status": "ag32_batch_status",
         }.get(command.split(" ", 1)[0])
         while time.monotonic() < deadline:

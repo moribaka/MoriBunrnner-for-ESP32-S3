@@ -63,9 +63,10 @@ module bacon_cpld_stream #(
     /* Native RX holds a complete byte while a toggle crosses to sys clock. */
     wire rx_csn = !enable || cs0 || !cs1;
     wire tx_csn = !enable || !cs0 || cs1;
-    // BSC2 writes return a frozen status concurrently with MOSI payload.
-    // BSC1 retains its original dual-low status selection and wire format.
-    wire status_csn = !enable || cs0 || (cs1 && !bsc2);
+    // Run the status serializer whenever CS0 is low. BSC1 never consumed
+    // MISO during writes; BSC2 uses those previously unspecified return bits.
+    // Keep negotiated mode out of the native-SCK asynchronous reset tree.
+    wire status_csn = !enable || cs0;
     reg [2:0] rx_bit;
     reg [7:0] rx_shift, rx_byte;
     reg rx_toggle;

@@ -296,9 +296,14 @@ static void bacon_check(void)
 }
 
 #include "serial_cpld_read_bench.inc"
+#include "serial_bsc2_lab.inc"
 
 static void dispatch(char *line)
 {
+    if (!strcmp(line,"bsc2-job-status")) { bsc2_lab_status(); return; }
+    if (!strcmp(line,"bsc2-backup-hash")) { bsc2_lab_hash(); return; }
+    if (!strncmp(line,"bsc2-cart ",10)) { bsc2_lab_job(line+10); return; }
+    if (!strncmp(line,"bsc2-upload ",12)) { bsc2_lab_upload(line+12); return; }
     if (strcmp(line, "wifi-connect-saved") == 0) {
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {
             message("error", "cartridge or firmware job is running"); return;
