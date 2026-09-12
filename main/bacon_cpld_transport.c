@@ -68,10 +68,11 @@ static esp_err_t enter(void)
 esp_err_t bacon_cpld_probe_locked(void)
 {
     esp_err_t err = enter();
-    if (err == ESP_OK && s_write_profile.mode == 2 &&
-        !(s_enter_flags & BACON_CPLD_V2_CAP_OR_CREDIT)) err = ESP_ERR_NOT_SUPPORTED;
     if (err == ESP_OK) s_available = 1;
     else if (err == ESP_ERR_NOT_SUPPORTED) s_available = 0;
+    // Missing optional BSC2 support must not poison the BSC1 availability cache.
+    if (err == ESP_OK && s_write_profile.mode == 2 &&
+        !(s_enter_flags & BACON_CPLD_V2_CAP_OR_CREDIT)) err = ESP_ERR_NOT_SUPPORTED;
     esp_err_t exit_err = mode_key(BACON_CPLD_EXIT_MAGIC);
     return err == ESP_OK ? exit_err : err;
 }

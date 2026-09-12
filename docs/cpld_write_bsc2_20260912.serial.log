@@ -1,0 +1,766 @@
+2026-09-12 22:21:23 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-12 22:21:23 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-12 22:21:23 I (1287) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-12 22:21:23 I (1296) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-12 22:21:23 I (1303) main: timezone configured: CST-8
+2026-09-12 22:21:23 I (1307) main: boot step: mount assets
+2026-09-12 22:21:23 I (1402) assets: mounted /assets: total=1438481 used=777598
+2026-09-12 22:21:23 I (1403) main: boot step: mount sdcard
+2026-09-12 22:21:23 I (1455) SDCARD: SD card mounted
+2026-09-12 22:21:23 I (1455) SDCARD: Total: 59638MB
+2026-09-12 22:21:23 W (1616) main: repaired legacy lang_zh_cn.ini
+2026-09-12 22:21:23 I (3402) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=5v settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-12 22:21:23 I (3407) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-12 22:21:23 I (3418) main: UI language=1 (zh)
+2026-09-12 22:21:23 I (3426) main: boot step: init i2c peripherals
+2026-09-12 22:21:23 W (3427) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-12 22:21:23 I (3438) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-12 22:21:23 I (3446) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-12 22:21:23 I (3449) power_manager: detected AXP209 at 0x34
+2026-09-12 22:21:23 I (3453) main: AXP209 power manager ready at 0x34
+2026-09-12 22:21:23 I (3458) tca9555: TCA9555 ready at 0x20
+2026-09-12 22:21:23 I (3465) main: tca9555.ini apply=0, skip register apply
+2026-09-12 22:21:23 I (3468) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-12 22:21:23 I (3471) tca9555: IRQ enabled on GPIO 17
+2026-09-12 22:21:23 I (3474) main: boot step: init usb msc manager
+2026-09-12 22:21:23 I (3478) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-12 22:21:23 I (3484) main: USB MSC manager ready, pass-through default is disabled
+2026-09-12 22:21:23 I (3490) main: boot step: init nvs
+2026-09-12 22:21:23 I (3511) main: boot step: init mcu debug
+2026-09-12 22:21:23 I (3512) main: boot step: init lvgl/display
+2026-09-12 22:21:23 I (3755) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-12 22:21:23 I (3756) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-12 22:21:23 I (3761) lvgl_port: using single LVGL draw buffer (20
+2026-09-12 22:21:23 @mori {"event":"wifi_connect","ok":false,"error":"ESP_ERR_NVS_NOT_FOUND"}
+2026-09-12 22:31:40 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-12 22:31:40 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-12 22:31:40 I (1288) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-12 22:31:40 I (1297) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-12 22:31:40 I (1304) main: timezone configured: CST-8
+2026-09-12 22:31:40 I (1308) main: boot step: mount assets
+2026-09-12 22:31:40 I (1403) assets: mounted /assets: total=1438481 used=777598
+2026-09-12 22:31:40 I (1404) main: boot step: mount sdcard
+2026-09-12 22:31:40 I (1456) SDCARD: SD card mounted
+2026-09-12 22:31:40 I (1457) SDCARD: Total: 59638MB
+2026-09-12 22:31:40 W (1631) main: repaired legacy lang_zh_cn.ini
+2026-09-12 22:31:40 I (3450) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=5v settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-12 22:31:40 I (3456) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-12 22:31:40 I (3467) main: UI language=1 (zh)
+2026-09-12 22:31:40 I (3475) main: boot step: init i2c peripherals
+2026-09-12 22:31:40 W (3476) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-12 22:31:40 I (3486) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-12 22:31:40 I (3494) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-12 22:31:40 I (3497) power_manager: detected AXP209 at 0x34
+2026-09-12 22:31:40 I (3501) main: AXP209 power manager ready at 0x34
+2026-09-12 22:31:40 I (3506) tca9555: TCA9555 ready at 0x20
+2026-09-12 22:31:40 I (3514) main: tca9555.ini apply=0, skip register apply
+2026-09-12 22:31:40 I (3516) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-12 22:31:40 I (3519) tca9555: IRQ enabled on GPIO 17
+2026-09-12 22:31:40 I (3522) main: boot step: init usb msc manager
+2026-09-12 22:31:40 I (3527) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-12 22:31:40 I (3532) main: USB MSC manager ready, pass-through default is disabled
+2026-09-12 22:31:40 I (3539) main: boot step: init nvs
+2026-09-12 22:31:40 I (3559) main: boot step: init mcu debug
+2026-09-12 22:31:40 I (3560) main: boot step: init lvgl/display
+2026-09-12 22:31:40 I (3804) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-12 22:31:40 I (3805) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-12 22:31:40 I (3810) lvgl_port: using single LVGL draw buffer (20 
+2026-09-12 22:31:40 @mori {"event":"status","version":"v2.32.131-writeexp2","uptime_ms":89874,"internal_free":83651,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"unknown","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:31:41 I (91313) burner_web: PSRAM auto window: free=7539336 largest=7471104 reserve=262144 -> 6MB
+2026-09-12 22:31:41 I (91315) power_manager: CPU perf lock acquired by burn_task
+2026-09-12 22:31:41 
+2026-09-12 22:31:41 @mori {"event":"bsc2_job_started","ok":true,"error":"ESP_OK","action":"backup"}
+2026-09-12 22:31:41 I (91316) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-12 22:31:41 I (91334) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-12 22:31:41 
+2026-09-12 22:31:41 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"probing gba cart for read","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":189483,"erase_us":0,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:31:42 I (91541) burner_web: GBA D0/D1 swap detection starting...
+2026-09-12 22:31:42 I (91542) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-12 22:31:42 I (91544) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-12 22:31:42 I (91555) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-12 22:31:42 I (91560) burner_web: GBA ReadID trace begin t=90334685us
+2026-09-12 22:31:42 I (91565) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=4913us (0.004913s)
+2026-09-12 22:31:42 I (91574) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8242us (0.008242s)
+2026-09-12 22:31:42 I (91582) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7917us (0.007917s)
+2026-09-12 22:31:42 I (91589) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7907us (0.007907s)
+2026-09-12 22:31:42 I (91597) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7791us (0.007791s)
+2026-09-12 22:31:42 I (91605) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7793us (0.007793s)
+2026-09-12 22:31:42 I (91613) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7830us (0.007830s)
+2026-09-12 22:31:42 I (91621) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7810us (0.007810s)
+2026-09-12 22:31:42 I (91629) burner_web: GBA ReadID trace end status=ESP_OK total=68071us (0.068071s)
+2026-09-12 22:31:42 I (91636) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:31:42 I (91645) burner_web: GBA Intel ReadID trace begin t=90419421us
+2026-09-12 22:31:42 I (91651) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5320us (0.005320s)
+2026-09-12 22:31:42 I (91659) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8696us (0.008696s)
+2026-09-12 22:31:42 I (91668) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8373us (0.008373s)
+2026-09-12 22:31:42 I (91676) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x007F dt=8467us (0.008467s)
+2026-09-12 22:31:42 I (91684) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8273us (0.008273s)
+2026-09-12 22:31:42 I (91693) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8362us (0.008362s)
+2026-09-12 22:31:42 I (91701) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8308us (0.008308s)
+2026-09-12 22:31:42 I (91709) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8406us (0.008406s)
+2026-09-12 22:31:42 I (91718) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8313us (0.008313s)
+2026-09-12 22:31:42 I (91726) burner_web: GBA Intel ReadID trace end status=ESP_OK total=80954us (0.080954s)
+2026-09-12 22:31:42 I (91734) burner_web: GBA intel-id probe @40000000Hz try=1 id=7F 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-12 22:31:42 I (91753) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=AMD standard
+2026-09-12 22:31:42 I (91756) burner_web: GBA profile match @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 cmdset=amd method=AMD standard
+2026-09-12 22:31:42 I (91764) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:31:42 I (91773) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-12 22:31:42 I (91794) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-12 22:31:42 I (91803) burner_web: GBA AMD runtime commands: standard AMD source=AMD standard
+2026-09-12 22:31:42 I (91809) burner_web: GBA prepared: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-12 22:31:42 I (91831) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-12 22:31:42 
+2026-09-12 22:31:42 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":655360,"total":33554432,"task_us":1394498,"erase_us":0,"write_us":0,"write_bps":470690,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":316140,"dump_write_us":808904,"dump_wait_us":542824}
+2026-09-12 22:31:43 
+2026-09-12 22:31:43 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":2555904,"total":33554432,"task_us":2614515,"erase_us":0,"write_us":0,"write_bps":991245,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":1122323,"dump_write_us":1947540,"dump_wait_us":945497}
+2026-09-12 22:31:44 
+2026-09-12 22:31:44 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":4521984,"total":33554432,"task_us":3820485,"erase_us":0,"write_us":0,"write_bps":1184578,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":1894284,"dump_write_us":3162676,"dump_wait_us":1375815}
+2026-09-12 22:31:46 
+2026-09-12 22:31:46 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":6356992,"total":33554432,"task_us":5028482,"erase_us":0,"write_us":0,"write_bps":1267833,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":2645658,"dump_write_us":4337696,"dump_wait_us":1814622}
+2026-09-12 22:31:47 
+2026-09-12 22:31:47 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8257536,"total":33554432,"task_us":6241492,"erase_us":0,"write_us":0,"write_bps":1324127,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":3420618,"dump_write_us":5537313,"dump_wait_us":2254676}
+2026-09-12 22:31:48 
+2026-09-12 22:31:48 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":10223616,"total":33554432,"task_us":7447652,"erase_us":0,"write_us":0,"write_bps":1375868,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":4219714,"dump_write_us":6708870,"dump_wait_us":2643129}
+2026-09-12 22:31:49 
+2026-09-12 22:31:49 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":12124160,"total":33554432,"task_us":8650482,"erase_us":0,"write_us":0,"write_bps":1405830,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":4993096,"dump_write_us":7880752,"dump_wait_us":3056659}
+2026-09-12 22:31:50 
+2026-09-12 22:31:50 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":13893632,"total":33554432,"task_us":9853508,"erase_us":0,"write_us":0,"write_bps":1413940,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":5745792,"dump_write_us":9060354,"dump_wait_us":3525208}
+2026-09-12 22:31:52 
+2026-09-12 22:31:52 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":15925248,"total":33554432,"task_us":11062512,"erase_us":0,"write_us":0,"write_bps":1443634,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":6574171,"dump_write_us":10217255,"dump_wait_us":3895084}
+2026-09-12 22:31:53 
+2026-09-12 22:31:53 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":18087936,"total":33554432,"task_us":12276560,"erase_us":0,"write_us":0,"write_bps":1474747,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":7427320,"dump_write_us":11426265,"dump_wait_us":4241873}
+2026-09-12 22:31:54 
+2026-09-12 22:31:54 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":19726336,"total":33554432,"task_us":13470492,"erase_us":0,"write_us":0,"write_bps":1467591,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":8123549,"dump_write_us":12582306,"dump_wait_us":4741575}
+2026-09-12 22:31:55 
+2026-09-12 22:31:55 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":21692416,"total":33554432,"task_us":14691549,"erase_us":0,"write_us":0,"write_bps":1478948,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":8897171,"dump_write_us":13759541,"dump_wait_us":5160658}
+2026-09-12 22:31:56 
+2026-09-12 22:31:56 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":23592960,"total":33554432,"task_us":15891488,"erase_us":0,"write_us":0,"write_bps":1485126,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":9672225,"dump_write_us":14955687,"dump_wait_us":5597420}
+2026-09-12 22:31:58 
+2026-09-12 22:31:58 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25690112,"total":33554432,"task_us":17104765,"erase_us":0,"write_us":0,"write_bps":1502699,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":10525728,"dump_write_us":16141442,"dump_wait_us":5946610}
+2026-09-12 22:31:59 
+2026-09-12 22:31:59 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":27394048,"total":33554432,"task_us":18311485,"erase_us":0,"write_us":0,"write_bps":1496545,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":11222216,"dump_write_us":17329455,"dump_wait_us":6452314}
+2026-09-12 22:32:00 
+2026-09-12 22:32:00 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":29229056,"total":33554432,"task_us":19517496,"erase_us":0,"write_us":0,"write_bps":1502004,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":11998199,"dump_write_us":18462342,"dump_wait_us":6851148}
+2026-09-12 22:32:01 
+2026-09-12 22:32:01 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":31260672,"total":33554432,"task_us":20728270,"erase_us":0,"write_us":0,"write_bps":1513606,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":12822862,"dump_write_us":19631830,"dump_wait_us":7212297}
+2026-09-12 22:32:02 
+2026-09-12 22:32:02 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"gba cart->tf direct dumping","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":33030144,"total":33554432,"task_us":21930485,"erase_us":0,"write_us":0,"write_bps":1506501,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":13516102,"dump_write_us":20858396,"dump_wait_us":7758212}
+2026-09-12 22:32:04 I (113714) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=dump finished
+2026-09-12 22:32:04 I (113716) power_manager: CPU perf lock released by burn_task
+2026-09-12 22:32:04 I (113719) burner_web: burn_task stack free min=11972 bytes
+2026-09-12 22:32:04 
+2026-09-12 22:32:04 @mori {"event":"bsc2_job_status","running":false,"state":"done","message":"dump finished","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":33554432,"total":33554432,"task_us":22398175,"erase_us":0,"write_us":0,"write_bps":1498116,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":13706643,"dump_write_us":21299605,"dump_wait_us":8012787}
+2026-09-12 22:32:54 
+2026-09-12 22:32:54 @mori {"event":"bsc2_backup_hash","ok":true,"sha256":"d1e41d5f8004de024391be96535bbc8952fb30a7b04b6e9c5a666d6927492dec","bytes":33554432}
+2026-09-12 22:32:54 
+2026-09-12 22:32:54 @mori {"event":"status","version":"v2.32.131-writeexp2","uptime_ms":163547,"internal_free":82243,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:32:54 I (164875) burner_web: PSRAM auto window: free=7539336 largest=7471104 reserve=262144 -> 6MB
+2026-09-12 22:32:54 I (164877) power_manager: CPU perf lock acquired by burn_task
+2026-09-12 22:32:54 
+2026-09-12 22:32:54 @mori {"event":"bsc2_job_started","ok":true,"error":"ESP_OK","action":"verify"}
+2026-09-12 22:32:54 
+2026-09-12 22:32:54 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"probing cart for verify","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":189750,"erase_us":0,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:32:55 I (165079) burner_web: GBA D0/D1 swap detection starting...
+2026-09-12 22:32:55 I (165095) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-12 22:32:55 I (165103) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-12 22:32:55 I (165114) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-12 22:32:55 I (165120) burner_web: GBA ReadID trace begin t=163894258us
+2026-09-12 22:32:55 I (165125) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5149us (0.005149s)
+2026-09-12 22:32:55 I (165134) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8335us (0.008335s)
+2026-09-12 22:32:55 I (165142) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=7974us (0.007974s)
+2026-09-12 22:32:55 I (165150) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=8002us (0.008002s)
+2026-09-12 22:32:55 I (165157) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7867us (0.007867s)
+2026-09-12 22:32:55 I (165165) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7916us (0.007916s)
+2026-09-12 22:32:55 I (165173) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7975us (0.007975s)
+2026-09-12 22:32:55 I (165181) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7928us (0.007928s)
+2026-09-12 22:32:55 I (165189) burner_web: GBA ReadID trace end status=ESP_OK total=68992us (0.068992s)
+2026-09-12 22:32:55 I (165197) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:32:55 I (165206) burner_web: GBA Intel ReadID trace begin t=163980125us
+2026-09-12 22:32:55 I (165212) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5770us (0.005770s)
+2026-09-12 22:32:55 I (165220) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8625us (0.008625s)
+2026-09-12 22:32:55 I (165229) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8337us (0.008337s)
+2026-09-12 22:32:55 I (165237) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x007F dt=8522us (0.008522s)
+2026-09-12 22:32:55 I (165246) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8401us (0.008401s)
+2026-09-12 22:32:55 I (165254) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8419us (0.008419s)
+2026-09-12 22:32:55 I (165262) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8390us (0.008390s)
+2026-09-12 22:32:55 I (165271) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8493us (0.008493s)
+2026-09-12 22:32:55 I (165279) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8482us (0.008482s)
+2026-09-12 22:32:55 I (165288) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81885us (0.081885s)
+2026-09-12 22:32:55 I (165296) burner_web: GBA intel-id probe @40000000Hz try=1 id=7F 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-12 22:32:55 I (165315) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=AMD standard
+2026-09-12 22:32:55 I (165317) burner_web: GBA profile match @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 cmdset=amd method=AMD standard
+2026-09-12 22:32:55 I (165326) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:32:55 I (165335) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-12 22:32:55 I (165355) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-12 22:32:55 I (165364) burner_web: GBA AMD runtime commands: standard AMD source=AMD standard
+2026-09-12 22:32:55 I (165371) burner_web: GBA prepared: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-12 22:32:55 I (165393) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-12 22:32:55 
+2026-09-12 22:32:55 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":1507328,"total":33554432,"task_us":1395749,"erase_us":0,"write_us":0,"write_bps":1097642,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:32:57 
+2026-09-12 22:32:57 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":3735552,"total":33554432,"task_us":2597753,"erase_us":0,"write_us":0,"write_bps":1440787,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:32:58 
+2026-09-12 22:32:58 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":5963776,"total":33554432,"task_us":3815783,"erase_us":0,"write_us":0,"write_bps":1563008,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:32:59 
+2026-09-12 22:32:59 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8126464,"total":33554432,"task_us":5024775,"erase_us":0,"write_us":0,"write_bps":1623690,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:00 
+2026-09-12 22:33:00 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":10354688,"total":33554432,"task_us":6246749,"erase_us":0,"write_us":0,"write_bps":1663550,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:02 
+2026-09-12 22:33:02 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":12582912,"total":33554432,"task_us":7447747,"erase_us":0,"write_us":0,"write_bps":1690385,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:03 
+2026-09-12 22:33:03 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":14745600,"total":33554432,"task_us":8657769,"erase_us":0,"write_us":0,"write_bps":1708913,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:04 
+2026-09-12 22:33:04 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16973824,"total":33554432,"task_us":9866749,"erase_us":0,"write_us":0,"write_bps":1723583,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:05 
+2026-09-12 22:33:05 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":19202048,"total":33554432,"task_us":11078747,"erase_us":0,"write_us":0,"write_bps":1734592,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:06 
+2026-09-12 22:33:06 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":21430272,"total":33554432,"task_us":12299751,"erase_us":0,"write_us":0,"write_bps":1743542,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:08 
+2026-09-12 22:33:08 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":23592960,"total":33554432,"task_us":13507758,"erase_us":0,"write_us":0,"write_bps":1751043,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:09 
+2026-09-12 22:33:09 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25821184,"total":33554432,"task_us":14703752,"erase_us":0,"write_us":0,"write_bps":1756774,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:10 
+2026-09-12 22:33:10 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":27983872,"total":33554432,"task_us":15914793,"erase_us":0,"write_us":0,"write_bps":1762307,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:11 
+2026-09-12 22:33:11 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":30212096,"total":33554432,"task_us":17120816,"erase_us":0,"write_us":0,"write_bps":1766892,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:12 
+2026-09-12 22:33:12 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":32440320,"total":33554432,"task_us":18330046,"erase_us":0,"write_us":0,"write_bps":1770755,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:14 I (183804) burner_web: ROM verify: err=ESP_OK bytes=33554432/33554432 tf=3452ms cart=13745ms
+2026-09-12 22:33:14 I (183806) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-12 22:33:14 I (183812) power_manager: CPU perf lock released by burn_task
+2026-09-12 22:33:14 I (183817) burner_web: burn_task stack free min=11956 bytes
+2026-09-12 22:33:14 
+2026-09-12 22:33:14 @mori {"event":"bsc2_job_status","running":false,"state":"done","message":"verify finished","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":33554432,"total":33554432,"task_us":18926828,"erase_us":0,"write_us":0,"write_bps":1773048,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:43
+2026-09-12 22:33:43 @mori {"event":"cpld_write_experiment","ok":true,"error":"ESP_OK","requested_mode":1}
+2026-09-12 22:33:44 
+2026-09-12 22:33:44 @mori {"event":"status","version":"v2.32.131-writeexp2","uptime_ms":213207,"internal_free":82243,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:33:44 I (214645) burner_web: PSRAM auto window: free=7539336 largest=7471104 reserve=262144 -> 6MB
+2026-09-12 22:33:44 I (214647) power_manager: CPU perf lock acquired by burn_task
+2026-09-12 22:33:44 
+2026-09-12 22:33:44 @mori {"event":"bsc2_job_started","ok":true,"error":"ESP_OK","action":"write"}
+2026-09-12 22:33:44 I (214649) burner_web: GBA psram erase window policy: fixed window=4MB
+2026-09-12 22:33:44 
+2026-09-12 22:33:44 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"probing gba cart and preparing flash","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":192712,"erase_us":0,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:45 I (214863) burner_web: GBA D0/D1 swap detection starting...
+2026-09-12 22:33:45 I (214870) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-12 22:33:45 I (214877) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-12 22:33:45 I (214888) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-12 22:33:45 I (214894) burner_web: GBA ReadID trace begin t=213668296us
+2026-09-12 22:33:45 I (214899) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5161us (0.005161s)
+2026-09-12 22:33:45 I (214908) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8299us (0.008299s)
+2026-09-12 22:33:45 I (214916) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8004us (0.008004s)
+2026-09-12 22:33:45 I (214924) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7982us (0.007982s)
+2026-09-12 22:33:45 I (214931) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7893us (0.007893s)
+2026-09-12 22:33:45 I (214939) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7955us (0.007955s)
+2026-09-12 22:33:45 I (214947) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7900us (0.007900s)
+2026-09-12 22:33:45 I (214955) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7860us (0.007860s)
+2026-09-12 22:33:45 I (214963) burner_web: GBA ReadID trace end status=ESP_OK total=68986us (0.068986s)
+2026-09-12 22:33:45 I (214971) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:33:45 I (214980) burner_web: GBA Intel ReadID trace begin t=213754152us
+2026-09-12 22:33:45 I (214985) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5389us (0.005389s)
+2026-09-12 22:33:45 I (214995) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=9196us (0.009196s)
+2026-09-12 22:33:45 I (215003) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8326us (0.008326s)
+2026-09-12 22:33:45 I (215011) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x007F dt=8367us (0.008367s)
+2026-09-12 22:33:45 I (215020) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8356us (0.008356s)
+2026-09-12 22:33:45 I (215028) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8447us (0.008447s)
+2026-09-12 22:33:45 I (215036) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8389us (0.008389s)
+2026-09-12 22:33:45 I (215045) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8607us (0.008607s)
+2026-09-12 22:33:45 I (215053) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8325us (0.008325s)
+2026-09-12 22:33:45 I (215062) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81877us (0.081877s)
+2026-09-12 22:33:45 I (215070) burner_web: GBA intel-id probe @40000000Hz try=1 id=7F 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-12 22:33:45 I (215090) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=AMD standard
+2026-09-12 22:33:45 I (215093) burner_web: GBA profile match @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 cmdset=amd method=AMD standard
+2026-09-12 22:33:45 I (215102) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:33:45 I (215111) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-12 22:33:45 I (215131) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-12 22:33:45 I (215140) burner_web: GBA AMD runtime commands: standard AMD source=AMD standard
+2026-09-12 22:33:45 I (215147) burner_web: GBA prepared: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-12 22:33:45 I (215168) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-12 22:33:45 I (215179) burner_web: GBA paired polling: 4 read-only address checks passed
+2026-09-12 22:33:45 I (215188) burner_web: GBA burn erase policy: force erase for all write paths
+2026-09-12 22:33:45 I (215191) burner_web: GBA write stage: addr=0x00000000 bytes=4194304 processed=0/33554432 path=psram erase=yes
+2026-09-12 22:33:45 I (215202) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:33:45 
+2026-09-12 22:33:45 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":1401828,"erase_us":849049,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:46 
+2026-09-12 22:33:46 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":2597687,"erase_us":2044908,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":1001753,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:48 
+2026-09-12 22:33:48 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":3807689,"erase_us":3254910,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":1001753,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:49 
+2026-09-12 22:33:49 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":5007695,"erase_us":4454916,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":1001753,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:50 I (220076) burner_web: GBA program chunk: addr=0x00000000 bytes=65536 processed=0/33554432 path=psram
+2026-09-12 22:33:50 
+2026-09-12 22:33:50 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":1245184,"total":33554432,"task_us":6210689,"erase_us":4874281,"write_us":777393,"write_bps":1675399,"physical_program_bytes":1245184,"skipped_bytes":0,"tf_us":1001753,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:51 
+2026-09-12 22:33:51 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":3276800,"total":33554432,"task_us":7419685,"erase_us":4874281,"write_us":1980078,"write_bps":1658097,"physical_program_bytes":3276800,"skipped_bytes":0,"tf_us":1001753,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:52 I (222613) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:33:52 
+2026-09-12 22:33:52 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":4194304,"total":33554432,"task_us":8637690,"erase_us":5548308,"write_us":2521155,"write_bps":1663643,"physical_program_bytes":4194304,"skipped_bytes":0,"tf_us":1001753,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:54 
+2026-09-12 22:33:54 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":4194304,"total":33554432,"task_us":9837691,"erase_us":6748309,"write_us":2521155,"write_bps":1663643,"physical_program_bytes":4194304,"skipped_bytes":0,"tf_us":2024592,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:55 
+2026-09-12 22:33:55 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":4194304,"total":33554432,"task_us":11042807,"erase_us":7953425,"write_us":2521155,"write_bps":1663643,"physical_program_bytes":4194304,"skipped_bytes":0,"tf_us":2024592,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:56 
+2026-09-12 22:33:56 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":4194304,"total":33554432,"task_us":12249754,"erase_us":9160372,"write_us":2521155,"write_bps":1663643,"physical_program_bytes":4194304,"skipped_bytes":0,"tf_us":2024592,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:57 
+2026-09-12 22:33:57 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":5242880,"total":33554432,"task_us":13451688,"erase_us":9714958,"write_us":3164877,"write_bps":1662703,"physical_program_bytes":5242880,"skipped_bytes":0,"tf_us":2024592,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:33:59 
+2026-09-12 22:33:59 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":7143424,"total":33554432,"task_us":14664684,"erase_us":9714958,"write_us":4371980,"write_bps":1644442,"physical_program_bytes":7143424,"skipped_bytes":0,"tf_us":2024592,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:00 I (229957) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:34:00 
+2026-09-12 22:34:00 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8388608,"total":33554432,"task_us":15877709,"erase_us":10285585,"write_us":5010270,"write_bps":1674282,"physical_program_bytes":8388608,"skipped_bytes":0,"tf_us":2024592,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:01 
+2026-09-12 22:34:01 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8388608,"total":33554432,"task_us":17084697,"erase_us":11492573,"write_us":5010270,"write_bps":1674282,"physical_program_bytes":8388608,"skipped_bytes":0,"tf_us":3053999,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:02 
+2026-09-12 22:34:02 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8388608,"total":33554432,"task_us":18298688,"erase_us":12706564,"write_us":5010270,"write_bps":1674282,"physical_program_bytes":8388608,"skipped_bytes":0,"tf_us":3053999,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:03 
+2026-09-12 22:34:03 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8388608,"total":33554432,"task_us":19508770,"erase_us":13916646,"write_us":5010270,"write_bps":1674282,"physical_program_bytes":8388608,"skipped_bytes":0,"tf_us":3053999,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:05 
+2026-09-12 22:34:05 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":9371648,"total":33554432,"task_us":20715687,"erase_us":14566330,"write_us":5564075,"write_bps":1691073,"physical_program_bytes":9371648,"skipped_bytes":0,"tf_us":3053999,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:06 
+2026-09-12 22:34:06 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":11337728,"total":33554432,"task_us":21927699,"erase_us":14566330,"write_us":6769779,"write_bps":1674801,"physical_program_bytes":11337728,"skipped_bytes":0,"tf_us":3053999,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:07 I (237354) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:34:07 
+2026-09-12 22:34:07 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":12582912,"total":33554432,"task_us":23139693,"erase_us":15001801,"write_us":7542064,"write_bps":1668364,"physical_program_bytes":12582912,"skipped_bytes":0,"tf_us":3053999,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:08 
+2026-09-12 22:34:08 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":12582912,"total":33554432,"task_us":24332690,"erase_us":16194798,"write_us":7542064,"write_bps":1668364,"physical_program_bytes":12582912,"skipped_bytes":0,"tf_us":4070280,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:09 
+2026-09-12 22:34:09 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":12582912,"total":33554432,"task_us":25539195,"erase_us":17401303,"write_us":7542064,"write_bps":1668364,"physical_program_bytes":12582912,"skipped_bytes":0,"tf_us":4070280,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:11 
+2026-09-12 22:34:11 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":13500416,"total":33554432,"task_us":26740686,"erase_us":18055301,"write_us":8086426,"write_bps":1670208,"physical_program_bytes":13500416,"skipped_bytes":0,"tf_us":4070280,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:12 
+2026-09-12 22:34:12 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":15728640,"total":33554432,"task_us":27943696,"erase_us":18055301,"write_us":9283127,"write_bps":1696221,"physical_program_bytes":15728640,"skipped_bytes":0,"tf_us":4070280,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:13 I (242999) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:34:13 
+2026-09-12 22:34:13 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16777216,"total":33554432,"task_us":29145708,"erase_us":18851305,"write_us":9686100,"write_bps":1732091,"physical_program_bytes":16777216,"skipped_bytes":0,"tf_us":4070280,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:14 
+2026-09-12 22:34:14 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16777216,"total":33554432,"task_us":30357703,"erase_us":20063300,"write_us":9686100,"write_bps":1732091,"physical_program_bytes":16777216,"skipped_bytes":0,"tf_us":5090062,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:15 
+2026-09-12 22:34:15 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16777216,"total":33554432,"task_us":31567688,"erase_us":21273285,"write_us":9686100,"write_bps":1732091,"physical_program_bytes":16777216,"skipped_bytes":0,"tf_us":5090062,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:17 
+2026-09-12 22:34:17 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16777216,"total":33554432,"task_us":32787760,"erase_us":22493357,"write_us":9686100,"write_bps":1732091,"physical_program_bytes":16777216,"skipped_bytes":0,"tf_us":5090062,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:18 
+2026-09-12 22:34:18 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":18284544,"total":33554432,"task_us":33994710,"erase_us":22901809,"write_us":10479380,"write_bps":1747652,"physical_program_bytes":18284544,"skipped_bytes":0,"tf_us":5090062,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:19 
+2026-09-12 22:34:19 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":20054016,"total":33554432,"task_us":35208696,"erase_us":22901809,"write_us":11687509,"write_bps":1716472,"physical_program_bytes":20054016,"skipped_bytes":0,"tf_us":5090062,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:20 I (250492) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:34:20 
+2026-09-12 22:34:20 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":20971520,"total":33554432,"task_us":36404845,"erase_us":23464652,"write_us":12317499,"write_bps":1702579,"physical_program_bytes":20971520,"skipped_bytes":0,"tf_us":5090062,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:21 
+2026-09-12 22:34:21 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":20971520,"total":33554432,"task_us":37612689,"erase_us":24672496,"write_us":12317499,"write_bps":1702579,"physical_program_bytes":20971520,"skipped_bytes":0,"tf_us":6124530,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:23 
+2026-09-12 22:34:23 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":20971520,"total":33554432,"task_us":38827689,"erase_us":25887496,"write_us":12317499,"write_bps":1702579,"physical_program_bytes":20971520,"skipped_bytes":0,"tf_us":6124530,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:24 
+2026-09-12 22:34:24 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":20971520,"total":33554432,"task_us":40029727,"erase_us":27089534,"write_us":12317499,"write_bps":1702579,"physical_program_bytes":20971520,"skipped_bytes":0,"tf_us":6124530,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:25 
+2026-09-12 22:34:25 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":21692416,"total":33554432,"task_us":41247685,"erase_us":27760071,"write_us":12862450,"write_bps":1692405,"physical_program_bytes":21692416,"skipped_bytes":0,"tf_us":6124530,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:26 
+2026-09-12 22:34:26 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":23461888,"total":33554432,"task_us":42449689,"erase_us":27760071,"write_us":14058967,"write_bps":1671256,"physical_program_bytes":23461888,"skipped_bytes":0,"tf_us":6124530,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:27 I (258261) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:34:27 
+2026-09-12 22:34:27 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25165824,"total":33554432,"task_us":43652693,"erase_us":27800852,"write_us":15215360,"write_bps":1653974,"physical_program_bytes":25165824,"skipped_bytes":0,"tf_us":6124530,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:29 
+2026-09-12 22:34:29 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25165824,"total":33554432,"task_us":44863688,"erase_us":29011847,"write_us":15215360,"write_bps":1653974,"physical_program_bytes":25165824,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:30 
+2026-09-12 22:34:30 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25165824,"total":33554432,"task_us":46064689,"erase_us":30212848,"write_us":15215360,"write_bps":1653974,"physical_program_bytes":25165824,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:31 
+2026-09-12 22:34:31 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25165824,"total":33554432,"task_us":47281755,"erase_us":31429914,"write_us":15215360,"write_bps":1653974,"physical_program_bytes":25165824,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:32 
+2026-09-12 22:34:32 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25165824,"total":33554432,"task_us":48481867,"erase_us":32618969,"write_us":15226314,"write_bps":1653974,"physical_program_bytes":25165824,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:34 
+2026-09-12 22:34:34 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":26935296,"total":33554432,"task_us":49700640,"erase_us":32618969,"write_us":16439304,"write_bps":1638875,"physical_program_bytes":26935296,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:35 
+2026-09-12 22:34:35 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":28639232,"total":33554432,"task_us":50906686,"erase_us":32618969,"write_us":17639793,"write_bps":1625599,"physical_program_bytes":28639232,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:36 I (266031) burner_web: GBA write stage: addr=0x01C00000 bytes=4194304 processed=29360128/33554432 path=psram erase=yes
+2026-09-12 22:34:36 I (266034) burner_web: GBA erase timeout budget: bytes=4194304 timeout=80000ms
+2026-09-12 22:34:36 
+2026-09-12 22:34:36 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":29360128,"total":33554432,"task_us":52114715,"erase_us":33348912,"write_us":18113042,"write_bps":1620938,"physical_program_bytes":29360128,"skipped_bytes":0,"tf_us":7152106,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:37 
+2026-09-12 22:34:37 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":29360128,"total":33554432,"task_us":53318705,"erase_us":34552902,"write_us":18113042,"write_bps":1620938,"physical_program_bytes":29360128,"skipped_bytes":0,"tf_us":8166819,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:38 
+2026-09-12 22:34:38 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":29360128,"total":33554432,"task_us":54529688,"erase_us":35763885,"write_us":18113042,"write_bps":1620938,"physical_program_bytes":29360128,"skipped_bytes":0,"tf_us":8166819,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:40 
+2026-09-12 22:34:40 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"erasing gba flash sectors (4MB) + prefetch tf->psram","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":29360128,"total":33554432,"task_us":55729689,"erase_us":36963886,"write_us":18113042,"write_bps":1620938,"physical_program_bytes":29360128,"skipped_bytes":0,"tf_us":8166819,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:41 
+2026-09-12 22:34:41 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":30343168,"total":33554432,"task_us":56935702,"erase_us":37467702,"write_us":18811743,"write_bps":1614762,"physical_program_bytes":30343168,"skipped_bytes":0,"tf_us":8166819,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:42 
+2026-09-12 22:34:42 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"psram->gba cart programmed","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":32047104,"total":33554432,"task_us":58137687,"erase_us":37467702,"write_us":20008156,"write_bps":1605169,"physical_program_bytes":32047104,"skipped_bytes":0,"tf_us":8166819,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:43 I (273743) burner_web: GBA program chunk: addr=0x01FF0000 bytes=65536 processed=33488896/33554432 path=psram
+2026-09-12 22:34:43 W (273794) burner_web: GBA post-write header diag: hoststyle=match standard=mismatch addr=0x00000000 len=512 swapped=0
+2026-09-12 22:34:43 W (273796) burner_web: GBA post-write standard mismatch @0x00000002 file=00 cart=7F
+2026-09-12 22:34:43 I (273803) burner_web: GBA CHIS summary: err=ESP_OK total=58624ms bytes=33554432/33554432 erase=37467ms tf=8166ms program=20960ms avg_once=0B
+2026-09-12 22:34:43 I (273814) burner_web: GBA program profile: calls=0 build=0ms spi=0ms entry=0ms poll=0ms reset=0ms prefetch_wait=0ms skipped_ff=0B
+2026-09-12 22:34:43 I (273827) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=burn finished
+2026-09-12 22:34:43 I (273836) power_manager: CPU perf lock released by burn_task
+2026-09-12 22:34:43 I (273841) burner_web: burn_task stack free min=8868 bytes
+2026-09-12 22:34:43 
+2026-09-12 22:34:43 @mori {"event":"bsc2_job_status","running":false,"state":"done","message":"burn finished","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":33554432,"total":33554432,"task_us":59178204,"erase_us":37467702,"write_us":21005365,"write_bps":1597421,"physical_program_bytes":33554432,"skipped_bytes":0,"tf_us":8166819,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:34:43 
+2026-09-12 22:34:43 @mori {"event":"cpld_write_profile","mode":1,"bytes":33554432,"streams":512,"packets":32768,"status_polls":219710,"credits":0,"elapsed_us":20924367,"ready_us":9016310,"prepare_us":2908417,"tx_us":7948084,"done_us":484221}
+2026-09-12 22:35:43 
+2026-09-12 22:35:43 @mori {"event":"status","version":"v2.32.131-writeexp2","uptime_ms":332495,"internal_free":82243,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"legacy","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:35:43 I (333923) burner_web: PSRAM auto window: free=7539336 largest=7471104 reserve=262144 -> 6MB
+2026-09-12 22:35:43 I (333925) power_manager: CPU perf lock acquired by burn_task
+2026-09-12 22:35:43 
+2026-09-12 22:35:43 @mori {"event":"bsc2_job_started","ok":true,"error":"ESP_OK","action":"verify"}
+2026-09-12 22:35:43 I (334128) burner_web: GBA D0/D1 swap detection starting...
+2026-09-12 22:35:43 I (334130) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-12 22:35:43 I (334132) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-12 22:35:43 I (334143) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-12 22:35:43 I (334149) burner_web: GBA ReadID trace begin t=332922838us
+2026-09-12 22:35:43 
+2026-09-12 22:35:43 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"probing cart for verify","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":208880,"erase_us":0,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:45 I (334154) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5103us (0.005103s)
+2026-09-12 22:35:45 I (334193) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=38966us (0.038966s)
+2026-09-12 22:35:45 I (334201) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8073us (0.008073s)
+2026-09-12 22:35:45 I (334209) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=7998us (0.007998s)
+2026-09-12 22:35:45 I (334217) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7837us (0.007837s)
+2026-09-12 22:35:45 I (334225) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7915us (0.007915s)
+2026-09-12 22:35:45 I (334232) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7885us (0.007885s)
+2026-09-12 22:35:45 I (334241) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=8320us (0.008320s)
+2026-09-12 22:35:45 I (334248) burner_web: GBA ReadID trace end status=ESP_OK total=99727us (0.099727s)
+2026-09-12 22:35:45 I (334256) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:35:45 I (334265) burner_web: GBA Intel ReadID trace begin t=333039328us
+2026-09-12 22:35:45 I (334271) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5420us (0.005420s)
+2026-09-12 22:35:45 I (334279) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8811us (0.008811s)
+2026-09-12 22:35:45 I (334288) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8521us (0.008521s)
+2026-09-12 22:35:45 I (334296) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x007F dt=8492us (0.008492s)
+2026-09-12 22:35:45 I (334305) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8425us (0.008425s)
+2026-09-12 22:35:45 I (334313) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8397us (0.008397s)
+2026-09-12 22:35:45 I (334322) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8446us (0.008446s)
+2026-09-12 22:35:45 I (334330) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8466us (0.008466s)
+2026-09-12 22:35:45 I (334339) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8473us (0.008473s)
+2026-09-12 22:35:45 I (334347) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81926us (0.081926s)
+2026-09-12 22:35:45 I (334355) burner_web: GBA intel-id probe @40000000Hz try=1 id=7F 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-12 22:35:45 I (334374) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=AMD standard
+2026-09-12 22:35:45 I (334377) burner_web: GBA profile match @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 cmdset=amd method=AMD standard
+2026-09-12 22:35:45 I (334385) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:35:45 I (334394) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-12 22:35:45 I (334415) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-12 22:35:45 I (334424) burner_web: GBA AMD runtime commands: standard AMD source=AMD standard
+2026-09-12 22:35:45 I (334431) burner_web: GBA prepared: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-12 22:35:45 I (334452) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-12 22:35:45 
+2026-09-12 22:35:45 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":1507328,"total":33554432,"task_us":1396597,"erase_us":0,"write_us":0,"write_bps":1085560,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:46 
+2026-09-12 22:35:46 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":3670016,"total":33554432,"task_us":2599565,"erase_us":0,"write_us":0,"write_bps":1427477,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:47 
+2026-09-12 22:35:47 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":5898240,"total":33554432,"task_us":3809549,"erase_us":0,"write_us":0,"write_bps":1556238,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:48 
+2026-09-12 22:35:48 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":8126464,"total":33554432,"task_us":5016587,"erase_us":0,"write_us":0,"write_bps":1620225,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:49 
+2026-09-12 22:35:49 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":10289152,"total":33554432,"task_us":6230698,"erase_us":0,"write_us":0,"write_bps":1660177,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:51 
+2026-09-12 22:35:51 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":12517376,"total":33554432,"task_us":7435548,"erase_us":0,"write_us":0,"write_bps":1688197,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:52 
+2026-09-12 22:35:52 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":14745600,"total":33554432,"task_us":8645580,"erase_us":0,"write_us":0,"write_bps":1706746,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:53 
+2026-09-12 22:35:53 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16908288,"total":33554432,"task_us":9852571,"erase_us":0,"write_us":0,"write_bps":1721118,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:54 
+2026-09-12 22:35:54 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":19136512,"total":33554432,"task_us":11053548,"erase_us":0,"write_us":0,"write_bps":1733944,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:55 
+2026-09-12 22:35:55 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":21299200,"total":33554432,"task_us":12261581,"erase_us":0,"write_us":0,"write_bps":1742030,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:57 
+2026-09-12 22:35:57 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":23527424,"total":33554432,"task_us":13464820,"erase_us":0,"write_us":0,"write_bps":1749156,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:58 
+2026-09-12 22:35:58 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":25690112,"total":33554432,"task_us":14667551,"erase_us":0,"write_us":0,"write_bps":1755432,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:35:59 
+2026-09-12 22:35:59 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":27918336,"total":33554432,"task_us":15878562,"erase_us":0,"write_us":0,"write_bps":1760354,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:36:00 
+2026-09-12 22:36:00 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":30146560,"total":33554432,"task_us":17081566,"erase_us":0,"write_us":0,"write_bps":1765800,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:36:01 
+2026-09-12 22:36:01 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":32309248,"total":33554432,"task_us":18291306,"erase_us":0,"write_us":0,"write_bps":1770182,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:36:03 I (352866) burner_web: ROM verify: err=ESP_OK bytes=33554432/33554432 tf=3451ms cart=13746ms
+2026-09-12 22:36:03 I (352868) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-12 22:36:03 I (352875) power_manager: CPU perf lock released by burn_task
+2026-09-12 22:36:03 I (352879) burner_web: burn_task stack free min=11956 bytes
+2026-09-12 22:36:03 
+2026-09-12 22:36:03 @mori {"event":"bsc2_job_status","running":false,"state":"done","message":"verify finished","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":33554432,"total":33554432,"task_us":18940759,"erase_us":0,"write_us":0,"write_bps":1771746,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:36:41
+2026-09-12 22:36:41 @mori {"event":"cpld_write_experiment","ok":true,"error":"ESP_OK","requested_mode":0}
+2026-09-12 22:36:41 
+2026-09-12 22:36:41 @mori {"event":"status","version":"v2.32.131-writeexp2","uptime_ms":390971,"internal_free":82243,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:36:42 
+2026-09-12 22:36:42 @mori {"event":"bsc2_upload_ready","message":"send binary in 1024-byte chunks; wait for each ack"}
+2026-09-12 22:36:42 
+2026-09-12 22:36:42 @mori {"event":"bsc2_upload_ack","received":1024}
+2026-09-12 22:36:42 
+2026-09-12 22:36:42 @mori {"event":"bsc2_upload_ack","received":2048}
+2026-09-12 22:36:42 
+2026-09-12 22:36:42 @mori {"event":"bsc2_upload_ack","received":3072}
+2026-09-12 22:36:42 
+2026-09-12 22:36:42 @mori {"event":"bsc2_upload_ack","received":4096}
+2026-09-12 22:36:43 
+2026-09-12 22:36:43 @mori {"event":"bsc2_upload_ack","received":5120}
+2026-09-12 22:36:43 
+2026-09-12 22:36:43 @mori {"event":"bsc2_upload_ack","received":6144}
+2026-09-12 22:36:43 
+2026-09-12 22:36:43 @mori {"event":"bsc2_upload_ack","received":7168}
+2026-09-12 22:36:43 
+2026-09-12 22:36:43 @mori {"event":"bsc2_upload_ack","received":8192}
+2026-09-12 22:36:43 
+2026-09-12 22:36:43 @mori {"event":"bsc2_upload_ack","received":9216}
+2026-09-12 22:36:44 
+2026-09-12 22:36:44 @mori {"event":"bsc2_upload_ack","received":10240}
+2026-09-12 22:36:44 
+2026-09-12 22:36:44 @mori {"event":"bsc2_upload_ack","received":11264}
+2026-09-12 22:36:44 
+2026-09-12 22:36:44 @mori {"event":"bsc2_upload_ack","received":12288}
+2026-09-12 22:36:44 
+2026-09-12 22:36:44 @mori {"event":"bsc2_upload_ack","received":13312}
+2026-09-12 22:36:45 
+2026-09-12 22:36:45 @mori {"event":"bsc2_upload_ack","received":14336}
+2026-09-12 22:36:45 
+2026-09-12 22:36:45 @mori {"event":"bsc2_upload_ack","received":15360}
+2026-09-12 22:36:45 
+2026-09-12 22:36:45 @mori {"event":"bsc2_upload_ack","received":16384}
+2026-09-12 22:36:45 
+2026-09-12 22:36:45 @mori {"event":"bsc2_upload_ack","received":17408}
+2026-09-12 22:36:45 
+2026-09-12 22:36:45 @mori {"event":"bsc2_upload_ack","received":18432}
+2026-09-12 22:36:46 
+2026-09-12 22:36:46 @mori {"event":"bsc2_upload_ack","received":19456}
+2026-09-12 22:36:46 
+2026-09-12 22:36:46 @mori {"event":"bsc2_upload_ack","received":20480}
+2026-09-12 22:36:46 
+2026-09-12 22:36:46 @mori {"event":"bsc2_upload_ack","received":21504}
+2026-09-12 22:36:46 
+2026-09-12 22:36:46 @mori {"event":"bsc2_upload_ack","received":22528}
+2026-09-12 22:36:46 
+2026-09-12 22:36:46 @mori {"event":"bsc2_upload_ack","received":23552}
+2026-09-12 22:36:47 
+2026-09-12 22:36:47 @mori {"event":"bsc2_upload_ack","received":24576}
+2026-09-12 22:36:47 
+2026-09-12 22:36:47 @mori {"event":"bsc2_upload_ack","received":25600}
+2026-09-12 22:36:47 
+2026-09-12 22:36:47 @mori {"event":"bsc2_upload_ack","received":26624}
+2026-09-12 22:36:47 
+2026-09-12 22:36:47 @mori {"event":"bsc2_upload_ack","received":27648}
+2026-09-12 22:36:47 
+2026-09-12 22:36:47 @mori {"event":"bsc2_upload_ack","received":28672}
+2026-09-12 22:36:48 
+2026-09-12 22:36:48 @mori {"event":"bsc2_upload_ack","received":29696}
+2026-09-12 22:36:48 
+2026-09-12 22:36:48 @mori {"event":"bsc2_upload_ack","received":30720}
+2026-09-12 22:36:48 
+2026-09-12 22:36:48 @mori {"event":"bsc2_upload_ack","received":31744}
+2026-09-12 22:36:48 
+2026-09-12 22:36:48 @mori {"event":"bsc2_upload_ack","received":32768}
+2026-09-12 22:36:48 
+2026-09-12 22:36:48 @mori {"event":"bsc2_upload_ack","received":33792}
+2026-09-12 22:36:49 
+2026-09-12 22:36:49 @mori {"event":"bsc2_upload_ack","received":34816}
+2026-09-12 22:36:49 
+2026-09-12 22:36:49 @mori {"event":"bsc2_upload_ack","received":35840}
+2026-09-12 22:36:49 
+2026-09-12 22:36:49 @mori {"event":"bsc2_upload_ack","received":36864}
+2026-09-12 22:36:49 
+2026-09-12 22:36:49 @mori {"event":"bsc2_upload_ack","received":37888}
+2026-09-12 22:36:50 
+2026-09-12 22:36:50 @mori {"event":"bsc2_upload_ack","received":38912}
+2026-09-12 22:36:50 
+2026-09-12 22:36:50 @mori {"event":"bsc2_upload_ack","received":39936}
+2026-09-12 22:36:50 
+2026-09-12 22:36:50 @mori {"event":"bsc2_upload_ack","received":40960}
+2026-09-12 22:36:50 
+2026-09-12 22:36:50 @mori {"event":"bsc2_upload_ack","received":41984}
+2026-09-12 22:36:50 
+2026-09-12 22:36:50 @mori {"event":"bsc2_upload_ack","received":43008}
+2026-09-12 22:36:51 
+2026-09-12 22:36:51 @mori {"event":"bsc2_upload_ack","received":44032}
+2026-09-12 22:36:51 
+2026-09-12 22:36:51 @mori {"event":"bsc2_upload_ack","received":45056}
+2026-09-12 22:36:51 
+2026-09-12 22:36:51 @mori {"event":"bsc2_upload_ack","received":46080}
+2026-09-12 22:36:51 
+2026-09-12 22:36:51 @mori {"event":"bsc2_upload_ack","received":47104}
+2026-09-12 22:36:51 
+2026-09-12 22:36:51 @mori {"event":"bsc2_upload_ack","received":48128}
+2026-09-12 22:36:52 
+2026-09-12 22:36:52 @mori {"event":"bsc2_upload_ack","received":49152}
+2026-09-12 22:36:52 
+2026-09-12 22:36:52 @mori {"event":"bsc2_upload_ack","received":50176}
+2026-09-12 22:36:52 
+2026-09-12 22:36:52 @mori {"event":"bsc2_upload_ack","received":51200}
+2026-09-12 22:36:52 
+2026-09-12 22:36:52 @mori {"event":"bsc2_upload_ack","received":52224}
+2026-09-12 22:36:52 
+2026-09-12 22:36:52 @mori {"event":"bsc2_upload_ack","received":53248}
+2026-09-12 22:36:53 
+2026-09-12 22:36:53 @mori {"event":"bsc2_upload_ack","received":54272}
+2026-09-12 22:36:53 
+2026-09-12 22:36:53 @mori {"event":"bsc2_upload_ack","received":55296}
+2026-09-12 22:36:53 
+2026-09-12 22:36:53 @mori {"event":"bsc2_upload_ack","received":56320}
+2026-09-12 22:36:53 
+2026-09-12 22:36:53 @mori {"event":"bsc2_upload_ack","received":57344}
+2026-09-12 22:36:54 
+2026-09-12 22:36:54 @mori {"event":"bsc2_upload_ack","received":58368}
+2026-09-12 22:36:54 
+2026-09-12 22:36:54 @mori {"event":"bsc2_upload_ack","received":59392}
+2026-09-12 22:36:54 
+2026-09-12 22:36:54 @mori {"event":"bsc2_upload_ack","received":60416}
+2026-09-12 22:36:54 
+2026-09-12 22:36:54 @mori {"event":"bsc2_upload_ack","received":61440}
+2026-09-12 22:36:54 
+2026-09-12 22:36:54 @mori {"event":"bsc2_upload_ack","received":62464}
+2026-09-12 22:36:55 
+2026-09-12 22:36:55 @mori {"event":"bsc2_upload_ack","received":63488}
+2026-09-12 22:36:55 
+2026-09-12 22:36:55 @mori {"event":"bsc2_upload_ack","received":64512}
+2026-09-12 22:36:55 
+2026-09-12 22:36:55 @mori {"event":"bsc2_upload_ack","received":65536}
+2026-09-12 22:36:55 
+2026-09-12 22:36:55 @mori {"event":"bsc2_upload_ack","received":66560}
+2026-09-12 22:36:55 
+2026-09-12 22:36:55 @mori {"event":"bsc2_upload_ack","received":67584}
+2026-09-12 22:36:56 
+2026-09-12 22:36:56 @mori {"event":"bsc2_upload_ack","received":68608}
+2026-09-12 22:36:56 
+2026-09-12 22:36:56 @mori {"event":"bsc2_upload_ack","received":69632}
+2026-09-12 22:36:56 
+2026-09-12 22:36:56 @mori {"event":"bsc2_upload_ack","received":70656}
+2026-09-12 22:36:56 
+2026-09-12 22:36:56 @mori {"event":"bsc2_upload_ack","received":71680}
+2026-09-12 22:36:56 
+2026-09-12 22:36:56 @mori {"event":"bsc2_upload_ack","received":72704}
+2026-09-12 22:36:57 
+2026-09-12 22:36:57 @mori {"event":"bsc2_upload_ack","received":73728}
+2026-09-12 22:36:57 
+2026-09-12 22:36:57 @mori {"event":"bsc2_upload_ack","received":74752}
+2026-09-12 22:36:57 
+2026-09-12 22:36:57 @mori {"event":"bsc2_upload_ack","received":75776}
+2026-09-12 22:36:57 
+2026-09-12 22:36:57 @mori {"event":"bsc2_upload_ack","received":76800}
+2026-09-12 22:36:57 
+2026-09-12 22:36:57 @mori {"event":"bsc2_upload_ack","received":77824}
+2026-09-12 22:36:58 
+2026-09-12 22:36:58 @mori {"event":"bsc2_upload_ack","received":78848}
+2026-09-12 22:36:58 
+2026-09-12 22:36:58 @mori {"event":"bsc2_upload_ack","received":79872}
+2026-09-12 22:36:58 
+2026-09-12 22:36:58 @mori {"event":"bsc2_upload_ack","received":80896}
+2026-09-12 22:36:58 
+2026-09-12 22:36:58 @mori {"event":"bsc2_upload_ack","received":81920}
+2026-09-12 22:36:59 
+2026-09-12 22:36:59 @mori {"event":"bsc2_upload_ack","received":82944}
+2026-09-12 22:36:59 
+2026-09-12 22:36:59 @mori {"event":"bsc2_upload_ack","received":83968}
+2026-09-12 22:36:59 
+2026-09-12 22:36:59 @mori {"event":"bsc2_upload_ack","received":84992}
+2026-09-12 22:36:59 
+2026-09-12 22:36:59 @mori {"event":"bsc2_upload_ack","received":86016}
+2026-09-12 22:36:59 
+2026-09-12 22:36:59 @mori {"event":"bsc2_upload_ack","received":87040}
+2026-09-12 22:37:00 
+2026-09-12 22:37:00 @mori {"event":"bsc2_upload_ack","received":88064}
+2026-09-12 22:37:00 
+2026-09-12 22:37:00 @mori {"event":"bsc2_upload_ack","received":89088}
+2026-09-12 22:37:00 
+2026-09-12 22:37:00 @mori {"event":"bsc2_upload_ack","received":90112}
+2026-09-12 22:37:00 
+2026-09-12 22:37:00 @mori {"event":"bsc2_upload_ack","received":91136}
+2026-09-12 22:37:00 
+2026-09-12 22:37:00 @mori {"event":"bsc2_upload_ack","received":92160}
+2026-09-12 22:37:01 
+2026-09-12 22:37:01 @mori {"event":"bsc2_upload_ack","received":93184}
+2026-09-12 22:37:01 
+2026-09-12 22:37:01 @mori {"event":"bsc2_upload_ack","received":94208}
+2026-09-12 22:37:01 
+2026-09-12 22:37:01 @mori {"event":"bsc2_upload_ack","received":95232}
+2026-09-12 22:37:01 
+2026-09-12 22:37:01 @mori {"event":"bsc2_upload_ack","received":96256}
+2026-09-12 22:37:01 
+2026-09-12 22:37:01 @mori {"event":"bsc2_upload_ack","received":97280}
+2026-09-12 22:37:02 
+2026-09-12 22:37:02 @mori {"event":"bsc2_upload_ack","received":98304}
+2026-09-12 22:37:02 
+2026-09-12 22:37:02 @mori {"event":"bsc2_upload_ack","received":99328}
+2026-09-12 22:37:02 
+2026-09-12 22:37:02 @mori {"event":"bsc2_upload_ack","received":100352}
+2026-09-12 22:37:02 
+2026-09-12 22:37:02 @mori {"event":"bsc2_upload_ack","received":101376}
+2026-09-12 22:37:02 I (413074) burner_web: bacon idle timeout reached, cartridge power rails off
+2026-09-12 22:37:02 
+2026-09-12 22:37:02 @mori {"event":"bsc2_upload_ack","received":102400}
+2026-09-12 22:37:03 
+2026-09-12 22:37:03 @mori {"event":"bsc2_upload_ack","received":103424}
+2026-09-12 22:37:03 
+2026-09-12 22:37:03 @mori {"event":"bsc2_upload_ack","received":104448}
+2026-09-12 22:37:03 
+2026-09-12 22:37:03 @mori {"event":"bsc2_upload_ack","received":105472}
+2026-09-12 22:37:03 
+2026-09-12 22:37:03 @mori {"event":"bsc2_upload_ack","received":106496}
+2026-09-12 22:37:03 
+2026-09-12 22:37:03 @mori {"event":"bsc2_upload_ack","received":107520}
+2026-09-12 22:37:04 
+2026-09-12 22:37:04 @mori {"event":"bsc2_upload_ack","received":108544}
+2026-09-12 22:37:04 
+2026-09-12 22:37:04 @mori {"event":"bsc2_upload_ack","received":109568}
+2026-09-12 22:37:04 
+2026-09-12 22:37:04 @mori {"event":"bsc2_upload_ack","received":109692}
+2026-09-12 22:37:04 
+2026-09-12 22:37:04 @mori {"event":"bsc2_upload_done","ok":true,"error":"ESP_OK","bytes":109692,"crc32":511443219}
+2026-09-12 22:37:37
+2026-09-12 22:37:37 @mori {"event":"ag32_batch_check","ok":true,"error":"","records":3,"payload_bytes":108924}
+2026-09-12 22:38:02 I (473292) power_manager: CPU perf lock acquired by ag32_batch
+2026-09-12 22:38:02
+2026-09-12 22:38:02 @mori {"event":"ag32_batch_started","message":"ESP_OK"}
+2026-09-12 22:38:31
+2026-09-12 22:38:31 @mori {"event":"ag32_batch_status","state":"running","phase":"program","message":"AG32 batch update queued","processed":34944,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":34944,"verified":128,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2148464620,"swd_ack":0,"stack_free_min":0,"mcu_resumed":false,"destructive_started":true,"recovery_required":true}
+2026-09-12 22:39:03
+2026-09-12 22:39:03 @mori {"event":"ag32_batch_status","state":"running","phase":"program","message":"AG32 batch update queued","processed":66688,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":66688,"verified":128,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2148496380,"swd_ack":0,"stack_free_min":0,"mcu_resumed":false,"destructive_started":true,"recovery_required":true}
+2026-09-12 22:39:36
+2026-09-12 22:39:36 @mori {"event":"ag32_batch_status","state":"running","phase":"program","message":"AG32 batch update queued","processed":89216,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":89216,"verified":128,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2148518908,"swd_ack":0,"stack_free_min":0,"mcu_resumed":false,"destructive_started":true,"recovery_required":true}
+2026-09-12 22:40:58
+2026-09-12 22:40:58 @mori {"event":"ag32_batch_status","state":"running","phase":"verify","message":"AG32 batch update queued","processed":86144,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":100072,"verified":86144,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2148515836,"swd_ack":0,"stack_free_min":0,"mcu_resumed":false,"destructive_started":true,"recovery_required":true}
+2026-09-12 22:42:09
+2026-09-12 22:42:09 @mori {"event":"ag32_batch_status","state":"success","phase":"complete","message":"AG32 batch programmed and verified","processed":108924,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":108924,"verified":108924,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2147492496,"swd_ack":1,"stack_free_min":4504,"mcu_resumed":true,"destructive_started":true,"recovery_required":false}
+2026-09-12 22:43:39 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-12 22:43:39 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-12 22:43:39 I (1288) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-12 22:43:39 I (1297) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-12 22:43:39 I (1304) main: timezone configured: CST-8
+2026-09-12 22:43:39 I (1308) main: boot step: mount assets
+2026-09-12 22:43:39 I (1403) assets: mounted /assets: total=1438481 used=777598
+2026-09-12 22:43:39 I (1404) main: boot step: mount sdcard
+2026-09-12 22:43:39 I (1456) SDCARD: SD card mounted
+2026-09-12 22:43:39 I (1457) SDCARD: Total: 59638MB
+2026-09-12 22:43:39 W (1621) main: repaired legacy lang_zh_cn.ini
+2026-09-12 22:43:39 I (3442) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=5v settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-12 22:43:39 I (3448) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-12 22:43:39 I (3459) main: UI language=1 (zh)
+2026-09-12 22:43:39 I (3467) main: boot step: init i2c peripherals
+2026-09-12 22:43:39 W (3468) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-12 22:43:39 I (3478) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-12 22:43:39 I (3486) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-12 22:43:39 I (3489) power_manager: detected AXP209 at 0x34
+2026-09-12 22:43:39 I (3493) main: AXP209 power manager ready at 0x34
+2026-09-12 22:43:39 I (3498) tca9555: TCA9555 ready at 0x20
+2026-09-12 22:43:39 I (3506) main: tca9555.ini apply=0, skip register apply
+2026-09-12 22:43:39 I (3508) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-12 22:43:39 I (3512) tca9555: IRQ enabled on GPIO 17
+2026-09-12 22:43:39 I (3514) main: boot step: init usb msc manager
+2026-09-12 22:43:39 I (3519) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-12 22:43:39 I (3524) main: USB MSC manager ready, pass-through default is disabled
+2026-09-12 22:43:39 I (3531) main: boot step: init nvs
+2026-09-12 22:43:39 I (3551) main: boot step: init mcu debug
+2026-09-12 22:43:39 I (3552) main: boot step: init lvgl/display
+2026-09-12 22:43:39 I (3796) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-12 22:43:39 I (3798) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-12 22:43:39 I (3802) lvgl_port: using single LVGL draw buffer (20 I (34478) power_manager: CPU perf lock acquired by cpld_check
+2026-09-12 22:43:39 I (34479) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-12 22:43:39 I (34483) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-12 22:43:39 I (34738) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-12 22:43:39 I (34739) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-12 22:43:39 I (34740) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-12 22:43:39 I (34743) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-12 22:43:39 I (34747) mcu_debug: DMI DMSTATUS before halt=0x000f0ca2
+2026-09-12 22:43:39 I (34984) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-12 22:43:39 I (34986) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-12 22:43:39 I (34987) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-12 22:43:39 I (34989) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-12 22:43:39 I (34996) power_manager: CPU perf lock released by cpld_check
+2026-09-12 22:43:39
+2026-09-12 22:43:39 @mori {"event":"cpld_check","ok":true,"error":"ESP_OK","passes":8,"bytes":524288,"elapsed_us":205406,"last_first_ready_us":392,"last_status_polls":70,"mcu_halted":true,"mcu_resumed":true}

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "bytes": 109692,
+  "sha256": "4a72419c212b1bf683edc9d692d10f2efad296f24d3651f30b486ef590b3ab66",
+  "records": [
+    {
+      "address": "0x81000000",
+      "bytes": 128,
+      "sha256": "22942dd51752166e263d0d750b6e7aed1999ae879b48adf32f9efa30e236d894"
+    },
+    {
+      "address": "0x800e7000",
+      "bytes": 99944,
+      "sha256": "dae0f8703563093eedf32dc7c8ca631e5c5b3211b668ccee4a60104d63b885c5"
+    },
+    {
+      "address": "0x80000000",
+      "bytes": 8852,
+      "sha256": "f0b69f07350f85aa05d663d9c37208b964b8d84fb2bd6bafc7fd8a56c2a79da4"
+    }
+  ]
+}

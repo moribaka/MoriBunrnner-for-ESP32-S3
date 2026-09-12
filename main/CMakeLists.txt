@@ -66,4 +66,3 @@ idf_component_get_property(libsmb2_lib sahlberg__libsmb2 COMPONENT_LIB)
 if(TARGET ${libsmb2_lib})
     target_compile_options(${libsmb2_lib} PRIVATE -Wno-error=array-parameter -include esp_random.h)
 endif()
-
