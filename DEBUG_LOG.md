@@ -533,3 +533,36 @@ ESP-IDF 编译通过，烧录写入哈希校验通过；主机回归测试全部
 - 编写docs/BURNER_PROTOCOL_OPTIMIZATION.md，给出块写入、本地轮询、双512字节缓冲的实施顺序、命令契约与旧协议协商约束。不能简单删WR脉冲或把三个已有CS模式当作空闲通道。
 - 假设新块包为512+16字节，传输字节数减少60.51%；按已实测28293块计算，理想线速占用7.566→2.988秒，约4.578秒空间。这是请求包模型，不是新协议或整体烧录性能实测；Flash内部忙和约33秒擦除仍存在。
 - 本轮完成源码核查与设计材料，未实现或刷入新CPLD协议；机上保持已验证的51c9db4与SRAM龙珠卡带。设计材料及日志本地Git保存。
+
+## 烧录页卡带信息面板与 NOR 库补充（2026-09-12）
+
+- 用户要求：左侧卡带信息面板也要支持逐项光标；左右键按面板实际位置切换光标；NOR 信息
+  折叠进底部区块；NOR 详情留在左侧面板，不占用右侧操作列表。
+- 信息面板改为按行枚举（`ui_burn_info_enumerate`），绘制与光标索引共用同一份列表；新增
+  行类型 `UI_BURN_INFO_ROW_GAP`（空行）、`HEADER`（分节标题）、`STATIC`（只读文本），
+  三类都不可选，`UP`/`DOWN` 自动跳过。
+- 左侧摘要顺序：类型、D1/D0、Save、Size、SRAM patch、`CFI:`、File，最后是底部 NOR 区块
+  （空行 + 分隔线/`NOR INFO` + 型号 + 容量）。
+- 焦点在左侧且选中型号行时按 `A`，在同一块左面板内展开 NOR 详情（面板标题 `> NOR`），
+  `B` 返回；全过程右侧操作列表的选中项不变。
+- 选择条反色必须画在文字之后：`ui_px_invert_rect()` 是逐像素 XOR，先画会得到纯白一行。
+- 串口 `ui` 增加 `burn_info_focus`/`burn_info_selected`/`burn_info_count`/
+  `burn_info_nor_detail`/`nor_model`/`nor_id`/`nor_device_size`/`nor_sector_size`/
+  `nor_buffer_bytes`，用于无屏验证。
+- NOR 库排查：本卡 GBA ID `89 00 7E 22 28 22 01 22`（厂商 0x89 + 容量码 0x28）原本不在
+  `main/burner/db/burner_nor_db_data.c`，所以显示 `未知NOR`。JS28F（Intel/Numonyx）与
+  MT28EW（Micron）是同一颗 die 的两个品牌料号，ID 相同，库里本来就写成别名；真正能区分
+  的是容量码（`0x21`=16MB、`0x22`=32MB、`0x23`=64MB、`0x28`=128MB、`0x48`=256MB）。
+- 补库：新增 `s_family_mt28ew01g`（名 `MT28EW01GABA`，profile `AMD_AAA_AA`，128 MiB /
+  128 KiB / GBA buffer 1024，与同厂商 `s_family_js28f256` 一致）+ GBA ID 条目
+  `89 00 7E 22 28 22 01 22`。flags 仍为 `BURNER_NOR_FLAG_NONE`（与未命中默认值相同），
+  且 AMD 运行时在 CFI 可用时优先采用探测结果，因此不改写入时序。MBC5 条目
+  （`89 7E 28 01`）未加：GB 8 位总线下的 buffer/flag 未实机验证，不猜。
+- 实机验证（COM26，MAC `a4:cb:8f:f2:c4:c0`）：摘要 `burn_info_count=10`，`down` 跳过
+  空行/标题/容量行，光标停在型号行；`A` 展开详情后 `count=11`、右侧选中项不变；`B` 返回
+  型号行；`nor_model=MT28EW01GABA`、`nor_device_size=134217728`、
+  `nor_sector_size=131072`、`nor_buffer_bytes=1024`。
+- 最终固件 v2.32.131：`build/moriburnner.bin` 2840976 字节，SHA256
+  `110EC67A5B6A98692B2B2B7A39550D5C9FC0541216B5404FEBC3221ADB46573E`，写入 `0x20000`，
+  esptool 报告 `Hash of data verified`。
+- 逐版迭代与证据见 `docs/ui_burner_cart_info_navigation_20260912.md`。
