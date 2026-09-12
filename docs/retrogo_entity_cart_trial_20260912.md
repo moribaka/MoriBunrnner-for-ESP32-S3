@@ -69,3 +69,9 @@ MoriBurnner 现有 v2.32.119 修复已保存于本地 Git 提交；本次 Retro-
 把同步 SPI bank miss 从进入游戏后的前几秒移到加载阶段。重新构建并刷写成功，
 产物 SHA256：`C72CC04279DFA74A7A1976033081C7234DD1FCE5FA1C2D406FAD37208781D82A`。
 需要实机进入游戏后再比较帧数；这不是新烧录协议，也没有改变卡带时序。
+
+## 新协议实现起点
+
+新增 `shared/entity_cart_protocol.h`，定义独立的 `CART_*` 操作码、请求帧和错误码。
+该文件目前只建立协议 ABI，尚未接入 CPLD 状态机或 Retro-Go 驱动；Bacon 烧录操作码
+保持不变。
