@@ -1,0 +1,77 @@
+********************************************************************************
+Obsolete PIO Core v6.1.19 is used (previous was 6.2.0)
+Please remove multiple PIO Cores from a system:
+https://docs.platformio.org/en/latest/core/installation/troubleshooting.html
+********************************************************************************
+Processing release (platform: AgRV; board: agrv2k_407; framework: agrv_sdk)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+Python version: 3.11.7
+CONFIGURATION: https://docs.platformio.org/page/boards/AgRV/agrv2k_407.html
+PLATFORM: Agm RiscV (1.0.0) > AgRV2K 407
+HARDWARE: AGRV2K 240MHz, 128KB RAM, 1MB Flash
+DEBUG: Current (cmsis-dap-openocd) On-board (cmsis-dap-openocd, cmsis-dap-openocd-jtag, jlink-openocd, jlink-openocd-jtag, serial, stlink-dap-openocd-dapdirect_swd)
+PACKAGES: 
+ - framework-agrv_sdk @ 1.0.0 
+ - tool-agrv_flashloader @ 1.0.0 
+ - tool-agrv_jlink @ 1.0.0 
+ - tool-agrv_logic @ 1.0.0 
+ - tool-agrv_openocd @ 1.0.0 
+ - toolchain-agrv @ 1.0.0 
+ - toolchain-agrv-clang @ 1.0.0
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 0 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Checking size .pio\build\release\moriburnner_ag32.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [==        ]  19.3% (used 25300 bytes from 131072 bytes)
+Flash: [          ]   0.8% (used 8852 bytes from 1048576 bytes)
+Generating BATCH bin moriburnner_ag32_batch.bin
+Logic: F:\dev\esp32\moriburnner\example\logic\example_board.bin, 99944 bytes
+Input: F:\dev\esp32\moriburnner\example\.pio\build\release\moriburnner_ag32.bin, 8852 bytes
+Output: F:\dev\esp32\moriburnner\example\moriburnner_ag32_batch.bin, 109692 bytes
+  Version:         1
+  Device ID:       0x40200001
+  Binary Size:     128
+  Binary Address:  0x81000000
+  Binary Type:     0x0
+  Erase Options:   0x1
+  Program Options: 0x1
+  Run Options:     0x10000, timeout: 1
+  Encrypt Offset:  0x0
+  Encrypt Size:    0
+  Header Checksum: 0x510eef57
+
+  Version:         1
+  Device ID:       0x40200001
+  Binary Size:     99944
+  Binary Address:  0x800e7000
+  Binary Type:     0x0
+  Erase Options:   0x0
+  Program Options: 0x1
+  Run Options:     0x10000, timeout: 1
+  Encrypt Offset:  0x0
+  Encrypt Size:    0
+  Header Checksum: 0x679fc5bf
+
+  Version:         1
+  Device ID:       0x40200001
+  Binary Size:     8852
+  Binary Address:  0x80000000
+  Binary Type:     0x0
+  Erase Options:   0x0
+  Program Options: 0x1
+  Run Options:     0x10006, reset, stop, timeout: 1
+  Encrypt Offset:  0x0
+  Encrypt Size:    0
+  Header Checksum: 0xc7397e8f
+
+========================= [SUCCESS] Took 1.27 seconds =========================
+
+Environment    Status    Duration
+-------------  --------  ------------
+release        SUCCESS   00:00:01.270
+========================= 1 succeeded in 00:00:01.270 =========================
