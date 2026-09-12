@@ -6129,9 +6129,9 @@ static void ui_handle_page_button_action_locked(
 
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_NONE &&
         (action == UI_INPUT_ACTION_LEFT || action == UI_INPUT_ACTION_RIGHT)) {
-        /* The burn page is a two-panel layout. LEFT/RIGHT move focus; the
-           board reports its physical left key as the RIGHT action. */
-        s_burner_focus_info = action == UI_INPUT_ACTION_RIGHT;
+        /* The burn page is a two-panel layout. LEFT/RIGHT move focus without
+           changing the panel positions. */
+        s_burner_focus_info = action == UI_INPUT_ACTION_LEFT;
         s_burner_info_detail = s_burner_focus_info;
         model->dirty = true;
         return;
