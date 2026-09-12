@@ -88,6 +88,13 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
         ui_format_probe_id(&status, id_text, sizeof(id_text));
         ui_format_gba_d0d1_text(&status, d0d1_text, sizeof(d0d1_text));
 
+        if (!s_burner_info_detail) {
+            ui_px_info_line(text_x, yy, text_w, ui_tr("Capacity:"), size_text);
+            yy += UI_LIST_LINE_H;
+            ui_px_info_line(text_x, yy, text_w, "NOR:", "Right = details");
+            return;
+        }
+
         if (status.probe_cart_mode == BURNER_CART_MODE_GBA) {
             ui_px_info_line(text_x, yy, text_w, ui_tr("D1/D0:"), d0d1_text);
             yy += UI_LIST_LINE_H;

@@ -1716,6 +1716,7 @@ static ui_nav_entry_t s_nav_stack[8];
 static uint8_t s_nav_depth = 0;
 static burner_cart_mode_t s_cart_mode = BURNER_CART_MODE_GBA;
 static bool s_burner_info_left = true;
+static bool s_burner_info_detail = false;
 static burner_write_path_t s_write_path = BURNER_WRITE_PATH_DIRECT;
 static burner_recipe_mode_t s_recipe_mode = BURNER_RECIPE_MODE_CHIS;
 static bool s_ram_fram = false;
@@ -6122,6 +6123,13 @@ static void ui_handle_page_button_action_locked(
             default:
                 break;
         }
+        return;
+    }
+
+    if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_NONE &&
+        (action == UI_INPUT_ACTION_LEFT || action == UI_INPUT_ACTION_RIGHT)) {
+        s_burner_info_detail = action == UI_INPUT_ACTION_RIGHT;
+        model->dirty = true;
         return;
     }
 
