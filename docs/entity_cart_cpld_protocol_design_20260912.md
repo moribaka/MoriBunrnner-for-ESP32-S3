@@ -56,3 +56,11 @@ COM26 已确认仍运行 `retro-core` 分区，串口 debug 输出稳定在约 1
 （当前输出未标明实体卡游戏场景，因此这只是运行态证据，不等同于实体卡验收）。
 下一步需要在设备上实际进入 `__physical_cart__.gb`，记录 `gb-cart` 的 bank
 读取和 CRC 结果，再与旧路径的帧率比较。
+
+## 崩溃修复尝试
+
+实体卡入口崩溃后，Retro-Go BSC1 进入流程与 MoriBurnner 已验证驱动对比发现少了
+`MORI2LEG`、旧路径释放字节 `0x0F`、再进入 `MORI2CPL` 的复位序列。Retro-Go
+已补齐该序列并重新刷写，提交为 `5d45b49`，固件 SHA256：
+`FDE5461C55E56DEFE8204AA2E0AD1529C0D668D55376F2ACFEFD18228D1E07E2`。
+刷写地址仍为 `0xAE0000`，esptool 已报告 `Hash of data verified`。
