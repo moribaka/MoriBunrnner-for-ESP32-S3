@@ -57,6 +57,11 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
     burner_status_snapshot(&status);
     ui_px_frame(x, y, w, h, true);
     ui_px_text_clipped(text_x, yy, text_w, s_burner_focus_info ? "> Cart info" : "Cart info", true);
+    if (s_burner_focus_info) {
+        /* Use the same inverted selector treatment as the operation list so
+           the cursor visibly moves onto the information panel. */
+        ui_px_invert_rect(x + 1, y + 4, w - 2, UI_LIST_LINE_H - 1);
+    }
     yy += UI_LIST_LINE_H + 2;
     ui_px_hline(x + 4, yy - 4, w - 8, true);
 
