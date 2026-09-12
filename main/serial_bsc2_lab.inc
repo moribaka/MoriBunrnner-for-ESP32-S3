@@ -65,6 +65,7 @@ static void bsc2_lab_job(const char *action)
         BURN_MBC5_PROGRAM_CHUNK_BYTES, BURN_GBA_DUMP_CHUNK_BYTES, 0,
         BSC2_BACKUP_NAME,BSC2_BACKUP_PATH,0,33554432,BURNER_GBA_SAVE_TYPE_SRAM,
         "",false,0,false,NULL);
+    if (err == ESP_OK) ui_show_burn_task_status(33554432);
     cJSON *json=event("bsc2_job_started");
     if(json){ cJSON_AddBoolToObject(json,"ok",err==ESP_OK); cJSON_AddStringToObject(json,"error",esp_err_to_name(err)); cJSON_AddStringToObject(json,"action",action); }
     reply(json);

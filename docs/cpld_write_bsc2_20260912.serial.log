@@ -1346,3 +1346,126 @@
 2026-09-12 22:55:16 @mori {"event":"ag32_batch_status","state":"running","phase":"verify","message":"AG32 batch update queued","processed":2176,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":100072,"verified":2176,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2148431868,"swd_ack":0,"stack_free_min":0,"mcu_resumed":false,"destructive_started":true,"recovery_required":true}
 2026-09-12 22:57:10
 2026-09-12 22:57:10 @mori {"event":"ag32_batch_status","state":"success","phase":"complete","message":"AG32 batch programmed and verified","processed":108924,"total":108924,"device_id":1075838977,"dp_idcode":731911287,"records":3,"programmed":108924,"verified":108924,"error":"ESP_OK","cleanup_error":"ESP_OK","address":2147492496,"swd_ack":1,"stack_free_min":4536,"mcu_resumed":true,"destructive_started":true,"recovery_required":false}
+2026-09-12 22:57:56
+2026-09-12 22:57:56 @mori {"event":"cpld_write_experiment","ok":false,"error":"ESP_ERR_NOT_SUPPORTED","requested_mode":2}
+2026-09-12 22:57:57
+2026-09-12 22:57:57 @mori {"event":"cpld_info","ok":true,"error":"ESP_OK","block_bytes":1024}
+2026-09-12 22:57:57
+2026-09-12 22:57:57 @mori {"event":"cpld_write_profile","mode":0,"bytes":0,"streams":0,"packets":0,"status_polls":0,"credits":0,"elapsed_us":0,"ready_us":0,"prepare_us":0,"tx_us":0,"done_us":0}
+2026-09-12 22:57:58 
+2026-09-12 22:57:58 @mori {"event":"status","version":"v2.32.131-writeexp3","uptime_ms":891854,"internal_free":82247,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"unknown","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:57:58 I (893293) burner_web: PSRAM auto window: free=7539336 largest=7471104 reserve=262144 -> 6MB
+2026-09-12 22:57:58 I (893296) power_manager: CPU perf lock acquired by burn_task
+2026-09-12 22:57:58 
+2026-09-12 22:57:58 @mori {"event":"bsc2_job_started","ok":true,"error":"ESP_OK","action":"verify"}
+2026-09-12 22:57:58 
+2026-09-12 22:57:58 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"probing cart for verify","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":0,"total":33554432,"task_us":197345,"erase_us":0,"write_us":0,"write_bps":0,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:57:59 I (893498) burner_web: GBA D0/D1 swap detection starting...
+2026-09-12 22:57:59 I (893521) burner_web: D0/D1 swap detection: entering CFI mode (word addr 0x055)
+2026-09-12 22:57:59 I (893529) burner_web: D0/D1 swap detection: CFI 'QRY' detected (normal, low-byte lane) [010]=0051 [011]=0052 [012]=0059
+2026-09-12 22:57:59 I (893540) burner_web: GBA D0/D1 swap detection: NORMAL (no swap), lane=low
+2026-09-12 22:57:59 I (893546) burner_web: GBA ReadID trace begin t=892320163us
+2026-09-12 22:57:59 I (893551) burner_web: GBA ReadID trace write addr=0x555 data=0x00AA dt=5162us (0.005162s)
+2026-09-12 22:57:59 I (893560) burner_web: GBA ReadID trace write addr=0x2AA data=0x0055 dt=8518us (0.008518s)
+2026-09-12 22:57:59 I (893568) burner_web: GBA ReadID trace write addr=0x555 data=0x0090 dt=8001us (0.008001s)
+2026-09-12 22:57:59 I (893576) burner_web: GBA ReadID trace read addr=0x000 data=0x0089 dt=8226us (0.008226s)
+2026-09-12 22:57:59 I (893584) burner_web: GBA ReadID trace read addr=0x001 data=0x227E dt=7729us (0.007729s)
+2026-09-12 22:57:59 I (893591) burner_web: GBA ReadID trace read addr=0x00E data=0x2228 dt=7882us (0.007882s)
+2026-09-12 22:57:59 I (893599) burner_web: GBA ReadID trace read addr=0x00F data=0x2201 dt=7889us (0.007889s)
+2026-09-12 22:57:59 I (893607) burner_web: GBA ReadID trace write addr=0x000 data=0x00F0 dt=7835us (0.007835s)
+2026-09-12 22:57:59 I (893615) burner_web: GBA ReadID trace end status=ESP_OK total=69249us (0.069249s)
+2026-09-12 22:57:59 I (893623) burner_web: GBA word-address probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:57:59 I (893632) burner_web: GBA Intel ReadID trace begin t=892406117us
+2026-09-12 22:57:59 I (893638) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=5585us (0.005585s)
+2026-09-12 22:57:59 I (893646) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8622us (0.008622s)
+2026-09-12 22:57:59 I (893655) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0090 dt=8417us (0.008417s)
+2026-09-12 22:57:59 I (893663) burner_web: GBA Intel ReadID trace read addr=0x000 data=0x007F dt=8576us (0.008576s)
+2026-09-12 22:57:59 I (893671) burner_web: GBA Intel ReadID trace read addr=0x001 data=0xEA00 dt=8336us (0.008336s)
+2026-09-12 22:57:59 I (893680) burner_web: GBA Intel ReadID trace read addr=0x00E data=0x52A3 dt=8459us (0.008459s)
+2026-09-12 22:57:59 I (893688) burner_web: GBA Intel ReadID trace read addr=0x00F data=0x19BE dt=8386us (0.008386s)
+2026-09-12 22:57:59 I (893697) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x0050 dt=8500us (0.008500s)
+2026-09-12 22:57:59 I (893705) burner_web: GBA Intel ReadID trace write addr=0x000 data=0x00FF dt=8393us (0.008393s)
+2026-09-12 22:57:59 I (893714) burner_web: GBA Intel ReadID trace end status=ESP_OK total=81799us (0.081799s)
+2026-09-12 22:57:59 I (893722) burner_web: GBA intel-id probe @40000000Hz try=1 id=7F 00 00 EA A3 52 BE 19 (candidate-id)
+2026-09-12 22:57:59 I (893741) burner_web: GBA raw ID method scan summary @40000000Hz try=1: candidates=0 best=AMD standard
+2026-09-12 22:57:59 I (893744) burner_web: GBA profile match @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 cmdset=amd method=AMD standard
+2026-09-12 22:57:59 I (893752) burner_web: GBA auto probe @40000000Hz try=1 id=89 00 7E 22 28 22 01 22 (candidate-id)
+2026-09-12 22:57:59 I (893761) burner_web: GBA CFI ok in word-address mode @40000000Hz try=1: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 cmdset=amd lane=low primary=0x0002
+2026-09-12 22:57:59 I (893782) burner_web: GBA AMD Bacon compatibility: keep flash size 134217728, use 32MB banked writes
+2026-09-12 22:57:59 I (893791) burner_web: GBA AMD runtime commands: standard AMD source=AMD standard
+2026-09-12 22:57:59 I (893797) burner_web: GBA prepared: chip=MT28EW01GABA profile=AGB:AMD:AAA/555:AA/55 flash=134217728 sector=131072 geom=uniform largest=131072 regions=1 buf=1024 prog_buf=1024 cfi=ok nor=amd cmd=word-address low-lane id=89 00 7E 22 28 22 01 22
+2026-09-12 22:57:59 I (893819) burner_web: GBA mapping: Bacon AMD 32MB-bank bank=32MB force_multi=0 range=0x00000000-0x01FFFFFF
+2026-09-12 22:57:59 
+2026-09-12 22:57:59 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":1441792,"total":33554432,"task_us":1403353,"erase_us":0,"write_us":0,"write_bps":1037656,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:00 
+2026-09-12 22:58:00 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":3538944,"total":33554432,"task_us":2615345,"erase_us":0,"write_us":0,"write_bps":1362867,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:02 
+2026-09-12 22:58:02 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":5701632,"total":33554432,"task_us":3843145,"erase_us":0,"write_us":0,"write_bps":1490200,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:03 
+2026-09-12 22:58:03 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":7733248,"total":33554432,"task_us":5028335,"erase_us":0,"write_us":0,"write_bps":1546203,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:04 
+2026-09-12 22:58:04 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":9830400,"total":33554432,"task_us":6235345,"erase_us":0,"write_us":0,"write_bps":1583917,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:05 
+2026-09-12 22:58:05 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":11927552,"total":33554432,"task_us":7438231,"erase_us":0,"write_us":0,"write_bps":1611201,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:06 
+2026-09-12 22:58:06 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":14024704,"total":33554432,"task_us":8634828,"erase_us":0,"write_us":0,"write_bps":1629765,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:08 
+2026-09-12 22:58:08 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":16121856,"total":33554432,"task_us":9845340,"erase_us":0,"write_us":0,"write_bps":1643306,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:09 
+2026-09-12 22:58:09 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":18219008,"total":33554432,"task_us":11054526,"erase_us":0,"write_us":0,"write_bps":1653287,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:10 
+2026-09-12 22:58:10 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":20381696,"total":33554432,"task_us":12265350,"erase_us":0,"write_us":0,"write_bps":1662377,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:11 
+2026-09-12 22:58:11 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":22478848,"total":33554432,"task_us":13493182,"erase_us":0,"write_us":0,"write_bps":1669983,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:13 
+2026-09-12 22:58:13 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":24576000,"total":33554432,"task_us":14679335,"erase_us":0,"write_us":0,"write_bps":1675439,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:14 
+2026-09-12 22:58:14 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":26673152,"total":33554432,"task_us":15884328,"erase_us":0,"write_us":0,"write_bps":1680231,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:15 
+2026-09-12 22:58:15 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":28770304,"total":33554432,"task_us":17093921,"erase_us":0,"write_us":0,"write_bps":1683803,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:16 
+2026-09-12 22:58:16 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":30867456,"total":33554432,"task_us":18292644,"erase_us":0,"write_us":0,"write_bps":1688732,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:17 
+2026-09-12 22:58:17 @mori {"event":"bsc2_job_status","running":true,"state":"burning","message":"file->cart verify running","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":32964608,"total":33554432,"task_us":19500609,"erase_us":0,"write_us":0,"write_bps":1692194,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:58:19 I (913117) burner_web: ROM verify: err=ESP_OK bytes=33554432/33554432 tf=3633ms cart=14287ms
+2026-09-12 22:58:19 I (913120) burner_web: burn_task result: err=ESP_OK state=done processed=33554432/33554432 msg=verify finished
+2026-09-12 22:58:19 I (913126) power_manager: CPU perf lock released by burn_task
+2026-09-12 22:58:19 I (913131) burner_web: burn_task stack free min=11956 bytes
+2026-09-12 22:58:19 
+2026-09-12 22:58:19 @mori {"event":"bsc2_job_status","running":false,"state":"done","message":"verify finished","path":"/sdcard/ROM_OUTPUT/bsc2_before_20260912.gba","processed":33554432,"total":33554432,"task_us":19822053,"erase_us":0,"write_us":0,"write_bps":1693040,"physical_program_bytes":0,"skipped_bytes":0,"tf_us":0,"dump_read_us":0,"dump_write_us":0,"dump_wait_us":0}
+2026-09-12 22:59:04
+2026-09-12 22:59:04 @mori {"event":"ui","process_calls":58063,"render_calls":1748,"music_polls":8475,"model_bytes":15352,"directory_scans":0,"cache_hits":0,"page":20,"selected":0,"count":7,"preview_generation":0,"file_worker_stack_free":14752,"burn_info_focus":0,"burn_info_selected":0,"burn_info_count":2,"burn_info_nor_detail":0,"file_start_active":false,"preview_active":false,"preview_done":false,"preview_available":false,"screen_dimmed":false,"selection":"选择AG32固件","status":"burner done: verify finished","nor_model":"MT28EW01GABA","nor_id":"89 00 7E 22 28 22 01 22","nor_device_size":134217728,"nor_sector_size":131072,"nor_buffer_bytes":1024}
+2026-09-12 23:03:59 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-12 23:03:59 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-12 23:03:59 I (1292) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-12 23:03:59 I (1301) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-12 23:03:59 I (1308) main: timezone configured: CST-8
+2026-09-12 23:03:59 I (1312) main: boot step: mount assets
+2026-09-12 23:03:59 I (1407) assets: mounted /assets: total=1438481 used=777598
+2026-09-12 23:03:59 I (1408) main: boot step: mount sdcard
+2026-09-12 23:03:59 I (1456) SDCARD: SD card mounted
+2026-09-12 23:03:59 I (1457) SDCARD: Total: 59638MB
+2026-09-12 23:03:59 W (1617) main: repaired legacy lang_zh_cn.ini
+2026-09-12 23:03:59 I (3414) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=5v settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-12 23:03:59 I (3420) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-12 23:03:59 I (3432) main: UI language=1 (zh)
+2026-09-12 23:03:59 I (3439) main: boot step: init i2c peripherals
+2026-09-12 23:03:59 W (3440) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-12 23:03:59 I (3451) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-12 23:03:59 I (3458) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-12 23:03:59 I (3462) power_manager: detected AXP209 at 0x34
+2026-09-12 23:03:59 I (3466) main: AXP209 power manager ready at 0x34
+2026-09-12 23:03:59 I (3470) tca9555: TCA9555 ready at 0x20
+2026-09-12 23:03:59 I (3478) main: tca9555.ini apply=0, skip register apply
+2026-09-12 23:03:59 I (3481) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-12 23:03:59 I (3484) tca9555: IRQ enabled on GPIO 17
+2026-09-12 23:03:59 I (3487) main: boot step: init usb msc manager
+2026-09-12 23:03:59 I (3491) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-12 23:03:59 I (3497) main: USB MSC manager ready, pass-through default is disabled
+2026-09-12 23:03:59 I (3503) main: boot step: init nvs
+2026-09-12 23:03:59 I (3524) main: boot step: init mcu debug
+2026-09-12 23:03:59 I (3524) main: boot step: init lvgl/display
+2026-09-12 23:03:59 I (3768) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-12 23:03:59 I (3770) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-12 23:03:59 I (3774) lvgl_port: using single LVGL draw buffer (20
+2026-09-12 23:03:59 @mori {"event":"ui","process_calls":10316,"render_calls":159,"music_polls":1476,"model_bytes":15352,"directory_scans":0,"cache_hits":0,"page":0,"selected":0,"count":5,"preview_generation":0,"file_worker_stack_free":14760,"burn_info_focus":0,"burn_info_selected":0,"burn_info_count":2,"burn_info_nor_detail":0,"file_start_active":false,"preview_active":false,"preview_done":false,"preview_available":false,"screen_dimmed":true,"selection":"系统","status":"wifi provisioning mode","nor_model":"","nor_id":"","nor_device_size":0,"nor_sector_size":0,"nor_buffer_bytes":0}

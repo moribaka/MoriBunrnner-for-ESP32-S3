@@ -159,6 +159,34 @@ ESP 配套实验应用为 `release/moriburnner_bsc2_esp32_app_writeexp3.bin`，
 `/sdcard/ag32_cpld_posedge_20260910.bin`（已先通过设备3记录/108924B校验），
 并将ESP恢复到原始备份v2.32.131。最终回退结果继续追加。
 
+最终回退已完成：旧AG32包programmed=verified=total=108924，3记录，
+mcu_resumed=true，recovery_required=false。旧CPLD上开启BSC2按预期返回
+ESP_ERR_NOT_SUPPORTED，模式保持off，随后BSC1身份探测及32MiB校验通过
+（19.822053s），证明可选能力失败未污染原协议可用性。
+ESP原始v2.32.131镜像回刷通过esptool hash校验。
+最后按用户要求仅通过串口按键，从机身烧录器→GBA→选择本轮备份→ROM校验，
+原生进度和结果页可见，最终`burner done: verify finished`，界面留在结果页。
+证据：`cpld_write_bsc2_20260912.ui.log` 和本目录 `ui-final.json`。
+当前设备使用原固件；仓库 `example/moriburnner_ag32_batch.bin`、`build/`
+和release下保留的是明确标记的实验工件，不要将其混作设备当前固件。
+
 GB/GBC硬件没有换卡测试；其旧协议功能仿真通过。音乐/UI/擦除策略/补丁
 实现未改动。三次真实烧录均逐次独立全量校验通过，卡内容保持本轮备份。
 失败路由候选没有上板；没有降低时钟、写入失败后自动重试或中途切换协议。
+
+## 用户操作偏好：串口与可见界面
+
+用户明确要求走串口控制，以便看见机身界面与操作进度，避免 Wi-Fi 后台控制。
+后续优先串口 `ui` 快照和 `key` 按键操作。必须使用诊断入口时也要显示原生
+任务页，不能只在后台跑任务。此轮实际烧录全部由串口启动；唯一 Wi-Fi
+连接尝试因无保存配置失败，没有通过 Wi-Fi 执行烧录。
+
+原串口实验入口缺少跳转任务页，现已补用与HTTP入口相同的
+`ui_show_burn_task_status()`；不会改变烧录实现或计时口径。
+此单行可见性修正构建为writeexp4，SHA256
+`f3efc2abd7fac7c34031c3ae895b8d2dc48f7ad786ab63b0a2f621a6177943cb`，
+保存在 `release/moriburnner_bsc2_esp32_app_writeexp4.bin`；编译通过，未额外刷入。
+BSC2烧录实测用writeexp3；最终原生界面校验用已恢复的v2.32.131。
+
+用户随后提出双线/多线方向，接线与SDK核对见
+`cpld_multilane_feasibility_20260912.md`，尚未改成DIO或更改实板接线。
