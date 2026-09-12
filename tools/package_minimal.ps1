@@ -12,6 +12,8 @@ $batchName = "AG32_BATCH_$tag.bin"
 $fullPath = Join-Path $buildDir $fullName
 $batchPath = Join-Path $repo 'example/moriburnner_ag32_batch.bin'
 $zipPath = Join-Path $releaseDir "MoriBurnner_$tag.zip"
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
 $description = Get-Content (Join-Path $buildDir 'project_description.json') -Raw | ConvertFrom-Json
 if ($description.project_version -ne $tag) {
     throw "Build version $($description.project_version) does not match package $tag"

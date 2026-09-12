@@ -467,7 +467,7 @@ static void ui_fill_task_row(const ui_model_t *model, uint16_t index, char *titl
                     hint,
                     hint_len,
                     "%s %s",
-                    (status.probe_cart_mode == BURNER_CART_MODE_GBA) ? "GBA" : "MBC5",
+                    ui_probe_type_label(&status, status.probe_cart_mode),
                     size_a);
             } else {
                 snprintf(hint, hint_len, "%s", ui_tr("not probed"));
