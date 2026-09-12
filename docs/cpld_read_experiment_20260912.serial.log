@@ -17,3 +17,121 @@
 2026-09-12 21:48:04 @mori {"event":"cpld_check","ok":false,"error":"ESP_ERR_TIMEOUT","passes":0,"bytes":0,"elapsed_us":0,"last_first_ready_us":378,"last_status_polls":397,"mcu_halted":false,"mcu_resumed":false}
 2026-09-12 21:48:18
 2026-09-12 21:48:18 @mori {"event":"cpld_info","ok":true,"error":"ESP_OK","block_bytes":1024}
+2026-09-12 21:55:51 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-12 21:55:51 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-12 21:55:51 I (1286) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-12 21:55:51 I (1295) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-12 21:55:51 I (1302) main: timezone configured: CST-8
+2026-09-12 21:55:51 I (1306) main: boot step: mount assets
+2026-09-12 21:55:51 I (1401) assets: mounted /assets: total=1438481 used=777598
+2026-09-12 21:55:51 I (1402) main: boot step: mount sdcard
+2026-09-12 21:55:51 I (1455) SDCARD: SD card mounted
+2026-09-12 21:55:51 I (1456) SDCARD: Total: 59638MB
+2026-09-12 21:55:51 W (1631) main: repaired legacy lang_zh_cn.ini
+2026-09-12 21:55:51 I (3428) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=5v settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-12 21:55:51 I (3434) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-12 21:55:51 I (3445) main: UI language=1 (zh)
+2026-09-12 21:55:51 I (3452) main: boot step: init i2c peripherals
+2026-09-12 21:55:51 W (3453) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-12 21:55:51 I (3464) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-12 21:55:51 I (3472) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-12 21:55:51 I (3475) power_manager: detected AXP209 at 0x34
+2026-09-12 21:55:51 I (3479) main: AXP209 power manager ready at 0x34
+2026-09-12 21:55:51 I (3484) tca9555: TCA9555 ready at 0x20
+2026-09-12 21:55:51 I (3492) main: tca9555.ini apply=0, skip register apply
+2026-09-12 21:55:51 I (3494) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-12 21:55:51 I (3497) tca9555: IRQ enabled on GPIO 17
+2026-09-12 21:55:51 I (3500) main: boot step: init usb msc manager
+2026-09-12 21:55:51 I (3504) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-12 21:55:51 I (3510) main: USB MSC manager ready, pass-through default is disabled
+2026-09-12 21:55:51 I (3516) main: boot step: init nvs
+2026-09-12 21:55:51 I (3537) main: boot step: init mcu debug
+2026-09-12 21:55:51 I (3538) main: boot step: init lvgl/display
+2026-09-12 21:55:51 I (3781) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-12 21:55:51 I (3782) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-12 21:55:51 I (3787) lvgl_port: using single LVGL draw buffer (20
+2026-09-12 21:55:51 @mori {"event":"status","version":"v2.32.131-readexp1","uptime_ms":14559,"internal_free":83739,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"unknown","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 21:55:51 I (16356) power_manager: CPU perf lock acquired by cpld_read_bench
+2026-09-12 21:55:51 I (16357) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-12 21:55:51 I (16362) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-12 21:55:57
+2026-09-12 21:55:57 @mori {"event":"cpld_read_progress","checked_bytes":4194304}
+2026-09-12 21:56:01
+2026-09-12 21:56:01 @mori {"event":"cpld_read_progress","checked_bytes":8388608}
+2026-09-12 21:56:07
+2026-09-12 21:56:07 @mori {"event":"cpld_read_progress","checked_bytes":12582912}
+2026-09-12 21:56:11
+2026-09-12 21:56:11 @mori {"event":"cpld_read_progress","checked_bytes":16777216}
+2026-09-12 21:56:17
+2026-09-12 21:56:17 @mori {"event":"cpld_read_progress","checked_bytes":20971520}
+2026-09-12 21:56:21
+2026-09-12 21:56:21 @mori {"event":"cpld_read_progress","checked_bytes":25165824}
+2026-09-12 21:56:26
+2026-09-12 21:56:26 @mori {"event":"cpld_read_progress","checked_bytes":29360128}
+2026-09-12 21:56:31
+2026-09-12 21:56:31 @mori {"event":"cpld_read_progress","checked_bytes":33554432}
+2026-09-12 21:56:31 I (56541) power_manager: CPU perf lock released by cpld_read_bench
+2026-09-12 21:56:31
+2026-09-12 21:56:31 @mori {"event":"cpld_read_bench","ok":true,"error":"ESP_OK","checked_bytes":33554432,"boundary_passes":36,"failure_address":0,"failure_variant":"","original":{"elapsed_us":13051565},"exclusive":{"elapsed_us":13393061,"ready_us":1314472,"start_us":980551,"finish_us":7093297,"crc_us":2187912,"copy_us":922682,"status_polls":35418},"pipeline":{"elapsed_us":10053817,"ready_us":1263012,"start_us":993032,"finish_us":3911018,"crc_us":2166208,"copy_us":943279,"status_polls":36098}}
+2026-09-12 21:57:55 I (140385) power_manager: CPU perf lock acquired by cpld_read_bench
+2026-09-12 21:58:01
+2026-09-12 21:58:01 @mori {"event":"cpld_read_progress","checked_bytes":4194304}
+2026-09-12 21:58:06
+2026-09-12 21:58:06 @mori {"event":"cpld_read_progress","checked_bytes":8388608}
+2026-09-12 21:58:11
+2026-09-12 21:58:11 @mori {"event":"cpld_read_progress","checked_bytes":12582912}
+2026-09-12 21:58:16
+2026-09-12 21:58:16 @mori {"event":"cpld_read_progress","checked_bytes":16777216}
+2026-09-12 21:58:21
+2026-09-12 21:58:21 @mori {"event":"cpld_read_progress","checked_bytes":20971520}
+2026-09-12 21:58:25
+2026-09-12 21:58:25 @mori {"event":"cpld_read_progress","checked_bytes":25165824}
+2026-09-12 21:58:31
+2026-09-12 21:58:31 @mori {"event":"cpld_read_progress","checked_bytes":29360128}
+2026-09-12 21:58:35
+2026-09-12 21:58:35 @mori {"event":"cpld_read_progress","checked_bytes":33554432}
+2026-09-12 21:58:35 I (180593) power_manager: CPU perf lock released by cpld_read_bench
+2026-09-12 21:58:35
+2026-09-12 21:58:35 @mori {"event":"cpld_read_bench","ok":true,"error":"ESP_OK","checked_bytes":33554432,"boundary_passes":36,"failure_address":0,"failure_variant":"","original":{"elapsed_us":12916985},"exclusive":{"elapsed_us":13434931,"ready_us":1324123,"start_us":997883,"finish_us":7083456,"crc_us":2196530,"copy_us":922708,"status_polls":35421},"pipeline":{"elapsed_us":10123334,"ready_us":1302494,"start_us":1000640,"finish_us":3906653,"crc_us":2186795,"copy_us":946654,"status_polls":36101}}
+2026-09-12 21:58:50
+2026-09-12 21:58:50 @mori {"event":"status","version":"v2.32.131-readexp1","uptime_ms":193827,"internal_free":82563,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"cpld","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 21:58:51
+2026-09-12 21:58:51 @mori {"event":"cpld_info","ok":true,"error":"ESP_OK","block_bytes":1024}
+2026-09-12 22:01:33 I (95) boot:  6 retro-core       OTA app          00 11 00ae0000
+2026-09-12 22:01:33 @mori {"event":"ready","message":"Mori serial debug v1; type help"}
+2026-09-12 22:01:33 I (1285) pm: Frequency switching config: CPU_MAX: 160, APB_MAX: 80, APB_MIN: 80, Light sleep: DISABLED
+2026-09-12 22:01:33 I (1294) power_manager: CPU DFS enabled: idle=80MHz max=160MHz light_sleep=off
+2026-09-12 22:01:33 I (1301) main: timezone configured: CST-8
+2026-09-12 22:01:33 I (1305) main: boot step: mount assets
+2026-09-12 22:01:33 I (1400) assets: mounted /assets: total=1438481 used=777598
+2026-09-12 22:01:33 I (1401) main: boot step: mount sdcard
+2026-09-12 22:01:33 I (1452) SDCARD: SD card mounted
+2026-09-12 22:01:33 I (1453) SDCARD: Total: 59638MB
+2026-09-12 22:01:33 W (1616) main: repaired legacy lang_zh_cn.ini
+2026-09-12 22:01:33 I (3416) burner_web: burn config loaded: erase=smart write_path=psram recipe=chis psram_mb=auto mbc5_chunk=16 dump_chunk=64 voltage=5v settle=100ms cores=cpu1/cpu1/cpu1 ag32_link=cpld
+2026-09-12 22:01:33 I (3422) main: GBX cache auto rebuild disabled; update manually from system menu
+2026-09-12 22:01:33 I (3433) main: UI language=1 (zh)
+2026-09-12 22:01:33 I (3440) main: boot step: init i2c peripherals
+2026-09-12 22:01:33 W (3441) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs
+2026-09-12 22:01:33 I (3452) mori_i2c: I2C bus ready. SDA=18, SCL=8, freq=100000
+2026-09-12 22:01:33 I (3460) axp209: AXP209 ready at 0x34, charge current fixed to 500mA
+2026-09-12 22:01:33 I (3463) power_manager: detected AXP209 at 0x34
+2026-09-12 22:01:33 I (3467) main: AXP209 power manager ready at 0x34
+2026-09-12 22:01:33 I (3472) tca9555: TCA9555 ready at 0x20
+2026-09-12 22:01:33 I (3480) main: tca9555.ini apply=0, skip register apply
+2026-09-12 22:01:33 I (3482) main: TCA9555@0x20 input=0xFFFF cfg=0xEFFF
+2026-09-12 22:01:33 I (3486) tca9555: IRQ enabled on GPIO 17
+2026-09-12 22:01:33 I (3488) main: boot step: init usb msc manager
+2026-09-12 22:01:33 I (3493) usb_msc_tf: USB MSC manager ready (default: disabled)
+2026-09-12 22:01:33 I (3498) main: USB MSC manager ready, pass-through default is disabled
+2026-09-12 22:01:33 I (3505) main: boot step: init nvs
+2026-09-12 22:01:33 I (3525) main: boot step: init mcu debug
+2026-09-12 22:01:33 I (3526) main: boot step: init lvgl/display
+2026-09-12 22:01:33 I (3770) lcd_display: LCD init done (ST7789, 320x240, rot=270), pins CLK=6 MOSI=4 CS=5 DC=13 BK=14, bk_pwm=1
+2026-09-12 22:01:33 I (3772) lvgl_port: draw_buf1 allocated in internal DMA (12800 bytes)
+2026-09-12 22:01:33 I (3776) lvgl_port: using single LVGL draw buffer (20
+2026-09-12 22:01:33 @mori {"event":"status","version":"v2.32.131","uptime_ms":118402,"internal_free":83739,"internal_largest":31744,"psram_free":7539336,"burn_running":false,"patch_running":false,"cancel_requested":false,"phase":"","detail":"","offset":0,"total":0,"passes":0,"read_bytes":0,"read_ms":0,"elapsed_ms":0,"result":0,"ag32_link":"cpld","ag32_link_active":"unknown","ag32_capabilities":0,"ag32_capabilities_known":false}
+2026-09-12 22:01:34 I (120182) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
+2026-09-12 22:01:34 I (120185) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
+2026-09-12 22:01:34
+2026-09-12 22:01:34 @mori {"event":"cpld_info","ok":true,"error":"ESP_OK","block_bytes":1024}
