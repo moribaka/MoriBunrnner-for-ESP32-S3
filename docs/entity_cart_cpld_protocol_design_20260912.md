@@ -108,3 +108,13 @@ COM26 已确认仍运行 `retro-core` 分区，串口 debug 输出稳定在约 1
 
 刷写后已通过主系统 UI 切回 Retro-Go。该 batch 与仓库记录的 BSC1 工件一致，
 现在具备重新验证实体卡连续读协议的硬件条件。
+
+随后已重新启用 Retro-Go BSC1 `GB_READ` 后端并刷入：
+
+- Retro-Go 提交：`ed8609c`
+- 固件 SHA256：`6B8D3EA78C35419A927331D8478B773401F91010939C1B70855BB3B3A16FD5C2`
+- 刷写分区：`0xAE0000`
+- esptool：`Hash of data verified`
+
+设备当前停在 Retro-Go 启动器，尚未再次进入实体卡入口，因此连续读的最终游戏
+帧率和 CRC 结果仍待实机操作确认。
