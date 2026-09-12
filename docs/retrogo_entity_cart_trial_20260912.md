@@ -29,6 +29,14 @@ Retro-Go 仓库已经包含一套针对 MoriBurnner 的实体 GB/GBC 卡入口�
   现有烧录流程、不刷 AG32。
 - 实体卡后端当前固定使用纯 CPLD/BSC1 SPI 路径，未启用 AG32 MCU 实验传输。
 
+## 2026-09-12 工具链尝试
+
+已建立本地 Git 检查点 `a29dc05`。尝试通过 `tools/flash_retro_core.ps1` 刷写时，
+当前工作区缺少可供分区刷写使用的 `partitions.bin`，且脚本调用的 Python 环境缺少
+`esptool`。改用项目指定 Python 构建时又缺少 `click`，所以本次没有刷写设备。
+仓库已有的 `retro-core/build/retro-core.bin` 是 2026-09-10 的旧构建，不能据此宣称
+本轮方案已实机通过。
+
 ## 已知限制
 
 - 当前缓存上限为 512 个 16 KiB bank，且会预留 PSRAM 空间；大容量 MBC5 卡可能
@@ -42,4 +50,3 @@ Retro-Go 仓库已经包含一套针对 MoriBurnner 的实体 GB/GBC 卡入口�
 MoriBurnner 现有 v2.32.119 修复已保存于本地 Git 提交；本次 Retro-Go 试运行
 不修改烧录器和 AG32。若实体卡试运行失败，只回滚 Retro-Go 分区，不回滚烧录器
 固件。
-
