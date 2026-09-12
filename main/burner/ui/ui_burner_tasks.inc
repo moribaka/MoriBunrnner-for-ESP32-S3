@@ -753,6 +753,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     uint8_t mbc5_id[4] = {0};
     char chip_name[48] = {0};
     burner_nor_geometry_t cfi_geometry = {0};
+    burner_gb_mapper_t detected_mapper = BURNER_GB_MAPPER_UNKNOWN;
     uint32_t device_size = 0;
     uint32_t save_probe_device_size = 0;
     uint32_t sector_size = 0;
@@ -812,6 +813,11 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     }
                 }
             }
+        }
+        if (err == ESP_OK && !gbx_profile_matched) {
+            err = burner_bacon_gb_detect_mapper(&detected_mapper);
+            if (err == ESP_OK && detected_mapper == BURNER_GB_MAPPER_MBC3 &&
+                device_size > 2u * 1024u * 1024u) device_size = 2u * 1024u * 1024u;
         }
     } else {
         err = burner_bacon_gba_prepare_power();
@@ -885,7 +891,9 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             false,
             false,
             chip_name,
-            gbx_profile_matched ? "GBX" : "MBC5");
+            gbx_profile_matched ? "GBX" :
+                detected_mapper == BURNER_GB_MAPPER_MBC3 ? "MBC3" :
+                detected_mapper == BURNER_GB_MAPPER_MBC5 ? "MBC5" : "unknown");
         if (gbx_profile_matched) {
             snprintf(out, out_len, "%s GBX %s", ui_cart_mode_label(cart_mode), chip_name);
         } else {

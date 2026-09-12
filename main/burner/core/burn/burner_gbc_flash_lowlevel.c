@@ -194,11 +194,6 @@ static uint32_t burner_erase_remaining_timeout_ms(int64_t deadline_us)
     return (uint32_t)((remaining_us + 999LL) / 1000LL);
 }
 
-static bool burner_buffer_all_equal(const uint8_t *left, const uint8_t *right, size_t len)
-{
-    return left != NULL && right != NULL && len > 0u && memcmp(left, right, len) == 0;
-}
-
 typedef struct {
     uint32_t sector_addr;
     uint32_t program_addr;

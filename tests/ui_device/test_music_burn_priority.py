@@ -1,4 +1,4 @@
-"""Silent audio + cartridge read tests priority without erasing/programming a cart."""
+"""Silent audio priority test; --write-rom explicitly opts into a cartridge write."""
 import argparse,json,time,subprocess,urllib.request,urllib.parse
 from pathlib import Path
 from test_file_worker import Board
@@ -7,6 +7,8 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--url',required=True);p.add_argument('--port',required=True)
     p.add_argument('--mode',choices=['gba','mbc5'],required=True)
+    p.add_argument('--size',default='32MB',help='Must fit the inserted mapper/cartridge')
+    p.add_argument('--write-rom',help='Authorized TF ROM to burn instead of the read-only dump')
     p.add_argument('--out',required=True)
     a=p.parse_args();out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
     name='diag_priority_silence.mp3';f=out/name
@@ -32,17 +34,31 @@ def main():
         b.cmd('play /sdcard/'+name,'play')
         before=wait(lambda s:s['state']=='playing' and s['position']>0)
         memory_before=b.cmd('status')
-        accepted=api('/api/read?mode='+a.mode+'&size=32MB&name=diag_priority_read',{},'POST')
-        assert accepted['ok'],accepted;dump=accepted['path']
+        if a.write_rom:
+            accepted=api('/api/write?'+urllib.parse.urlencode({'mode':a.mode,'name':a.write_rom,
+                'write_path':'psram','pipeline_erase':'smart','sram':0,'waitcnt':0,'batteryless':0}),{},'POST')
+        else:
+            accepted=api('/api/read?mode='+a.mode+'&size='+a.size+'&name=diag_priority_read',{},'POST')
+            dump=accepted['path']
+        assert accepted['ok'],accepted
         paused=wait(lambda s:s['state']=='paused')
         assert api('/api/status')['state']=='burning'
         assert not api('/api/music/pause',{})['ok']
         assert not api('/api/music/seek',{'delta':1000})['ok']
         b.serial.write(('play /sdcard/'+name+'\n').encode())
-        time.sleep(.2)
-        # Discard the expected serial rejection before using Board.cmd again.
-        while b.serial.in_waiting:
-            b.log.write(b.serial.readline().decode('utf-8','replace'));b.log.flush()
+        # Wait for this command's terminal rejection; USB output can arrive
+        # after the UART buffer initially becomes empty.
+        end=time.monotonic()+5
+        rejected=False
+        while time.monotonic()<end:
+            line=b.line()
+            if '@mori ' not in line:continue
+            event=json.loads(line.split('@mori ',1)[1])
+            if event.get('event')=='error':
+                assert event.get('message')=='ESP_ERR_INVALID_STATE',event
+                rejected=True;break
+            assert event.get('event')!='play',event
+        assert rejected,'Missing playback rejection'
         memory_during=b.cmd('status')
         end=time.monotonic()+90
         while time.monotonic()<end:
@@ -50,13 +66,14 @@ def main():
             assert music['state']=='paused' and music['position']==paused['position'],music
             if s['state'] in ('done','error','cancelled'):break
             time.sleep(.4)
-        assert s['state']=='done' and s['message']=='dump finished',s
+        assert s['state']=='done' and s['message']==('burn finished' if a.write_rom else 'dump finished'),s
         assert api('/api/music/status')['state']=='paused'
         assert api('/api/music/pause',{})['ok']
         resumed=wait(lambda s:s['state']=='playing')
         assert resumed['volume']==1
         result={'ok':True,'before':before,'paused':paused,'resumed':resumed,
-                'memory_before':memory_before,'memory_during':memory_during,'read':s}
+                'memory_before':memory_before,'memory_during':memory_during,
+                'write' if a.write_rom else 'read':s}
         print(json.dumps(result,ensure_ascii=False),flush=True)
     finally:
         api('/api/music/stop',{})
@@ -68,6 +85,11 @@ def main():
         b.serial.close();b.log.close()
         (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         if uploaded:api('/api/tf/delete?path='+name,method='DELETE')
-        if dump:api('/api/tf/delete?path='+urllib.parse.quote(dump.removeprefix('/sdcard/')),method='DELETE')
+        if dump:
+            # Cancellation removes the unfinished dump itself.
+            listing=api('/api/tf/list?dir=ROM_OUTPUT')
+            rel=dump.removeprefix('/sdcard/')
+            if any(entry.get('path')==rel for entry in listing.get('entries',[])):
+                api('/api/tf/delete?path='+urllib.parse.quote(rel),method='DELETE')
 
 if __name__=='__main__':main()

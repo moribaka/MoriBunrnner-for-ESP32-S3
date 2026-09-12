@@ -941,7 +941,7 @@ static esp_err_t burner_start_write_from_tf_impl(
         (void)snprintf(
             probe_err,
             sizeof(probe_err),
-            "read %s nor size failed: %s",
+            "read %s cart capacity failed: %s (check cart type)",
             (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
             esp_err_to_name(err));
         if (patch_plan != NULL) heap_caps_free(patch_plan);
@@ -954,7 +954,7 @@ static esp_err_t burner_start_write_from_tf_impl(
         (void)snprintf(
             size_err,
             sizeof(size_err),
-            "rom size exceeds nor size: rom=%" PRIu32 "B available=%" PRIu32 "B nor=%" PRIu32 "B",
+            "rom exceeds addressable cart capacity: rom=%" PRIu32 "B available=%" PRIu32 "B cart=%" PRIu32 "B",
             effective_size,
             available_size,
             device_size);

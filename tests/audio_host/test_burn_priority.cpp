@@ -15,6 +15,7 @@ esp_err_t play_from(const char *p,uint32_t ms,uint32_t){
 }
 esp_err_t stop(){fake.playing=false;fake.path[0]=0;return ESP_OK;}
 esp_err_t stop_and_wait(){++stop_count;return stop();}
+esp_err_t deinit(){auto e=stop_and_wait();fake.initialized=false;return e;}
 esp_err_t toggle_pause(){fake.paused=!fake.paused;return ESP_OK;}
 esp_err_t seek(uint32_t ms){fake.position_ms=ms;return ESP_OK;}
 Status status(){return fake;}
@@ -29,7 +30,7 @@ int main(){
     assert(music_player_play("music/test.mp3",1000)==ESP_OK);
     lyra::audio::fake.position_ms=12345;
     assert(music_player_acquire_burn_priority()==ESP_OK);
-    assert(lyra::audio::stop_count==1 && !lyra::audio::fake.playing);
+    assert(lyra::audio::stop_count==1 && !lyra::audio::fake.playing && !ready);
     music_player_snapshot_t snap;
     music_player_get_snapshot(&snap);
     assert(snap.state==MUSIC_PLAYER_STATE_PAUSED && snap.elapsed_ms==12345 && snap.volume_percent==1);
@@ -44,6 +45,7 @@ int main(){
     music_player_release_burn_priority();
     assert(lyra::audio::play_count==1); // No automatic resume.
     assert(music_player_toggle_pause()==ESP_OK);
+    assert(ready && lyra::audio::fake.volume_percent==1);
     assert(lyra::audio::fake.position_ms==12345 && lyra::audio::play_count==2);
     assert(music_player_acquire_burn_priority()==ESP_OK);
     music_player_stop();

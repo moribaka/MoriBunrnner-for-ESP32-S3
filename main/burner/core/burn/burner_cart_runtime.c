@@ -267,12 +267,10 @@ esp_err_t burner_probe_cart_capacity_bytes(burner_cart_mode_t cart_mode, uint32_
                 mbc5_id[2],
                 mbc5_id[3]);
         }
-        if (err == ESP_OK && s_gb_mapper_override_kind != BURNER_GB_MAPPER_UNKNOWN) {
-            s_gb_mapper_kind = s_gb_mapper_override_kind;
-            if (s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC3 &&
-                device_size > (2u * 1024u * 1024u)) {
-                device_size = (2u * 1024u * 1024u);
-            }
+        if (err == ESP_OK) {
+            err = burner_bacon_gb_select_mapper(&s_gb_mapper_kind);
+            uint32_t limit = burner_gb_mapper_device_size_limit(s_gb_mapper_kind);
+            if (err == ESP_OK && limit && device_size > limit) device_size = limit;
         }
     }
     {

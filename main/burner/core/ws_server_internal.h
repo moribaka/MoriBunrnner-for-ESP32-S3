@@ -646,6 +646,8 @@ extern uint32_t s_burn_psram_window_mb;
 extern uint32_t s_burn_mbc5_chunk_kb;
 extern uint32_t s_burn_dump_chunk_kb;
 extern burner_gb_mapper_t s_gb_mapper_override_kind;
+/* SPI lock required; UNKNOWN means identical bank contents, not MBC5. */
+esp_err_t burner_bacon_gb_detect_mapper(burner_gb_mapper_t *mapper_out);
 extern TickType_t s_bacon_last_active_tick;
 extern bool s_bacon_idle_powered_down;
 extern burner_cart_ctx_t s_cart_ctx;

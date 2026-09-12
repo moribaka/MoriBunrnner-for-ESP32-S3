@@ -218,7 +218,12 @@ static void ui_burn_rom_open_mapper_menu_locked(ui_model_t *model)
         return;
     }
     s_burn_rom_submenu = UI_BURN_ROM_SUBMENU_MAPPER;
-    model->selected = (s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC3) ? 1U : 0U;
+    burner_status_t status;
+    burner_status_snapshot(&status);
+    bool mbc3 = s_gb_mapper_override_kind == BURNER_GB_MAPPER_MBC3 ||
+        (s_gb_mapper_override_kind == BURNER_GB_MAPPER_UNKNOWN && status.probe_valid &&
+         strcmp(status.probe_mapper_name, "MBC3") == 0);
+    model->selected = mbc3 ? 1U : 0U;
     model->scroll = 0;
     ui_mark_content_dirty(model);
     ui_set_status_locked(model, ui_tr("select type"));

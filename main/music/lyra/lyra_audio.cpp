@@ -84,6 +84,9 @@ constexpr float kEqualizerCenterFrequenciesHz[lyra::audio::kEqualizerBandCount] 
 
 SemaphoreHandle_t s_state_mutex;
 TaskHandle_t s_audio_task;
+StaticTask_t s_audio_task_storage;
+StackType_t *s_audio_stack;
+bool s_shutdown_requested;
 i2s_chan_handle_t s_i2s_tx;
 i2s_chan_handle_t s_i2s_speaker_tx;
 bool s_i2s_started;
@@ -3739,6 +3742,12 @@ void audio_task(void *)
         bool paused;
         bool pause_after_seek;
         xSemaphoreTake(s_state_mutex, portMAX_DELAY);
+        if (s_shutdown_requested) {
+            xSemaphoreGive(s_state_mutex);
+            // The owner joins this suspended worker before freeing its stack.
+            vTaskSuspend(nullptr);
+            continue;
+        }
         generation = s_request_generation;
         seek_position_ms = s_requested_seek_ms;
         start_byte = s_requested_start_byte;
@@ -3887,9 +3896,19 @@ esp_err_t init()
     s_status.volume_percent = 1; // Adapter restores Mori system.ini before playback.
     s_requested_seek_ms = 0;
     s_requested_pause_after_seek = false;
+    s_requested_path[0] = '\0';
+    s_request_generation = 0;
+    s_stopped_generation = 0;
+    s_shutdown_requested = false;
     s_initialized = true;
-    if (xTaskCreatePinnedToCore(audio_task, "lyra_audio", kAudioTaskStack, nullptr,
-                                kAudioTaskPriority, &s_audio_task, 0) != pdPASS) {
+    s_audio_stack = static_cast<StackType_t *>(heap_caps_malloc(
+        kAudioTaskStack, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    s_audio_task = s_audio_stack ? xTaskCreateStaticPinnedToCore(
+        audio_task, "lyra_audio", kAudioTaskStack, nullptr, kAudioTaskPriority,
+        s_audio_stack, &s_audio_task_storage, 0) : nullptr;
+    if (!s_audio_task) {
+        heap_caps_free(s_audio_stack);
+        s_audio_stack = nullptr;
         s_initialized = false;
         esp_audio_simple_dec_unregister_default();
         esp_audio_dec_unregister_default();
@@ -3974,6 +3993,32 @@ esp_err_t stop_and_wait()
         if (stopped) return ESP_OK;
         vTaskDelay(pdMS_TO_TICKS(2));
     }
+}
+
+esp_err_t deinit()
+{
+    if (!s_initialized) return ESP_OK;
+    esp_err_t err = stop_and_wait();
+    if (err != ESP_OK) return err;
+    xSemaphoreTake(s_state_mutex, portMAX_DELAY);
+    s_shutdown_requested = true;
+    xSemaphoreGive(s_state_mutex);
+    xTaskNotifyGive(s_audio_task);
+    while (eTaskGetState(s_audio_task) != eSuspended ||
+           xTaskGetCurrentTaskHandleForCore(0) == s_audio_task) vTaskDelay(1);
+    vTaskDelete(s_audio_task);
+    s_audio_task = nullptr;
+    heap_caps_free(s_audio_stack);
+    s_audio_stack = nullptr;
+    err = i2s_del_channel(s_i2s_tx);
+    s_i2s_tx = nullptr;
+    esp_audio_simple_dec_unregister_default();
+    esp_audio_dec_unregister_default();
+    s_initialized = false;
+    s_status.initialized = false;
+    vSemaphoreDelete(s_state_mutex);
+    s_state_mutex = nullptr;
+    return err;
 }
 
 esp_err_t seek(uint32_t position_ms)
