@@ -33,9 +33,14 @@ Retro-Go 仓库已经包含一套针对 MoriBurnner 的实体 GB/GBC 卡入口�
 
 已建立本地 Git 检查点 `a29dc05`。尝试通过 `tools/flash_retro_core.ps1` 刷写时，
 当前工作区缺少可供分区刷写使用的 `partitions.bin`，且脚本调用的 Python 环境缺少
-`esptool`。改用项目指定 Python 构建时又缺少 `click`，所以本次没有刷写设备。
-仓库已有的 `retro-core/build/retro-core.bin` 是 2026-09-10 的旧构建，不能据此宣称
-本轮方案已实机通过。
+`esptool`。改用项目指定 Python 并补齐 PATH 后，`retro-core` 已重新构建成功：
+
+- 构建时间：2026-09-12 16:31:05
+- 文件大小：1,257,808 bytes
+- SHA256：`274D3BB060E752E0D8AAF2A0FAEED907EAB5E077FFF95DDF5C6309285474F860`
+- 应用分区检查：通过，分区大小 3 MiB，剩余 60%
+
+本次只完成构建，没有刷写设备；实体卡方案仍未宣称实机通过。
 
 ## 已知限制
 
