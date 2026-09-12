@@ -1,0 +1,19 @@
+2026-09-12 21:48:02
+2026-09-12 21:48:02 @mori {"event":"ui","process_calls":29149,"render_calls":2958,"music_polls":4716,"model_bytes":15352,"directory_scans":1,"cache_hits":0,"page":19,"selected":0,"count":19,"preview_generation":2,"file_worker_stack_free":10072,"burn_info_focus":0,"burn_info_selected":7,"burn_info_count":12,"burn_info_nor_detail":0,"file_start_active":false,"preview_active":false,"preview_done":false,"preview_available":false,"screen_dimmed":true,"selection":"","status":"burner done: burn finished","nor_model":"MT28EW01GABA","nor_id":"89 00 7E 22 28 22 01 22","nor_device_size":134217728,"nor_sector_size":131072,"nor_buffer_bytes":1024}
+2026-09-12 21:48:03 I (552529) power_manager: CPU perf lock acquired by cpld_check
+2026-09-12 21:48:03 I (552776) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-12 21:48:03 I (552778) mcu_debug: SWD DP status after ABORT=0x00000000
+2026-09-12 21:48:03 I (552779) mcu_debug: SWD DP CTRL/STAT=0x00000000
+2026-09-12 21:48:03 I (552782) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000040
+2026-09-12 21:48:03 I (552786) mcu_debug: DMI DMSTATUS before halt=0x00030ca2
+2026-09-12 21:48:03 E (553216) mcu_debug: DMI status timeout: wanted=0x00000300 got=0x00030ca2
+2026-09-12 21:48:03 I (553219) mcu_debug: SWD DP IDCODE=0x2ba01477
+2026-09-12 21:48:03 I (553220) mcu_debug: SWD DP status after ABORT=0xf0000041
+2026-09-12 21:48:03 I (553223) mcu_debug: SWD DP CTRL/STAT=0xf0000041
+2026-09-12 21:48:03 I (553228) mcu_debug: SWD AP IDR=0x1fff0011 CSW=0x23000042
+2026-09-12 21:48:04 E (553657) mcu_debug: DMI status timeout: wanted=0x00030000 got=0x00000ca2
+2026-09-12 21:48:04 I (553659) power_manager: CPU perf lock released by cpld_check
+2026-09-12 21:48:04
+2026-09-12 21:48:04 @mori {"event":"cpld_check","ok":false,"error":"ESP_ERR_TIMEOUT","passes":0,"bytes":0,"elapsed_us":0,"last_first_ready_us":378,"last_status_polls":397,"mcu_halted":false,"mcu_resumed":false}
+2026-09-12 21:48:18
+2026-09-12 21:48:18 @mori {"event":"cpld_info","ok":true,"error":"ESP_OK","block_bytes":1024}
