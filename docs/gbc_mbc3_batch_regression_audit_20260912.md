@@ -33,3 +33,18 @@ CPLD 版本回退；是否完全解释当前擦除失败，仍需恢复正式 ba
 
 后续恢复应使用上述正式 posedge batch，先验证 MBC3 只读数据，再根据授权重测
 当前 ROM 的烧录并独立校验。失败烧录可能已经擦除了卡内部分数据。
+
+## 正式 batch 已恢复
+
+已通过 ESP32 内置 SWD 刷写 `/sdcard/ag32_cpld_posedge_20260910.bin`，设备最终报告：
+
+- `state=success`
+- `records=3`
+- `programmed=verified=108924`
+- `dp_idcode=0x2BA01477`
+- `device_id=0x40200001`
+- `mcu_resumed=true`
+- `recovery_required=false`
+
+随后 `cpld-info` 返回 `ok=true`、`block_bytes=1024`。本次只恢复 AG32/CPLD，未重新
+执行 GBC 擦除/写入；下一次烧录前应先做 MBC3 只读和空白状态确认。
