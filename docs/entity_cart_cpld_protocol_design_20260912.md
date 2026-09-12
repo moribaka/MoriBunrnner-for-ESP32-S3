@@ -86,3 +86,9 @@ COM26 已确认仍运行 `retro-core` 分区，串口 debug 输出稳定在约 1
 搬运 16 KiB。提交 `eb8039c` 改为保留已加载 bank 的 PSRAM 指针，命中时直接复用，
 不改变卡带协议或 MBC 写入。重新刷写后的实机串口稳定在 60-61 FPS，BUSY 约 34%。
 固件 SHA256：`D25ABBAA199D8E3778685CE1D3427D791D49EE0035C18DDC10B2660EBB6397A1`。
+
+只读核对显示当前仓库 batch 为 `94EFE7052DF14813D0829E175BA520F8EE8B5C2B2C6D5A68E17C2604A43B3907`，
+文档记录的 CPLD payload hash 为
+`0058F32B2604F7F76431B326075BC852ECFD8AFF85574AB5A43EA997061436D7`。
+这证明仓库里有已路由的 BSC1 工件，但还不能证明当前板上实际烧的是同一 payload；
+需要回到 MoriBurnner 分区执行 `cpld-info` 才能完成板上身份核对。
