@@ -56,7 +56,7 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
     (void)model;
     burner_status_snapshot(&status);
     ui_px_frame(x, y, w, h, true);
-    ui_px_text_clipped(text_x, yy, text_w, ui_tr("Cart info"), true);
+    ui_px_text_clipped(text_x, yy, text_w, s_burner_focus_info ? "> Cart info" : "Cart info", true);
     yy += UI_LIST_LINE_H + 2;
     ui_px_hline(x + 4, yy - 4, w - 8, true);
 
@@ -272,7 +272,9 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
     s_anim.list_selector_target_w = (float)selector_w;
     ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, UI_LIST_SELECTOR_Y_SPEED);
     ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, UI_LIST_SELECTOR_W_SPEED);
-    ui_px_invert_rect(x, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    if (!s_burner_focus_info) {
+        ui_px_invert_rect(x, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    }
 }
 
 static void ui_px_draw_burn_rom_split_chrome(const ui_model_t *model)
