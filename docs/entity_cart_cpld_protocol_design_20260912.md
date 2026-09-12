@@ -92,3 +92,19 @@ COM26 已确认仍运行 `retro-core` 分区，串口 debug 输出稳定在约 1
 `0058F32B2604F7F76431B326075BC852ECFD8AFF85574AB5A43EA997061436D7`。
 这证明仓库里有已路由的 BSC1 工件，但还不能证明当前板上实际烧的是同一 payload；
 需要回到 MoriBurnner 分区执行 `cpld-info` 才能完成板上身份核对。
+
+## 板上 AG32/CPLD 刷写
+
+已将主 MoriBurnner app 临时启动后，通过 ESP32 内置 SWD 刷写
+`/sdcard/ag32_cpld_20260910_hwtest.bin`。设备报告：
+
+- `state=success`
+- `records=3`
+- `programmed=verified=108924`
+- `dp_idcode=0x2BA01477`
+- `device_id=0x40200001`
+- `mcu_resumed=true`
+- `recovery_required=false`
+
+刷写后已通过主系统 UI 切回 Retro-Go。该 batch 与仓库记录的 BSC1 工件一致，
+现在具备重新验证实体卡连续读协议的硬件条件。
