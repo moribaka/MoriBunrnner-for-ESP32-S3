@@ -6128,7 +6128,10 @@ static void ui_handle_page_button_action_locked(
 
     if (model->page == UI_PAGE_BURN_ROM && s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_NONE &&
         (action == UI_INPUT_ACTION_LEFT || action == UI_INPUT_ACTION_RIGHT)) {
-        s_burner_info_detail = action == UI_INPUT_ACTION_RIGHT;
+        /* The burn page is a two-panel layout. LEFT/RIGHT select the panel;
+           selecting the information panel always exposes its details. */
+        s_burner_info_left = action == UI_INPUT_ACTION_LEFT;
+        s_burner_info_detail = s_burner_info_left;
         model->dirty = true;
         return;
     }
