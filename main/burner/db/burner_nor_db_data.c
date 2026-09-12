@@ -103,6 +103,16 @@ BURNER_NOR_FAMILY_DEFINE(
     1024u,
     256u);
 BURNER_NOR_FAMILY_DEFINE(
+    s_family_mt28ew01g,
+    "MT28EW01GABA",
+    BURNER_GBA_PROFILE_AMD_AAA_AA,
+    BURNER_NOR_CMDSET_AMD,
+    BURNER_NOR_FLAG_NONE,
+    128u * 1024u * 1024u,
+    128u * 1024u,
+    1024u,
+    256u);
+BURNER_NOR_FAMILY_DEFINE(
     s_family_s29gl01,
     "S29GL01GP/GS",
     BURNER_GBA_PROFILE_AMD_555_AA,
@@ -148,6 +158,9 @@ const burner_nor_entry_t g_burner_nor_db_gba[] = {
         BURNER_NOR_GBA_FAMILY_ENTRY(
             s_family_js28f256,
             BURNER_NOR_ID8_EXACT(0x89u, 0x00u, 0x7Eu, 0x22u, 0x22u, 0x22u, 0x01u, 0x22u)),
+        BURNER_NOR_GBA_FAMILY_ENTRY(
+            s_family_mt28ew01g,
+            BURNER_NOR_ID8_EXACT(0x89u, 0x00u, 0x7Eu, 0x22u, 0x28u, 0x22u, 0x01u, 0x22u)),
         BURNER_NOR_GBA_FAMILY_ENTRY(
             s_family_s29gl01,
             BURNER_NOR_ID8_EXACT(0x01u, 0x00u, 0x7Eu, 0x22u, 0x28u, 0x22u, 0x01u, 0x22u)),
