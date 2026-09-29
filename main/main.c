@@ -427,7 +427,6 @@ static const char s_default_burn_config_ini[] =
     "psram_window_mb=auto\n"
     "mbc5_chunk_kb=16\n"
     "dump_chunk_kb=64\n"
-    "gba_fixed_erase_window=1\n"
     "erase_core=cpu1\n"
     "tf_core=cpu1\n"
     "psram_core=cpu1\n"

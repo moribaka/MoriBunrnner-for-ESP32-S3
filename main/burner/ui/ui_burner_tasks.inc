@@ -749,6 +749,8 @@ static esp_err_t ui_start_chip_erase_task(void)
 
 static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mode_t cart_mode)
 {
+    if (s_recipe_mode == BURNER_RECIPE_MODE_GBABF && cart_mode != BURNER_CART_MODE_GBA)
+        return ESP_ERR_NOT_SUPPORTED;
     uint8_t gba_id[8] = {0};
     uint8_t mbc5_id[4] = {0};
     char chip_name[48] = {0};
@@ -831,6 +833,10 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &buffer_write_bytes,
                     &cfi_ok);
                 gbx_profile_matched = (err == ESP_OK);
+            } else if (s_recipe_mode == BURNER_RECIPE_MODE_AUTO) {
+                err = burner_auto_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+            } else if (s_recipe_mode == BURNER_RECIPE_MODE_GBABF) {
+                err = burner_gbabf_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
             } else if (s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
                 err = burner_chislink_gba_probe_locked(
                     gba_id,
@@ -952,7 +958,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_d0d1_swapped,
             chip_name,
             gbx_profile_matched ? "GBX" :
-                                  ((s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
+                                  ((s_recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((s_recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "GBABF" : ((s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""))));
         {
             bool detected = false;
             burner_spi_lock_take();

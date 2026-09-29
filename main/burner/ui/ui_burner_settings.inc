@@ -37,6 +37,8 @@ static const char *ui_write_path_label(void)
 
 static const char *ui_recipe_mode_label(burner_recipe_mode_t mode)
 {
+    if (mode == BURNER_RECIPE_MODE_AUTO) return ui_lang_is_zh() ? "自动融合" : "Auto combined";
+    if (mode == BURNER_RECIPE_MODE_GBABF) return "GBABF";
     if (mode == BURNER_RECIPE_MODE_CHISLINK) {
         return "CHISLINK";
     }
@@ -45,6 +47,8 @@ static const char *ui_recipe_mode_label(burner_recipe_mode_t mode)
 
 static const char *ui_recipe_mode_hint(burner_recipe_mode_t mode)
 {
+    if (mode == BURNER_RECIPE_MODE_AUTO) return "CHIS + GBABF";
+    if (mode == BURNER_RECIPE_MODE_GBABF) return ui_lang_is_zh() ? "GBA检测" : "GBA detection";
     if (mode == s_recipe_mode) {
         return ui_lang_is_zh() ? "当前" : "Current";
     }
@@ -59,6 +63,10 @@ static const char *ui_recipe_mode_hint(burner_recipe_mode_t mode)
 static burner_recipe_mode_t ui_recipe_mode_for_index(uint16_t index)
 {
     switch (index) {
+        case 4:
+            return BURNER_RECIPE_MODE_AUTO;
+        case 3:
+            return BURNER_RECIPE_MODE_GBABF;
         case 1:
             return BURNER_RECIPE_MODE_CHISLINK;
         case 2:
@@ -72,6 +80,10 @@ static burner_recipe_mode_t ui_recipe_mode_for_index(uint16_t index)
 static uint16_t ui_recipe_mode_index(burner_recipe_mode_t mode)
 {
     switch (mode) {
+        case BURNER_RECIPE_MODE_AUTO:
+            return 4U;
+        case BURNER_RECIPE_MODE_GBABF:
+            return 3U;
         case BURNER_RECIPE_MODE_CHISLINK:
             return 1U;
         case BURNER_RECIPE_MODE_GBX:
@@ -108,6 +120,16 @@ static void ui_apply_recipe_mode_locked(ui_model_t *model, burner_recipe_mode_t 
     if (changed) {
         ui_persist_burn_settings_locked(model);
         ui_reset_cart_analysis_locked();
+    }
+    if (mode == BURNER_RECIPE_MODE_AUTO) {
+        ui_set_status_locked(model, ui_lang_is_zh() ? "检测: 自动融合" : "Detection: Auto combined");
+        ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_RECIPE_MODE);
+        return;
+    }
+    if (mode == BURNER_RECIPE_MODE_GBABF) {
+        ui_set_status_locked(model, "Burn method: GBABF");
+        ui_focus_burn_rom_op_locked(model, UI_BURN_ROM_OP_RECIPE_MODE);
+        return;
     }
     if (mode == BURNER_RECIPE_MODE_CHISLINK) {
         ui_set_status_locked(model, "Burn method: CHISLINK");

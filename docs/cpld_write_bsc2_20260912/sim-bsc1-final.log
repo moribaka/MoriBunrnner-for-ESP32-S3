@@ -1,2 +1,0 @@
-CPLD stream passed: v2=0 credits=0 GBA/GB reads, raw writes, AMD pages, CRC, overlap, short frames, abort
-example/logic/tests/bacon_cpld_stream_tb.v:330: $finish called at 5867583193 (1ps)

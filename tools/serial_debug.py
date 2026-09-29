@@ -53,9 +53,20 @@ def run(args):
             "cpld-write-experiment": "cpld_write_experiment",
             "cpld-write-profile": "cpld_write_profile", "wifi-connect-saved": "wifi_connect",
             "bsc2-cart": "bsc2_job_started", "bsc2-job-status": "bsc2_job_status",
+            "gba-cart32": "bsc2_job_started",
+            "gba-cart128": "bsc2_job_started", "gba-bank-map": "gba_bank_map",
+            "gba-spot256": "gba_spot_done",
+            "gba-spot-gbabf": "gba_spot_done",
+            "gba-spot-native": "gba_spot_done",
+            "gba-native-worker": "bsc2_job_started",
+            "intel-speed": "intel_speed",
             "bsc2-backup-hash": "bsc2_backup_hash",
             "ag32-batch": "ag32_batch_started", "ag32-batch-status": "ag32_batch_status",
         }.get(command.split(" ", 1)[0])
+        if command.startswith(("gba-cart32 hash ", "gba-cart128 hash ")):
+            terminal = "bsc2_backup_hash"
+        if command == "gba-native-worker hash":
+            terminal = "bsc2_backup_hash"
         while time.monotonic() < deadline:
             pending.extend(port.read(4096))
             while b"\n" in pending:

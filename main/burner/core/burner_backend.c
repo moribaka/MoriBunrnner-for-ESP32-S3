@@ -173,7 +173,6 @@ static void burner_burn_config_apply_defaults(void)
     s_burn_core_cfg.tf_core = BURNER_CORE_AFFINITY_CPU1;
     s_burn_core_cfg.psram_core = BURNER_CORE_AFFINITY_CPU1;
     s_burn_erase_always = BURN_ERASE_ALWAYS_DEFAULT;
-    s_gba_fixed_erase_window_enabled = BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT;
     s_mbc5_power_5v_enabled = 0u;
     s_bacon_power_settle_ms = BURNER_POWER_SETTLE_MS;
     s_burn_write_path_default = BURNER_WRITE_PATH_DIRECT;
@@ -190,7 +189,6 @@ esp_err_t burner_load_burn_config(void)
     FILE *fp = NULL;
     char line[WEB_LANG_LINE_MAX];
     bool erase_always = false;
-    bool gba_fixed_erase_window = (BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT != 0u);
     bool use_5v = false;
     uint32_t power_settle_ms = BURNER_POWER_SETTLE_MS;
     burner_write_path_t write_path = BURNER_WRITE_PATH_DIRECT;
@@ -248,8 +246,6 @@ esp_err_t burner_load_burn_config(void)
                 if (burner_parse_u32_text(value, &parsed)) {
                     dump_chunk_kb = burner_dump_chunk_bytes_to_kb(burner_dump_chunk_kb_to_bytes(parsed));
                 }
-            } else if (strcmp(key, "gba_fixed_erase_window") == 0) {
-                (void)burner_parse_bool_text(value, &gba_fixed_erase_window);
             } else if (strcmp(key, "erase_core") == 0) {
                 (void)burner_parse_core_affinity_text(value, &erase_core);
             } else if (strcmp(key, "tf_core") == 0) {
@@ -271,7 +267,6 @@ esp_err_t burner_load_burn_config(void)
     fclose(fp);
 
     s_burn_erase_always = erase_always ? 1u : 0u;
-    s_gba_fixed_erase_window_enabled = gba_fixed_erase_window ? 1u : 0u;
     s_mbc5_power_5v_enabled = use_5v ? 1u : 0u;
     s_bacon_power_settle_ms = power_settle_ms;
     s_burn_write_path_default = write_path;
@@ -343,7 +338,6 @@ esp_err_t burner_save_burn_config(void)
             "psram_window_mb=%s\n"
             "mbc5_chunk_kb=%" PRIu32 "\n"
             "dump_chunk_kb=%" PRIu32 "\n"
-            "gba_fixed_erase_window=%u\n"
             "erase_core=%s\n"
             "tf_core=%s\n"
             "psram_core=%s\n"
@@ -356,7 +350,6 @@ esp_err_t burner_save_burn_config(void)
             burner_psram_window_mb_to_text(s_burn_psram_window_mb, psram_text, sizeof(psram_text)),
             s_burn_mbc5_chunk_kb,
             s_burn_dump_chunk_kb,
-            (unsigned)s_gba_fixed_erase_window_enabled,
             burner_core_affinity_to_str(s_burn_core_cfg.erase_core),
             burner_core_affinity_to_str(s_burn_core_cfg.tf_core),
             burner_core_affinity_to_str(s_burn_core_cfg.psram_core),
@@ -485,7 +478,7 @@ static int burner_build_core_config_json(char *resp, size_t resp_len)
         "\"power_settle_ms\":%" PRIu32 ",\"power_settle_options\":[100,200,400,800,1000],"
         "\"write_path\":\"%s\",\"recipe_mode\":\"%s\",\"pipeline_erase\":\"%s\",\"psram_mb\":\"%s\","
         "\"mbc5_chunk_kb\":%" PRIu32 ",\"dump_chunk_kb\":%" PRIu32 ","
-        "\"gbc_voltage\":\"%s\",\"gba_fixed_erase_window\":%s,"
+        "\"gbc_voltage\":\"%s\","
         "\"ag32_link\":\"%s\",\"ag32_link_active\":\"%s\","
         "\"ag32_capabilities\":%" PRIu32 ",\"ag32_capabilities_known\":%s,"
         "\"options\":[\"auto\",\"cpu0\",\"cpu1\"]}",
@@ -500,7 +493,6 @@ static int burner_build_core_config_json(char *resp, size_t resp_len)
         s_burn_mbc5_chunk_kb,
         s_burn_dump_chunk_kb,
         burner_gbc_voltage_to_str(s_mbc5_power_5v_enabled != 0u),
-        (s_gba_fixed_erase_window_enabled != 0u) ? "true" : "false",
         ag32_mcu_link_preference_name(ag32_mcu_link_get_preference()),
         ag32_mcu_link_active_name(ag32_mcu_link_get_active()),
         ag32_mcu_link_capabilities(),
@@ -533,7 +525,6 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     char mbc5_chunk_kb_arg[16] = {0};
     char dump_chunk_kb_arg[16] = {0};
     char gbc_voltage_arg[16] = {0};
-    char gba_fixed_erase_window_arg[16] = {0};
     char ag32_link_arg[16] = {0};
     burner_core_affinity_t erase_val = s_burn_core_cfg.erase_core;
     burner_core_affinity_t tf_val = s_burn_core_cfg.tf_core;
@@ -546,7 +537,6 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     uint32_t mbc5_chunk_kb_val = s_burn_mbc5_chunk_kb;
     uint32_t dump_chunk_kb_val = s_burn_dump_chunk_kb;
     bool use_5v_val = (s_mbc5_power_5v_enabled != 0u);
-    bool gba_fixed_erase_window_val = (s_gba_fixed_erase_window_enabled != 0u);
     ag32_link_preference_t ag32_link_val = ag32_mcu_link_get_preference();
     bool update_erase = false;
     bool update_tf = false;
@@ -559,7 +549,6 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     bool update_mbc5_chunk_kb = false;
     bool update_dump_chunk_kb = false;
     bool update_gbc_voltage = false;
-    bool update_gba_fixed_erase_window = false;
     bool update_ag32_link = false;
     char resp[768];
     int n;
@@ -576,13 +565,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
         !burner_get_query_arg(req, "mbc5_chunk_kb", mbc5_chunk_kb_arg, sizeof(mbc5_chunk_kb_arg), false) ||
         !burner_get_query_arg(req, "dump_chunk_kb", dump_chunk_kb_arg, sizeof(dump_chunk_kb_arg), false) ||
         !burner_get_query_arg(req, "gbc_voltage", gbc_voltage_arg, sizeof(gbc_voltage_arg), false) ||
-        !burner_get_query_arg(req, "ag32_link", ag32_link_arg, sizeof(ag32_link_arg), false) ||
-        !burner_get_query_arg(
-            req,
-            "gba_fixed_erase_window",
-            gba_fixed_erase_window_arg,
-            sizeof(gba_fixed_erase_window_arg),
-            false)) {
+        !burner_get_query_arg(req, "ag32_link", ag32_link_arg, sizeof(ag32_link_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid query");
     }
     if (erase_arg[0] != '\0') {
@@ -617,7 +600,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0') {
         if (!burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode_val)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be auto, chis, chislink, gbx or gbabf");
         }
         update_recipe_mode = true;
     }
@@ -665,12 +648,6 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
         }
         update_gbc_voltage = true;
     }
-    if (gba_fixed_erase_window_arg[0] != '\0') {
-        if (!burner_parse_bool_text(gba_fixed_erase_window_arg, &gba_fixed_erase_window_val)) {
-            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "gba_fixed_erase_window must be true/false/1/0");
-        }
-        update_gba_fixed_erase_window = true;
-    }
     if (ag32_link_arg[0] != '\0') {
         if (!ag32_mcu_link_parse_preference(ag32_link_arg, &ag32_link_val)) {
             return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ag32_link must be auto/legacy/cpld/mcu");
@@ -680,7 +657,7 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     if (!update_erase && !update_tf && !update_psram && !update_power_settle &&
         !update_write_path && !update_recipe_mode && !update_erase_mode && !update_psram_mb &&
         !update_mbc5_chunk_kb && !update_dump_chunk_kb && !update_gbc_voltage &&
-        !update_gba_fixed_erase_window && !update_ag32_link) {
+        !update_ag32_link) {
         return httpd_resp_send_err(
             req,
             HTTPD_400_BAD_REQUEST,
@@ -723,9 +700,6 @@ esp_err_t burner_core_config_post_handler(httpd_req_t *req)
     }
     if (update_gbc_voltage) {
         s_mbc5_power_5v_enabled = use_5v_val ? 1u : 0u;
-    }
-    if (update_gba_fixed_erase_window) {
-        s_gba_fixed_erase_window_enabled = gba_fixed_erase_window_val ? 1u : 0u;
     }
     if (update_ag32_link) {
         ag32_mcu_link_set_preference(ag32_link_val);

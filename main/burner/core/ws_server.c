@@ -71,7 +71,6 @@ burner_core_config_t s_burn_core_cfg = {
     .psram_core = BURNER_CORE_AFFINITY_CPU1,
 };
 uint8_t s_burn_erase_always = BURN_ERASE_ALWAYS_DEFAULT;
-uint8_t s_gba_fixed_erase_window_enabled = BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT;
 uint8_t s_mbc5_power_5v_enabled = 0;
 uint32_t s_bacon_power_settle_ms = BURNER_POWER_SETTLE_MS;
 burner_write_path_t s_burn_write_path_default = BURNER_WRITE_PATH_DIRECT;
@@ -718,6 +717,10 @@ bool burner_parse_write_path_text(const char *text, burner_write_path_t *path_ou
 const char *burner_recipe_mode_to_str(burner_recipe_mode_t mode)
 {
     switch (mode) {
+    case BURNER_RECIPE_MODE_GBABF:
+        return "gbabf";
+    case BURNER_RECIPE_MODE_AUTO:
+        return "auto";
     case BURNER_RECIPE_MODE_GBX:
         return "gbx";
     case BURNER_RECIPE_MODE_CHISLINK:
@@ -739,6 +742,14 @@ bool burner_parse_recipe_mode_text(const char *text, burner_recipe_mode_t *mode_
     }
     if (strcasecmp(text, "gbx") == 0) {
         *mode_out = BURNER_RECIPE_MODE_GBX;
+        return true;
+    }
+    if (strcasecmp(text, "gbabf") == 0) {
+        *mode_out = BURNER_RECIPE_MODE_GBABF;
+        return true;
+    }
+    if (strcasecmp(text, "auto") == 0) {
+        *mode_out = BURNER_RECIPE_MODE_AUTO;
         return true;
     }
     if (strcasecmp(text, "chislink") == 0 ||
@@ -838,6 +849,20 @@ uint32_t burner_psram_window_mb_to_bytes(uint32_t mb)
         mb = max_mb;
     }
     return mb * BURN_PSRAM_WINDOW_BYTES_PER_MB;
+}
+
+size_t burner_psram_usable_bytes(void)
+{
+    size_t free_bytes;
+    size_t largest_bytes;
+
+    if (!esp_psram_is_initialized()) {
+        return 0u;
+    }
+
+    free_bytes = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    largest_bytes = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return (largest_bytes < free_bytes) ? largest_bytes : free_bytes;
 }
 
 uint32_t burner_psram_auto_window_mb(void)
@@ -2837,6 +2862,7 @@ esp_err_t burner_ensure_rom_dir(void)
 #include "burn/burner_gbc_flash_lowlevel.c"
 
 #include "burn/burner_gba_flash_lowlevel.c"
+#include "burn/burner_gba_spot_test.c"
 
 #include "burn/burner_cart_runtime.c"
 

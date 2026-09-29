@@ -2582,7 +2582,6 @@
             mbc5ChunkKb: 16,
             dumpChunkKb: 64,
             gbcVoltage: '3v3',
-            gbaFixedEraseWindow: true,
             baconSpiConfiguredHz: 0,
             baconSpiActualHz: 0,
             recipeMode: 'chis',
@@ -2636,6 +2635,8 @@
 
         function normalizeRecipeModeValue(value) {
             const normalized = String(value || '').toLowerCase();
+            if (normalized === 'auto') return 'auto';
+            if (normalized === 'gbabf') return 'gbabf';
             if (normalized === 'gbx') {
                 return 'gbx';
             }
@@ -3353,6 +3354,8 @@
                                     <option value="chis">CHIS 自动探测</option>
                                     <option value="chislink">CHISLINK 严格探测</option>
                                     <option value="gbx">GBX 配置优先</option>
+                                    <option value="gbabf">GBABF GBA 检测</option>
+                                    <option value="auto">自动融合 CHIS + GBABF</option>
                                 </select>
                                 <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">
                                     影响读卡识别、GBX 匹配和烧录准备时采用的识别来源。
@@ -4432,6 +4435,10 @@
 
         function formatRecipeModeLabel(mode) {
             switch (normalizeRecipeModeValue(mode)) {
+                case 'auto':
+                    return '自动融合 CHIS + GBABF';
+                case 'gbabf':
+                    return 'GBABF';
                 case 'gbx':
                     return 'GBX';
                 case 'chislink':
@@ -4443,6 +4450,10 @@
 
         function formatProbeSourceLabel(source) {
             switch (String(source || '').toLowerCase()) {
+                case 'auto:chis': return '自动融合 / CHIS';
+                case 'auto:gbabf': return '自动融合 / GBABF';
+                case 'gbabf':
+                    return 'GBABF';
                 case 'gbx':
                     return 'GBX';
                 case 'chislink':
@@ -6802,14 +6813,6 @@
                                     <option value="1000">1000 ms</option>
                                 </select>
                                 <span class="setting-desc">关电后与上目标电压后的等待时间</span>
-                            </div>
-                            <div class="setting-item">
-                                <label class="setting-label" for="burnGbaFixedEraseWindow">GBA 固定擦除窗口</label>
-                                <select id="burnGbaFixedEraseWindow" class="input">
-                                    <option value="true">开启</option>
-                                    <option value="false">关闭</option>
-                                </select>
-                                <span class="setting-desc">控制 GBA 擦除阶段是否固定使用 4MB 擦除窗口</span>
                             </div>
                         </div>
                         <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
@@ -9984,7 +9987,6 @@
             const mbc5ChunkKb = Number(data && data.mbc5_chunk_kb ? data.mbc5_chunk_kb : 16);
             const dumpChunkKb = Number(data && data.dump_chunk_kb ? data.dump_chunk_kb : 64);
             const gbcVoltage = (data && data.gbc_voltage) ? String(data.gbc_voltage).toUpperCase() : '3V3';
-            const gbaFixedEraseWindow = parseApiBoolean(data && data.gba_fixed_erase_window, true);
             const ag32Link = (data && data.ag32_link) ? String(data.ag32_link).toLowerCase() : 'auto';
             const ag32Active = (data && data.ag32_link_active) ? String(data.ag32_link_active).toLowerCase() : 'unknown';
             const ag32CapsKnown = parseApiBoolean(data && data.ag32_capabilities_known, false);
@@ -10001,7 +10003,6 @@
                 `MBC5 写入块: ${mbc5ChunkKb} KB`,
                 `ROM 导出块: ${dumpChunkKb} KB`,
                 `GBC 电压: ${gbcVoltage}`,
-                `GBA 固定擦除窗口: ${gbaFixedEraseWindow ? '开启' : '关闭'}`,
                 `AG32 链路: ${ag32Link} (active: ${ag32Active})`,
                 ...(ag32Link === 'mcu' || ag32Active === 'mcu' ?
                     [`MCU capability: ${ag32CapsKnown ? '0x' + ag32Capabilities.toString(16).padStart(8, '0') : '尚未握手'}`] : [])
@@ -10014,9 +10015,8 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
-            const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
             const ag32LinkEl = document.getElementById('burnAg32Link');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !ag32LinkEl) return;
 
             statusEl.textContent = '读取中...';
             try {
@@ -10038,8 +10038,6 @@
                 setMbc5ChunkKb(data.mbc5_chunk_kb || 16);
                 setDumpChunkKb(data.dump_chunk_kb || 64);
                 state.gbcVoltage = String(data.gbc_voltage || '3v3').toLowerCase() === '5v' ? '5v' : '3v3';
-                state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, true);
-                gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 ag32LinkEl.value = String(data.ag32_link || 'legacy').toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);
             } catch (error) {
@@ -10053,9 +10051,8 @@
             const tfEl = document.getElementById('burnCoreTf');
             const psramEl = document.getElementById('burnCorePsram');
             const settleEl = document.getElementById('burnPowerSettleMs');
-            const gbaFixedEraseWindowEl = document.getElementById('burnGbaFixedEraseWindow');
             const ag32LinkEl = document.getElementById('burnAg32Link');
-            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !gbaFixedEraseWindowEl || !ag32LinkEl) return;
+            if (!statusEl || !eraseEl || !tfEl || !psramEl || !settleEl || !ag32LinkEl) return;
 
             const erase = String(eraseEl.value || 'auto').toLowerCase();
             const tf = String(tfEl.value || 'auto').toLowerCase();
@@ -10067,7 +10064,6 @@
             const psramMb = String(getPsramWindowMb());
             const mbc5ChunkKb = String(getMbc5ChunkKb());
             const dumpChunkKb = String(getDumpChunkKb());
-            const gbaFixedEraseWindow = parseApiBoolean(gbaFixedEraseWindowEl.value, true) ? 'true' : 'false';
             const ag32Link = String(ag32LinkEl.value || 'legacy').toLowerCase();
             statusEl.textContent = '应用中...';
 
@@ -10083,7 +10079,6 @@
                 query.set('psram_mb', psramMb);
                 query.set('mbc5_chunk_kb', mbc5ChunkKb);
                 query.set('dump_chunk_kb', dumpChunkKb);
-                query.set('gba_fixed_erase_window', gbaFixedEraseWindow);
                 query.set('ag32_link', ag32Link);
                 const response = await apiCall(`/api/burn/core_config?${query.toString()}`, { method: 'POST' });
                 const data = await readApiPayload(response);
@@ -10105,8 +10100,6 @@
                 setMbc5ChunkKb(data.mbc5_chunk_kb || 16);
                 setDumpChunkKb(data.dump_chunk_kb || 64);
                 state.gbcVoltage = data.gbc_voltage;
-                state.gbaFixedEraseWindow = parseApiBoolean(data.gba_fixed_erase_window, parseApiBoolean(gbaFixedEraseWindow, true));
-                gbaFixedEraseWindowEl.value = state.gbaFixedEraseWindow ? 'true' : 'false';
                 ag32LinkEl.value = String(data.ag32_link || ag32Link).toLowerCase();
                 statusEl.textContent = formatBurnCoreStatusLines(data);
                 showToast('烧录配置已更新', 'success');

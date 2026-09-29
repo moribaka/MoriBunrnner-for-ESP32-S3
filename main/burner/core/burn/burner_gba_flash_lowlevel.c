@@ -262,8 +262,12 @@ static esp_err_t burner_bacon_gba_rom_program(
     }
 
     intel_cmdset = burner_gba_nor_is_intel_active();
-    if (intel_cmdset && !s_cart_ctx.probe_cfi_ok) {
+    if (intel_cmdset && !s_cart_ctx.probe_cfi_ok && !s_gba_probe_88b0_window) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (s_gba_probe_88b0_window &&
+        ((uint64_t)byte_addr + len > BURN_GBA_LINEAR_ADDR_BYTES || buffer_write_bytes != 1024u)) {
+        return ESP_ERR_INVALID_SIZE;
     }
 
     program_start_us = burner_gba_diag_now_us();
@@ -796,6 +800,13 @@ esp_err_t burner_bacon_gba_verify_read_block_hoststyle(uint8_t *out, size_t len,
         burner_gba_resolve_write_addr(rom_addr, is_multi_card, &bank, &local_addr, &bank_remain);
         remain = len - copied;
         chunk = (remain < bank_remain) ? remain : bank_remain;
+        /* This 88B0 cartridge wraps its sequential read counter after
+         * 64K words. Re-latch the address at each 128KiB boundary even
+         * when a caller requests an entire 256KiB erase sector. */
+        if (s_gba_probe_88b0_window) {
+            size_t burst_remain = 0x20000u - (local_addr & 0x1FFFFu);
+            if (chunk > burst_remain) chunk = burst_remain;
+        }
 
         if (is_multi_card) {
             err = burner_gba_switch_bank_if_needed(bank);

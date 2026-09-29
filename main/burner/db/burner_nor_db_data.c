@@ -515,7 +515,9 @@ const burner_nor_entry_t g_burner_nor_db_gba[] = {
             .device_size = 32u * 1024u * 1024u,
             .sector_size = 0u,
             .buffer_write_bytes = 0u,
-            .flags = BURNER_NOR_FLAG_RESET_EVERY_1MB | BURNER_NOR_FLAG_DISABLE_BUFFER_PROGRAM,
+            /* 0x880D: native 64-byte Intel buffering qualified on board;
+             * keep partition read-mode resets. 0x880E remains separate. */
+            .flags = BURNER_NOR_FLAG_RESET_EVERY_1MB,
             .id_len = 8u,
             .id = BURNER_NOR_ID8_PREFIX4(0x20u, 0x00u, 0x0Du, 0x88u),
             .id_mask = BURNER_NOR_ID_MASK8_PREFIX4,

@@ -921,13 +921,13 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     if (use_pipeline_stage) {
         psram_window_mb = BURN_PSRAM_WINDOW_AUTO_MB;
         psram_window_bytes = 0u;
-    } else if (s_gba_fixed_erase_window_enabled != 0u) {
-        psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
-        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
-    } else {
-        psram_window_mb = burner_psram_window_bytes_to_mb(job->psram_window_bytes);
-        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
+    } else if (use_psram_stage) {
+        /* GBA staging is always sized from the PSRAM that is free right now; this
+         * path has no manual window control. */
+        psram_window_mb = burner_psram_auto_window_mb();
+        psram_window_bytes = psram_window_mb * BURN_PSRAM_WINDOW_BYTES_PER_MB;
     }
+
     (void)snprintf(
         psram_alloc_fail_msg,
         sizeof(psram_alloc_fail_msg),
@@ -944,11 +944,7 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         use_pipeline_stage ? "pipeline copy tf->psram (sector window)" : "copy tf->psram (%uMB window)",
         (unsigned)psram_window_mb);
     if (use_psram_stage && !use_pipeline_stage) {
-        ESP_LOGI(
-            BURNER_TAG,
-            "GBA psram erase window policy: %s window=%uMB",
-            s_gba_fixed_erase_window_enabled != 0u ? "fixed" : "dynamic",
-            (unsigned)psram_window_mb);
+        ESP_LOGI(BURNER_TAG, "GBA psram window: auto %uMB", (unsigned)psram_window_mb);
     }
     addr_begin = job->addr_begin;
     if (addr_begin > (UINT32_MAX - (job->total_bytes - 1u))) {
@@ -1001,7 +997,8 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
         return ESP_ERR_INVALID_SIZE;
     }
     if (!burner_gba_gbx_is_active() &&
-        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL && !s_cart_ctx.probe_cfi_ok) {
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL &&
+        !s_cart_ctx.probe_cfi_ok && !s_gba_probe_88b0_window) {
         burner_status_update(
             BURNER_STATE_ERROR,
             0,
@@ -1021,29 +1018,6 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
     burner_spi_lock_take();
     burner_gba_check_poll_pair();
     burner_spi_lock_give();
-    if (intel_active && job->write_path == BURNER_WRITE_PATH_PSRAM) {
-        psram_window_mb = BURN_GBA_FIXED_ERASE_WINDOW_MB;
-        psram_window_bytes = burner_psram_window_mb_to_bytes(psram_window_mb);
-        (void)snprintf(
-            psram_alloc_fail_msg,
-            sizeof(psram_alloc_fail_msg),
-            "alloc %uMB psram staging failed",
-            (unsigned)psram_window_mb);
-        (void)snprintf(
-            psram_erase_prefetch_msg,
-            sizeof(psram_erase_prefetch_msg),
-            "intel erase gba flash sectors (%uMB) + prefetch tf->psram",
-            (unsigned)psram_window_mb);
-        (void)snprintf(
-            psram_copy_msg,
-            sizeof(psram_copy_msg),
-            "copy tf->psram (%uMB window)",
-            (unsigned)psram_window_mb);
-        ESP_LOGI(
-            BURNER_TAG,
-            "GBA Intel PSRAM policy: fixed %uMB window, erase+prefetch then program",
-            (unsigned)psram_window_mb);
-    }
     fp = burner_file_open_read(job->rom_path);
     if (fp == NULL) {
         burner_status_update(
@@ -1098,9 +1072,16 @@ static esp_err_t burner_run_write_job_gba(const burner_task_param_t *job)
                                  ? (size_t)job->total_bytes
                                  : (size_t)pipeline_stage_capacity;
         } else {
+            size_t psram_usable = burner_psram_usable_bytes();
+
             stage_capacity = (job->total_bytes < psram_window_bytes)
                                  ? (size_t)job->total_bytes
                                  : (size_t)psram_window_bytes;
+            /* The window was resolved from free PSRAM above; shrink it again if the
+             * pool moved, so the staging allocation cannot fail outright. */
+            if (psram_usable != 0u && stage_capacity > psram_usable) {
+                stage_capacity = psram_usable & ~(size_t)1u;
+            }
         }
         psram_stage_buf = (uint8_t *)heap_caps_malloc(
             stage_capacity,

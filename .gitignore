@@ -18,10 +18,10 @@
 /BACON_HOST_BEHAVIOR.md
 /BUSINESS_WEB_API.md
 
-# Local progress / experiment notes
-/PROGRESS_*.md
-/EXPERIMENT_*.md
+# Documentation is intentionally excluded: source code only
+*.md
 /docs/
+/DOCS/
 
 # Editor and local workspace
 /.vscode/
@@ -37,6 +37,9 @@
 /compile_commands.json
 *.log
 *.out
+/__pycache__/
+__pycache__/
+*.pyc
 /tests/*/*.exe
 Thumbs.db
 
@@ -54,6 +57,5 @@ Thumbs.db
 /example/logic/*.rpt
 /example/logic/logic_log.txt
 /example/logic/example_board.inc
-/example/logic/example_board.v
 /example/logic/example_board_routed.v
 /example/logic/*_tmpl.v

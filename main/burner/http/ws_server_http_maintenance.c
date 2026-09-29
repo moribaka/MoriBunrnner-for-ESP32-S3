@@ -689,8 +689,10 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0' &&
         !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be auto, chis, chislink, gbx or gbabf");
     }
+    if (recipe_mode == BURNER_RECIPE_MODE_GBABF && cart_mode != BURNER_CART_MODE_GBA)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "GBABF detection supports GBA only");
     if (!burner_get_query_arg(req, "sample_addr", sample_addr_arg, sizeof(sample_addr_arg), false)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid sample_addr query");
     }
@@ -783,6 +785,10 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
                         &cfi_ok);
                 }
                 gbx_profile_matched = (err == ESP_OK);
+            } else if (recipe_mode == BURNER_RECIPE_MODE_AUTO) {
+                err = burner_auto_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+            } else if (recipe_mode == BURNER_RECIPE_MODE_GBABF) {
+                err = burner_gbabf_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
             } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
                 err = burner_chislink_gba_probe_locked(
                     gba_id,
@@ -976,7 +982,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             gba_d0d1_swapped,
             chip_name,
             gbx_profile_matched ? "GBX" :
-                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
+                                  ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "GBABF" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""))));
         burner_status_set_gba_save_probe(gba_save_type, gba_save_size, gba_save_detected);
         burner_status_set_gba_batteryless_probe(
             gba_batteryless_save_address,
@@ -1024,7 +1030,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             gba_chip_label,
             burner_recipe_mode_to_str(recipe_mode),
             gbx_profile_matched ? "gbx" :
-                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"),
+                                  ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "gbabf" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"))),
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),
             gba_cmd_mode,
@@ -1122,8 +1128,10 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0' &&
         !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be auto, chis, chislink, gbx or gbabf");
     }
+    if (recipe_mode == BURNER_RECIPE_MODE_GBABF && cart_mode != BURNER_CART_MODE_GBA)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "GBABF detection supports GBA only");
 
     if (s_status_lock != NULL) {
         xSemaphoreTake(s_status_lock, portMAX_DELAY);
@@ -1200,6 +1208,10 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                         &cfi_ok);
                 }
                 gbx_profile_matched = (err == ESP_OK);
+            } else if (recipe_mode == BURNER_RECIPE_MODE_AUTO) {
+                err = burner_auto_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+            } else if (recipe_mode == BURNER_RECIPE_MODE_GBABF) {
+                err = burner_gbabf_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
             } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
                 err = burner_chislink_gba_probe_locked(
                     gba_id,
@@ -1334,7 +1346,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_d0d1_swapped,
             chip_name,
             gbx_profile_matched ? "GBX" :
-                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""));
+                                  ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "GBABF" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""))));
         {
             esp_err_t analysis_err = burner_probe_gba_rom_analysis(
                 save_probe_device_size,
@@ -1405,7 +1417,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_chip_label,
             burner_recipe_mode_to_str(recipe_mode),
             gbx_profile_matched ? "gbx" :
-                                  ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"),
+                                  ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "gbabf" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"))),
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),
             gba_cmd_mode,

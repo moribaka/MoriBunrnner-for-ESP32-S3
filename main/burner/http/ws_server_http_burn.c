@@ -393,7 +393,7 @@ esp_err_t burner_write_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0' &&
         !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be auto, chis, chislink, gbx or gbabf");
     }
     if (write_path_arg[0] != '\0' &&
         !burner_parse_write_path_text(write_path_arg, &write_path)) {
@@ -1298,7 +1298,7 @@ esp_err_t burner_verify_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0' &&
         !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be auto, chis, chislink, gbx or gbabf");
     }
     if (slot_arg[0] != '\0' && !burner_parse_u32_text(slot_arg, &slot)) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid slot query");
@@ -1626,7 +1626,7 @@ esp_err_t burner_cart_erase_handler(httpd_req_t *req)
     }
     if (recipe_mode_arg[0] != '\0' &&
         !burner_parse_recipe_mode_text(recipe_mode_arg, &recipe_mode)) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be chis, chislink or gbx");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "recipe_mode must be auto, chis, chislink, gbx or gbabf");
     }
 
     if (cart_mode == BURNER_CART_MODE_GBA) {

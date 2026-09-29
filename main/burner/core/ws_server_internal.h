@@ -82,8 +82,6 @@
 #define BURN_PSRAM_WINDOW_MAX_MB 8U
 #define BURN_PSRAM_WINDOW_DEFAULT_MB BURN_PSRAM_WINDOW_AUTO_MB
 #define BURN_PSRAM_WINDOW_RESERVE_BYTES (256U * 1024U)
-#define BURN_GBA_FIXED_ERASE_WINDOW_ENABLED_DEFAULT 1U
-#define BURN_GBA_FIXED_ERASE_WINDOW_MB 4U
 #define BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES 0U
 #define BURN_TASK_STACK_BYTES (16U * 1024U)
 #define VERIFY_LOG_DIR_REL ".log"
@@ -427,6 +425,8 @@ typedef enum {
     BURNER_RECIPE_MODE_CHIS = 0,
     BURNER_RECIPE_MODE_CHISLINK,
     BURNER_RECIPE_MODE_GBX,
+    BURNER_RECIPE_MODE_GBABF,
+    BURNER_RECIPE_MODE_AUTO,
 } burner_recipe_mode_t;
 
 typedef enum {
@@ -637,7 +637,6 @@ extern const uint32_t s_mcu_spi_clock_hz;
 extern uint32_t s_mcu_spi_actual_hz;
 extern burner_core_config_t s_burn_core_cfg;
 extern uint8_t s_burn_erase_always;
-extern uint8_t s_gba_fixed_erase_window_enabled;
 extern uint8_t s_mbc5_power_5v_enabled;
 extern uint32_t s_bacon_power_settle_ms;
 extern burner_write_path_t s_burn_write_path_default;
@@ -733,6 +732,21 @@ void burner_spi_lock_give(void);
 esp_err_t burner_bacon_gba_power_cycle_3v3_locked(void);
 esp_err_t burner_bacon_gba_release_bus_idle(void);
 esp_err_t burner_bacon_finish_cart_access(void);
+typedef struct {
+    bool backup_verified;
+    bool destructive_started;
+    uint32_t points_total;
+    uint32_t recipe_id;
+    uint32_t markers_verified;
+    uint32_t sectors_restored;
+    uint32_t sectors_verified;
+    uint32_t mismatch_address;
+    esp_err_t test_error;
+    esp_err_t restore_error;
+} burner_gba_spot_report_t;
+esp_err_t burner_gba_88b0_spot_test_locked(const char *backup_path, burner_gba_spot_report_t *report);
+esp_err_t burner_gba_88b0_gbabf_test_locked(const char *backup_path, burner_gba_spot_report_t *report);
+esp_err_t burner_gba_m36_native_test_locked(const char *backup_path, burner_gba_spot_report_t *report);
 int burner_bacon_cart_power_mv(void);
 esp_err_t burner_bacon_gba_read_block(uint8_t *out, size_t len, uint32_t offset, bool is_multi_card);
 esp_err_t burner_debug_read_word_locked(uint32_t word_addr, uint16_t *value);
@@ -748,12 +762,21 @@ const char *burner_write_path_to_str(burner_write_path_t path);
 bool burner_parse_write_path_text(const char *text, burner_write_path_t *path_out);
 const char *burner_recipe_mode_to_str(burner_recipe_mode_t mode);
 bool burner_parse_recipe_mode_text(const char *text, burner_recipe_mode_t *mode_out);
+esp_err_t burner_gbabf_gba_probe_locked(uint8_t id[8], uint32_t *device_size,
+    uint32_t *sector_size, uint16_t *buffer_bytes, bool *cfi_ok);
+esp_err_t burner_auto_gba_probe_locked(uint8_t id[8], uint32_t *device_size,
+    uint32_t *sector_size, uint16_t *buffer_bytes, bool *cfi_ok);
+const char *burner_auto_gba_probe_source(void);
+unsigned burner_gba_intel_speed_get(void);
+esp_err_t burner_gba_intel_speed_set(unsigned mode);
 uint32_t burner_clamp_mbc5_program_chunk_bytes(uint32_t bytes);
 uint32_t burner_mbc5_program_chunk_kb_to_bytes(uint32_t kb);
 bool burner_is_supported_dump_chunk_bytes(uint32_t bytes);
 uint32_t burner_dump_chunk_kb_to_bytes(uint32_t kb);
 uint32_t burner_dump_chunk_bytes_to_kb(uint32_t bytes);
 uint32_t burner_psram_auto_window_mb(void);
+/* Largest PSRAM staging window that can be allocated right now (auto/dynamic). */
+size_t burner_psram_usable_bytes(void);
 uint32_t burner_psram_window_mb_to_bytes(uint32_t mb);
 uint32_t burner_psram_window_bytes_to_mb(uint32_t bytes);
 const char *burner_core_affinity_to_str(burner_core_affinity_t affinity);

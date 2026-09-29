@@ -71,6 +71,8 @@ static void status(void)
     cJSON *json = event("status");
     if (json == NULL) return;
     cJSON_AddStringToObject(json, "version", esp_app_get_description()->version);
+    cJSON_AddStringToObject(json, "recipe_mode", burner_recipe_mode_to_str(s_burn_recipe_mode_default));
+    cJSON_AddNumberToObject(json, "intel_speed_mode", burner_gba_intel_speed_get());
     char sta_ip[16] = {0};
     if (wifi_maneger_get_sta_ip(sta_ip, sizeof(sta_ip)) == ESP_OK)
         cJSON_AddStringToObject(json, "sta_ip", sta_ip);
@@ -300,9 +302,28 @@ static void bacon_check(void)
 
 static void dispatch(char *line)
 {
+    if (!strncmp(line,"intel-speed ",12)) {
+        if (bsc2_lab_busy()) { message("error","cartridge or firmware job busy"); return; }
+        unsigned mode;
+        if (!strcmp(line+12,"baseline")) mode=0;
+        else if (!strcmp(line+12,"poll")) mode=1;
+        else if (!strcmp(line+12,"batch")) mode=2;
+        else { message("error","intel-speed baseline|poll|batch"); return; }
+        esp_err_t err=burner_gba_intel_speed_set(mode);
+        cJSON *json=event("intel_speed");
+        if(json){cJSON_AddBoolToObject(json,"ok",err==ESP_OK);cJSON_AddNumberToObject(json,"mode",mode);}
+        reply(json);return;
+    }
     if (!strcmp(line,"bsc2-job-status")) { bsc2_lab_status(); return; }
     if (!strcmp(line,"bsc2-backup-hash")) { bsc2_lab_hash(); return; }
     if (!strncmp(line,"bsc2-cart ",10)) { bsc2_lab_job(line+10); return; }
+    if (!strncmp(line,"gba-cart32 ",11)) { cart32_lab_command(line+11, 33554432u); return; }
+    if (!strncmp(line,"gba-cart128 ",12)) { cart32_lab_command(line+12, 134217728u); return; }
+    if (!strcmp(line,"gba-bank-map")) { cart128_bank_map(); return; }
+    if (!strncmp(line,"gba-spot256 ",12)) { cart256_spot_command(line+12, false, false); return; }
+    if (!strncmp(line,"gba-spot-gbabf ",15)) { cart256_spot_command(line+15, true, false); return; }
+    if (!strncmp(line,"gba-spot-native ",16)) { cart256_spot_command(line+16, true, true); return; }
+    if (!strncmp(line,"gba-native-worker ",18)) { m36_native_worker_test(line+18); return; }
     if (!strncmp(line,"bsc2-upload ",12)) { bsc2_lab_upload(line+12); return; }
     if (strcmp(line, "wifi-connect-saved") == 0) {
         if (burner_task_is_running_snapshot() || ag32_batch_program_is_running()) {

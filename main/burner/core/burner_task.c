@@ -293,6 +293,8 @@ esp_err_t burner_start_task_ex(
     if (rom_name == NULL || rom_path == NULL || total_bytes == 0) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (recipe_mode == BURNER_RECIPE_MODE_GBABF && cart_mode != BURNER_CART_MODE_GBA)
+        return ESP_ERR_NOT_SUPPORTED;
     if (mode != BURNER_JOB_ERASE_ROM && usb_msc_tf_in_use_by_host()) {
         return ESP_ERR_INVALID_STATE;
     }

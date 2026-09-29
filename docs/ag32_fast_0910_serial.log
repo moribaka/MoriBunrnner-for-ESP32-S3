@@ -1,8 +1,0 @@
-2026-09-10 09:28:26 I (20668) burner_web: MCU SPI init: host=1 cs0=21 cs1=1 clk=47 miso=48 mosi=45 freq=40000000Hz
-2026-09-10 09:28:26 I (20670) burner_web: MCU SPI CS idle readback: cs0=1 cs1=1
-2026-09-10 09:28:26 I (20673) burner_web: MCU SPI ready: actual=40000000Hz dma_scratch_tx=16384 dma_scratch_rw=16384
-2026-09-10 09:28:26 I (20682) ag32_mcu_link: MCU protocol v1 capabilities=0x000000fe
-2026-09-10 09:28:26 
-2026-09-10 09:28:26 @mori {"event":"ag32_test","ok":true,"error":"ESP_OK","passes":100,"bytes_each_direction":131590,"elapsed_ms":208.382}
-2026-09-10 09:28:27 
-2026-09-10 09:28:27 @mori {"event":"ag32_stream_test","ok":true,"error":"ESP_OK","passes":100,"bytes_each_direction":131590,"elapsed_ms":224.519}
