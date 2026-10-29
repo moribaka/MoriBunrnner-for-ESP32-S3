@@ -8,7 +8,7 @@ import serial
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--url',required=True);p.add_argument('--port',required=True)
-    p.add_argument('--out',required=True);p.add_argument('--ffmpeg',default='C:/ffmpeg/bin/ffmpeg.exe')
+    p.add_argument('--out',required=True);p.add_argument('--ffmpeg',default='ffmpeg')
     p.add_argument('--only',help='Comma-separated fixture names to run from the matrix')
     args=p.parse_args();out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
     def api(path,body=None,method=None):

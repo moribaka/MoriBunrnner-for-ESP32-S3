@@ -53,6 +53,16 @@ static bool burner_gba_88b0_exact_id(const uint8_t id[8])
     return id != NULL && memcmp(id, expected, sizeof(expected)) == 0;
 }
 
+static bool burner_gba_88b0_cfi_buffer_supported(
+    const uint8_t id[8], bool cfi_ok, uint16_t buffer_bytes)
+{
+    /* 仅保留已确认的 88B0 低字节、交换接线和 1024 字节 E9 路径。 */
+    return burner_gba_88b0_exact_id(id) && cfi_ok && buffer_bytes == 1024u &&
+           s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL &&
+           s_cart_ctx.gba_cmd_data_lane == BURNER_GBA_CMD_DATA_LOW &&
+           s_cart_ctx.d0d1_swapped;
+}
+
 typedef enum {
     BURNER_GBA_AMD_RUNTIME_STANDARD = 0,
     BURNER_GBA_AMD_RUNTIME_AAA_A9,
@@ -2258,7 +2268,7 @@ static void burner_readid_trace_begin(const char *name, int64_t *start_us, int64
     if (last_us != NULL) {
         *last_us = now_us;
     }
-    ESP_LOGI(BURNER_TAG, "%s begin t=%" PRId64 "us", name, now_us);
+    ESP_LOGD(BURNER_TAG, "%s begin t=%" PRId64 "us", name, now_us);
 }
 
 static void burner_readid_trace_log_u16(
@@ -2283,7 +2293,7 @@ static void burner_readid_trace_log_u16(
         dt_sub_us = -dt_sub_us;
     }
 
-    ESP_LOGI(
+    ESP_LOGD(
         BURNER_TAG,
         "%s %s addr=0x%03" PRIX32 " data=0x%04X dt=%" PRId64 "us (%" PRId64 ".%06" PRId64 "s)",
         name,
@@ -2317,7 +2327,7 @@ static void burner_readid_trace_log_u8(
         dt_sub_us = -dt_sub_us;
     }
 
-    ESP_LOGI(
+    ESP_LOGD(
         BURNER_TAG,
         "%s %s addr=0x%04" PRIX32 " data=0x%02X dt=%" PRId64 "us (%" PRId64 ".%06" PRId64 "s)",
         name,
@@ -2339,7 +2349,7 @@ static void burner_readid_trace_end(const char *name, int64_t start_us, esp_err_
         total_sub_us = -total_sub_us;
     }
 
-    ESP_LOGI(
+    ESP_LOGD(
         BURNER_TAG,
         "%s end status=%s total=%" PRId64 "us (%" PRId64 ".%06" PRId64 "s)",
         name,
@@ -4865,6 +4875,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     uint64_t requested_top64 = 0;
     bool cfi_ok = false;
     bool chislink_intel_compat = false;
+    bool native_88b0_buffer_compat = false;
     bool gbx_profile_matched = false;
     bool cached_probe_used = false;
     bool probe_runtime_usable = false;
@@ -4883,6 +4894,10 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
     s_gba_intel_speed_eligible = false;
 
     if (job->recipe_mode == BURNER_RECIPE_MODE_GBX) {
+        /* 写入必须识别当前卡带，不能依赖界面之前缓存的身份。 */
+        if (job->mode == BURNER_JOB_WRITE_ROM) {
+            burner_gba_gbx_clear_cached_probe();
+        }
         if (job->gbx_profile_file[0] != '\0') {
             err = burner_gba_gbx_prepare_manual_profile(
                 job->gbx_profile_file,
@@ -5030,6 +5045,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             (s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL) &&
             cfi_ok;
         program_buffer_write_bytes = burner_gba_program_buffer_write_bytes(buffer_write_bytes, s_cart_ctx.gba_cmdset);
+        native_88b0_buffer_compat = burner_gba_88b0_cfi_buffer_supported(id, cfi_ok, buffer_write_bytes);
         if ((nor_flags & BURNER_NOR_FLAG_DISABLE_BUFFER_PROGRAM) != 0u) {
             const char *special_chip_name = burner_gba_chip_name(id);
 
@@ -5061,6 +5077,8 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
             }
             if (s_gba_probe_88b0_window) {
                 ESP_LOGI(BURNER_TAG, "GBA Intel 88B0 window recipe: keep 1024-byte E9 buffered program");
+            } else if (native_88b0_buffer_compat) {
+                ESP_LOGI(BURNER_TAG, "GBA Intel 88B0 valid CFI: keep 1024-byte E9 buffered program");
             } else if (chislink_intel_compat && program_buffer_write_bytes != 0u) {
                 ESP_LOGI(
                     BURNER_TAG,
@@ -5072,7 +5090,7 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
                     "GBA Intel 88B0 special profile: disable buffered program probe_buf=%u actual_buf=0",
                     (unsigned)program_buffer_write_bytes);
             }
-            if (!chislink_intel_compat && !s_gba_probe_88b0_window) {
+            if (!chislink_intel_compat && !s_gba_probe_88b0_window && !native_88b0_buffer_compat) {
                 program_buffer_write_bytes = 0u;
             }
         }
@@ -5097,6 +5115,13 @@ static esp_err_t burner_bacon_gba_prepare(const burner_task_param_t *job)
                 device_size,
                 (unsigned)(BURN_GBA_BANK_BYTES / (1024u * 1024u)));
         }
+    }
+
+    /* 必须在任何擦除前拒绝没有可用编程路径的原生 Intel 写入。 */
+    if (!burner_gba_gbx_is_active() && job->mode == BURNER_JOB_WRITE_ROM &&
+        s_cart_ctx.gba_cmdset == BURNER_NOR_CMDSET_INTEL && program_buffer_write_bytes < 2u) {
+        ESP_LOGE(BURNER_TAG, "GBA Intel write blocked before erase: no supported program buffer");
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
     s_cart_ctx.prepared = true;

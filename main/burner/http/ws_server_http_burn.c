@@ -813,11 +813,8 @@ static esp_err_t burner_start_write_from_tf_impl(
     uint32_t write_size = 0;
     uint32_t addr_begin = 0;
     uint32_t effective_size = 0;
-    uint32_t device_size = 0;
-    uint32_t available_size = 0;
     uint32_t psram_window_bytes = BURN_WRITE_PSRAM_DEFAULT_WINDOW_BYTES;
     uint32_t mbc5_program_chunk_bytes = BURN_MBC5_PROGRAM_CHUNK_BYTES;
-    char probe_err[96] = {0};
     bool gba_force_multi = false;
     burner_gba_patch_report_t patch_report = {0};
     burner_gba_patch_plan_t *patch_plan = NULL;
@@ -928,40 +925,7 @@ static esp_err_t burner_start_write_from_tf_impl(
         return burner_start_error(ESP_ERR_INVALID_SIZE, "requested write range too large", error_msg, error_msg_len);
     }
 
-    err = burner_probe_cart_capacity_bytes(cart_mode, &device_size);
-    if (err != ESP_OK) {
-        if (cart_mode == BURNER_CART_MODE_GBA && err == ESP_ERR_NOT_SUPPORTED) {
-            if (patch_plan != NULL) heap_caps_free(patch_plan);
-            return burner_start_error(
-                err,
-                "gba card looks like read-only retail rom; writing is blocked",
-                error_msg,
-                error_msg_len);
-        }
-        (void)snprintf(
-            probe_err,
-            sizeof(probe_err),
-            "read %s cart capacity failed: %s (check cart type)",
-            (cart_mode == BURNER_CART_MODE_GBA) ? "gba" : "mbc5",
-            esp_err_to_name(err));
-        if (patch_plan != NULL) heap_caps_free(patch_plan);
-        return burner_start_error(err, probe_err, error_msg, error_msg_len);
-    }
-    available_size = (addr_begin < device_size) ? (device_size - addr_begin) : 0u;
-    if (((uint64_t)addr_begin + (uint64_t)effective_size) > (uint64_t)device_size) {
-        char size_err[160] = {0};
-
-        (void)snprintf(
-            size_err,
-            sizeof(size_err),
-            "rom exceeds addressable cart capacity: rom=%" PRIu32 "B available=%" PRIu32 "B cart=%" PRIu32 "B",
-            effective_size,
-            available_size,
-            device_size);
-        if (patch_plan != NULL) heap_caps_free(patch_plan);
-        return burner_start_error(ESP_ERR_INVALID_SIZE, size_err, error_msg, error_msg_len);
-    }
-
+    /* 工作任务按所选模式探测一次，并在擦除前检查真实容量和写入能力。 */
     err = burner_start_task_ex(
         BURNER_JOB_WRITE_ROM,
         cart_mode,

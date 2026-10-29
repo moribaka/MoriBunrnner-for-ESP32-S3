@@ -10,9 +10,10 @@ def main():
     p.add_argument('--size',default='32MB',help='Must fit the inserted mapper/cartridge')
     p.add_argument('--write-rom',help='Authorized TF ROM to burn instead of the read-only dump')
     p.add_argument('--out',required=True)
+    p.add_argument('--ffmpeg',default='ffmpeg')
     a=p.parse_args();out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
     name='diag_priority_silence.mp3';f=out/name
-    subprocess.run(['C:/ffmpeg/bin/ffmpeg.exe','-v','error','-y','-f','lavfi','-i',
+    subprocess.run([a.ffmpeg,'-v','error','-y','-f','lavfi','-i',
         'anullsrc=r=44100:cl=stereo','-t','60','-c:a','libmp3lame','-b:a','32k',str(f)],check=True)
     def api(path,body=None,method=None):
         data=None if body is None else json.dumps(body).encode()

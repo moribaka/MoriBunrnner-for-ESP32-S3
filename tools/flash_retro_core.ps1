@@ -8,13 +8,14 @@ $ErrorActionPreference = "Stop"
 
 $workspaceRoot = Split-Path $PSScriptRoot -Parent
 $retroRoot = Join-Path (Split-Path $workspaceRoot -Parent) "retro-go-master"
-$idfPath = "F:\ESP32\v5.5.1\esp-idf"
-$toolsPath = "F:\ESP32\tools\v5.5.1"
-$python = Join-Path $toolsPath "python_env\idf5.5_py3.14_env\Scripts\python.exe"
+. (Join-Path $PSScriptRoot 'idf_runtime.ps1')
+$idfRuntime = Get-MoriIdfRuntime
+$idfPath = $idfRuntime.IdfPath
+$toolsPath = $idfRuntime.ToolsPath
+$python = $idfRuntime.Python
 
 $env:IDF_PATH = $idfPath
 $env:IDF_TOOLS_PATH = $toolsPath
-$env:IDF_PYTHON_ENV_PATH = Join-Path $toolsPath "python_env\idf5.5_py3.14_env"
 
 Push-Location $retroRoot
 try {

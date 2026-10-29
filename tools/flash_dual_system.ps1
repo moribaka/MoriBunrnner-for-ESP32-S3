@@ -12,14 +12,15 @@ $retroRoot = Join-Path (Split-Path $workspaceRoot -Parent) "retro-go-master"
 $sizeCheckScript = Join-Path $workspaceRoot "tools\check_dual_system_sizes.py"
 $partitionCsvPath = Join-Path $workspaceRoot "partitions.csv"
 
-$idfPath = "F:\ESP32\v5.5.1\esp-idf"
-$toolsPath = "F:\ESP32\tools\v5.5.1"
-$python = Join-Path $toolsPath "python_env\idf5.5_py3.14_env\Scripts\python.exe"
+. (Join-Path $PSScriptRoot 'idf_runtime.ps1')
+$idfRuntime = Get-MoriIdfRuntime
+$idfPath = $idfRuntime.IdfPath
+$toolsPath = $idfRuntime.ToolsPath
+$python = $idfRuntime.Python
 
 function Set-IdfEnvironment {
     $env:IDF_PATH = $idfPath
     $env:IDF_TOOLS_PATH = $toolsPath
-    $env:IDF_PYTHON_ENV_PATH = Join-Path $toolsPath "python_env\idf5.5_py3.14_env"
     $env:ESP_ROM_ELF_DIR = Join-Path $toolsPath "tools\esp-rom-elfs\20241011"
     $env:PYTHON = $python
 

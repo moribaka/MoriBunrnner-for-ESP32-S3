@@ -20,6 +20,7 @@
 
 # Documentation is intentionally excluded: source code only
 *.md
+*.[mM][dD]
 /docs/
 /DOCS/
 
@@ -27,10 +28,21 @@
 /.vscode/
 /.clangd
 /.claude/
+/.agents/
+/.workbuddy/
 
 # Temporary local files
 /.tmp-tools/
 /.tmp*
+/*.img
+/*.zip
+*.gba
+*.gbc
+*.gb
+*.sav
+*.nds
+/tools/load_idf_env.ps1
+/tools/package_release_source_only.ps1
 
 # Common generated files
 /sdkconfig.old
@@ -46,6 +58,8 @@ Thumbs.db
 # FPGA project generated output
 /example/.vscode/
 /example/moriburnner下位机.bin
+/example/moriburnner_ag32_batch.bin
+/example/logic/*.qws
 /example/logic/alta_db/
 /example/logic/alta_logs/
 /example/logic/db/

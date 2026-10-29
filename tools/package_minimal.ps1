@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)][ValidatePattern('^v?\d+\.\d+\.\d+$')][string]$Version,
-    [string]$PythonExe = 'F:/ESP32/tools/v5.5.1/python_env/idf5.5_py3.14_env/Scripts/python.exe'
+    [string]$PythonExe = 'python'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent

@@ -26,86 +26,6 @@ static void burner_gba_post_write_diag_log_first_mismatch(
     }
 }
 
-static void burner_gba_post_write_diag_log_prefix(
-    const char *label,
-    const uint8_t *buf,
-    size_t len)
-{
-    enum {
-        BURNER_GBA_POST_WRITE_PREFIX_BYTES = 16
-    };
-    char line[BURNER_GBA_POST_WRITE_PREFIX_BYTES * 3 + 1];
-    size_t prefix_len;
-    size_t pos = 0u;
-
-    if (label == NULL || buf == NULL || len == 0u) {
-        return;
-    }
-
-    prefix_len = (len < BURNER_GBA_POST_WRITE_PREFIX_BYTES) ? len : (size_t)BURNER_GBA_POST_WRITE_PREFIX_BYTES;
-    for (size_t i = 0u; i < prefix_len && (pos + 3u) < sizeof(line); ++i) {
-        pos += (size_t)snprintf(line + pos, sizeof(line) - pos, "%02X", buf[i]);
-        if (i + 1u < prefix_len && (pos + 1u) < sizeof(line)) {
-            line[pos++] = ' ';
-            line[pos] = '\0';
-        }
-    }
-    line[sizeof(line) - 1u] = '\0';
-    ESP_LOGW(BURNER_TAG, "GBA post-write %s prefix[%u]: %s", label, (unsigned)prefix_len, line);
-}
-
-static void burner_gba_post_write_diag_log_swapped_prefix(
-    const char *label,
-    const uint8_t *buf,
-    size_t len)
-{
-    enum {
-        BURNER_GBA_POST_WRITE_PREFIX_BYTES = 16
-    };
-    uint8_t swapped[BURNER_GBA_POST_WRITE_PREFIX_BYTES];
-    size_t prefix_len;
-
-    if (label == NULL || buf == NULL || len == 0u) {
-        return;
-    }
-
-    prefix_len = (len < BURNER_GBA_POST_WRITE_PREFIX_BYTES) ? len : (size_t)BURNER_GBA_POST_WRITE_PREFIX_BYTES;
-    for (size_t i = 0u; i < prefix_len; ++i) {
-        swapped[i] = (uint8_t)SWAP_D0D1_U8(buf[i]);
-    }
-    burner_gba_post_write_diag_log_prefix(label, swapped, prefix_len);
-}
-
-static void burner_gba_post_write_diag_log_swap_match(
-    const char *label,
-    const uint8_t *expected,
-    const uint8_t *actual,
-    size_t len)
-{
-    enum {
-        BURNER_GBA_POST_WRITE_COMPARE_BYTES = 32
-    };
-    size_t compare_len;
-    size_t match_count = 0u;
-
-    if (label == NULL || expected == NULL || actual == NULL || len == 0u) {
-        return;
-    }
-
-    compare_len = (len < BURNER_GBA_POST_WRITE_COMPARE_BYTES) ? len : (size_t)BURNER_GBA_POST_WRITE_COMPARE_BYTES;
-    for (size_t i = 0u; i < compare_len; ++i) {
-        if ((uint8_t)SWAP_D0D1_U8(expected[i]) == actual[i]) {
-            match_count++;
-        }
-    }
-    ESP_LOGW(
-        BURNER_TAG,
-        "GBA post-write %s swapped-byte matches: %u/%u",
-        label,
-        (unsigned)match_count,
-        (unsigned)compare_len);
-}
-
 static bool burner_gba_apply_header_checksum_fix(
     uint8_t *buf,
     size_t len,
@@ -150,12 +70,10 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
     };
     uint8_t rom_buf[BURNER_GBA_POST_WRITE_DIAG_BYTES];
     uint8_t host_buf[BURNER_GBA_POST_WRITE_DIAG_BYTES];
-    uint8_t std_buf[BURNER_GBA_POST_WRITE_DIAG_BYTES];
     uint32_t diag_addr;
     size_t diag_len;
     size_t got;
     bool host_match;
-    bool std_match;
     esp_err_t err;
 
     if (fp == NULL || job == NULL || job->total_bytes == 0u) {
@@ -199,13 +117,6 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
         diag_len,
         diag_addr,
         burner_is_gba_multi_card(job));
-    if (err == ESP_OK) {
-        err = burner_bacon_gba_read_block(
-            std_buf,
-            diag_len,
-            diag_addr,
-            burner_is_gba_multi_card(job));
-    }
     burner_spi_lock_give();
     if (err != ESP_OK) {
         ESP_LOGW(
@@ -217,9 +128,8 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
     }
 
     host_match = (memcmp(rom_buf, host_buf, diag_len) == 0);
-    std_match = (memcmp(rom_buf, std_buf, diag_len) == 0);
-
-    if ((!host_match || !std_match) &&
+    /* 只在实际读回不匹配时恢复 Intel 状态并重试一次。 */
+    if (!host_match &&
         !burner_gba_gbx_is_active() &&
         burner_gba_nor_is_intel_active() &&
         s_cart_ctx.probe_cfi_ok) {
@@ -235,13 +145,6 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
                 diag_addr,
                 burner_is_gba_multi_card(job));
         }
-        if (err == ESP_OK) {
-            err = burner_bacon_gba_read_block(
-                std_buf,
-                diag_len,
-                diag_addr,
-                burner_is_gba_multi_card(job));
-        }
         burner_spi_lock_give();
         if (err != ESP_OK) {
             ESP_LOGW(
@@ -252,61 +155,23 @@ static esp_err_t burner_gba_post_write_header_diag(FILE *fp, const burner_task_p
             return err;
         }
         host_match = (memcmp(rom_buf, host_buf, diag_len) == 0);
-        std_match = (memcmp(rom_buf, std_buf, diag_len) == 0);
-        ESP_LOGI(
+        ESP_LOGD(
             BURNER_TAG,
-            "GBA post-write header diag retry: hoststyle=%s standard=%s addr=0x%08" PRIX32 " len=%u",
-            host_match ? "match" : "mismatch",
-            std_match ? "match" : "mismatch",
+            "GBA post-write header retry: match=%u addr=0x%08" PRIX32 " len=%u",
+            host_match ? 1u : 0u,
             diag_addr,
             (unsigned)diag_len);
     }
 
-    if (host_match && std_match) {
-        ESP_LOGI(
-            BURNER_TAG,
-            "GBA post-write header diag: hoststyle=match standard=match addr=0x%08" PRIX32 " len=%u",
-            diag_addr,
-            (unsigned)diag_len);
-        return ESP_OK;
-    }
     if (host_match) {
-        ESP_LOGW(
+        ESP_LOGD(
             BURNER_TAG,
-            "GBA post-write header diag: hoststyle=match standard=mismatch addr=0x%08" PRIX32 " len=%u swapped=%u",
+            "GBA post-write header matched addr=0x%08" PRIX32 " len=%u",
             diag_addr,
-            (unsigned)diag_len,
-            s_cart_ctx.d0d1_swapped ? 1u : 0u);
-        burner_gba_post_write_diag_log_first_mismatch("standard", diag_addr, rom_buf, std_buf, diag_len);
+            (unsigned)diag_len);
         return ESP_OK;
-    }
-    if (std_match) {
-        ESP_LOGW(
-            BURNER_TAG,
-            "GBA post-write header diag: hoststyle=mismatch standard=match addr=0x%08" PRIX32 " len=%u swapped=%u",
-            diag_addr,
-            (unsigned)diag_len,
-            s_cart_ctx.d0d1_swapped ? 1u : 0u);
-        burner_gba_post_write_diag_log_first_mismatch("hoststyle", diag_addr, rom_buf, host_buf, diag_len);
-        return ESP_OK;
-    }
-
-    ESP_LOGW(
-        BURNER_TAG,
-        "GBA post-write header diag: hoststyle=mismatch standard=mismatch addr=0x%08" PRIX32 " len=%u swapped=%u",
-        diag_addr,
-        (unsigned)diag_len,
-        s_cart_ctx.d0d1_swapped ? 1u : 0u);
-    burner_gba_post_write_diag_log_prefix("file", rom_buf, diag_len);
-    burner_gba_post_write_diag_log_prefix("hoststyle", host_buf, diag_len);
-    burner_gba_post_write_diag_log_prefix("standard", std_buf, diag_len);
-    if (s_cart_ctx.d0d1_swapped) {
-        burner_gba_post_write_diag_log_swapped_prefix("file-swapped", rom_buf, diag_len);
-        burner_gba_post_write_diag_log_swap_match("hoststyle", rom_buf, host_buf, diag_len);
-        burner_gba_post_write_diag_log_swap_match("standard", rom_buf, std_buf, diag_len);
     }
     burner_gba_post_write_diag_log_first_mismatch("hoststyle", diag_addr, rom_buf, host_buf, diag_len);
-    burner_gba_post_write_diag_log_first_mismatch("standard", diag_addr, rom_buf, std_buf, diag_len);
     return ESP_FAIL;
 }
 
