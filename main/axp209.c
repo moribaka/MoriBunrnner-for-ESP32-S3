@@ -10,6 +10,8 @@ static const char *TAG = "axp209";
 static i2c_master_dev_handle_t s_axp209_dev = NULL;
 static uint8_t s_axp209_addr = AXP209_I2C_ADDR_DEFAULT;
 static bool s_axp209_ready = false;
+static bool s_coulomb_fresh_epoch;
+static uint16_t s_shutdown_voltage_mv = 3300u;
 
 #define AXP209_XFER_TIMEOUT_MS 100
 
@@ -26,6 +28,11 @@ static bool s_axp209_ready = false;
 #define AXP209_REG_BATTERY_VOLT_H   0x78u
 #define AXP209_REG_ADC_ENABLE1      0x82u
 #define AXP209_REG_ADC_ENABLE2      0x83u
+#define AXP209_REG_FUEL_GAUGE       0xB9u
+#define AXP209_REG_COULOMB_DATA     0xB0u
+#define AXP209_REG_COULOMB_CTRL     0xB8u
+#define AXP209_REG_ADC_RATE         0x84u
+#define AXP209_REG_SHUTDOWN_VOLTAGE 0x31u
 
 #define AXP209_ADC_ENABLE1_BATTERY_VOLTAGE (1u << 7)
 #define AXP209_ADC_ENABLE1_BATTERY_CURRENT (1u << 6)
@@ -173,6 +180,19 @@ esp_err_t axp209_init(i2c_master_bus_handle_t bus, uint8_t address_7bit)
     if (err != ESP_OK) {
         goto fail;
     }
+    /* 只启用测量；绝不清零计数器，也不改充电电压、限流或 ADC 频率。 */
+    uint8_t coulomb_ctrl = 0u;
+    if (axp209_read_reg(AXP209_REG_COULOMB_CTRL, &coulomb_ctrl) == ESP_OK) {
+        s_coulomb_fresh_epoch = (coulomb_ctrl & 0x80u) == 0u;
+        if (s_coulomb_fresh_epoch &&
+            axp209_write_reg(AXP209_REG_COULOMB_CTRL, (uint8_t)((coulomb_ctrl & 0x1Fu) | 0x80u)) != ESP_OK) {
+            ESP_LOGW(TAG, "coulomb counter unavailable; keep voltage/fuel gauge telemetry");
+        }
+    }
+    uint8_t shutdown_cfg = 0u;
+    if (axp209_read_reg(AXP209_REG_SHUTDOWN_VOLTAGE, &shutdown_cfg) == ESP_OK) {
+        s_shutdown_voltage_mv = (uint16_t)(2600u + 100u * (shutdown_cfg & 7u));
+    }
     err = axp209_acknowledge_irq();
     if (err != ESP_OK) {
         goto fail;
@@ -314,6 +334,36 @@ esp_err_t axp209_read_snapshot(axp209_snapshot_t *snapshot)
         ((uint32_t)axp209_combine_12bit(battery_regs[6], battery_regs[7]) * 14u) / 10u;
     snapshot->internal_temp_deci_c =
         (int32_t)axp209_combine_12bit(analog_regs[8], analog_regs[9]) - 1447;
+    /* AXP209 的 bit7 是暂停控制，不是 AXP22x 的电量有效标志。 */
+    uint8_t gauge = 0x7Fu;
+    if (axp209_read_reg(AXP209_REG_FUEL_GAUGE, &gauge) == ESP_OK) {
+        snapshot->fuel_gauge_raw = gauge;
+        snapshot->fuel_gauge_percent = gauge & 0x7Fu;
+        snapshot->fuel_gauge_valid = (gauge & 0x80u) == 0u && snapshot->fuel_gauge_percent <= 100u;
+    } else snapshot->fuel_gauge_raw = 0x7Fu;
+    snapshot->shutdown_voltage_mv = s_shutdown_voltage_mv;
+    snapshot->coulomb_fresh_epoch = s_coulomb_fresh_epoch;
+    uint8_t rate = 0u, ctrl = 0u;
+    if (axp209_read_reg(AXP209_REG_ADC_RATE, &rate) == ESP_OK &&
+        axp209_read_reg(AXP209_REG_COULOMB_CTRL, &ctrl) == ESP_OK && (ctrl & 0x80u)) {
+        uint8_t first[8] = {0}, second[8] = {0};
+        const uint8_t address = AXP209_REG_COULOMB_DATA;
+        /* 两次短快照用于排除跨字节进位撕裂，不暂停硬件计量。 */
+        if (i2c_master_transmit_receive(s_axp209_dev, &address, 1, first, sizeof(first), AXP209_XFER_TIMEOUT_MS) == ESP_OK &&
+            i2c_master_transmit_receive(s_axp209_dev, &address, 1, second, sizeof(second), AXP209_XFER_TIMEOUT_MS) == ESP_OK) {
+            uint32_t a[2] = {0}, b[2] = {0};
+            for (unsigned n = 0; n < 2; ++n) for (unsigned i = 0; i < 4; ++i) {
+                a[n] = (a[n] << 8) | first[4u * n + i];
+                b[n] = (b[n] << 8) | second[4u * n + i];
+            }
+            if ((uint32_t)(b[0] - a[0]) <= 1u && (uint32_t)(b[1] - a[1]) <= 1u) {
+                snapshot->coulomb_charge_raw = b[0];
+                snapshot->coulomb_discharge_raw = b[1];
+                snapshot->coulomb_sample_hz = (uint16_t)(25u << ((rate >> 6) & 3u));
+                snapshot->coulomb_valid = true;
+            }
+        }
+    }
     return ESP_OK;
 }
 

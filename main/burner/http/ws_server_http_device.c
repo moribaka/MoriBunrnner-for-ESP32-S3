@@ -6,6 +6,7 @@
 #include "power_manager.h"
 #include "music_player.h"
 #include "smb_client.h"
+#include "lvgl_port.h"
 
 #define BURNER_POWER_STATUS_RESP_LEN 6000U
 #define SMB_JSON_BODY_MAX 640U
@@ -55,6 +56,19 @@ static bool burner_music_is_audio_name(const char *name)
            strcasecmp(ext, "ogg") == 0 || strcasecmp(ext, "opus") == 0 ||
            strcasecmp(ext, "aiff") == 0 || strcasecmp(ext, "aif") == 0 ||
            strcasecmp(ext, "aifc") == 0;
+}
+
+esp_err_t burner_power_calibration_reset_handler(httpd_req_t *req)
+{
+    char confirmation[32] = {0};
+    if (!burner_get_query_arg(req, "confirm", confirmation, sizeof(confirmation), true) ||
+        strcmp(confirmation, "reset-battery") != 0) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "confirm=reset-battery required");
+    }
+    if (power_manager_reset_battery_learning() != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "battery learning reset failed");
+    }
+    return burner_send_json(req, "{\"ok\":true}");
 }
 
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req)
@@ -131,7 +145,7 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
     int n;
     esp_err_t send_err;
 
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
 
     resp = (char *)heap_caps_malloc(BURNER_POWER_STATUS_RESP_LEN, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (resp == NULL) {
@@ -230,6 +244,11 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         "\"uptime_ms\":%" PRIu64 ",\"free_heap\":%" PRIu32 ",\"min_free_heap\":%" PRIu32 ","
         "\"power\":{\"ready\":%s,\"chip_type\":\"%s\",\"chip_name\":\"%s\","
         "\"battery_percent_valid\":%s,\"battery_percent\":%u,"
+        "\"battery_percent_raw\":%u,\"battery_percent_source\":\"%s\","
+        "\"battery_filtered_voltage_mv\":%" PRIu32 ",\"sample_age_ms\":%" PRIu32 ",\"sample_stale\":%s,"
+        "\"learned_capacity_mah\":%" PRIu32 ",\"learning_observed_mah\":%" PRIu32 ","
+        "\"learning_cycles\":%u,\"learning_discharge_cycles\":%u,\"learning_curve_points\":%u,"
+        "\"calibration_state\":\"%s\",\"calibration_storage_ok\":%s,"
         "\"charging\":%s,\"charge_full\":%s,\"vbus_present\":%s,\"battery_present\":%s,"
         "\"charge_current_limit_ma\":%u,\"battery_voltage_mv\":%" PRIu32 ",\"acin_voltage_mv\":%" PRIu32
         ",\"vbus_voltage_mv\":%" PRIu32 ",\"battery_charge_current_ma_x10\":%" PRIu32
@@ -283,6 +302,18 @@ esp_err_t burner_power_status_handler(httpd_req_t *req)
         power.chip_name != NULL ? power.chip_name : "NONE",
         burner_json_bool(power.battery_percent_valid),
         power.battery_percent,
+        power.battery_percent_raw,
+        power.battery_percent_source != NULL ? power.battery_percent_source : "unknown",
+        power.battery_filtered_voltage_mv,
+        power.sample_age_ms,
+        burner_json_bool(power.sample_stale),
+        power.learned_capacity_mah,
+        power.learning_observed_mah,
+        power.learning_cycles,
+        power.learning_discharge_cycles,
+        power.learning_curve_points,
+        power.calibration_state != NULL ? power.calibration_state : "unknown",
+        burner_json_bool(power.calibration_storage_ok),
         burner_json_bool(power.charging),
         burner_json_bool(power.charge_full),
         burner_json_bool(power.vbus_present),
@@ -542,7 +573,7 @@ esp_err_t burner_device_info_handler(httpd_req_t *req)
     char cpu_usage_text[32] = "sampling / 采样中";
     char resp[896];
 
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
 
     esp_chip_info(&chip_info);
     if (burner_cpu_monitor_update(&cpu_usage_percent)) {
@@ -671,7 +702,7 @@ esp_err_t burner_storage_status_handler(httpd_req_t *req)
         tf_used_bytes,
         tf_free_bytes);
 
-    web_ws_mark_activity();
+    web_ws_mark_network_activity();
 
     if (n < 0 || n >= (int)sizeof(resp)) {
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "json encode failed");
@@ -933,6 +964,50 @@ esp_err_t burner_lang_handler(httpd_req_t *req)
     return err;
 }
 
+esp_err_t burner_power_policy_handler(httpd_req_t *req)
+{
+    if (req->method == HTTP_POST) {
+        web_ws_mark_network_activity();
+        char body[192];
+        bool keep;
+        int screen = mori_screen_idle_off_minutes(), wifi = mori_wifi_idle_off_minutes();
+        if (burner_read_request_body(req, body, sizeof(body), NULL) != ESP_OK)
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid body");
+        (void)burner_json_get_int(body, "screen_idle_off_minutes", &screen);
+        (void)burner_json_get_int(body, "wifi_idle_off_minutes", &wifi);
+        if (screen < 0 || screen > 1440 || wifi < 0 || wifi > 1440)
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid timeout");
+        if (burner_json_get_bool(body, "wifi_keep_online", &keep)) {
+            if (wifi_maneger_set_keep_online(keep) != ESP_OK)
+                return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "policy save failed");
+        }
+        if (screen != mori_screen_idle_off_minutes() || wifi != mori_wifi_idle_off_minutes()) {
+            esp_err_t err = mori_save_power_idle_settings_to_system_ini(screen, wifi);
+            if (err != ESP_OK) return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "timeout save failed");
+            mori_set_screen_idle_off_minutes(screen);
+            mori_set_wifi_idle_off_minutes(wifi);
+        }
+    }
+    uint16_t outputs = 0;
+    bool amp_known = tca9555_read_outputs(&outputs) == ESP_OK;
+    uint32_t sleep_count;
+    uint64_t sleep_time_us;
+    power_manager_sleep_stats(&sleep_count, &sleep_time_us);
+    char response[640];
+    snprintf(response, sizeof(response),
+        "{\"ok\":true,\"wifi_keep_online\":%s,\"wifi_radio_started\":%s,"
+        "\"screen_idle_off_minutes\":%u,\"wifi_idle_off_minutes\":%u,"
+        "\"screen_sleeping\":%s,\"panel_sleeping\":%s,\"brightness\":%u,"
+        "\"amplifier_enabled\":%s,\"amplifier_known\":%s,"
+        "\"display_awake_lock\":%s,\"sleep_count\":%lu,\"sleep_time_us\":%llu}",
+        burner_json_bool(wifi_maneger_keep_online()), burner_json_bool(wifi_maneger_radio_started()),
+        mori_screen_idle_off_minutes(), mori_wifi_idle_off_minutes(),
+        burner_json_bool(lvgl_port_is_idle_dimmed()), burner_json_bool(lcd_display_is_sleeping()),
+        lcd_display_get_brightness(), burner_json_bool((outputs & TCA9555_IO1_4) != 0), burner_json_bool(amp_known),
+        burner_json_bool(power_manager_display_awake()), (unsigned long)sleep_count, (unsigned long long)sleep_time_us);
+    return burner_send_json(req, response);
+}
+
 esp_err_t burner_wifi_status_handler(httpd_req_t *req)
 {
     wifi_mode_t mode = WIFI_MODE_NULL;
@@ -1106,8 +1181,9 @@ esp_err_t burner_wifi_ap_handler(httpd_req_t *req)
 
 esp_err_t burner_wifi_disconnect_handler(httpd_req_t *req)
 {
-    (void)req;
-    wifi_maneger_disconnect();
+    /* 由监测任务停服务，避免 HTTP 处理器停止自身时死锁。 */
+    if (mori_request_wifi_off() != ESP_OK)
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "save policy failed");
     return burner_send_json(req, "{\"success\":true}");
 }
 
@@ -1119,7 +1195,8 @@ esp_err_t burner_wifi_forget_handler(httpd_req_t *req)
         return burner_send_json(req, "{\"success\":false,\"message\":\"clear config failed\"}");
     }
 
-    wifi_maneger_disconnect();
+    if (mori_request_wifi_off() != ESP_OK)
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "save policy failed");
     return burner_send_json(req, "{\"success\":true}");
 }
 

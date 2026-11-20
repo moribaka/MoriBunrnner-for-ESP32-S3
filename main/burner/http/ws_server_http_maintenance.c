@@ -654,6 +654,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
     const char *sample_error = "";
     const char *gb_mapper = "unknown";
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
+    char auto_profile_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
     bool gbx_profile_matched = false;
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
@@ -786,7 +787,8 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
                 }
                 gbx_profile_matched = (err == ESP_OK);
             } else if (recipe_mode == BURNER_RECIPE_MODE_AUTO) {
-                err = burner_auto_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+                err = burner_auto_analyze_gba_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes,
+                                                   &cfi_ok, auto_profile_name, sizeof(auto_profile_name));
             } else if (recipe_mode == BURNER_RECIPE_MODE_GBABF) {
                 err = burner_gbabf_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
             } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
@@ -958,7 +960,8 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            gbx_profile_matched && gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name : burner_gba_chip_name(gba_id),
+            gbx_profile_matched && gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name :
+                (auto_profile_name[0] ? auto_profile_name : burner_gba_chip_name(gba_id)),
             gbx_profile_matched && gbx_profile->base_cmdset != BURNER_NOR_CMDSET_UNKNOWN ? gbx_profile->base_cmdset : s_cart_ctx.gba_cmdset,
             device_size);
         if (gba_likely_read_only) {
@@ -981,7 +984,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            gbx_profile_matched ? "GBX" :
+            auto_profile_name[0] ? "AUTO:GBX" : gbx_profile_matched ? "GBX" :
                                   ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "GBABF" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""))));
         burner_status_set_gba_save_probe(gba_save_type, gba_save_size, gba_save_detected);
         burner_status_set_gba_batteryless_probe(
@@ -1029,7 +1032,7 @@ esp_err_t burner_cart_id_debug_handler(httpd_req_t *req)
             id_hex,
             gba_chip_label,
             burner_recipe_mode_to_str(recipe_mode),
-            gbx_profile_matched ? "gbx" :
+            auto_profile_name[0] ? "AUTO:GBX" : gbx_profile_matched ? "gbx" :
                                   ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "gbabf" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"))),
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),
@@ -1089,6 +1092,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
     const char *gba_chip_label = NULL;
     const char *gb_mapper = "unknown";
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
+    char auto_profile_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
     bool gbx_profile_matched = false;
     bool cfi_ok = false;
     bool gba_id_looks_like_rom_header = false;
@@ -1209,7 +1213,8 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
                 }
                 gbx_profile_matched = (err == ESP_OK);
             } else if (recipe_mode == BURNER_RECIPE_MODE_AUTO) {
-                err = burner_auto_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+                err = burner_auto_analyze_gba_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes,
+                                                   &cfi_ok, auto_profile_name, sizeof(auto_profile_name));
             } else if (recipe_mode == BURNER_RECIPE_MODE_GBABF) {
                 err = burner_gbabf_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
             } else if (recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
@@ -1320,7 +1325,8 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
         burner_nor_format_chip_name(
             chip_name,
             sizeof(chip_name),
-            gbx_profile_matched && gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name : burner_gba_chip_name(gba_id),
+            gbx_profile_matched && gbx_profile->display_name[0] != '\0' ? gbx_profile->display_name :
+                (auto_profile_name[0] ? auto_profile_name : burner_gba_chip_name(gba_id)),
             gbx_profile_matched && gbx_profile->base_cmdset != BURNER_NOR_CMDSET_UNKNOWN ? gbx_profile->base_cmdset : s_cart_ctx.gba_cmdset,
             device_size);
         if (gba_likely_read_only) {
@@ -1345,7 +1351,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            gbx_profile_matched ? "GBX" :
+            auto_profile_name[0] ? "AUTO:GBX" : gbx_profile_matched ? "GBX" :
                                   ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "GBABF" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""))));
         {
             esp_err_t analysis_err = burner_probe_gba_rom_analysis(
@@ -1416,7 +1422,7 @@ esp_err_t burner_cart_id_handler(httpd_req_t *req)
             id_hex,
             gba_chip_label,
             burner_recipe_mode_to_str(recipe_mode),
-            gbx_profile_matched ? "gbx" :
+            auto_profile_name[0] ? "AUTO:GBX" : gbx_profile_matched ? "gbx" :
                                   ((recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "gbabf" : ((recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "chislink" : "chis"))),
             (probe_family != NULL && probe_family->name != NULL) ? probe_family->name : "",
             burner_nor_cmdset_name(probe_cmdset),

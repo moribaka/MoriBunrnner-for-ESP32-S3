@@ -2,6 +2,7 @@
 #include "ag32_batch_programmer.h"
 
 #include <ctype.h>
+#include <sys/param.h>
 #include <dirent.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -36,6 +37,7 @@
 #include "libs/qrcode/qrcodegen.h"
 #include "music_player.h"
 #include "mori_system_settings.h"
+#include "nvs.h"
 #include "smb_client.h"
 #include "power_manager.h"
 #include "epub_native.h"
@@ -57,43 +59,25 @@
 #define UI_CANVAS_PIXELS (UI_CANVAS_W * UI_CANVAS_H)
 #define UI_COLOR_BLACK 0x0000U
 #define UI_COLOR_WHITE 0xFFFFU
+#define UI_RGB565(r, g, b) ((((r) & 0xF8U) << 8U) | (((g) & 0xFCU) << 3U) | ((b) >> 3U))
+#define UI_COLOR_HOME_PAPER UI_RGB565(251, 242, 227)
+#define UI_COLOR_HOME_TILE UI_RGB565(255, 250, 240)
+#define UI_COLOR_PAPER UI_RGB565(248, 226, 182)
+#define UI_COLOR_INK UI_RGB565(48, 34, 28)
+#define UI_COLOR_AMBER UI_RGB565(255, 209, 124)
+#define UI_COLOR_ORANGE UI_RGB565(173, 78, 32)
+#define UI_COLOR_SAND UI_RGB565(240, 226, 205)
+#define UI_COLOR_TILE UI_RGB565(255, 235, 194)
+#define UI_COLOR_TILE_BORDER UI_RGB565(228, 201, 168)
+#define UI_COLOR_FOCUS_BORDER UI_RGB565(187, 98, 44)
+static uint16_t s_px_foreground = UI_COLOR_INK;
 
-#define UI_TILE_GRID_COLS 4
-#define UI_TILE_GRID_ROWS 2
-#define UI_TILE_PAGE_H 38
-#define UI_TILE_PAGE_GAP_X 8
-#define UI_TILE_PAGE_GAP_Y 12
-#define UI_TILE_PAGE_TOP 38
-#define UI_TILE_PAGE_BOTTOM_HINT_GAP 10
-#define UI_TILE_CELL_W ((UI_CANVAS_W - UI_TILE_PAGE_GAP_X * (UI_TILE_GRID_COLS + 1)) / UI_TILE_GRID_COLS)
-#define UI_TILE_CELL_H ((UI_CANVAS_H - UI_TILE_PAGE_TOP - UI_HINT_H - UI_TILE_PAGE_BOTTOM_HINT_GAP - UI_TILE_PAGE_GAP_Y * (UI_TILE_GRID_ROWS - 1)) / UI_TILE_GRID_ROWS)
-#define UI_TILE_ICON_AUTO_SIZE ((UI_TILE_CELL_W < UI_TILE_CELL_H ? UI_TILE_CELL_W : UI_TILE_CELL_H) - 20)
-#define UI_TILE_ICON_SIZE ((UI_TILE_ICON_AUTO_SIZE < 28) ? 28 : ((UI_TILE_ICON_AUTO_SIZE > 44) ? 44 : UI_TILE_ICON_AUTO_SIZE))
-#define UI_TILE_ICON_Y 52
-#define UI_TILE_ICON_SPACING (UI_TILE_ICON_SIZE + (UI_TILE_ICON_SIZE / 2))
-#define UI_TILE_SELECTOR_MARGIN 5
-#define UI_TILE_TITLE_Y (UI_TILE_ICON_Y + UI_TILE_ICON_SIZE + 30)
-#define UI_TILE_HINT_Y (UI_TILE_TITLE_Y + 16)
-#define UI_TILE_DOTTED_Y (UI_TILE_HINT_Y + 16)
-#define UI_TILE_ARROW_Y 214
-#define UI_TILE_BAR_H 2
-#define UI_TILE_SELECT_LINE 5
-#define UI_TILE_HEADER_Y0 0
-#define UI_TILE_HEADER_H 38
-#define UI_TILE_ICON_DYNAMIC_Y0 (UI_TILE_ICON_Y - UI_TILE_SELECTOR_MARGIN)
-#define UI_TILE_ICON_DYNAMIC_H (UI_TILE_ICON_SIZE + UI_TILE_SELECTOR_MARGIN * 2)
-#define UI_TEXT_GLYPH_TOP_OFFSET ((UI_CJK_Y_OFFSET < UI_ASCII_ZH_Y_OFFSET) ? UI_CJK_Y_OFFSET : UI_ASCII_ZH_Y_OFFSET)
 #define UI_TEXT_GLYPH_H ((UI_HZK16_H > UI_ASCII_ZH_H) ? UI_HZK16_H : UI_ASCII_ZH_H)
-#define UI_TILE_TEXT_DYNAMIC_Y0 (UI_TILE_TITLE_Y + UI_TEXT_GLYPH_TOP_OFFSET - 1)
-#define UI_TILE_TEXT_DYNAMIC_H (UI_TILE_HINT_Y - UI_TILE_TITLE_Y + UI_TEXT_GLYPH_H + 2)
-#define UI_TILE_DOT_DYNAMIC_Y0 (UI_TILE_DOTTED_Y - 1)
-#define UI_TILE_DOT_DYNAMIC_H 4
 #define UI_BURNER_ICON_W 86
 #define UI_BURNER_ICON_H 72
 #define UI_BURNER_ICON_GBA_X 56
 #define UI_BURNER_ICON_GBC_X 178
 #define UI_BURNER_ICON_Y 76
-#define UI_BURNER_SELECT_MARGIN 5
 
 #define UI_LIST_LINE_H 16
 #define UI_LIST_TEXT_X 4
@@ -116,14 +100,12 @@
 #define UI_FPS_TEXT_MAX_LEN 12
 #define UI_TITLE_TEXT_MAX_LEN 32
 
-#define UI_HOME_FIXED_COUNT APP_REGISTRY_HOME_FIXED_COUNT
 #define UI_HOME_APP_MAX APP_REGISTRY_HOME_APP_MAX
-#define UI_HOME_ICON_MAX APP_REGISTRY_HOME_ICON_MAX
 #define UI_TF_ITEM_COUNT 7
 #define UI_WIFI_ITEM_COUNT 8
 #define UI_SMB_BASE_ITEM_COUNT 12
 #define UI_SMB_INPUT_ACTION_COUNT 3U
-#define UI_POWER_ITEM_COUNT 14
+#define UI_POWER_ITEM_COUNT 19
 #define UI_SYSTEM_ITEM_COUNT 5
 #define UI_BURNER_MODE_COUNT 2
 #define UI_BURN_ROM_LOCKED_ITEM_COUNT 3
@@ -145,7 +127,8 @@
 /* First info row baseline inside the cart-info panel: title (8px) + title line + 2px gap. */
 #define UI_BURN_INFO_ROW_Y0 (8 + UI_LIST_LINE_H + 2)
 #define UI_BURN_SAVE_ITEM_COUNT 8
-#define UI_SETTINGS_ITEM_COUNT 11
+#define UI_SETTINGS_ITEM_COUNT 12
+#define UI_SETTING_CHARACTER_THEME 11U
 #define UI_TASK_STATUS_ITEM_COUNT 12
 #define UI_TASK_PATCH_BASE_ROW UI_TASK_STATUS_ITEM_COUNT
 #define UI_TASK_RESULT_ITEM_COUNT 19
@@ -224,9 +207,6 @@
 #define UI_READER_SCAN_CHUNK_BYTES 4096U
 #define UI_READER_WINDOW_PAGES 24U
 #define UI_READER_PREFETCH_PERCENT 70U
-#define UI_TILE_CAMERA_SPEED 92.0f
-#define UI_TILE_BAR_SPEED 88.0f
-#define UI_TILE_FORE_SPEED 90.0f
 #define UI_LIST_SELECTOR_Y_SPEED 96.0f
 #define UI_LIST_SELECTOR_W_SPEED 94.0f
 #define UI_LIST_BAR_SPEED 92.0f
@@ -273,6 +253,7 @@ typedef enum {
     UI_PAGE_TASK_STATUS,
     UI_PAGE_TASK_RESULT,
     UI_PAGE_AG32_UPDATE,
+    UI_PAGE_APPS,
     UI_PAGE_COUNT,
 } ui_page_t;
 
@@ -453,6 +434,7 @@ typedef struct {
     int gba_patch_progress[3];
     char gba_patch_message[3][32];
     bool task_result_status_valid;
+    bool theme_baicheng;
     uint8_t battery_percent;
     bool battery_valid;
     bool battery_charging;
@@ -581,6 +563,8 @@ typedef struct {
 typedef struct {
     ui_page_t page;
     ui_page_t parent;
+    uint16_t selected;
+    uint16_t scroll;
 } ui_nav_entry_t;
 
 typedef struct {
@@ -595,19 +579,8 @@ typedef struct {
 } ui_burn_layout_t;
 
 typedef struct {
-    const ui_menu_item_t *items;
-    uint16_t count;
-    uint8_t cols;
-    uint8_t rows;
-} ui_icon_page_config_t;
-
-typedef struct {
     float tile_camera_x;
     float tile_camera_target_x;
-    float tile_bar_w;
-    float tile_bar_target_w;
-    float tile_fore_y;
-    float tile_fore_target_y;
     float list_selector_y;
     float list_selector_target_y;
     float list_selector_w;
@@ -620,8 +593,6 @@ typedef struct {
     float list_camera_target_y;
     uint16_t marquee_selected;
     uint32_t marquee_selected_since_ms;
-    uint16_t burner_prev_selected;
-    uint16_t icon_prev_selected;
     ui_page_t page;
     bool page_changed;
     int32_t list_prev_selector_y;
@@ -659,6 +630,7 @@ static uint32_t s_last_clock_refresh_ms = 0;
 static uint32_t s_last_fps_refresh_ms = 0;
 static uint32_t s_render_frames_this_second = 0;
 static uint32_t s_last_battery_refresh_ms = 0;
+static uint32_t s_battery_reset_confirm_until_ms = 0;
 static uint32_t s_last_live_refresh_ms = 0;
 static uint32_t s_last_button_queue_full_log_ms = 0;
 static DRAM_ATTR burner_status_t s_task_result_status = {0};
@@ -699,6 +671,7 @@ static ui_button_page_map_t s_button_page_maps[] = {
     {.page = UI_PAGE_TASK_STATUS},
     {.page = UI_PAGE_TASK_RESULT},
     {.page = UI_PAGE_AG32_UPDATE},
+    {.page = UI_PAGE_APPS},
 };
 _Static_assert(sizeof(s_button_page_maps) / sizeof(s_button_page_maps[0]) == UI_PAGE_COUNT,
                "Every UI page needs a button map");
@@ -1024,20 +997,11 @@ static void ui_capture_task_result_locked(ui_model_t *model, const burner_status
     s_task_result_active_seen = false;
 }
 
-static const ui_menu_item_t s_home_system_item = {
-    .title = "System",
-    .hint = "web overview",
-    .symbol = "SYS",
-    .action = UI_ACTION_OPEN_SYSTEM,
-    .accent = UI_COLOR_WHITE,
-};
-
-static const ui_menu_item_t s_home_burner_item = {
-    .title = "Burner",
-    .hint = "cart operations",
-    .symbol = "BURN",
-    .action = UI_ACTION_OPEN_BURNER,
-    .accent = UI_COLOR_WHITE,
+static const ui_menu_item_t s_home_items[] = {
+    {.title = "Cart workbench", .action = UI_ACTION_OPEN_BURNER},
+    {.title = "TF files", .action = UI_ACTION_OPEN_TF},
+    {.title = "Apps", .action = UI_ACTION_OPEN_APP_MANAGER},
+    {.title = "System", .action = UI_ACTION_OPEN_SYSTEM},
 };
 
 static const ui_menu_item_t s_home_retro_go_item = {
@@ -1049,16 +1013,16 @@ static const ui_menu_item_t s_home_retro_go_item = {
 };
 
 static app_config_t s_app_config = {0};
-static ui_menu_item_t s_home_items[UI_HOME_ICON_MAX] = {0};
-static uint16_t s_home_item_count = 0;
+static ui_menu_item_t s_app_items[UI_HOME_APP_MAX + 1U] = {0};
+static uint16_t s_app_item_count = 0;
 static bool s_home_items_ready = false;
 
 static const ui_menu_item_t s_system_items[UI_SYSTEM_ITEM_COUNT] = {
-    {.title = "Apps", .hint = "home shortcuts", .symbol = "APP", .action = UI_ACTION_OPEN_APP_MANAGER, .accent = UI_COLOR_WHITE},
-    {.title = "TF", .hint = "files and USB", .symbol = "TF", .action = UI_ACTION_OPEN_TF, .accent = UI_COLOR_WHITE},
     {.title = "Settings", .hint = "device tools", .symbol = "CFG", .action = UI_ACTION_OPEN_SETTINGS, .accent = UI_COLOR_WHITE},
-    {.title = "Power", .hint = "battery telemetry", .symbol = "PWR", .action = UI_ACTION_OPEN_POWER, .accent = UI_COLOR_WHITE},
     {.title = "Wi-Fi", .hint = "network setup", .symbol = "WIFI", .action = UI_ACTION_OPEN_WIFI, .accent = UI_COLOR_WHITE},
+    {.title = "TF", .hint = "files and USB", .symbol = "TF", .action = UI_ACTION_OPEN_TF, .accent = UI_COLOR_WHITE},
+    {.title = "Power", .hint = "battery telemetry", .symbol = "PWR", .action = UI_ACTION_OPEN_POWER, .accent = UI_COLOR_WHITE},
+    {.title = "App manager", .hint = "show and sort apps", .symbol = "APP", .action = UI_ACTION_OPEN_APP_MANAGER, .accent = UI_COLOR_WHITE},
 };
 
 static bool ui_take_model_lock(void);
@@ -1089,9 +1053,6 @@ static void ui_burn_rom_open_mapper_menu_locked(ui_model_t *model);
 static void ui_persist_burn_settings_locked(ui_model_t *model);
 static const char *ui_selected_gb_mapper_label(void);
 static void ui_push_current_page_locked(const ui_model_t *model);
-static bool ui_page_is_icon_grid(ui_page_t page);
-static bool ui_icon_page_config_for_page(ui_page_t page, ui_icon_page_config_t *config_out);
-static uint16_t ui_icon_page_move_selection(uint16_t selected, uint16_t count, uint8_t cols, uint8_t rows, int dx, int dy);
 static bool ui_file_page_is_book_scope(const ui_model_t *model);
 static bool ui_reader_text_file_supported_name(const char *name);
 static bool ui_reader_native_file_supported_name(const char *name);
@@ -1276,20 +1237,12 @@ static bool ui_action_for_app_id(app_id_t id, ui_action_t *action_out)
     }
 }
 
-static void ui_home_append_item(const ui_menu_item_t *item)
-{
-    if (item == NULL || s_home_item_count >= UI_HOME_ICON_MAX) {
-        return;
-    }
-    s_home_items[s_home_item_count++] = *item;
-}
-
 static void ui_home_append_app(app_id_t app_id)
 {
     const app_descriptor_t *desc = app_registry_get(app_id);
     ui_menu_item_t item = {0};
 
-    if (desc == NULL || s_home_item_count >= UI_HOME_ICON_MAX) {
+    if (desc == NULL) {
         return;
     }
     if (!ui_action_for_app_id(desc->id, &item.action)) {
@@ -1300,22 +1253,16 @@ static void ui_home_append_app(app_id_t app_id)
     snprintf(item.hint, sizeof(item.hint), "%s", desc->hint);
     item.symbol = desc->symbol;
     item.accent = UI_COLOR_WHITE;
-    ui_home_append_item(&item);
+    s_app_items[s_app_item_count++] = item;
 }
 
 static void ui_home_rebuild_items(void)
 {
-    memset(s_home_items, 0, sizeof(s_home_items));
-    s_home_item_count = 0;
-    ui_home_append_item(&s_home_system_item);
+    s_app_item_count = 0;
     for (size_t i = 0; i < s_app_config.count && i < UI_HOME_APP_MAX; ++i) {
         ui_home_append_app(s_app_config.apps[i]);
     }
-    ui_home_append_item(&s_home_burner_item);
-    ui_home_append_item(&s_home_retro_go_item);
-    if (s_root_selected >= s_home_item_count) {
-        s_root_selected = 0;
-    }
+    s_app_items[s_app_item_count++] = s_home_retro_go_item;
     s_home_items_ready = true;
 }
 
@@ -1327,26 +1274,46 @@ static void ui_home_load_config(void)
         ESP_LOGW(UI_TAG, "app launcher config loaded with issues: %s", esp_err_to_name(err));
     }
     ui_home_rebuild_items();
-    ESP_LOGI(UI_TAG, "home launcher items=%u apps=%u", (unsigned)s_home_item_count, (unsigned)s_app_config.count);
+    ESP_LOGI(UI_TAG, "launcher apps=%u", (unsigned)s_app_item_count);
 }
 
 static uint16_t ui_home_item_count(void)
 {
-    if (!s_home_items_ready) {
-        ui_home_load_config();
-    }
-    return s_home_item_count;
+    return sizeof(s_home_items) / sizeof(s_home_items[0]);
 }
 
 static const ui_menu_item_t *ui_home_item_at(uint16_t index)
 {
-    if (!s_home_items_ready) {
-        ui_home_load_config();
-    }
-    if (index >= s_home_item_count) {
+    if (index >= ui_home_item_count()) {
         return NULL;
     }
     return &s_home_items[index];
+}
+
+static bool ui_save_character_theme(bool baicheng)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("mori_ui", NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return false;
+    }
+    err = nvs_set_u8(handle, "baicheng", baicheng);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    return err == ESP_OK;
+}
+
+static bool ui_load_character_theme(void)
+{
+    nvs_handle_t handle;
+    uint8_t baicheng = 0;
+    if (nvs_open("mori_ui", NVS_READONLY, &handle) == ESP_OK) {
+        (void)nvs_get_u8(handle, "baicheng", &baicheng);
+        nvs_close(handle);
+    }
+    return baicheng != 0U;
 }
 
 static uint16_t ui_app_manager_item_count(void)
@@ -1486,7 +1453,7 @@ static const char *ui_root_item_title(const ui_menu_item_t *item)
         case UI_ACTION_OPEN_APP_MANAGER:
             return ui_tr("Apps");
         case UI_ACTION_OPEN_TF:
-            return "TF";
+            return ui_tr("TF files");
         case UI_ACTION_OPEN_READER:
             return ui_tr("Reader");
         case UI_ACTION_OPEN_MUSIC:
@@ -1496,7 +1463,7 @@ static const char *ui_root_item_title(const ui_menu_item_t *item)
         case UI_ACTION_OPEN_POWER:
             return ui_tr("Power");
         case UI_ACTION_OPEN_BURNER:
-            return ui_tr("Burner");
+            return ui_tr("Cart workbench");
         case UI_ACTION_OPEN_SETTINGS:
             return ui_tr("Settings");
         case UI_ACTION_OPEN_RETRO_GO:
@@ -1537,97 +1504,6 @@ static const char *ui_root_item_hint(const ui_menu_item_t *item)
     }
 }
 
-static bool ui_page_is_icon_grid(ui_page_t page)
-{
-    return page == UI_PAGE_ROOT || page == UI_PAGE_SYSTEM;
-}
-
-static bool ui_icon_page_config_for_page(ui_page_t page, ui_icon_page_config_t *config_out)
-{
-    ui_icon_page_config_t config = {0};
-
-    switch (page) {
-        case UI_PAGE_ROOT:
-            config.items = s_home_items;
-            config.count = ui_home_item_count();
-            break;
-        case UI_PAGE_SYSTEM:
-            config.items = s_system_items;
-            config.count = UI_SYSTEM_ITEM_COUNT;
-            break;
-        default:
-            return false;
-    }
-    config.cols = UI_TILE_GRID_COLS;
-    config.rows = UI_TILE_GRID_ROWS;
-    if (config_out != NULL) {
-        *config_out = config;
-    }
-    return true;
-}
-
-static uint16_t ui_icon_page_move_selection(uint16_t selected, uint16_t count, uint8_t cols, uint8_t rows, int dx, int dy)
-{
-    uint16_t page_slots;
-    uint16_t page_index;
-    uint16_t page_base;
-    uint16_t page_count;
-    uint16_t local_index;
-    uint16_t local_rows;
-    uint16_t row;
-    uint16_t col;
-    uint16_t target_index;
-
-    if (count == 0U || cols == 0U || rows == 0U) {
-        return 0U;
-    }
-    page_slots = (uint16_t)(cols * rows);
-    if (page_slots == 0U) {
-        return 0U;
-    }
-    if (selected >= count) {
-        selected = 0U;
-    }
-    page_index = (uint16_t)(selected / page_slots);
-    page_base = (uint16_t)(page_index * page_slots);
-    page_count = (uint16_t)((count - page_base) > page_slots ? page_slots : (count - page_base));
-    local_index = (uint16_t)(selected - page_base);
-    local_rows = (uint16_t)((page_count + cols - 1U) / cols);
-    row = (uint16_t)(local_index / cols);
-    col = (uint16_t)(local_index % cols);
-
-    if (dx != 0) {
-        uint16_t row_count = (uint16_t)((row == local_rows - 1U && (page_count % cols) != 0U) ? (page_count % cols) : cols);
-        if (row_count == 0U) {
-            row_count = cols;
-        }
-        col = (uint16_t)((col + row_count + (dx > 0 ? 1 : -1)) % row_count);
-    }
-    if (dy != 0) {
-        int target_row = (int)row + (dy > 0 ? 1 : -1);
-
-        if (target_row < 0) {
-            target_row = (int)local_rows - 1;
-        } else if (target_row >= (int)local_rows) {
-            target_row = 0;
-        }
-        row = (uint16_t)target_row;
-        if (row == local_rows - 1U && (page_count % cols) != 0U) {
-            uint16_t row_count = (uint16_t)(page_count % cols);
-
-            if (row_count != 0U && col >= row_count) {
-                col = (uint16_t)(row_count - 1U);
-            }
-        }
-    }
-
-    target_index = (uint16_t)(page_base + row * cols + col);
-    if (target_index >= page_base + page_count) {
-        target_index = (uint16_t)(page_base + page_count - 1U);
-    }
-    return target_index;
-}
-
 static const char *ui_system_item_title(const ui_menu_item_t *item)
 {
     if (item == NULL) {
@@ -1643,7 +1519,7 @@ static const char *ui_system_item_title(const ui_menu_item_t *item)
         case UI_ACTION_OPEN_WIFI:
             return "Wi-Fi";
         default:
-            return item->title;
+            return ui_tr(item->title);
     }
 }
 
@@ -1662,7 +1538,7 @@ static const char *ui_system_item_hint(const ui_menu_item_t *item)
         case UI_ACTION_OPEN_WIFI:
             return ui_tr("network setup");
         default:
-            return item->hint;
+            return ui_tr(item->hint);
     }
 }
 
@@ -1702,15 +1578,11 @@ static const uint32_t s_dump_chunk_kb_options[] = {32U, 64U, 128U, 256U};
 static const uint32_t s_power_settle_ms_options[] = {100U, 200U, 400U, 800U, 1000U};
 
 static ui_anim_state_t s_anim = {
-    .tile_fore_y = (float)UI_CANVAS_H,
-    .tile_fore_target_y = 0.0f,
     .list_bar_x = (float)UI_CANVAS_W,
     .list_bar_target_x = (float)(UI_CANVAS_W - UI_LIST_BAR_W),
     .music_drawer_x = (float)UI_MUSIC_DRAWER_X_CLOSED,
     .music_drawer_target_x = (float)UI_MUSIC_DRAWER_X_CLOSED,
     .marquee_selected = UINT16_MAX,
-    .burner_prev_selected = UINT16_MAX,
-    .icon_prev_selected = UINT16_MAX,
     .page = UI_PAGE_ROOT,
     .page_changed = true,
 };
@@ -1897,7 +1769,7 @@ static void ui_px_clear(void)
         return;
     }
     for (uint32_t i = 0; i < UI_CANVAS_PIXELS; ++i) {
-        s_canvas_buf[i] = UI_COLOR_BLACK;
+        s_canvas_buf[i] = UI_COLOR_PAPER;
     }
 }
 
@@ -1929,7 +1801,7 @@ static void ui_px_clear_rect(int32_t x, int32_t y, int32_t w, int32_t h)
     for (int32_t yy = y0; yy < y1; ++yy) {
         uint16_t *row = &s_canvas_buf[(uint32_t)yy * UI_CANVAS_W + (uint32_t)x0];
         for (int32_t xx = x0; xx < x1; ++xx) {
-            *row++ = UI_COLOR_BLACK;
+            *row++ = UI_COLOR_PAPER;
         }
     }
 }
@@ -2027,10 +1899,10 @@ static void ui_px_set(int32_t x, int32_t y, bool on)
         (x < s_px_clip_x0 || y < s_px_clip_y0 || x >= s_px_clip_x1 || y >= s_px_clip_y1)) {
         return;
     }
-    s_canvas_buf[(uint32_t)y * UI_CANVAS_W + (uint32_t)x] = on ? UI_COLOR_WHITE : UI_COLOR_BLACK;
+    s_canvas_buf[(uint32_t)y * UI_CANVAS_W + (uint32_t)x] = on ? s_px_foreground : UI_COLOR_PAPER;
 }
 
-static void ui_px_toggle(int32_t x, int32_t y)
+static void ui_px_highlight_pixel(int32_t x, int32_t y)
 {
     uint16_t *px = NULL;
 
@@ -2042,7 +1914,9 @@ static void ui_px_toggle(int32_t x, int32_t y)
         return;
     }
     px = &s_canvas_buf[(uint32_t)y * UI_CANVAS_W + (uint32_t)x];
-    *px = (*px == UI_COLOR_BLACK) ? UI_COLOR_WHITE : UI_COLOR_BLACK;
+    if (*px == UI_COLOR_PAPER || *px == UI_COLOR_TILE) {
+        *px = UI_COLOR_AMBER;
+    }
 }
 
 static void ui_px_hline(int32_t x, int32_t y, int32_t w, bool on)
@@ -2059,11 +1933,28 @@ static void ui_px_vline(int32_t x, int32_t y, int32_t h, bool on)
     }
 }
 
+static void ui_px_color_box(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t color)
+{
+    int32_t x0 = MAX(x, 0);
+    int32_t x1 = MIN(x + w, UI_CANVAS_W);
+    int32_t y0 = MAX(y, 0);
+    int32_t y1 = MIN(y + h, UI_CANVAS_H);
+    if (s_px_clip_active) {
+        x0 = MAX(x0, s_px_clip_x0);
+        x1 = MIN(x1, s_px_clip_x1);
+        y0 = MAX(y0, s_px_clip_y0);
+        y1 = MIN(y1, s_px_clip_y1);
+    }
+    if (x0 >= x1 || y0 >= y1 || s_canvas_buf == NULL) return;
+    for (int32_t row = y0; row < y1; ++row) {
+        uint16_t *line = s_canvas_buf + row * UI_CANVAS_W;
+        for (int32_t col = x0; col < x1; ++col) line[col] = color;
+    }
+}
+
 static void ui_px_box(int32_t x, int32_t y, int32_t w, int32_t h, bool on)
 {
-    for (int32_t yy = 0; yy < h; ++yy) {
-        ui_px_hline(x, y + yy, w, on);
-    }
+    ui_px_color_box(x, y, w, h, on ? s_px_foreground : UI_COLOR_PAPER);
 }
 
 static void ui_px_frame(int32_t x, int32_t y, int32_t w, int32_t h, bool on)
@@ -2077,32 +1968,23 @@ static void ui_px_frame(int32_t x, int32_t y, int32_t w, int32_t h, bool on)
     ui_px_vline(x + w - 1, y, h, on);
 }
 
-static void ui_px_invert_rect(int32_t x, int32_t y, int32_t w, int32_t h)
+static void ui_px_panel(int32_t x, int32_t y, int32_t w, int32_t h, bool focused)
+{
+    const uint16_t border = focused ? UI_COLOR_FOCUS_BORDER : UI_COLOR_TILE_BORDER;
+    ui_px_color_box(x, y, w, 1, border);
+    ui_px_color_box(x, y + h - 1, w, 1, border);
+    ui_px_color_box(x, y + 1, 1, h - 2, border);
+    ui_px_color_box(x + w - 1, y + 1, 1, h - 2, border);
+    ui_px_color_box(x + 1, y + 1, w - 2, h - 2, focused ? UI_COLOR_AMBER : UI_COLOR_TILE);
+}
+
+static void ui_px_highlight_rect(int32_t x, int32_t y, int32_t w, int32_t h)
 {
     for (int32_t yy = 0; yy < h; ++yy) {
         for (int32_t xx = 0; xx < w; ++xx) {
-            ui_px_toggle(x + xx, y + yy);
+            ui_px_highlight_pixel(x + xx, y + yy);
         }
     }
-}
-
-static void ui_px_corner_box_draw(int32_t x, int32_t y, int32_t w, int32_t h, bool on)
-{
-    const int32_t len = UI_TILE_SELECT_LINE;
-
-    ui_px_hline(x, y, len + 1, on);
-    ui_px_vline(x, y, len + 1, on);
-    ui_px_hline(x, y + h - 1, len + 1, on);
-    ui_px_vline(x, y + h - len - 1, len + 1, on);
-    ui_px_hline(x + w - len - 1, y, len + 1, on);
-    ui_px_vline(x + w - 1, y, len + 1, on);
-    ui_px_hline(x + w - len - 1, y + h - 1, len + 1, on);
-    ui_px_vline(x + w - 1, y + h - len - 1, len + 1, on);
-}
-
-static void ui_px_corner_box(int32_t x, int32_t y, int32_t w, int32_t h)
-{
-    ui_px_corner_box_draw(x, y, w, h, true);
 }
 
 static const uint8_t *ui_font5x7(char ch)
@@ -2871,6 +2753,14 @@ static bool ui_anim_value_active(float value, float target)
     return diff > 0.5f || diff < -0.5f;
 }
 
+static bool ui_sleeve_scroll_active(void);
+
+static bool ui_sleeve_page_active(const ui_model_t *model)
+{
+    return model->page == UI_PAGE_BURN_ROM &&
+           s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_NONE && !s_burner_focus_info;
+}
+
 static bool ui_anim_active_for_page(const ui_model_t *model)
 {
     ui_file_entry_t entry = {0};
@@ -2880,12 +2770,11 @@ static bool ui_anim_active_for_page(const ui_model_t *model)
     if (model == NULL) {
         return false;
     }
-    if (ui_page_is_icon_grid(model->page)) {
-        return ui_anim_value_active(s_anim.tile_bar_w, s_anim.tile_bar_target_w);
+    if (model->page == UI_PAGE_BURN_ROM) {
+        return ui_sleeve_page_active(model) && ui_sleeve_scroll_active();
     }
-    if (model->page == UI_PAGE_BURNER) {
-        return ui_anim_value_active(s_anim.tile_bar_w, s_anim.tile_bar_target_w) ||
-               ui_anim_value_active(s_anim.tile_fore_y, s_anim.tile_fore_target_y);
+    if (model->page == UI_PAGE_ROOT || model->page == UI_PAGE_BURNER) {
+        return false;
     }
     if (model->page == UI_PAGE_MUSIC_PLAYER) {
         return ui_anim_value_active(s_anim.music_drawer_x, s_anim.music_drawer_target_x) ||
@@ -3430,14 +3319,8 @@ static void ui_format_page_header(const ui_model_t *model, char *header, size_t 
     }
 
     snprintf(header, header_len, "%s", ui_page_title(model->page));
-    if (ui_page_is_icon_grid(model->page)) {
-        if (model->page == UI_PAGE_ROOT) {
-            snprintf(header, header_len, "MORI");
-        }
-        return;
-    }
     if (model->page == UI_PAGE_BURNER) {
-        snprintf(header, header_len, "%s", ui_tr("Burner"));
+        snprintf(header, header_len, "%s", ui_tr("Cart workbench"));
         return;
     }
     if (model->page == UI_PAGE_READER && s_reader_ctx.active && s_reader_ctx.path[0] != '\0') {
@@ -3470,6 +3353,8 @@ static const char *ui_page_title(ui_page_t page)
             return ui_tr("System");
         case UI_PAGE_APP_MANAGER:
             return ui_tr("Apps");
+        case UI_PAGE_APPS:
+            return ui_tr("Apps");
         case UI_PAGE_TF:
             return "TF";
         case UI_PAGE_MUSIC_FILES:
@@ -3477,7 +3362,7 @@ static const char *ui_page_title(ui_page_t page)
         case UI_PAGE_MUSIC_PLAYER:
             return ui_tr("Now Playing");
         case UI_PAGE_FILES:
-            return ui_tr("Files");
+            return ui_tr("TF files");
         case UI_PAGE_READER:
             return ui_tr("Reader");
         case UI_PAGE_FILE_ACTIONS:
@@ -3951,15 +3836,17 @@ static void ui_open_book_library_locked(ui_model_t *model, bool reset_selection)
 static void ui_open_music_library_locked(ui_model_t *model, bool reset_selection)
 {
     bool restored = false;
+    ui_page_t parent;
 
     if (model == NULL) {
         return;
     }
+    parent = model->page == UI_PAGE_MUSIC_PLAYER ? model->parent_page : model->page;
     if (model->page != UI_PAGE_MUSIC_PLAYER) {
         ui_push_current_page_locked(model);
     }
     model->page = UI_PAGE_MUSIC_PLAYER;
-    model->parent_page = UI_PAGE_ROOT;
+    model->parent_page = parent;
     model->selected = 0;
     model->scroll = 0;
     model->file_filter = UI_FILE_FILTER_AUDIO;
@@ -3969,7 +3856,7 @@ static void ui_open_music_library_locked(ui_model_t *model, bool reset_selection
     restored = ui_music_restore_history_locked(model);
     if (restored) {
         model->page = UI_PAGE_MUSIC_PLAYER;
-        model->parent_page = UI_PAGE_ROOT;
+        model->parent_page = parent;
         model->selected = 0;
         model->scroll = 0;
         ui_set_status_locked(model, s_music_ctx.current.name[0] != '\0' ? s_music_ctx.current.name : ui_tr("Music"));
@@ -4343,6 +4230,8 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
             return UI_SYSTEM_ITEM_COUNT;
         case UI_PAGE_APP_MANAGER:
             return ui_app_manager_item_count();
+        case UI_PAGE_APPS:
+            return s_app_item_count;
         case UI_PAGE_TF:
             return UI_TF_ITEM_COUNT;
         case UI_PAGE_MUSIC_FILES:
@@ -4365,7 +4254,7 @@ static uint16_t ui_page_item_count(const ui_model_t *model)
         case UI_PAGE_SMB_TEXT_INPUT:
             return ui_smb_text_input_count();
         case UI_PAGE_POWER:
-            return UI_POWER_ITEM_COUNT;
+            return power_manager_chip_type() == POWER_CHIP_AXP209 ? UI_POWER_ITEM_COUNT : 15U;
         case UI_PAGE_BURNER:
             return UI_BURNER_MODE_COUNT;
         case UI_PAGE_BURN_ROM:
@@ -4401,6 +4290,8 @@ static void ui_push_current_page_locked(const ui_model_t *model)
     }
     s_nav_stack[s_nav_depth].page = model->page;
     s_nav_stack[s_nav_depth].parent = model->parent_page;
+    s_nav_stack[s_nav_depth].selected = model->selected;
+    s_nav_stack[s_nav_depth].scroll = model->scroll;
     s_nav_depth++;
 }
 
@@ -4754,25 +4645,21 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
         ui_mark_motion_dirty(model);
         return;
     }
-    if (ui_page_is_icon_grid(model->page)) {
-        ui_icon_page_config_t config = {0};
-        uint16_t next_selected = model->selected;
+    if (model->page == UI_PAGE_ROOT) {
+        uint16_t next = model->selected;
 
-        (void)ui_icon_page_config_for_page(model->page, &config);
-        if (delta == -1) {
-            next_selected = ui_icon_page_move_selection(model->selected, count, config.cols, config.rows, -1, 0);
-        } else if (delta == 1) {
-            next_selected = ui_icon_page_move_selection(model->selected, count, config.cols, config.rows, 1, 0);
+        if (delta == (int)UI_ROW_COUNT && next == 0U) {
+            next = 1U;
         } else if (delta == -(int)UI_ROW_COUNT) {
-            next_selected = ui_icon_page_move_selection(model->selected, count, config.cols, config.rows, 0, -1);
-        } else if (delta == (int)UI_ROW_COUNT) {
-            next_selected = ui_icon_page_move_selection(model->selected, count, config.cols, config.rows, 0, 1);
+            next = 0U;
+        } else if (delta == 1 && next + 1U < count) {
+            next++;
+        } else if (delta == -1 && next > 0U) {
+            next--;
         }
-        if (next_selected != model->selected) {
-            model->selected = next_selected;
-            if (model->page == UI_PAGE_ROOT) {
-                s_root_selected = model->selected;
-            }
+        if (next != model->selected) {
+            model->selected = next;
+            s_root_selected = next;
             ui_mark_motion_dirty(model);
         }
         return;
@@ -4785,9 +4672,6 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
         uint16_t old_scroll = model->scroll;
 
         model->selected = (uint16_t)selected;
-        if (model->page == UI_PAGE_ROOT) {
-            s_root_selected = model->selected;
-        }
         if (model->page == UI_PAGE_BURN_ROM) {
             model->scroll = ui_scroll_for_selected_rows(model->selected, model->scroll, count, ui_burn_rom_visible_rows());
         } else if (model->page == UI_PAGE_SMB_TEXT_INPUT) {
@@ -4800,7 +4684,7 @@ static void ui_menu_move_locked(ui_model_t *model, int delta)
         } else {
             model->scroll = ui_scroll_for_selected(model->selected, model->scroll, count);
         }
-        if (model->scroll == old_scroll) {
+        if (model->scroll == old_scroll || ui_sleeve_page_active(model)) {
             ui_mark_motion_dirty(model);
         } else {
             ui_mark_content_dirty(model);
@@ -4864,8 +4748,10 @@ static void ui_back_locked(ui_model_t *model)
             ui_music_set_drawer_open_locked(model, true);
             return;
         }
-        ui_open_root_locked(model);
-        return;
+        if (model->parent_page != UI_PAGE_APPS) {
+            ui_open_root_locked(model);
+            return;
+        }
     }
     if (model->page == UI_PAGE_READER) {
         ui_reader_save_history_locked(model);
@@ -4892,15 +4778,14 @@ static void ui_back_locked(ui_model_t *model)
     }
     if (ui_file_page_is_book_scope(model)) {
         if (model->file_path[0] == '\0') {
+            model->file_book_scope = false;
+        } else if (!ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
             ui_open_root_locked(model);
             return;
-        }
-        if (!ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
-            ui_open_root_locked(model);
+        } else {
+            ui_open_files_locked(model, parent, true);
             return;
         }
-        ui_open_files_locked(model, parent, true);
-        return;
     }
     if (model->page == UI_PAGE_FILES && model->file_path[0] != '\0') {
         if (ui_file_parent_path(model->file_path, parent, sizeof(parent))) {
@@ -5057,8 +4942,8 @@ static void ui_back_locked(ui_model_t *model)
         s_nav_depth--;
         model->page = s_nav_stack[s_nav_depth].page;
         model->parent_page = s_nav_stack[s_nav_depth].parent;
-        model->selected = (model->page == UI_PAGE_ROOT) ? s_root_selected : 0;
-        model->scroll = 0;
+        model->selected = s_nav_stack[s_nav_depth].selected;
+        model->scroll = s_nav_stack[s_nav_depth].scroll;
         if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
             ui_scan_file_window_locked(model);
         }
@@ -5208,8 +5093,10 @@ static void ui_select_locked(
 
     switch (model->page) {
         case UI_PAGE_ROOT:
+        case UI_PAGE_APPS:
             {
-                const ui_menu_item_t *item = ui_home_item_at(model->selected);
+                const ui_menu_item_t *item = model->page == UI_PAGE_ROOT ? ui_home_item_at(model->selected) :
+                    (model->selected < s_app_item_count ? &s_app_items[model->selected] : NULL);
 
                 if (item == NULL) {
                     break;
@@ -5219,7 +5106,11 @@ static void ui_select_locked(
                         ui_open_page_locked(model, UI_PAGE_SYSTEM);
                         break;
                     case UI_ACTION_OPEN_TF:
-                        ui_open_page_locked(model, UI_PAGE_TF);
+                        model->file_path[0] = '\0';
+                        ui_open_page_locked(model, UI_PAGE_FILES);
+                        break;
+                    case UI_ACTION_OPEN_APP_MANAGER:
+                        ui_open_page_locked(model, UI_PAGE_APPS);
                         break;
                     case UI_ACTION_OPEN_READER:
                         ui_open_book_library_locked(model, true);
@@ -5449,6 +5340,26 @@ static void ui_select_locked(
         case UI_PAGE_POWER:
             if (model->selected <= 1U) {
                 ui_power_adjust_idle_minutes_locked(model, 1);
+            } else if (model->selected == (power_manager_chip_type() == POWER_CHIP_AXP209 ? 18U : 14U)) {
+                bool enabled = !wifi_maneger_keep_online();
+                esp_err_t err = wifi_maneger_set_keep_online(enabled);
+                if (err == ESP_OK && enabled) mori_request_wifi();
+                ui_set_status_locked(model, err == ESP_OK ? ui_tr("power settings saved") : ui_tr("save power settings failed"));
+                ui_mark_content_dirty(model);
+            } else if (model->selected == 17U) {
+                uint32_t now_ms = esp_log_timestamp();
+                if (s_battery_reset_confirm_until_ms && (int32_t)(s_battery_reset_confirm_until_ms - now_ms) > 0) {
+                    esp_err_t err = power_manager_reset_battery_learning();
+                    ui_set_status_locked(model, err == ESP_OK ?
+                        (ui_lang_is_zh() ? "已重置，将重新学习" : "Learning reset") :
+                        (ui_lang_is_zh() ? "重置失败" : "Reset failed"));
+                    s_battery_reset_confirm_until_ms = 0;
+                    s_last_battery_refresh_ms = 0;
+                } else {
+                    s_battery_reset_confirm_until_ms = now_ms + 5000u;
+                    ui_set_status_locked(model, ui_lang_is_zh() ? "再次按A重置电池学习" : "Press A again to reset learning");
+                }
+                ui_mark_content_dirty(model);
             } else {
                 ui_set_status_locked(model, ui_tr("Power"));
             }
@@ -5841,6 +5752,11 @@ static void ui_select_locked(
                     ui_set_status_locked(model, ui_tr("save settings failed"));
                 }
                 ui_mark_content_dirty(model);
+            } else if (model->selected == UI_SETTING_CHARACTER_THEME) {
+                model->theme_baicheng = !model->theme_baicheng;
+                ui_set_status_locked(model, ui_tr(ui_save_character_theme(model->theme_baicheng)
+                    ? "settings saved" : "save settings failed"));
+                model->dirty = true;
             } else if (model->selected == 10U) {
                 ui_open_page_locked(model, UI_PAGE_AG32_UPDATE);
                 ui_set_status_locked(model, ui_tr("choose AG32 batch from TF"));
@@ -6180,10 +6096,10 @@ static void ui_handle_page_button_action_locked(
 
     switch (action) {
         case UI_INPUT_ACTION_UP:
-            ui_menu_move_locked(model, ui_page_is_icon_grid(model->page) ? -UI_ROW_COUNT : -1);
+            ui_menu_move_locked(model, (model->page == UI_PAGE_ROOT) ? -UI_ROW_COUNT : -1);
             break;
         case UI_INPUT_ACTION_DOWN:
-            ui_menu_move_locked(model, ui_page_is_icon_grid(model->page) ? UI_ROW_COUNT : 1);
+            ui_menu_move_locked(model, (model->page == UI_PAGE_ROOT) ? UI_ROW_COUNT : 1);
             break;
         case UI_INPUT_ACTION_LEFT:
             if (model->page == UI_PAGE_SMB && model->selected == 7U) {
@@ -6191,7 +6107,7 @@ static void ui_handle_page_button_action_locked(
             } else if (model->page == UI_PAGE_POWER && model->selected <= 1U) {
                 ui_power_adjust_idle_minutes_locked(model, -1);
             } else {
-                ui_menu_move_locked(model, ui_page_is_icon_grid(model->page) ? -1 : -UI_ROW_COUNT);
+                ui_menu_move_locked(model, (model->page == UI_PAGE_ROOT) ? -1 : -UI_ROW_COUNT);
             }
             break;
         case UI_INPUT_ACTION_RIGHT:
@@ -6200,7 +6116,7 @@ static void ui_handle_page_button_action_locked(
             } else if (model->page == UI_PAGE_POWER && model->selected <= 1U) {
                 ui_power_adjust_idle_minutes_locked(model, 1);
             } else {
-                ui_menu_move_locked(model, ui_page_is_icon_grid(model->page) ? 1 : UI_ROW_COUNT);
+                ui_menu_move_locked(model, (model->page == UI_PAGE_ROOT) ? 1 : UI_ROW_COUNT);
             }
             break;
         case UI_INPUT_ACTION_SELECT:
@@ -6345,6 +6261,8 @@ static void ui_process_button_repeats(void)
         if (!state->pressed || !ui_action_is_repeatable(action)) {
             continue;
         }
+        /* 长按摇杆仍属于持续操作，不能按首次按下时间触发闲置熄屏。 */
+        lvgl_port_mark_activity();
         if ((action == UI_INPUT_ACTION_LEFT || action == UI_INPUT_ACTION_RIGHT) &&
             ui_take_model_lock()) {
             bool music_page = (s_model.page == UI_PAGE_MUSIC_PLAYER);
@@ -6464,7 +6382,6 @@ static void ui_update_fps_if_needed(uint32_t now_ms)
     }
     if (strcmp(s_model.fps_text, fps_text) != 0) {
         snprintf(s_model.fps_text, sizeof(s_model.fps_text), "%s", fps_text);
-        ui_mark_chrome_dirty(&s_model);
     }
     xSemaphoreGive(s_model_lock);
 }
@@ -6537,6 +6454,9 @@ static const char *ui_power_state_label(const char *state)
     }
     if (strcmp(state, "charge_full") == 0) {
         return ui_lang_is_zh() ? "已满" : "full";
+    }
+    if (strcmp(state, "charge_ready") == 0) {
+        return ui_lang_is_zh() ? "外接供电" : "external";
     }
     if (strcmp(state, "discharging_light_load") == 0) {
         return ui_lang_is_zh() ? "轻载" : "light";
@@ -7027,8 +6947,26 @@ static void ui_fill_tf_row(const ui_model_t *model, uint16_t index, char *title,
     }
 }
 
+static const char *ui_battery_learning_label(const char *state)
+{
+    if (state == NULL) return "--";
+    if (!strcmp(state, "waiting_reference")) return ui_lang_is_zh() ? "等待参考点" : "Waiting reference";
+    if (!strcmp(state, "learning_discharge")) return ui_lang_is_zh() ? "记录放电" : "Learning discharge";
+    if (!strcmp(state, "learning_charge")) return ui_lang_is_zh() ? "记录充电" : "Learning charge";
+    if (!strcmp(state, "provisional")) return ui_lang_is_zh() ? "初步容量" : "Provisional";
+    if (!strcmp(state, "learned")) return ui_lang_is_zh() ? "已学习" : "Learned";
+    if (!strcmp(state, "reanchor")) return ui_lang_is_zh() ? "等待校正" : "Reanchoring";
+    if (!strcmp(state, "counter_unavailable")) return ui_lang_is_zh() ? "计量未就绪" : "Counter unavailable";
+    return "--";
+}
+
 static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
+    if (index == (power_manager_chip_type() == POWER_CHIP_AXP209 ? 18U : 14U)) {
+        snprintf(title, title_len, "%s", ui_lang_is_zh() ? "无线调试常在线" : "Wi-Fi debug always on");
+        snprintf(hint, hint_len, "%s", wifi_maneger_keep_online() ? ui_tr("On") : ui_tr("Off"));
+        return;
+    }
     if (index == 0U) {
         snprintf(title, title_len, "%s", ui_tr("Screen auto off"));
         ui_format_idle_minutes(mori_screen_idle_off_minutes(), hint, hint_len);
@@ -7098,6 +7036,23 @@ static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *tit
             snprintf(title, title_len, "%s", ui_lang_is_zh() ? "芯片温度" : "Chip temperature");
             ui_format_power_temp(power_valid ? power->internal_temp_deci_c : 0, adc_supported, hint, hint_len);
             break;
+        case 12:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电量自学习" : "Battery learning");
+            snprintf(hint, hint_len, "%s", power_valid ? ui_battery_learning_label(power->calibration_state) : "--");
+            break;
+        case 13:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "可用容量" : "Usable capacity");
+            if (power_valid && power->learned_capacity_mah) snprintf(hint, hint_len, "%" PRIu32 "mAh", power->learned_capacity_mah);
+            else snprintf(hint, hint_len, "%s", ui_lang_is_zh() ? "尚在学习" : "Learning");
+            break;
+        case 14:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "本段已记录" : "Observed charge");
+            snprintf(hint, hint_len, "%" PRIu32 "mAh", power_valid ? power->learning_observed_mah : 0u);
+            break;
+        case 15:
+            snprintf(title, title_len, "%s", ui_lang_is_zh() ? "更换电池后重置" : "Reset after battery change");
+            snprintf(hint, hint_len, "%s", ui_lang_is_zh() ? "按A" : "Press A");
+            break;
         default:
             snprintf(title, title_len, "%s", ui_lang_is_zh() ? "电源芯片" : "Power chip");
             snprintf(hint, hint_len, "%s", power_valid ? power->chip_name : (power_manager_ready() ? power_manager_chip_name() : ui_tr("missing")));
@@ -7109,7 +7064,6 @@ static void ui_fill_power_row(const ui_model_t *model, uint16_t index, char *tit
 
 static void ui_fill_settings_row(const ui_model_t *model, uint16_t index, char *title, size_t title_len, char *hint, size_t hint_len)
 {
-    (void)model;
     switch (index) {
         case 0:
             snprintf(title, title_len, "%s", ui_tr("Brightness"));
@@ -7155,6 +7109,10 @@ static void ui_fill_settings_row(const ui_model_t *model, uint16_t index, char *
             snprintf(title, title_len, "%s", ui_tr("AG32 firmware update"));
             snprintf(hint, hint_len, "TF .bin / SWD");
             break;
+        case UI_SETTING_CHARACTER_THEME:
+            snprintf(title, title_len, "%s", ui_tr("Character theme"));
+            snprintf(hint, hint_len, "%s", ui_tr(model->theme_baicheng ? "Baicheng" : "Chis"));
+            break;
         default:
             if (title_len > 0U) {
                 title[0] = '\0';
@@ -7163,345 +7121,6 @@ static void ui_fill_settings_row(const ui_model_t *model, uint16_t index, char *
                 hint[0] = '\0';
             }
             break;
-    }
-}
-
-static void ui_px_icon(const ui_menu_item_t *item, int32_t x, int32_t y, bool selected)
-{
-    const int32_t s = UI_TILE_ICON_SIZE;
-    ui_action_t action = item != NULL ? item->action : UI_ACTION_OPEN_SETTINGS;
-
-#define UI_ICON_X(v) (x + ((int32_t)(v) * s) / 30)
-#define UI_ICON_Y(v) (y + ((int32_t)(v) * s) / 30)
-#define UI_ICON_W(v) ((((int32_t)(v) * s) / 30) > 0 ? (((int32_t)(v) * s) / 30) : 1)
-
-    ui_px_frame(x + 1, y + 1, UI_TILE_ICON_SIZE - 2, UI_TILE_ICON_SIZE - 2, true);
-    switch (action) {
-        case UI_ACTION_OPEN_SYSTEM:
-            ui_px_frame(UI_ICON_X(6), UI_ICON_Y(7), UI_ICON_W(18), UI_ICON_W(13), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(23), UI_ICON_W(10), true);
-            ui_px_vline(UI_ICON_X(15), UI_ICON_Y(20), UI_ICON_W(3), true);
-            break;
-        case UI_ACTION_OPEN_APP_MANAGER:
-            ui_px_frame(UI_ICON_X(7), UI_ICON_Y(7), UI_ICON_W(6), UI_ICON_W(6), true);
-            ui_px_frame(UI_ICON_X(17), UI_ICON_Y(7), UI_ICON_W(6), UI_ICON_W(6), true);
-            ui_px_frame(UI_ICON_X(7), UI_ICON_Y(17), UI_ICON_W(6), UI_ICON_W(6), true);
-            ui_px_frame(UI_ICON_X(17), UI_ICON_Y(17), UI_ICON_W(6), UI_ICON_W(6), true);
-            ui_px_hline(UI_ICON_X(9), UI_ICON_Y(25), UI_ICON_W(12), true);
-            break;
-        case UI_ACTION_OPEN_TF:
-            ui_px_frame(UI_ICON_X(6), UI_ICON_Y(8), UI_ICON_W(18), UI_ICON_W(14), true);
-            ui_px_hline(UI_ICON_X(8), UI_ICON_Y(6), UI_ICON_W(8), true);
-            ui_px_vline(UI_ICON_X(6), UI_ICON_Y(7), UI_ICON_W(3), true);
-            break;
-        case UI_ACTION_OPEN_READER:
-            ui_px_frame(UI_ICON_X(7), UI_ICON_Y(8), UI_ICON_W(16), UI_ICON_W(14), true);
-            ui_px_vline(UI_ICON_X(15), UI_ICON_Y(8), UI_ICON_W(14), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(12), UI_ICON_W(3), true);
-            ui_px_hline(UI_ICON_X(17), UI_ICON_Y(12), UI_ICON_W(3), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(15), UI_ICON_W(3), true);
-            ui_px_hline(UI_ICON_X(17), UI_ICON_Y(15), UI_ICON_W(3), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(18), UI_ICON_W(3), true);
-            ui_px_hline(UI_ICON_X(17), UI_ICON_Y(18), UI_ICON_W(3), true);
-            break;
-        case UI_ACTION_OPEN_MUSIC:
-            ui_px_vline(UI_ICON_X(11), UI_ICON_Y(7), UI_ICON_W(13), true);
-            ui_px_vline(UI_ICON_X(19), UI_ICON_Y(5), UI_ICON_W(11), true);
-            ui_px_hline(UI_ICON_X(11), UI_ICON_Y(7), UI_ICON_W(8), true);
-            ui_px_hline(UI_ICON_X(11), UI_ICON_Y(10), UI_ICON_W(8), true);
-            ui_px_box(UI_ICON_X(7), UI_ICON_Y(20), UI_ICON_W(5), UI_ICON_W(5), true);
-            ui_px_box(UI_ICON_X(15), UI_ICON_Y(18), UI_ICON_W(5), UI_ICON_W(5), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(23), UI_ICON_W(2), false);
-            ui_px_hline(UI_ICON_X(18), UI_ICON_Y(21), UI_ICON_W(2), false);
-            break;
-        case UI_ACTION_OPEN_BURNER:
-            ui_px_hline(UI_ICON_X(14), UI_ICON_Y(5), UI_ICON_W(1), true);
-            ui_px_hline(UI_ICON_X(12), UI_ICON_Y(6), UI_ICON_W(5), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(8), UI_ICON_W(9), true);
-            ui_px_hline(UI_ICON_X(9), UI_ICON_Y(11), UI_ICON_W(12), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(16), UI_ICON_W(10), true);
-            ui_px_hline(UI_ICON_X(12), UI_ICON_Y(20), UI_ICON_W(6), true);
-            break;
-        case UI_ACTION_OPEN_WIFI:
-            ui_px_hline(UI_ICON_X(7), UI_ICON_Y(9), UI_ICON_W(16), true);
-            ui_px_hline(UI_ICON_X(9), UI_ICON_Y(12), UI_ICON_W(12), true);
-            ui_px_hline(UI_ICON_X(11), UI_ICON_Y(15), UI_ICON_W(8), true);
-            ui_px_hline(UI_ICON_X(13), UI_ICON_Y(18), UI_ICON_W(4), true);
-            ui_px_box(UI_ICON_X(14), UI_ICON_Y(22), UI_ICON_W(2), UI_ICON_W(2), true);
-            break;
-        case UI_ACTION_OPEN_POWER:
-            ui_px_frame(UI_ICON_X(8), UI_ICON_Y(9), UI_ICON_W(14), UI_ICON_W(12), true);
-            ui_px_box(UI_ICON_X(22), UI_ICON_Y(13), UI_ICON_W(2), UI_ICON_W(4), true);
-            ui_px_box(UI_ICON_X(11), UI_ICON_Y(12), UI_ICON_W(8), UI_ICON_W(6), true);
-            break;
-        case UI_ACTION_OPEN_RETRO_GO:
-            ui_px_frame(UI_ICON_X(6), UI_ICON_Y(8), UI_ICON_W(18), UI_ICON_W(14), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(11), UI_ICON_W(10), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(15), UI_ICON_W(7), true);
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(19), UI_ICON_W(9), true);
-            ui_px_vline(UI_ICON_X(18), UI_ICON_Y(11), UI_ICON_W(8), true);
-            ui_px_hline(UI_ICON_X(19), UI_ICON_Y(15), UI_ICON_W(3), true);
-            ui_px_vline(UI_ICON_X(22), UI_ICON_Y(14), UI_ICON_W(3), true);
-            break;
-        case UI_ACTION_OPEN_SETTINGS:
-        default:
-            ui_px_hline(UI_ICON_X(10), UI_ICON_Y(14), UI_ICON_W(10), true);
-            ui_px_vline(UI_ICON_X(15), UI_ICON_Y(9), UI_ICON_W(10), true);
-            ui_px_frame(UI_ICON_X(12), UI_ICON_Y(11), UI_ICON_W(6), UI_ICON_W(6), true);
-            ui_px_set(UI_ICON_X(8), UI_ICON_Y(8), true);
-            ui_px_set(UI_ICON_X(22), UI_ICON_Y(8), true);
-            ui_px_set(UI_ICON_X(8), UI_ICON_Y(22), true);
-            ui_px_set(UI_ICON_X(22), UI_ICON_Y(22), true);
-            break;
-    }
-    if (selected) {
-        ui_px_corner_box(
-            x - UI_TILE_SELECTOR_MARGIN,
-            y - UI_TILE_SELECTOR_MARGIN,
-            UI_TILE_ICON_SIZE + UI_TILE_SELECTOR_MARGIN * 2,
-            UI_TILE_ICON_SIZE + UI_TILE_SELECTOR_MARGIN * 2);
-    }
-
-#undef UI_ICON_X
-#undef UI_ICON_Y
-#undef UI_ICON_W
-}
-
-static void ui_px_draw_icon_page(const ui_model_t *model)
-{
-    ui_icon_page_config_t config = {0};
-    const ui_menu_item_t *selected_item = NULL;
-    uint16_t selected = 0;
-    int32_t progress_w = 0;
-
-    if (model == NULL || !ui_icon_page_config_for_page(model->page, &config) || config.count == 0U) {
-        return;
-    }
-    selected = (model->selected < config.count) ? model->selected : 0U;
-    selected_item = &config.items[selected];
-    s_anim.tile_bar_target_w = (float)(((uint32_t)(selected + 1U) * (uint32_t)UI_CANVAS_W) / config.count);
-    ui_anim_move(&s_anim.tile_bar_w, s_anim.tile_bar_target_w, UI_TILE_BAR_SPEED);
-    progress_w = (int32_t)s_anim.tile_bar_w;
-
-    ui_px_text(8, 10, model->page == UI_PAGE_ROOT ? "MORI" : ui_tr("System"), true);
-    ui_px_text_clipped(UI_CANVAS_W - 118, 10, 58, model->time_text, true);
-    ui_px_draw_battery_overlay(model, 10);
-    ui_px_box(0, 0, progress_w, UI_TILE_BAR_H, true);
-
-    for (uint16_t i = 0; i < config.count; ++i) {
-        int32_t col = (int32_t)(i % config.cols);
-        int32_t row = (int32_t)(i / config.cols);
-        int32_t cell_x = UI_TILE_PAGE_GAP_X + col * (UI_TILE_CELL_W + UI_TILE_PAGE_GAP_X);
-        int32_t cell_y = UI_TILE_PAGE_TOP + row * (UI_TILE_CELL_H + UI_TILE_PAGE_GAP_Y);
-        int32_t icon_x = cell_x + (UI_TILE_CELL_W - UI_TILE_ICON_SIZE) / 2;
-        int32_t icon_y = cell_y + 4;
-        const ui_menu_item_t *item = &config.items[i];
-        const char *title = (model->page == UI_PAGE_ROOT) ? ui_root_item_title(item) : ui_system_item_title(item);
-        int32_t title_w = ui_px_text_width(title);
-        int32_t title_x = cell_x + (UI_TILE_CELL_W - title_w) / 2;
-
-        ui_px_icon(item, icon_x, icon_y, i == selected);
-        ui_px_text_clipped(title_x, icon_y + UI_TILE_ICON_SIZE + 10, UI_TILE_CELL_W, title, true);
-    }
-
-    if (selected_item != NULL) {
-        const char *hint = (model->page == UI_PAGE_ROOT) ? ui_root_item_hint(selected_item) : ui_system_item_hint(selected_item);
-
-        ui_px_text((UI_CANVAS_W - ui_px_text_width(hint)) / 2, UI_CANVAS_H - UI_HINT_H - UI_TILE_PAGE_BOTTOM_HINT_GAP, hint, true);
-    }
-    for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
-        ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
-    }
-    if (model->status_text[0] != '\0') {
-        ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
-    }
-}
-
-static bool ui_px_icon_page_item_rect(
-    const ui_icon_page_config_t *config,
-    uint16_t index,
-    int32_t *x_out,
-    int32_t *y_out,
-    int32_t *w_out,
-    int32_t *h_out)
-{
-    int32_t col;
-    int32_t row;
-    int32_t cell_x;
-    int32_t cell_y;
-
-    if (config == NULL || index >= config->count) {
-        return false;
-    }
-    col = (int32_t)(index % config->cols);
-    row = (int32_t)(index / config->cols);
-    cell_x = UI_TILE_PAGE_GAP_X + col * (UI_TILE_CELL_W + UI_TILE_PAGE_GAP_X);
-    cell_y = UI_TILE_PAGE_TOP + row * (UI_TILE_CELL_H + UI_TILE_PAGE_GAP_Y);
-    if (x_out != NULL) {
-        *x_out = cell_x - UI_TILE_SELECTOR_MARGIN;
-    }
-    if (y_out != NULL) {
-        *y_out = cell_y - UI_TILE_SELECTOR_MARGIN;
-    }
-    if (w_out != NULL) {
-        *w_out = UI_TILE_CELL_W + UI_TILE_SELECTOR_MARGIN * 2;
-    }
-    if (h_out != NULL) {
-        *h_out = UI_TILE_CELL_H + UI_TILE_SELECTOR_MARGIN * 2;
-    }
-    return true;
-}
-
-static void ui_px_draw_icon_page_item(
-    const ui_model_t *model,
-    const ui_icon_page_config_t *config,
-    uint16_t index,
-    bool selected)
-{
-    int32_t col;
-    int32_t row;
-    int32_t cell_x;
-    int32_t cell_y;
-    int32_t icon_x;
-    int32_t icon_y;
-    int32_t title_w;
-    int32_t title_x;
-    const ui_menu_item_t *item;
-    const char *title;
-
-    if (model == NULL || config == NULL || index >= config->count) {
-        return;
-    }
-    col = (int32_t)(index % config->cols);
-    row = (int32_t)(index / config->cols);
-    cell_x = UI_TILE_PAGE_GAP_X + col * (UI_TILE_CELL_W + UI_TILE_PAGE_GAP_X);
-    cell_y = UI_TILE_PAGE_TOP + row * (UI_TILE_CELL_H + UI_TILE_PAGE_GAP_Y);
-    icon_x = cell_x + (UI_TILE_CELL_W - UI_TILE_ICON_SIZE) / 2;
-    icon_y = cell_y + 4;
-    item = &config->items[index];
-    title = (model->page == UI_PAGE_ROOT) ? ui_root_item_title(item) : ui_system_item_title(item);
-    title_w = ui_px_text_width(title);
-    title_x = cell_x + (UI_TILE_CELL_W - title_w) / 2;
-
-    ui_px_icon(item, icon_x, icon_y, selected);
-    ui_px_text_clipped(title_x, icon_y + UI_TILE_ICON_SIZE + 10, UI_TILE_CELL_W, title, true);
-}
-
-static void ui_px_draw_icon_page_footer(const ui_model_t *model, const ui_menu_item_t *selected_item)
-{
-    const char *hint = "";
-
-    if (model == NULL) {
-        return;
-    }
-    if (selected_item != NULL) {
-        hint = (model->page == UI_PAGE_ROOT) ? ui_root_item_hint(selected_item) : ui_system_item_hint(selected_item);
-    }
-    ui_px_clear_rect(0, UI_CANVAS_H - UI_HINT_H - 3, UI_CANVAS_W, UI_HINT_H + 3);
-    if (hint[0] != '\0') {
-        ui_px_text((UI_CANVAS_W - ui_px_text_width(hint)) / 2, UI_CANVAS_H - UI_HINT_H - UI_TILE_PAGE_BOTTOM_HINT_GAP, hint, true);
-    }
-    for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
-        ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
-    }
-    if (model->status_text[0] != '\0') {
-        ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
-    }
-}
-
-static void ui_px_apply_icon_grid_chrome_dynamic(const ui_model_t *model)
-{
-    char header[UI_ROW_TEXT_MAX_LEN] = {0};
-    ui_icon_page_config_t config = {0};
-    const ui_menu_item_t *selected_item = NULL;
-
-    if (model == NULL) {
-        return;
-    }
-    (void)ui_icon_page_config_for_page(model->page, &config);
-    if (config.count > 0U) {
-        uint16_t selected = (model->selected < config.count) ? model->selected : 0U;
-        selected_item = &config.items[selected];
-    }
-
-    ui_px_clear_rect(0, 0, UI_CANVAS_W, UI_LIST_HEADER_H);
-    ui_format_page_header(model, header, sizeof(header));
-    ui_px_text(4, 10, header, true);
-    ui_px_text_clipped(UI_CANVAS_W - 118, 10, 58, model->time_text, true);
-    ui_px_draw_battery_overlay(model, 10);
-    ui_px_invalidate_rect(0, 0, UI_CANVAS_W, UI_LIST_HEADER_H);
-
-    ui_px_draw_icon_page_footer(model, selected_item);
-    ui_px_invalidate_rect(0, UI_CANVAS_H - UI_HINT_H - 3, UI_CANVAS_W, UI_HINT_H + 3);
-}
-
-static void ui_px_apply_tile(const ui_model_t *model)
-{
-    ui_icon_page_config_t config = {0};
-
-    if (model != NULL && ui_icon_page_config_for_page(model->page, &config) && config.count > 0U) {
-        s_anim.icon_prev_selected = (model->selected < config.count) ? model->selected : 0U;
-    } else {
-        s_anim.icon_prev_selected = UINT16_MAX;
-    }
-    ui_px_draw_icon_page(model);
-}
-
-static void ui_px_apply_tile_dynamic(const ui_model_t *model)
-{
-    ui_icon_page_config_t config = {0};
-    uint16_t selected;
-    uint16_t prev_selected;
-    int32_t prev_bar_w;
-    int32_t new_bar_w;
-    int32_t bar_x;
-    int32_t bar_w;
-    const ui_menu_item_t *selected_item = NULL;
-
-    if (model == NULL || !ui_icon_page_config_for_page(model->page, &config) || config.count == 0U) {
-        return;
-    }
-
-    selected = (model->selected < config.count) ? model->selected : 0U;
-    selected_item = &config.items[selected];
-    prev_selected = s_anim.icon_prev_selected;
-    if (prev_selected >= config.count) {
-        prev_selected = selected;
-    }
-
-    prev_bar_w = (int32_t)s_anim.tile_bar_w;
-    s_anim.tile_bar_target_w = (float)(((uint32_t)(selected + 1U) * (uint32_t)UI_CANVAS_W) / config.count);
-    ui_anim_move(&s_anim.tile_bar_w, s_anim.tile_bar_target_w, UI_TILE_BAR_SPEED);
-    new_bar_w = (int32_t)s_anim.tile_bar_w;
-    bar_x = (prev_bar_w < new_bar_w) ? prev_bar_w : new_bar_w;
-    bar_w = ((prev_bar_w > new_bar_w) ? prev_bar_w : new_bar_w) - bar_x + 1;
-    ui_px_clear_rect(bar_x, 0, bar_w, UI_TILE_BAR_H);
-    ui_px_box(0, 0, new_bar_w, UI_TILE_BAR_H, true);
-    ui_px_invalidate_rect(bar_x, 0, bar_w, UI_TILE_BAR_H);
-
-    if (model->motion_dirty || prev_selected != selected) {
-        int32_t x;
-        int32_t y;
-        int32_t w;
-        int32_t h;
-
-        if (ui_px_icon_page_item_rect(&config, prev_selected, &x, &y, &w, &h)) {
-            ui_px_clear_rect(x, y, w, h);
-            ui_px_draw_icon_page_item(model, &config, prev_selected, false);
-            ui_px_invalidate_rect(x, y, w, h);
-        }
-        if (selected != prev_selected &&
-            ui_px_icon_page_item_rect(&config, selected, &x, &y, &w, &h)) {
-            ui_px_clear_rect(x, y, w, h);
-            ui_px_draw_icon_page_item(model, &config, selected, true);
-            ui_px_invalidate_rect(x, y, w, h);
-        }
-        s_anim.icon_prev_selected = selected;
-    }
-
-    if (model->chrome_dirty || model->content_dirty || prev_selected != selected) {
-        ui_px_draw_icon_page_footer(model, selected_item);
-        ui_px_invalidate_rect(0, UI_CANVAS_H - UI_HINT_H - 3, UI_CANVAS_W, UI_HINT_H + 3);
     }
 }
 
@@ -7536,16 +7155,16 @@ static void ui_px_draw_wifi_qr_matrix(const uint8_t *qrcode, int32_t x, int32_t 
         return;
     }
     total_modules = qr_size + UI_WIFI_QR_QUIET_MODULES * 2;
-    ui_px_box(x, y, total_modules * module_px, total_modules * module_px, true);
+    ui_px_color_box(x, y, total_modules * module_px, total_modules * module_px, UI_COLOR_WHITE);
     for (int32_t row = 0; row < qr_size; ++row) {
         for (int32_t col = 0; col < qr_size; ++col) {
             if (qrcodegen_getModule(qrcode, col, row)) {
-                ui_px_box(
+                ui_px_color_box(
                     x + (col + UI_WIFI_QR_QUIET_MODULES) * module_px,
                     y + (row + UI_WIFI_QR_QUIET_MODULES) * module_px,
                     module_px,
                     module_px,
-                    false);
+                    UI_COLOR_BLACK);
             }
         }
     }
@@ -7650,7 +7269,7 @@ static void ui_px_apply_smb_text_input(const ui_model_t *model)
     } else {
         snprintf(value, sizeof(value), "%s", (field != NULL && field[0] != '\0') ? field : "--");
     }
-    ui_px_frame(4, UI_LIST_HEADER_H + 16, UI_CANVAS_W - 12, 14, true);
+    ui_px_panel(4, UI_LIST_HEADER_H + 16, UI_CANVAS_W - 12, 14, false);
     ui_px_text_clipped(8, UI_LIST_HEADER_H + 19, UI_CANVAS_W - 20, value, true);
 
     selected_row = (int32_t)selected - (int32_t)scroll;
@@ -7681,7 +7300,7 @@ static void ui_px_apply_smb_text_input(const ui_model_t *model)
     }
     ui_px_vline(UI_CANVAS_W - 3, list_y, list_h, true);
     ui_px_box(UI_CANVAS_W - UI_LIST_BAR_W, list_y, UI_LIST_BAR_W, bar_h, true);
-    ui_px_invert_rect(0, selector_y, selector_w, UI_LIST_LINE_H - 1);
+    ui_px_highlight_rect(0, selector_y, selector_w, UI_LIST_LINE_H - 1);
 
     for (int32_t x = 0; x < UI_CANVAS_W; x += 6) {
         ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
@@ -7730,9 +7349,9 @@ static void ui_px_draw_task_progress_row(const ui_model_t *model, uint16_t row)
     }
 
     ui_px_text(x, y + 4, label, true);
-    ui_px_frame(bar_x, bar_y - 3, bar_w, 7, true);
+    ui_px_color_box(bar_x, bar_y - 3, bar_w, 7, UI_COLOR_SAND);
     if (fill_w > 0) {
-        ui_px_box(bar_x + 1, bar_y - 2, fill_w > bar_w - 2 ? bar_w - 2 : fill_w, 5, true);
+        ui_px_color_box(bar_x, bar_y - 3, fill_w, 7, UI_COLOR_ORANGE);
     }
     snprintf(percent, sizeof(percent), "%d%%", progress);
     ui_px_text_clipped(percent_x, y + 4, percent_w, percent, true);
@@ -7787,8 +7406,8 @@ static void ui_px_draw_task_patch_row(const ui_model_t *model, uint16_t row, int
     fill_w = (bar_w * progress) / 100;
     if (progress > 0 && fill_w < 1) fill_w = 1;
     ui_px_text(x, y + 4, label, true);
-    ui_px_frame(bar_x, y + 4, bar_w, 7, true);
-    if (fill_w > 0) ui_px_box(bar_x + 1, y + 5, fill_w > bar_w - 2 ? bar_w - 2 : fill_w, 5, true);
+    ui_px_color_box(bar_x, y + 4, bar_w, 7, UI_COLOR_SAND);
+    ui_px_color_box(bar_x, y + 4, fill_w, 7, UI_COLOR_ORANGE);
     snprintf(percent, sizeof(percent), "%d%%", progress);
     ui_px_text_clipped(percent_x, y + 4, percent_w, percent, true);
 }
@@ -7867,9 +7486,9 @@ static void ui_px_draw_task_erase_progress_row(const ui_model_t *model, uint16_t
     }
 
     ui_px_text(x, y + 4, label, true);
-    ui_px_frame(bar_x, bar_y - 3, bar_w, 7, true);
+    ui_px_color_box(bar_x, bar_y - 3, bar_w, 7, UI_COLOR_SAND);
     if (fill_w > 0) {
-        ui_px_box(bar_x + 1, bar_y - 2, fill_w > bar_w - 2 ? bar_w - 2 : fill_w, 5, true);
+        ui_px_color_box(bar_x, bar_y - 3, fill_w, 7, UI_COLOR_ORANGE);
     }
     snprintf(percent, sizeof(percent), "%d%%", progress);
     ui_px_text_clipped(percent_x, y + 4, percent_w, percent, true);
@@ -8011,7 +7630,7 @@ static void ui_px_draw_music_file_row(
 
 static void ui_px_draw_music_button_prev(int32_t x, int32_t y, int32_t size)
 {
-    ui_px_frame(x, y, size, size, true);
+    ui_px_panel(x, y, size, size, false);
     ui_px_box(x + 7, y + 7, 3, size - 14, true);
     for (int32_t i = 0; i < 5; ++i) {
         ui_px_box(x + 12 + i * 2, y + (size / 2) - 2 - i, 2, 4 + i * 2, true);
@@ -8020,7 +7639,7 @@ static void ui_px_draw_music_button_prev(int32_t x, int32_t y, int32_t size)
 
 static void ui_px_draw_music_button_next(int32_t x, int32_t y, int32_t size)
 {
-    ui_px_frame(x, y, size, size, true);
+    ui_px_panel(x, y, size, size, false);
     ui_px_box(x + size - 10, y + 7, 3, size - 14, true);
     for (int32_t i = 0; i < 5; ++i) {
         ui_px_box(x + size - 14 - i * 2, y + (size / 2) - 2 - i, 2, 4 + i * 2, true);
@@ -8029,7 +7648,7 @@ static void ui_px_draw_music_button_next(int32_t x, int32_t y, int32_t size)
 
 static void ui_px_draw_music_button_play_pause(int32_t x, int32_t y, int32_t size, bool pause_icon)
 {
-    ui_px_frame(x, y, size, size, true);
+    ui_px_panel(x, y, size, size, true);
     if (pause_icon) {
         ui_px_box(x + 10, y + 8, 4, size - 16, true);
         ui_px_box(x + size - 14, y + 8, 4, size - 16, true);
@@ -8144,7 +7763,7 @@ static void ui_px_apply_settings_adjust(const ui_model_t *model)
         ui_px_hline(x, UI_CANVAS_H - UI_HINT_H - 2, 2, true);
     }
 
-    ui_px_frame(panel_x, panel_y, panel_w, 116, true);
+    ui_px_panel(panel_x, panel_y, panel_w, 116, false);
     ui_px_text_clipped(panel_x + 12, panel_y + 14, panel_w - 24, title, true);
     if (volume) {
         snprintf(value_text, sizeof(value_text), "%u%%", (unsigned)value);
@@ -8152,9 +7771,9 @@ static void ui_px_apply_settings_adjust(const ui_model_t *model)
         snprintf(value_text, sizeof(value_text), "%u/255", (unsigned)value);
     }
     ui_px_text_clipped(panel_x + 12, panel_y + 38, panel_w - 24, value_text, true);
-    ui_px_frame(bar_x, bar_y, bar_w, 14, true);
+    ui_px_color_box(bar_x, bar_y, bar_w, 14, UI_COLOR_SAND);
     if (fill_w > 0) {
-        ui_px_box(bar_x + 1, bar_y + 1, fill_w, 12, true);
+        ui_px_color_box(bar_x + 1, bar_y + 1, fill_w, 12, UI_COLOR_ORANGE);
     }
     ui_px_text_clipped(panel_x + 12, panel_y + 96, panel_w - 24, ui_tr("hold 1s for x10"), true);
     ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_tr("L/R adjust  B back"), true);
@@ -8205,7 +7824,7 @@ static void ui_px_apply_list(const ui_model_t *model)
     }
     ui_anim_move(&s_anim.list_bar_h, s_anim.list_bar_target_h, UI_LIST_BAR_SPEED);
     ui_anim_move(&s_anim.list_bar_x, s_anim.list_bar_target_x, UI_LIST_BAR_SPEED);
-    ui_px_box((int32_t)s_anim.list_bar_x, UI_LIST_HEADER_H, UI_LIST_BAR_W, (int32_t)s_anim.list_bar_h, true);
+    ui_px_color_box((int32_t)s_anim.list_bar_x, UI_LIST_HEADER_H, UI_LIST_BAR_W, (int32_t)s_anim.list_bar_h, UI_COLOR_ORANGE);
 
     for (uint16_t row = 0; row < UI_ROW_COUNT; ++row) {
         uint16_t index = scroll + row;
@@ -8252,6 +7871,7 @@ static void ui_px_apply_list(const ui_model_t *model)
                 continue;
             }
         }
+        ui_px_color_box(0, y, UI_CANVAS_W - UI_LIST_BAR_W - 1, UI_LIST_LINE_H - 1, UI_COLOR_TILE);
         if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
             ui_px_draw_file_row(model, row);
             continue;
@@ -8287,32 +7907,14 @@ static void ui_px_apply_list(const ui_model_t *model)
     if (selected_row < 0 || selected_row >= UI_ROW_COUNT) {
         selector_y = UI_LIST_HEADER_H;
     }
-    {
-        char title[UI_ROW_TEXT_MAX_LEN] = {0};
-        char hint[UI_ROW_TEXT_MAX_LEN] = {0};
-        ui_px_fill_row(model, selected, (uint16_t)((selected >= scroll) ? (selected - scroll) : 0U), title, sizeof(title), hint, sizeof(hint));
-        selector_w = ui_px_text_width(title) + UI_LIST_SELECTOR_MARGIN * 2;
-        if (model->page == UI_PAGE_TASK_STATUS && !s_task_cancel_confirm) {
-            burner_status_t status = {0};
-
-            burner_status_snapshot(&status);
-            if (ui_chip_erase_busy_active(model, &status) &&
-                (selected == UI_TASK_ERASE_PROGRESS_ROW || selected == UI_TASK_BURN_PROGRESS_ROW)) {
-                selector_w = UI_CANVAS_W - UI_LIST_BAR_W - 2;
-            }
-        }
-        if (selector_w < 22) {
-            selector_w = 22;
-        }
-        if (selector_w > UI_CANVAS_W - UI_LIST_BAR_W - 2) {
-            selector_w = UI_CANVAS_W - UI_LIST_BAR_W - 2;
-        }
-    }
+    selector_w = count > 0U ? UI_CANVAS_W - UI_LIST_BAR_W - 2 : 0;
     s_anim.list_selector_target_y = (float)selector_y;
     s_anim.list_selector_target_w = (float)selector_w;
-    ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, UI_LIST_SELECTOR_Y_SPEED);
-    ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, UI_LIST_SELECTOR_W_SPEED);
-    ui_px_invert_rect(0, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    s_anim.list_selector_y = s_anim.list_selector_target_y;
+    s_anim.list_selector_w = s_anim.list_selector_target_w;
+    if (count > 0U) {
+        ui_px_highlight_rect(0, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    }
     if (model->status_text[0] != '\0') {
         ui_px_text_clipped(4, UI_CANVAS_H - UI_HINT_H + 3, UI_CANVAS_W - 8, ui_status_text_to_display(model->status_text), true);
     } else if (model->page == UI_PAGE_APP_MANAGER) {
@@ -8383,6 +7985,7 @@ static void ui_px_draw_visible_row(const ui_model_t *model, uint16_t row)
             return;
         }
     }
+    ui_px_color_box(0, y, UI_CANVAS_W - UI_LIST_BAR_W - 1, UI_LIST_LINE_H - 1, UI_COLOR_TILE);
     if (model->page == UI_PAGE_FILES || model->page == UI_PAGE_MUSIC_FILES) {
         ui_px_draw_file_row(model, row);
         return;
@@ -8424,39 +8027,10 @@ static void ui_px_apply_list_dynamic(const ui_model_t *model)
     int32_t redraw_row1;
     int32_t redraw_w;
     int32_t bar_h = 1;
-    burner_status_t task_status = {0};
-    bool chip_erase_busy = false;
-
     if (selected_row < 0 || selected_row >= UI_ROW_COUNT) {
         selector_y = UI_LIST_HEADER_H;
     }
-    {
-        char title[UI_ROW_TEXT_MAX_LEN] = {0};
-        char hint[UI_ROW_TEXT_MAX_LEN] = {0};
-        ui_px_fill_row(
-            model,
-            selected,
-            (uint16_t)((selected >= scroll) ? (selected - scroll) : 0U),
-            title,
-            sizeof(title),
-            hint,
-            sizeof(hint));
-        selector_w = ui_px_text_width(title) + UI_LIST_SELECTOR_MARGIN * 2;
-        if (model->page == UI_PAGE_TASK_STATUS && !s_task_cancel_confirm) {
-            burner_status_snapshot(&task_status);
-            chip_erase_busy = ui_chip_erase_busy_active(model, &task_status);
-            if (chip_erase_busy &&
-                (selected == UI_TASK_ERASE_PROGRESS_ROW || selected == UI_TASK_BURN_PROGRESS_ROW)) {
-                selector_w = UI_CANVAS_W - UI_LIST_BAR_W - 2;
-            }
-        }
-        if (selector_w < 22) {
-            selector_w = 22;
-        }
-        if (selector_w > UI_CANVAS_W - UI_LIST_BAR_W - 2) {
-            selector_w = UI_CANVAS_W - UI_LIST_BAR_W - 2;
-        }
-    }
+    selector_w = count > 0U ? UI_CANVAS_W - UI_LIST_BAR_W - 2 : 0;
     if (count > 0U) {
         bar_h = (int32_t)(((uint32_t)(selected + 1U) * (uint32_t)list_h) / count);
         if (bar_h < 1) {
@@ -8471,8 +8045,8 @@ static void ui_px_apply_list_dynamic(const ui_model_t *model)
     s_anim.list_bar_target_h = (float)bar_h;
     s_anim.list_bar_target_x = (float)(UI_CANVAS_W - UI_LIST_BAR_W);
 
-    ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, UI_LIST_SELECTOR_Y_SPEED);
-    ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, UI_LIST_SELECTOR_W_SPEED);
+    s_anim.list_selector_y = s_anim.list_selector_target_y;
+    s_anim.list_selector_w = s_anim.list_selector_target_w;
     ui_anim_move(&s_anim.list_bar_h, s_anim.list_bar_target_h, UI_LIST_BAR_SPEED);
     ui_anim_move(&s_anim.list_bar_x, s_anim.list_bar_target_x, UI_LIST_BAR_SPEED);
 
@@ -8502,9 +8076,11 @@ static void ui_px_apply_list_dynamic(const ui_model_t *model)
     ui_px_hline(UI_CANVAS_W - UI_LIST_BAR_W, UI_LIST_HEADER_H, UI_LIST_BAR_W, true);
     ui_px_hline(UI_CANVAS_W - UI_LIST_BAR_W, UI_CANVAS_H - UI_HINT_H - 1, UI_LIST_BAR_W, true);
     ui_px_vline(UI_CANVAS_W - 3, UI_LIST_HEADER_H, list_h, true);
-    ui_px_box((int32_t)s_anim.list_bar_x, UI_LIST_HEADER_H, UI_LIST_BAR_W, (int32_t)s_anim.list_bar_h, true);
+    ui_px_color_box((int32_t)s_anim.list_bar_x, UI_LIST_HEADER_H, UI_LIST_BAR_W, (int32_t)s_anim.list_bar_h, UI_COLOR_ORANGE);
 
-    ui_px_invert_rect(0, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    if (count > 0U) {
+        ui_px_highlight_rect(0, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    }
     redraw_w = prev_selector_w > (int32_t)s_anim.list_selector_w ? prev_selector_w : (int32_t)s_anim.list_selector_w;
     ui_px_invalidate_rect(0, redraw_y0, redraw_w + 2, redraw_y1 - redraw_y0);
     ui_px_invalidate_rect(UI_CANVAS_W - UI_LIST_BAR_W, UI_LIST_HEADER_H, UI_LIST_BAR_W, list_h);
@@ -8538,8 +8114,12 @@ static void ui_px_apply_list_content_dynamic(const ui_model_t *model)
     ui_px_invalidate_rect(0, list_y, UI_CANVAS_W, list_h);
 }
 
+#include "ui_theme_draw.inc"
+#include "burner/ui/ui_burner_studio_draw.inc"
+
 static void ui_px_render(const ui_model_t *model)
 {
+    static bool studio_page_drawn;
     bool full_redraw = false;
 
     if (s_canvas == NULL || s_canvas_buf == NULL) {
@@ -8549,20 +8129,45 @@ static void ui_px_render(const ui_model_t *model)
         s_anim.page = model->page;
         s_anim.page_changed = true;
         full_redraw = true;
-        if (ui_page_is_icon_grid(model->page)) {
-            s_anim.tile_fore_y = (float)UI_CANVAS_H;
-        } else if (model->page == UI_PAGE_BURNER) {
-            s_anim.tile_fore_y = (float)UI_CANVAS_H;
-        } else {
-            s_anim.list_bar_x = (float)UI_CANVAS_W;
-            s_anim.list_selector_y = (float)UI_LIST_HEADER_H;
-            s_anim.list_selector_w = 18.0f;
-        }
+        s_anim.list_bar_x = (float)UI_CANVAS_W;
+        s_anim.list_selector_y = (float)UI_LIST_HEADER_H;
+        s_anim.list_selector_w = 18.0f;
     }
     full_redraw = full_redraw || model->dirty || s_anim.page_changed;
     if (!full_redraw && !model->dirty && !model->motion_dirty && !model->content_dirty &&
         !model->chrome_dirty && !model->music_player_dirty && !model->music_progress_dirty &&
         !ui_anim_active_for_page(model)) {
+        return;
+    }
+    const bool sleeve = ui_sleeve_page_active(model);
+    burner_status_t task_status = {0};
+    bool meter = false;
+    if (model->page == UI_PAGE_TASK_STATUS && !s_task_cancel_confirm &&
+        !model->patch_export && model->selected == 0) {
+        burner_status_snapshot(&task_status);
+        meter = task_status.state == BURNER_STATE_BURNING &&
+                (task_status.write_start_us != 0 || task_status.write_elapsed_us != 0) &&
+                !task_status.chip_erase_ui_active && !task_status.erase_phase_active;
+    }
+    const bool studio_page = sleeve || meter;
+    full_redraw = full_redraw || studio_page != studio_page_drawn;
+    studio_page_drawn = studio_page;
+    if (studio_page) {
+        if (sleeve) {
+            ui_px_apply_sleeve(model, full_redraw);
+        } else {
+            ui_px_apply_studio_meter(model, &task_status, full_redraw);
+            s_anim.list_selector_target_y = s_anim.list_selector_y;
+            s_anim.list_selector_target_w = s_anim.list_selector_w;
+            s_anim.list_bar_target_x = s_anim.list_bar_x;
+            s_anim.list_bar_target_h = s_anim.list_bar_h;
+        }
+        s_anim.page_changed = false;
+        return;
+    }
+    if (model->page == UI_PAGE_ROOT) {
+        ui_px_apply_home(model, full_redraw);
+        s_anim.page_changed = false;
         return;
     }
     if (!full_redraw) {
@@ -8592,15 +8197,13 @@ static void ui_px_render(const ui_model_t *model)
             ui_px_invalidate_full();
         } else if (model->page == UI_PAGE_MUSIC_PLAYER) {
             ui_px_apply_music_player_dynamic(model);
-        } else if (ui_page_is_icon_grid(model->page) && !model->dirty && !model->motion_dirty &&
-                   !model->content_dirty && model->chrome_dirty) {
-            ui_px_apply_icon_grid_chrome_dynamic(model);
         } else if (!model->dirty && !model->motion_dirty && !model->content_dirty && model->chrome_dirty) {
             ui_px_apply_chrome_dynamic(model);
-        } else if (ui_page_is_icon_grid(model->page)) {
-            ui_px_apply_tile_dynamic(model);
         } else if (model->page == UI_PAGE_BURNER) {
-            ui_px_apply_burner_modes_dynamic(model);
+            ui_px_draw_burner_mode_cards(model);
+            ui_px_invalidate_rect(UI_BURNER_ICON_GBA_X, UI_BURNER_ICON_Y,
+                                  UI_BURNER_ICON_GBC_X - UI_BURNER_ICON_GBA_X + UI_BURNER_ICON_W,
+                                  UI_BURNER_ICON_H);
         } else if (model->page == UI_PAGE_BURN_ROM) {
             ui_px_apply_burn_rom_split_dynamic(model);
         } else if (model->content_dirty) {
@@ -8608,14 +8211,20 @@ static void ui_px_render(const ui_model_t *model)
         } else {
             ui_px_apply_list_dynamic(model);
         }
+        if (model->chrome_dirty || model->page == UI_PAGE_WIFI_QR ||
+            model->page == UI_PAGE_SMB_TEXT_INPUT || model->page == UI_PAGE_READER) {
+            ui_px_theme_header(model);
+        }
+        if (model->chrome_dirty || ui_settings_adjust_active(model) || model->page == UI_PAGE_WIFI_QR ||
+            model->page == UI_PAGE_SMB_TEXT_INPUT || model->page == UI_PAGE_READER) {
+            ui_px_theme_footer();
+        }
         s_anim.page_changed = false;
         return;
     }
     ui_px_clear();
     if (ui_settings_adjust_active(model)) {
         ui_px_apply_settings_adjust(model);
-    } else if (ui_page_is_icon_grid(model->page)) {
-        ui_px_apply_tile(model);
     } else if (model->page == UI_PAGE_BURNER) {
         ui_px_apply_burner_modes(model);
     } else if (model->page == UI_PAGE_BURN_ROM) {
@@ -8631,12 +8240,14 @@ static void ui_px_render(const ui_model_t *model)
     } else {
         ui_px_apply_list(model);
     }
-    if (!ui_page_is_icon_grid(model->page) && model->page != UI_PAGE_BURNER && model->page != UI_PAGE_MUSIC_PLAYER) {
+    if (model->page != UI_PAGE_BURNER && model->page != UI_PAGE_MUSIC_PLAYER) {
         s_anim.list_prev_selector_y = (int32_t)s_anim.list_selector_y;
         s_anim.list_prev_selector_w = (int32_t)s_anim.list_selector_w;
         s_anim.list_prev_bar_h = (int32_t)s_anim.list_bar_h;
         s_anim.list_prev_bar_x = (int32_t)s_anim.list_bar_x;
     }
+    ui_px_theme_header(model);
+    ui_px_theme_footer();
     ui_px_invalidate_full();
     s_anim.page_changed = false;
 }
@@ -8662,6 +8273,7 @@ esp_err_t ui_init(void)
     if (!ui_take_model_lock()) {
         return ESP_ERR_NO_MEM;
     }
+    s_model.theme_baicheng = ui_load_character_theme();
     xSemaphoreGive(s_model_lock);
     if (!s_home_items_ready) {
         ui_home_load_config();
@@ -8722,6 +8334,11 @@ void ui_process(void)
     ui_update_burn_rom_prompt_locked(&s_model);
     ++s_ui_runtime_stats.process_calls;
     if (music_polled) ++s_ui_runtime_stats.music_polls;
+    /* 熄屏仍处理音乐/任务状态，保留脏标记，唤醒后再绘制。 */
+    if (lvgl_port_is_idle_dimmed()) {
+        xSemaphoreGive(s_model_lock);
+        return;
+    }
     should_render = s_model.dirty || s_model.motion_dirty || s_model.content_dirty || s_model.chrome_dirty ||
                     s_model.music_player_dirty || s_model.music_progress_dirty ||
                     ui_anim_active_for_page(&s_model) || s_anim.page != s_model.page ||
@@ -8750,7 +8367,6 @@ void ui_mark_activity(void)
 {
     uint32_t now_ms = esp_log_timestamp();
     s_last_activity_ms = now_ms;
-    s_last_network_activity_ms = now_ms;
     lvgl_port_mark_activity();
     if (s_activity_cb != NULL) {
         s_activity_cb();
@@ -8997,6 +8613,8 @@ void ui_get_runtime_stats(ui_runtime_stats_t *out)
     if (s_model.page == UI_PAGE_ROOT) {
         const ui_menu_item_t *item = ui_home_item_at(s_model.selected);
         if (item != NULL) snprintf(out->selection, sizeof(out->selection), "%s", ui_tr(item->title));
+    } else if (s_model.page == UI_PAGE_APPS && s_model.selected < s_app_item_count) {
+        snprintf(out->selection, sizeof(out->selection), "%s", ui_root_item_title(&s_app_items[s_model.selected]));
     } else if (s_model.page == UI_PAGE_FILES || s_model.page == UI_PAGE_MUSIC_FILES) {
         ui_file_entry_t entry;
         if (ui_current_file_locked(&s_model, &entry))

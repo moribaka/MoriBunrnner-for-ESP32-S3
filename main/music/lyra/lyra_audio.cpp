@@ -22,6 +22,7 @@
 #include "decoder/impl/esp_opus_dec.h"
 #include "lyra_board_pins.h"
 #include "lyra_sd.h"
+#include "tca9555.h"
 
 #include <algorithm>
 #include <climits>
@@ -90,6 +91,19 @@ bool s_shutdown_requested;
 i2s_chan_handle_t s_i2s_tx;
 i2s_chan_handle_t s_i2s_speaker_tx;
 bool s_i2s_started;
+bool s_amplifier_enabled;
+
+void set_primary_amplifier(bool enabled)
+{
+    if (enabled == s_amplifier_enabled || !tca9555_ready()) return;
+    /* 开启前 I2S 时钟已稳定；停止前先静音，避免时钟消失时扬声器爆音。 */
+    if (enabled) vTaskDelay(pdMS_TO_TICKS(2));
+    esp_err_t err = tca9555_pin_write(TCA9555_IO1_4, enabled);
+    if (err == ESP_OK) {
+        s_amplifier_enabled = enabled;
+        if (!enabled) vTaskDelay(pdMS_TO_TICKS(2));
+    } else ESP_LOGW(kTag, "amplifier switch failed: %s", esp_err_to_name(err));
+}
 bool s_i2s_speaker_started;
 bool s_speaker_output_faulted;
 bool s_initialized;
@@ -147,6 +161,7 @@ struct PcmOutput {
     volatile bool error;
     esp_err_t error_code;
     int32_t gain_q15;
+    size_t silent_bytes;
     uint32_t sample_rate;
     uint32_t equalizer_generation;
     bool equalizer_initialized;
@@ -318,6 +333,7 @@ bool preload_and_start_i2s(PcmOutput *output)
     const esp_err_t enable_ret = i2s_channel_enable(s_i2s_tx);
     if (enable_ret != ESP_OK) return fail_pcm_output(output, enable_ret);
     s_i2s_started = true;
+    set_primary_amplifier(output->gain_q15 > 0);
     if (mirror_speaker && !s_speaker_output_faulted) {
         const esp_err_t speaker_enable_ret = i2s_channel_enable(s_i2s_speaker_tx);
         if (speaker_enable_ret != ESP_OK) {
@@ -2434,6 +2450,14 @@ void pcm_output_task(void *context)
         paused = s_status.paused;
         xSemaphoreGive(s_state_mutex);
         if (paused && !output->stop_requested) {
+            if (channel_started) {
+                set_primary_amplifier(false);
+                if (s_i2s_started) i2s_channel_disable(s_i2s_tx);
+                s_i2s_started = false;
+                disable_speaker_i2s();
+                channel_started = false;
+                output->gain_q15 = 0;
+            }
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20));
             continue;
         }
@@ -2475,10 +2499,19 @@ void pcm_output_task(void *context)
             break;
         }
         apply_output_processing(output, output->staging_buffer, received);
+        if (output->gain_q15 > 0) {
+            output->silent_bytes = 0;
+            set_primary_amplifier(true);
+        }
         mirror_to_speaker(output->staging_buffer, received);
         const esp_err_t write_ret = write_i2s_data(
             s_i2s_tx, output->staging_buffer, received);
         if (write_ret != ESP_OK) fail_pcm_output(output, write_ret);
+        if (output->gain_q15 == 0) {
+            output->silent_bytes += received;
+            /* 静音填满 DMA 后再关功放，避免截断尚未播放的渐弱声音。 */
+            if (output->silent_bytes >= kI2sDmaBufferBytes) set_primary_amplifier(false);
+        }
         if (output->error) break;
     }
 
@@ -2492,6 +2525,7 @@ void pcm_output_task(void *context)
         }
     }
     if (s_i2s_started) {
+        set_primary_amplifier(false);
         i2s_channel_disable(s_i2s_tx);
         s_i2s_started = false;
     }
@@ -2631,6 +2665,7 @@ esp_err_t configure_i2s(uint32_t sample_rate)
     if (sample_rate == 0 || s_i2s_tx == nullptr) return ESP_ERR_INVALID_ARG;
 
     if (s_i2s_started) {
+        set_primary_amplifier(false);
         const esp_err_t disable_ret = i2s_channel_disable(s_i2s_tx);
         if (disable_ret != ESP_OK) return disable_ret;
         s_i2s_started = false;
@@ -3677,6 +3712,7 @@ esp_err_t play_file(const char *path, uint32_t generation, uint32_t start_positi
 
     if (!generation_is_current(generation)) {
         if (s_i2s_started) {
+        set_primary_amplifier(false);
             i2s_channel_disable(s_i2s_tx);
             s_i2s_started = false;
         }
@@ -3692,6 +3728,7 @@ esp_err_t play_file(const char *path, uint32_t generation, uint32_t start_positi
         ESP_LOGI(kTag, "finished %s", path);
     } else {
         if (s_i2s_started) {
+        set_primary_amplifier(false);
             i2s_channel_disable(s_i2s_tx);
             s_i2s_started = false;
         }
@@ -3764,6 +3801,7 @@ void audio_task(void *)
         handled_generation = generation;
         if (!path[0]) {
             if (s_i2s_started) {
+        set_primary_amplifier(false);
                 i2s_channel_disable(s_i2s_tx);
                 s_i2s_started = false;
             }

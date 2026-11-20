@@ -320,6 +320,30 @@ static esp_err_t burner_gba_gbx_read_chip_bytes(uint32_t byte_addr, uint8_t *out
     return ESP_OK;
 }
 
+static esp_err_t burner_gba_gbx_read_id_bytes(const burner_gbx_profile_t *profile,
+                                              uint32_t base, uint8_t *out, size_t len)
+{
+    uint32_t previous_word = UINT32_MAX;
+    uint16_t word = 0;
+    for (size_t i = 0; i < len; ++i) {
+        uint32_t offset = profile->flash_id_offsets[i];
+        if (offset == UINT32_MAX || base > UINT32_MAX - offset) return ESP_ERR_INVALID_ARG;
+        uint32_t address = base + offset;
+        uint32_t word_address = address >> 1;
+        if (word_address != previous_word) {
+            uint32_t local = 0;
+            esp_err_t err = burner_gba_gbx_prepare_bank_addr(address & ~1U, false, &local);
+            if (err != ESP_OK) return err;
+            err = burner_bacon_rom_read_u16(local >> 1, &word);
+            if (err != ESP_OK) return err;
+            previous_word = word_address;
+        }
+        /* FlashGBX 配置记录的是总线上观察到的 ID。 */
+        out[i] = (uint8_t)(word >> ((address & 1U) * 8U));
+    }
+    return ESP_OK;
+}
+
 static esp_err_t burner_gba_gbx_resolve_byte_addr(
     const burner_gba_gbx_exec_ctx_t *ctx,
     burner_gbx_addr_kind_t addr_kind,
@@ -677,9 +701,7 @@ static esp_err_t burner_gba_gbx_read_cfi_with_profile(
     }
 
     if (!burner_gba_detect_qry_words(
-            burner_apply_d0d1_swap_on_read(w10, s_cart_ctx.d0d1_swapped),
-            burner_apply_d0d1_swap_on_read(w11, s_cart_ctx.d0d1_swapped),
-            burner_apply_d0d1_swap_on_read(w12, s_cart_ctx.d0d1_swapped),
+            w10, w11, w12,
             &detected_swapped,
             &high_byte_lane)) {
         ESP_LOGW(
@@ -964,7 +986,7 @@ static esp_err_t burner_gba_gbx_read_id_with_profile(
     if (err != ESP_OK) {
         return err;
     }
-    err = burner_gba_gbx_read_chip_bytes(read_addr, baseline, id_len, false);
+    err = burner_gba_gbx_read_id_bytes(profile, read_addr, baseline, id_len);
     if (err != ESP_OK) {
         return err;
     }
@@ -996,7 +1018,7 @@ static esp_err_t burner_gba_gbx_read_id_with_profile(
         return err;
     }
     esp_rom_delay_us(1000u);
-    err = burner_gba_gbx_read_chip_bytes(read_addr, id_out, id_len, false);
+    err = burner_gba_gbx_read_id_bytes(profile, read_addr, id_out, id_len);
     (void)burner_gba_gbx_execute_plain_sequence(
         &profile->reset,
         NULL,
@@ -1124,7 +1146,7 @@ static esp_err_t burner_gba_gbx_probe_method_visitor(
 
     burner_gbx_profile_clear(candidate);
     err = burner_gbx_find_agb_profile_for_method_id(
-        &profile->read_identifier,
+        profile,
         id,
         id_len,
         candidate,

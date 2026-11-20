@@ -774,7 +774,9 @@ void burner_bacon_idle_task_entry(void *param)
         } while (0);
 
         if (should_sleep) {
-            err = burner_bacon_gba_power_cmd(false, false);
+            /* 先释放地址/数据驱动和选通信号，再切断卡槽电源。 */
+            err = burner_bacon_gba_release_bus_idle();
+            if (err == ESP_OK) err = burner_bacon_gba_power_cmd(false, false);
             if (err == ESP_OK) {
                 s_bacon_idle_powered_down = true;
                 burner_reset_cart_probe_state();

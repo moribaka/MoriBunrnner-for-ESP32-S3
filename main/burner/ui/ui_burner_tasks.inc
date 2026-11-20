@@ -767,6 +767,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
     bool batteryless_region_found = false;
     bool batteryless_data_present = false;
     const burner_gbx_profile_t *gbx_profile = &s_cart_ctx.gbx;
+    char auto_profile_name[BURNER_PROBE_CHIP_NAME_LEN] = {0};
     bool gbx_profile_matched = false;
     bool gba_d0d1_known = false;
     bool gba_d0d1_swapped = false;
@@ -834,7 +835,8 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                     &cfi_ok);
                 gbx_profile_matched = (err == ESP_OK);
             } else if (s_recipe_mode == BURNER_RECIPE_MODE_AUTO) {
-                err = burner_auto_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
+                err = burner_auto_analyze_gba_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes,
+                                                   &cfi_ok, auto_profile_name, sizeof(auto_profile_name));
             } else if (s_recipe_mode == BURNER_RECIPE_MODE_GBABF) {
                 err = burner_gbabf_gba_probe_locked(gba_id, &device_size, &sector_size, &buffer_write_bytes, &cfi_ok);
             } else if (s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) {
@@ -940,7 +942,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             burner_nor_format_chip_name(
                 chip_name,
                 sizeof(chip_name),
-                burner_gba_chip_name(gba_id),
+                auto_profile_name[0] ? auto_profile_name : burner_gba_chip_name(gba_id),
                 s_cart_ctx.gba_cmdset,
                 device_size);
         }
@@ -957,7 +959,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
             gba_d0d1_known,
             gba_d0d1_swapped,
             chip_name,
-            gbx_profile_matched ? "GBX" :
+            auto_profile_name[0] ? "AUTO:GBX" : gbx_profile_matched ? "GBX" :
                                   ((s_recipe_mode == BURNER_RECIPE_MODE_AUTO) ? burner_auto_gba_probe_source() : ((s_recipe_mode == BURNER_RECIPE_MODE_GBABF) ? "GBABF" : ((s_recipe_mode == BURNER_RECIPE_MODE_CHISLINK) ? "CHISLINK" : ""))));
         {
             bool detected = false;
@@ -1000,7 +1002,7 @@ static esp_err_t ui_read_cart_id_once(char *out, size_t out_len, burner_cart_mod
                 burner_status_set_gba_batteryless_probe(0u, 0u, false, false);
             }
         }
-        if (gbx_profile_matched) {
+        if (gbx_profile_matched || auto_profile_name[0]) {
             snprintf(out, out_len, "%s GBX %s", ui_cart_mode_label(cart_mode), chip_name);
         } else {
             snprintf(
@@ -1176,9 +1178,9 @@ static void ui_work_task(void *param)
             err = wifi_maneger_ready() ? wifi_maneger_ap() : ESP_ERR_INVALID_STATE;
             break;
         case UI_WORK_WIFI_DISCONNECT:
-            wifi_maneger_disconnect();
+            err = wifi_maneger_set_keep_online(false);
+            if (err == ESP_OK) err = wifi_maneger_suspend();
             ok_text = ui_tr("Wi-Fi disconnected");
-            err = ESP_OK;
             break;
         case UI_WORK_WIFI_CLOSE_AP:
             ok_text = "setup hotspot closed";

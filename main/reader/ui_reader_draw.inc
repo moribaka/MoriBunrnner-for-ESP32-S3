@@ -119,8 +119,8 @@ static void ui_px_apply_reader(const ui_model_t *model)
         if (fill_w > bar_w - 2) {
             fill_w = bar_w - 2;
         }
-        ui_px_frame(bar_x, bar_y, bar_w, 5, true);
-        ui_px_box(bar_x + 1, bar_y + 1, fill_w, 3, true);
+        ui_px_color_box(bar_x, bar_y, bar_w, 5, UI_COLOR_SAND);
+        ui_px_color_box(bar_x + 1, bar_y + 1, fill_w, 3, UI_COLOR_ORANGE);
     }
 
     if (model->status_text[0] != '\0') {

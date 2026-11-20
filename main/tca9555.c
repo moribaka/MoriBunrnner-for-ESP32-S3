@@ -29,6 +29,7 @@ static void IRAM_ATTR tca9555_int_handler(void *param)
     BaseType_t task_woken = pdFALSE;
 
     (void)param;
+    if (s_irq_gpio != GPIO_NUM_NC) gpio_intr_disable(s_irq_gpio);
     if (s_irq_event_group == NULL) {
         return;
     }
@@ -64,15 +65,16 @@ static void tca9555_irq_task(void *param)
 
         /* Debounce without busy-waiting on the UI/system core. */
         vTaskDelay(pdMS_TO_TICKS(10));
-        if (s_irq_gpio != GPIO_NUM_NC && gpio_get_level(s_irq_gpio) != 0) {
-            continue;
-        }
+        /* 其他监测读取也会清除INT；收到事件后仍需读当前输入，避免丢失松键。 */
 
         {
             uint16_t input = 0;
             if (tca9555_read_inputs(&input) != ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(50));
+                gpio_intr_enable(s_irq_gpio);
                 continue;
             }
+            gpio_intr_enable(s_irq_gpio);
 
             if (!last_input_valid) {
                 last_input = input;
@@ -336,7 +338,7 @@ esp_err_t tca9555_enable_irq(gpio_num_t irq_gpio, tca9555_input_cb_t cb, void *u
     s_irq_cb = cb;
     s_irq_user_ctx = user_ctx;
 
-    int_cfg.intr_type = GPIO_INTR_NEGEDGE;
+    int_cfg.intr_type = GPIO_INTR_LOW_LEVEL;
     int_cfg.mode = GPIO_MODE_INPUT;
     int_cfg.pull_up_en = GPIO_PULLUP_ENABLE;
     int_cfg.pull_down_en = GPIO_PULLDOWN_DISABLE;

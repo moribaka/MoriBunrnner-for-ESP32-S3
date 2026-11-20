@@ -30,6 +30,13 @@ void wifi_maneger_connect(const char *ssid, const char *password);
 esp_err_t wifi_maneger_ap(void);
 esp_err_t wifi_maneger_scan(p_wifi_scan_cb f);
 void wifi_maneger_disconnect(void);
+esp_err_t wifi_maneger_suspend(void);
+bool wifi_maneger_radio_started(void);
+bool wifi_maneger_connected(void);
+bool wifi_maneger_provisioning_active(void);
+bool wifi_maneger_busy(void);
+bool wifi_maneger_keep_online(void);
+esp_err_t wifi_maneger_set_keep_online(bool enabled);
 esp_err_t wifi_maneger_shutdown_for_reboot(void);
 
 bool wifi_maneger_has_saved_sta(void);

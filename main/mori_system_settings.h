@@ -15,6 +15,8 @@ bool mori_wifi_idle_disconnect_enabled(void);
 void mori_set_wifi_idle_disconnect_enabled(bool enabled);
 uint16_t mori_wifi_idle_off_minutes(void);
 void mori_set_wifi_idle_off_minutes(uint16_t minutes);
+void mori_request_wifi(void);
+esp_err_t mori_request_wifi_off(void);
 
 uint8_t mori_load_ui_language_from_system_ini(bool *found_out);
 esp_err_t mori_save_language_settings_to_system_ini(const char *language_ini, uint8_t ui_language);

@@ -12,6 +12,9 @@ esp_err_t lcd_display_set_brightness(uint8_t brightness);
 /* Temporarily gates the backlight without changing the user's brightness. */
 esp_err_t lcd_display_set_backlight_suspended(bool suspended);
 uint8_t lcd_display_get_brightness(void);
+esp_err_t lcd_display_set_idle_dimmed(bool dimmed);
+esp_err_t lcd_display_set_sleeping(bool sleeping);
+bool lcd_display_is_sleeping(void);
 int lcd_display_width(void);
 int lcd_display_height(void);
 

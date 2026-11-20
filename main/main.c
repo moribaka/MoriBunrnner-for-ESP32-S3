@@ -52,17 +52,17 @@
 #define MORI_I2C_BOOT_FREQ_HZ 100000U
 #define MORI_TCA9555_BOOT_INPUT_CFG 0xFFFFU
 #define MORI_TCA9555_AMP_SD_MASK TCA9555_IO1_4
-#define MORI_TCA9555_BOARD_OUTPUT_DEFAULT MORI_TCA9555_AMP_SD_MASK
+#define MORI_TCA9555_BOARD_OUTPUT_DEFAULT 0U
 #define MORI_TCA9555_BOARD_CONFIG_DEFAULT ((uint16_t)(MORI_TCA9555_BOOT_INPUT_CFG & ~MORI_TCA9555_AMP_SD_MASK))
 #define MORI_TCA9555_IRQ_DEBOUNCE_MS 25U
 #define MORI_TCA9555_IRQ_LOG_RELEASE 0
-#define MORI_BOOT_KEY_TASK_STACK_SIZE 2048
+#define MORI_BOOT_KEY_TASK_STACK_SIZE 4096
 #define MORI_BOOT_KEY_TASK_PRIORITY 3
 #define MORI_BOOT_KEY_TASK_CORE_ID 0
 #define MORI_BOOT_KEY_POLL_MS 20U
 #define MORI_BOOT_KEY_DEBOUNCE_MS 40U
 #define MORI_BOOT_KEY_LONG_PRESS_MS 700U
-#define MORI_IDLE_MONITOR_TASK_STACK_SIZE 3072
+#define MORI_IDLE_MONITOR_TASK_STACK_SIZE 5120
 #define MORI_IDLE_MONITOR_TASK_PRIORITY 2
 #define MORI_IDLE_MONITOR_TASK_CORE_ID 0
 #define MORI_IDLE_MONITOR_POLL_MS 500U
@@ -91,7 +91,7 @@
 #define MORI_NTP_DEFAULT_SERVER "ntp.aliyun.com"
 #define MORI_NTP_LEGACY_DEFAULT_SERVER "pool.ntp.org"
 #define MORI_NTP_SYNC_INTERVAL_MS (6U * 60U * 60U * 1000U)
-#define MORI_SYSTEM_BRIGHTNESS_DEFAULT 128U
+#define MORI_SYSTEM_BRIGHTNESS_DEFAULT 115U
 #define MORI_SYSTEM_VOLUME_DEFAULT 60U
 #define MORI_IP5306_FIXED_CHARGE_CURRENT_MA 450U
 #define MORI_IP5306_FIXED_CHG_DIG_BITS 0x04U
@@ -100,6 +100,7 @@ static volatile bool s_web_started = false;
 static volatile bool s_web_starting = false;
 static volatile bool s_wifi_idle_suspended = false;
 static volatile bool s_wifi_reconnect_running = false;
+static volatile bool s_wifi_stop_requested;
 static volatile uint16_t s_screen_idle_off_minutes = MORI_SCREEN_IDLE_OFF_DEFAULT_MIN;
 static volatile uint16_t s_wifi_idle_off_minutes = MORI_WIFI_IDLE_OFF_DEFAULT_MIN;
 static volatile uint32_t s_last_wifi_activity_ms = 0;
@@ -243,7 +244,7 @@ static const char s_default_system_ini[] =
     "screen_idle_off_minutes=1\n"
     "wifi_idle_off_minutes=1\n"
     "wifi_idle_disconnect=1\n"
-    "brightness=128\n"
+    "brightness=115\n"
     "volume=60\n"
     "ntp_server=" MORI_NTP_DEFAULT_SERVER "\n";
 
@@ -413,8 +414,8 @@ static const char s_default_tca9555_ini[] =
     "# TCA9555 register config\n"
     "# apply=1 to enable writing registers on boot.\n"
     "apply=0\n"
-    "# board default: P1_4=AMP_SD# output high, others input.\n"
-    "# output=0x1000    ; OUTPUT_PORT1:PORT0\n"
+    "# 默认 P1_4 为功放输出，空闲低电平，播放时由音频模块使能。\n"
+    "# output=0x0000    ; OUTPUT_PORT1:PORT0\n"
     "# polarity=0x0000  ; POLARITY_PORT1:PORT0\n"
     "# config=0xEFFF    ; CONFIG_PORT1:PORT0 (1=input,0=output)\n";
 
@@ -3134,6 +3135,15 @@ static void tca9555_input_irq_cb(uint16_t pin_mask, int level, void *user_ctx)
     ESP_LOGI("main", "TCA9555 IRQ %s pin=0x%04X level=%d", name, pin_mask, level);
 }
 
+static void IRAM_ATTR boot_key_isr(void *arg)
+{
+    (void)arg;
+    gpio_intr_disable(MORI_PIN_KEY_BOOT);
+    BaseType_t woken = pdFALSE;
+    if (s_boot_key_task) vTaskNotifyGiveFromISR(s_boot_key_task, &woken);
+    if (woken) portYIELD_FROM_ISR();
+}
+
 static void boot_key_task(void *arg)
 {
     gpio_config_t key_cfg = {
@@ -3141,7 +3151,7 @@ static void boot_key_task(void *arg)
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
+        .intr_type = GPIO_INTR_LOW_LEVEL,
     };
     int last_raw = 1;
     int stable_level = 1;
@@ -3159,6 +3169,9 @@ static void boot_key_task(void *arg)
     last_raw = gpio_get_level(MORI_PIN_KEY_BOOT);
     stable_level = last_raw;
     last_change_ms = esp_log_timestamp();
+    esp_err_t isr_err = tca9555_ready() ? ESP_OK : gpio_install_isr_service(0);
+    bool irq_ready = (isr_err == ESP_OK || isr_err == ESP_ERR_INVALID_STATE) &&
+        gpio_isr_handler_add(MORI_PIN_KEY_BOOT, boot_key_isr, NULL) == ESP_OK;
 
     while (1) {
         uint32_t now_ms = esp_log_timestamp();
@@ -3174,7 +3187,12 @@ static void boot_key_task(void *arg)
             ui_post_button(UI_BUTTON_RIGHT, stable_level == 0);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(MORI_BOOT_KEY_POLL_MS));
+        if (irq_ready && raw == 1 && stable_level == 1 && now_ms - last_change_ms >= MORI_BOOT_KEY_DEBOUNCE_MS) {
+            gpio_intr_enable(MORI_PIN_KEY_BOOT);
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(lvgl_port_is_idle_dimmed() ? 1000 : MORI_BOOT_KEY_POLL_MS));
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(MORI_BOOT_KEY_POLL_MS));
+        }
     }
 }
 
@@ -3269,10 +3287,7 @@ static void init_i2c_peripherals(void)
         return;
     }
 
-    /*
-     * Keep the button matrix as inputs by default, but drive AMP_SD# high so
-     * the audio amplifier is enabled unless tca9555.ini explicitly overrides it.
-     */
+    /* 按键保持输入，功放默认关闭，由音频播放路径控制。 */
     for (int i = 0; i < 3; i++) {
         err = tca9555_write_outputs(MORI_TCA9555_BOARD_OUTPUT_DEFAULT);
         if (err == ESP_OK) {
@@ -3288,6 +3303,8 @@ static void init_i2c_peripherals(void)
     }
 
     apply_tca9555_ini_if_present();
+    (void)tca9555_pin_write(MORI_TCA9555_AMP_SD_MASK, false);
+    (void)tca9555_set_pin_mode(MORI_TCA9555_AMP_SD_MASK, false);
 
     if (tca9555_read_inputs(&tca_input) == ESP_OK &&
         tca9555_read_config(&tca_cfg) == ESP_OK) {
@@ -3372,14 +3389,7 @@ static uint32_t newer_activity_timestamp_ms(uint32_t a, uint32_t b)
 
 static void mark_wifi_activity(void)
 {
-    uint32_t now_ms = newer_activity_timestamp_ms(
-        ui_get_last_activity_ms(),
-        ui_get_last_network_activity_ms());
-
-    if (now_ms == 0U) {
-        now_ms = esp_log_timestamp();
-    }
-    s_last_wifi_activity_ms = now_ms;
+    s_last_wifi_activity_ms = esp_log_timestamp();
 }
 
 static void idle_monitor_task(void *arg)
@@ -3387,24 +3397,42 @@ static void idle_monitor_task(void *arg)
     (void)arg;
 
     for (;;) {
+        static uint32_t last_battery_ms;
+        static uint32_t last_wifi_retry_ms;
+        uint32_t sample_now = esp_log_timestamp();
+        if (wifi_maneger_ready() && wifi_maneger_keep_online() && !wifi_maneger_connected() &&
+            !wifi_maneger_provisioning_active() && !wifi_maneger_busy() &&
+            (uint32_t)(sample_now - last_wifi_retry_ms) >= 30000U) {
+            last_wifi_retry_ms = sample_now;
+            mori_request_wifi();
+        }
+        if ((uint32_t)(sample_now - last_battery_ms) >= 5000U) {
+            power_manager_telemetry_t telemetry;
+            (void)power_manager_get_telemetry(&telemetry);
+            last_battery_ms = sample_now;
+        }
         uint32_t last_activity_ms = newer_activity_timestamp_ms(
-            s_last_wifi_activity_ms,
-            newer_activity_timestamp_ms(ui_get_last_activity_ms(), ui_get_last_network_activity_ms()));
+            s_last_wifi_activity_ms, ui_get_last_network_activity_ms());
         uint32_t now_ms = esp_log_timestamp();
         uint16_t wifi_idle_minutes = s_wifi_idle_off_minutes;
         uint32_t wifi_idle_off_ms = (uint32_t)wifi_idle_minutes * 60U * 1000U;
+        music_player_snapshot_t music = {0};
+        music_player_get_snapshot(&music);
+        bool network_audio = music.source == MUSIC_PLAYER_SOURCE_SMB &&
+            (music.state == MUSIC_PLAYER_STATE_PLAYING || music.state == MUSIC_PLAYER_STATE_LOADING || music.state == MUSIC_PLAYER_STATE_PAUSED);
 
         s_last_wifi_activity_ms = last_activity_ms;
-        if (last_activity_ms != 0U &&
-            !burner_task_is_running_snapshot() &&
+        bool timed_out = last_activity_ms != 0U && !network_audio && !wifi_maneger_keep_online() &&
             wifi_idle_minutes != MORI_POWER_IDLE_TIMEOUT_DISABLED_MIN &&
-            !s_wifi_idle_suspended &&
-            !s_wifi_reconnect_running &&
-            (now_ms - last_activity_ms) >= wifi_idle_off_ms) {
+            (uint32_t)(now_ms - last_activity_ms) >= wifi_idle_off_ms;
+        if (!wifi_maneger_radio_started()) s_wifi_stop_requested = false;
+        if (!burner_task_is_running_snapshot() && wifi_maneger_radio_started() &&
+            !s_wifi_reconnect_running && (s_wifi_stop_requested || (!wifi_maneger_busy() && timed_out))) {
             stop_web_service_if_running();
-            wifi_maneger_disconnect();
-            s_wifi_idle_suspended = true;
-            ESP_LOGD("main", "Wi-Fi idle timeout %u min reached, disconnected", (unsigned)wifi_idle_minutes);
+            esp_err_t err = wifi_maneger_suspend();
+            s_wifi_idle_suspended = err == ESP_OK;
+            if (err == ESP_OK) s_wifi_stop_requested = false;
+            ESP_LOGI("main", "Wi-Fi idle radio stop: %s", esp_err_to_name(err));
         }
 
         vTaskDelay(pdMS_TO_TICKS(MORI_IDLE_MONITOR_POLL_MS));
@@ -3430,17 +3458,24 @@ static void start_idle_monitor_task(void)
     }
 }
 
-static void activity_reconnect_wifi_if_needed(void)
+esp_err_t mori_request_wifi_off(void)
+{
+    esp_err_t err = wifi_maneger_set_keep_online(false);
+    if (err == ESP_OK) s_wifi_stop_requested = true;
+    return err;
+}
+
+void mori_request_wifi(void)
 {
     BaseType_t create_ret;
 
-    if (!s_wifi_idle_suspended || s_wifi_reconnect_running) {
+    if (s_wifi_reconnect_running || wifi_maneger_connected() || wifi_maneger_provisioning_active() || wifi_maneger_busy()) {
         return;
     }
     if (burner_task_is_running_snapshot()) {
         return;
     }
-    if (!wifi_maneger_ready() || !wifi_maneger_has_saved_sta()) {
+    if (!wifi_maneger_ready()) {
         s_wifi_idle_suspended = false;
         return;
     }
@@ -3464,7 +3499,8 @@ static void wifi_reconnect_task(void *arg)
     (void)arg;
 
     ui_set_status_text("connecting saved wifi");
-    wifi_maneger_connect_saved(STA_CONNECT_TIMEOUT_MS);
+    if (wifi_maneger_has_saved_sta()) wifi_maneger_connect_saved(STA_CONNECT_TIMEOUT_MS);
+    else (void)wifi_maneger_ap();
     s_wifi_idle_suspended = false;
     mark_wifi_activity();
     s_wifi_reconnect_running = false;
@@ -3644,7 +3680,6 @@ void app_main(void)
     } else {
         (void)lcd_display_set_brightness(mori_load_display_brightness_from_system_ini(NULL));
         mori_set_screen_idle_off_minutes(s_screen_idle_off_minutes);
-        ui_set_activity_callback(activity_reconnect_wifi_if_needed);
         start_boot_key_task();
         start_idle_monitor_task();
         ui_mark_activity();
@@ -3661,7 +3696,15 @@ void app_main(void)
     }
 
     wifi_txt_connected = mori_try_connect_wifi_from_tf_txt();
+    ESP_LOGI("main", "Automatic idle sleep: %s", esp_err_to_name(power_manager_enable_idle_sleep()));
     if (!wifi_txt_connected) {
+        if (!wifi_maneger_keep_online()) {
+            s_wifi_idle_suspended = true;
+            ui_set_wifi_state(UI_WIFI_STATE_DISCONNECTED);
+            ui_set_status_text("Wi-Fi on demand");
+            ESP_LOGI("main", "Local mode: radio off; connect from Wi-Fi settings when needed");
+            return;
+        }
         if (wifi_maneger_has_saved_sta()) {
             ui_set_status_text("connecting saved wifi");
             ESP_LOGI(wifi_manager_tag, "Found saved Wi-Fi config, connecting...");

@@ -230,10 +230,24 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         .handler = burner_power_status_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t power_policy_get_uri = {
+        .uri = "/api/power/policy", .method = HTTP_GET,
+        .handler = burner_power_policy_handler,
+    };
+    httpd_uri_t power_policy_post_uri = {
+        .uri = "/api/power/policy", .method = HTTP_POST,
+        .handler = burner_power_policy_handler,
+    };
     httpd_uri_t power_charge_current_uri = {
         .uri = "/api/power/charge_current",
         .method = HTTP_POST,
         .handler = burner_power_charge_current_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t power_calibration_reset_uri = {
+        .uri = "/api/power/calibration/reset",
+        .method = HTTP_POST,
+        .handler = burner_power_calibration_reset_handler,
         .user_ctx = NULL,
     };
     httpd_uri_t storage_status_uri = {
@@ -475,7 +489,7 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
     burner_status_reset();
     xSemaphoreGive(s_status_lock);
 
-    config.max_uri_handlers = 78;
+    config.max_uri_handlers = 80;
     config.stack_size = WEB_HTTPD_STACK_SIZE;
     config.core_id = WEB_HTTPD_CORE_ID;
     config.task_priority = WEB_HTTPD_TASK_PRIORITY;
@@ -493,6 +507,8 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
     }
 
     err = httpd_register_uri_handler(s_httpd, &root_uri);
+    if (err == ESP_OK) err = httpd_register_uri_handler(s_httpd, &power_policy_get_uri);
+    if (err == ESP_OK) err = httpd_register_uri_handler(s_httpd, &power_policy_post_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;
@@ -678,6 +694,11 @@ esp_err_t web_ws_start(ws_cfg_t *cfg)
         return err;
     }
     err = httpd_register_uri_handler(s_httpd, &power_charge_current_uri);
+    if (err != ESP_OK) {
+        web_ws_stop();
+        return err;
+    }
+    err = httpd_register_uri_handler(s_httpd, &power_calibration_reset_uri);
     if (err != ESP_OK) {
         web_ws_stop();
         return err;

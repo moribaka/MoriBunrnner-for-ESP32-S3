@@ -33,6 +33,8 @@ static bool wifi_started = false;
 static bool wifi_initialized = false;
 static bool provisioning_waiting_confirm = false;
 static bool wifi_shutting_down_for_reboot = false;
+static bool wifi_keep_online = false;
+static bool wifi_suspended = false;
 
 static char target_ssid[WIFI_SSID_BUF_LEN] = {0};
 
@@ -324,11 +326,23 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         "</body></html>");
 }
 
+static TaskHandle_t provision_confirm_task;
+
+static void provision_confirm_worker(void *arg)
+{
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(150));
+    esp_err_t err = wifi_maneger_provisioning_confirm();
+    if (err != ESP_OK) ESP_LOGW(wifi_manager_tag, "provision confirm failed: %s", esp_err_to_name(err));
+    provision_confirm_task = NULL;
+    vTaskDelete(NULL);
+}
+
 static esp_err_t confirm_post_handler(httpd_req_t *req)
 {
-    esp_err_t err = wifi_maneger_provisioning_confirm();
-
-    if (err != ESP_OK) {
+    /* 先返回确认，再由独立任务关闭配网页面，避免 httpd_stop 等待自身。 */
+    if (!provision_confirm_task && xTaskCreate(provision_confirm_worker, "wifi_confirm", 4096,
+            NULL, 3, &provision_confirm_task) != pdPASS) {
         return httpd_resp_send_err(
             req,
             HTTPD_500_INTERNAL_SERVER_ERROR,
@@ -446,9 +460,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_STA_START:
-                if (!wifi_shutting_down_for_reboot && target_ssid[0] != '\0') {
-                    esp_wifi_connect();
-                }
+                /* 连接由调用方统一发起，避免首次启动与事件回调重复连接。 */
                 break;
 
             case WIFI_EVENT_STA_DISCONNECTED: {
@@ -469,7 +481,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
                     }
                 }
 
-                if (!wifi_shutting_down_for_reboot &&
+                if (!wifi_shutting_down_for_reboot && !wifi_suspended &&
                     target_ssid[0] != '\0' &&
                     sta_connect_cnt < MAX_CONNECT_RETRY) {
                     sta_connect_cnt++;
@@ -607,13 +619,15 @@ esp_err_t wifi_maneger_init(p_wifi_state_cb f)
         return err;
     }
 
-    err = esp_wifi_start();
-    if (err != ESP_OK) {
-        ESP_LOGE(wifi_manager_tag, "esp_wifi_start failed: %s", esp_err_to_name(err));
-        return err;
+    /* 本地功能启动时保持射频关闭，需要联网时才启动。 */
+    nvs_handle_t policy;
+    uint8_t keep = 0;
+    if (nvs_open(WIFI_CFG_NAMESPACE, NVS_READONLY, &policy) == ESP_OK) {
+        (void)nvs_get_u8(policy, "keep_online", &keep);
+        nvs_close(policy);
     }
-
-    wifi_started = true;
+    wifi_keep_online = keep != 0;
+    (void)esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
     wifi_initialized = true;
     return ESP_OK;
 }
@@ -632,6 +646,7 @@ void wifi_maneger_connect(const char *ssid, const char *password)
         ESP_LOGE(wifi_manager_tag, "ssid is empty");
         return;
     }
+    wifi_suspended = false;
 
     snprintf((char *)wifi_config.sta.ssid, sizeof(wifi_config.sta.ssid), "%s", ssid);
     snprintf(
@@ -706,6 +721,49 @@ void wifi_maneger_disconnect(void)
     if (wifi_started) {
         esp_wifi_disconnect();
     }
+}
+
+bool wifi_maneger_radio_started(void) { return wifi_started; }
+bool wifi_maneger_keep_online(void) { return wifi_keep_online; }
+bool wifi_maneger_connected(void) { return wifi_started && is_sta_connected; }
+bool wifi_maneger_provisioning_active(void) { return provision_httpd != NULL; }
+bool wifi_maneger_busy(void)
+{
+    return wifi_started && ((scan_sem && uxSemaphoreGetCount(scan_sem) == 0) ||
+        (target_ssid[0] && !is_sta_connected && sta_connect_cnt < MAX_CONNECT_RETRY));
+}
+
+esp_err_t wifi_maneger_set_keep_online(bool enabled)
+{
+    nvs_handle_t policy;
+    esp_err_t err = nvs_open(WIFI_CFG_NAMESPACE, NVS_READWRITE, &policy);
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(policy, "keep_online", enabled ? 1 : 0);
+    if (err == ESP_OK) err = nvs_commit(policy);
+    nvs_close(policy);
+    if (err == ESP_OK) wifi_keep_online = enabled;
+    return err;
+}
+
+esp_err_t wifi_maneger_suspend(void)
+{
+    if (!wifi_initialized || !wifi_started) return ESP_OK;
+    /* 先阻止断线事件自动重连，再停射频；不删除保存的网络。 */
+    wifi_suspended = true;
+    target_ssid[0] = '\0';
+    sta_connect_cnt = 0;
+    stop_provision_http_server();
+    esp_err_t err = esp_wifi_stop();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED) {
+        wifi_suspended = false;
+        return err;
+    }
+    wifi_started = false;
+    is_sta_connected = false;
+    provisioning_waiting_confirm = false;
+    xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+    if (wifi_callback) wifi_callback(WIFI_STATE_DISCONNECTED);
+    return ESP_OK;
 }
 
 esp_err_t wifi_maneger_shutdown_for_reboot(void)
@@ -866,6 +924,7 @@ esp_err_t wifi_maneger_get_sta_ip(char *ip, size_t ip_len)
         return ESP_ERR_INVALID_ARG;
     }
     ip[0] = '\0';
+    if (!wifi_maneger_connected()) return ESP_ERR_INVALID_STATE;
 
     sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (sta_netif == NULL) {
@@ -892,6 +951,7 @@ esp_err_t wifi_maneger_ap(void)
     wifi_mode_t mode = WIFI_MODE_NULL;
     wifi_config_t ap_config = {0};
     esp_err_t err;
+    wifi_suspended = false;
 
     err = esp_wifi_get_mode(&mode);
     if (err != ESP_OK) {
@@ -1023,6 +1083,12 @@ esp_err_t wifi_maneger_scan(p_wifi_scan_cb f)
 
     if (pdTRUE != xSemaphoreTake(scan_sem, 0)) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (!wifi_started) {
+        wifi_suspended = false;
+        esp_err_t err = esp_wifi_start();
+        if (err != ESP_OK) { xSemaphoreGive(scan_sem); return err; }
+        wifi_started = true;
     }
 
     esp_wifi_clear_ap_list();

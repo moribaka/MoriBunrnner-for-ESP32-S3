@@ -5,6 +5,7 @@
 
 esp_err_t burner_power_charge_current_handler(httpd_req_t *req);
 esp_err_t burner_power_status_handler(httpd_req_t *req);
+esp_err_t burner_power_calibration_reset_handler(httpd_req_t *req);
 esp_err_t burner_device_info_handler(httpd_req_t *req);
 esp_err_t burner_device_restart_handler(httpd_req_t *req);
 esp_err_t burner_device_brightness_get_handler(httpd_req_t *req);
@@ -15,6 +16,7 @@ esp_err_t burner_lang_handler(httpd_req_t *req);
 esp_err_t burner_lang_list_handler(httpd_req_t *req);
 esp_err_t burner_lang_apply_handler(httpd_req_t *req);
 esp_err_t burner_wifi_status_handler(httpd_req_t *req);
+esp_err_t burner_power_policy_handler(httpd_req_t *req);
 esp_err_t burner_wifi_scan_handler(httpd_req_t *req);
 esp_err_t burner_wifi_connect_handler(httpd_req_t *req);
 esp_err_t burner_wifi_ap_handler(httpd_req_t *req);

@@ -28,6 +28,12 @@
 #include "ag32_mcu_transport.h"
 #include "mcu_debug.h"
 #include "power_manager.h"
+#include "wifi_manager.h"
+#include "mori_system_settings.h"
+#include "lcd_display.h"
+#include "lvgl_port.h"
+#include "pin_map.h"
+#include "esp_pm.h"
 
 static TaskHandle_t s_console;
 static portMUX_TYPE s_job_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -99,6 +105,52 @@ static void status(void)
     cJSON_AddNumberToObject(json, "ag32_capabilities", ag32_mcu_link_capabilities());
     cJSON_AddBoolToObject(json, "ag32_capabilities_known",
         ag32_mcu_link_capabilities_known());
+    reply(json);
+}
+
+static void power_status(void)
+{
+    power_manager_telemetry_t power = {0};
+    esp_err_t err = power_manager_get_telemetry(&power);
+    cJSON *json = event("power");
+    if (json == NULL) return;
+    cJSON_AddBoolToObject(json, "ok", err == ESP_OK);
+    cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
+    if (err == ESP_OK) {
+        cJSON_AddStringToObject(json, "chip", power.chip_name);
+        cJSON_AddBoolToObject(json, "battery_present", power.battery_present);
+        cJSON_AddBoolToObject(json, "percent_valid", power.battery_percent_valid);
+        cJSON_AddNumberToObject(json, "percent", power.battery_percent);
+        cJSON_AddNumberToObject(json, "percent_raw", power.battery_percent_raw);
+        cJSON_AddStringToObject(json, "source", power.battery_percent_source);
+        cJSON_AddNumberToObject(json, "voltage_mv", power.battery_voltage_mv);
+        cJSON_AddNumberToObject(json, "filtered_voltage_mv", power.battery_filtered_voltage_mv);
+        cJSON_AddNumberToObject(json, "charge_ma_x10", power.battery_charge_current_ma_x10);
+        cJSON_AddNumberToObject(json, "discharge_ma_x10", power.battery_discharge_current_ma_x10);
+        cJSON_AddBoolToObject(json, "charging", power.charging);
+        cJSON_AddBoolToObject(json, "full", power.charge_full);
+        cJSON_AddBoolToObject(json, "external_power", power.vbus_present);
+        cJSON_AddStringToObject(json, "direction", power.current_direction);
+        cJSON_AddStringToObject(json, "charge_state", power.charge_state);
+        cJSON_AddNumberToObject(json, "fuel_gauge_raw", power.axp209_snapshot.fuel_gauge_raw);
+        cJSON_AddBoolToObject(json, "fuel_gauge_valid", power.axp209_snapshot.fuel_gauge_valid);
+        cJSON_AddBoolToObject(json, "charge_control_valid", power.axp209_charge_control_ok);
+        cJSON_AddNumberToObject(json, "charge_target_mv", power.axp209_charge_control.target_voltage_mv);
+        cJSON_AddNumberToObject(json, "charge_limit_ma", power.charge_current_limit_ma);
+        cJSON_AddBoolToObject(json, "sample_stale", power.sample_stale);
+        cJSON_AddNumberToObject(json, "sample_age_ms", power.sample_age_ms);
+        cJSON_AddBoolToObject(json, "coulomb_valid", power.axp209_snapshot.coulomb_valid);
+        cJSON_AddNumberToObject(json, "coulomb_charge_raw", power.axp209_snapshot.coulomb_charge_raw);
+        cJSON_AddNumberToObject(json, "coulomb_discharge_raw", power.axp209_snapshot.coulomb_discharge_raw);
+        cJSON_AddNumberToObject(json, "coulomb_sample_hz", power.axp209_snapshot.coulomb_sample_hz);
+        cJSON_AddNumberToObject(json, "learned_capacity_mah", power.learned_capacity_mah);
+        cJSON_AddNumberToObject(json, "learning_observed_mah", power.learning_observed_mah);
+        cJSON_AddNumberToObject(json, "learning_cycles", power.learning_cycles);
+        cJSON_AddNumberToObject(json, "learning_discharge_cycles", power.learning_discharge_cycles);
+        cJSON_AddNumberToObject(json, "learning_curve_points", power.learning_curve_points);
+        cJSON_AddStringToObject(json, "calibration_state", power.calibration_state);
+        cJSON_AddBoolToObject(json, "calibration_storage_ok", power.calibration_storage_ok);
+    }
     reply(json);
 }
 
@@ -302,6 +354,44 @@ static void bacon_check(void)
 
 static void dispatch(char *line)
 {
+    if (!strcmp(line, "power-policy")) {
+        cJSON *json = event("power_policy");
+        uint32_t count; uint64_t time_us;
+        power_manager_sleep_stats(&count, &time_us);
+        esp_pm_config_t pm = {0};
+        (void)esp_pm_get_configuration(&pm);
+        uint16_t outputs = 0;
+        bool amp_ok = tca9555_read_outputs(&outputs) == ESP_OK;
+        if (json) {
+            cJSON_AddBoolToObject(json, "wifi_keep_online", wifi_maneger_keep_online());
+            cJSON_AddBoolToObject(json, "wifi_radio_started", wifi_maneger_radio_started());
+            cJSON_AddBoolToObject(json, "panel_sleeping", lcd_display_is_sleeping());
+            cJSON_AddBoolToObject(json, "screen_sleeping", lvgl_port_is_idle_dimmed());
+            cJSON_AddNumberToObject(json, "sleep_count", count);
+            cJSON_AddNumberToObject(json, "sleep_time_us", (double)time_us);
+            cJSON_AddNumberToObject(json, "cpu_min_mhz", pm.min_freq_mhz);
+            cJSON_AddNumberToObject(json, "cpu_max_mhz", pm.max_freq_mhz);
+            cJSON_AddBoolToObject(json, "automatic_light_sleep", pm.light_sleep_enable);
+            cJSON_AddBoolToObject(json, "display_awake_lock", power_manager_display_awake());
+            cJSON_AddNumberToObject(json, "irq_level", gpio_get_level(MORI_PIN_I2C_IRQ));
+            cJSON_AddBoolToObject(json, "amplifier_enabled", amp_ok && (outputs & TCA9555_IO1_4));
+            cJSON_AddBoolToObject(json, "amplifier_known", amp_ok);
+        }
+        reply(json); return;
+    }
+    if (!strcmp(line, "wifi on") || !strcmp(line, "wifi keep-on") || !strcmp(line, "wifi on-demand") || !strcmp(line, "wifi off")) {
+        esp_err_t err = ESP_OK;
+        if (!strcmp(line, "wifi keep-on")) {
+            err = wifi_maneger_set_keep_online(true);
+            if (err == ESP_OK) mori_request_wifi();
+        } else if (!strcmp(line, "wifi on-demand")) {
+            err = wifi_maneger_set_keep_online(false);
+        } else if (!strcmp(line, "wifi off")) {
+            err = wifi_maneger_suspend();
+        } else mori_request_wifi();
+        message(err == ESP_OK ? "wifi_policy" : "error", esp_err_to_name(err));
+        return;
+    }
     if (!strncmp(line,"intel-speed ",12)) {
         if (bsc2_lab_busy()) { message("error","cartridge or firmware job busy"); return; }
         unsigned mode;
@@ -813,6 +903,17 @@ static void dispatch(char *line)
         return;
     }
     if (strcmp(line, "status") == 0) { status(); return; }
+    if (strcmp(line, "power") == 0) { power_status(); return; }
+    if (strcmp(line, "battery-reset confirm") == 0) {
+        esp_err_t err = power_manager_reset_battery_learning();
+        cJSON *json = event("battery_reset");
+        if (json) {
+            cJSON_AddBoolToObject(json, "ok", err == ESP_OK);
+            cJSON_AddStringToObject(json, "error", esp_err_to_name(err));
+            reply(json);
+        }
+        return;
+    }
     if (strcmp(line, "cancel") == 0) {
         message("cancel", burner_gba_patch_debug_cancel() ? "requested" : "no active patch");
         return;
@@ -823,7 +924,7 @@ static void dispatch(char *line)
         esp_restart();
     }
     if (strcmp(line, "help") == 0) {
-        message("help", "status | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | bacon-check | cpld-info | cpld-check | ag32-link [auto|legacy|mcu|cpld] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
+        message("help", "status | power | ui | key up/down/left/right/a/b/menu | ls PATH | tf-bench PATH | bacon-check | cpld-info | cpld-check | ag32-link [auto|legacy|mcu|cpld] | ag32-ping | ag32-test | ag32-stream-test | ag32-probe | ag32-regs | ag32-batch-check PATH | ag32-batch PATH | ag32-batch-status | patch FLAGS PATH | patch-save FLAGS PATH | epub PATH | play PATH | cancel | reboot; FLAGS: s=SRAM b=batteryless w=WAITCNT");
         return;
     }
     if (strncmp(line, "ls ", 3) == 0) {
@@ -895,7 +996,7 @@ static void console_task(void *arg)
     message("ready", "Mori serial debug v1; type help");
     for (;;) {
         char input[64];
-        int count = usb_serial_jtag_read_bytes(input, sizeof(input), 0);
+        int count = usb_serial_jtag_read_bytes(input, sizeof(input), pdMS_TO_TICKS(250));
         for (int i = 0; i < count; ++i) {
             char c = input[i];
             if (c == '\r' || c == '\n') {
@@ -911,7 +1012,6 @@ static void console_task(void *arg)
                 }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 

@@ -24,6 +24,18 @@ typedef struct {
     bool ready;
     bool battery_percent_valid;
     uint8_t battery_percent;
+    uint8_t battery_percent_raw;
+    const char *battery_percent_source;
+    uint32_t battery_filtered_voltage_mv;
+    uint32_t sample_age_ms;
+    bool sample_stale;
+    uint32_t learned_capacity_mah;
+    uint32_t learning_observed_mah;
+    uint16_t learning_cycles;
+    uint16_t learning_discharge_cycles;
+    uint8_t learning_curve_points;
+    const char *calibration_state;
+    bool calibration_storage_ok;
     bool charging;
     bool charge_full;
     bool vbus_present;
@@ -50,12 +62,17 @@ typedef struct {
 
 esp_err_t power_manager_init(i2c_master_bus_handle_t bus);
 esp_err_t power_manager_cpu_freq_init(void);
+esp_err_t power_manager_enable_idle_sleep(void);
+esp_err_t power_manager_set_display_awake(bool awake);
+bool power_manager_display_awake(void);
+void power_manager_sleep_stats(uint32_t *count, uint64_t *time_us);
 esp_err_t power_manager_perf_lock_acquire(const char *owner);
 void power_manager_perf_lock_release(const char *owner);
 power_chip_type_t power_manager_chip_type(void);
 bool power_manager_ready(void);
 const char *power_manager_chip_name(void);
 esp_err_t power_manager_get_telemetry(power_manager_telemetry_t *telemetry);
+esp_err_t power_manager_reset_battery_learning(void);
 
 #ifdef __cplusplus
 }

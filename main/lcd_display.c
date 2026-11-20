@@ -16,7 +16,9 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "pin_map.h"
+#include "power_manager.h"
 
 #define LCD_TAG "lcd_display"
 
@@ -39,7 +41,7 @@
 #define MORI_LCD_BK_PWM_TIMER LEDC_TIMER_0
 #define MORI_LCD_BK_PWM_CHANNEL LEDC_CHANNEL_0
 #define MORI_LCD_BK_PWM_RESOLUTION LEDC_TIMER_8_BIT
-#define MORI_LCD_BK_BRIGHTNESS_DEFAULT 128U
+#define MORI_LCD_BK_BRIGHTNESS_DEFAULT 115U
 #define MORI_LCD_BK_BRIGHTNESS_MAX ((1U << MORI_LCD_BK_PWM_RESOLUTION) - 1U)
 
 /*
@@ -76,6 +78,11 @@ static SemaphoreHandle_t s_flush_done_sem = NULL;
 static bool s_backlight_pwm_ready = false;
 static uint8_t s_backlight_brightness = MORI_LCD_BK_BRIGHTNESS_DEFAULT;
 static bool s_backlight_suspended;
+static bool s_backlight_dimmed;
+static bool s_backlight_held;
+static bool s_panel_sleeping;
+static StaticSemaphore_t s_panel_lock_storage;
+static SemaphoreHandle_t s_panel_lock;
 static StaticSemaphore_t s_backlight_lock_storage;
 static SemaphoreHandle_t s_backlight_lock;
 
@@ -111,6 +118,8 @@ static esp_err_t lcd_apply_vendor_init(void)
     static const uint8_t d6[] = {0xA1};
     static const uint8_t e0[] = {0xD0, 0x08, 0x0A, 0x0D, 0x0B, 0x07, 0x21, 0x33, 0x39, 0x39, 0x16, 0x16, 0x1F, 0x3C};
     static const uint8_t e1[] = {0xD0, 0x00, 0x03, 0x01, 0x00, 0x10, 0x21, 0x32, 0x38, 0x16, 0x14, 0x14, 0x20, 0x3D};
+    /* 实机对照确认 Gamma 2.5 可减轻浅色泛白。 */
+    static const uint8_t gamma_2_5[] = {0x04};
     static const struct {
         uint8_t cmd;
         const uint8_t *data;
@@ -128,6 +137,7 @@ static esp_err_t lcd_apply_vendor_init(void)
         {0xD6, d6, sizeof(d6)},
         {0xE0, e0, sizeof(e0)},
         {0xE1, e1, sizeof(e1)},
+        {0x26, gamma_2_5, sizeof(gamma_2_5)},
     };
 
     err = lcd_write_cmd(0x11, NULL, 0);
@@ -180,10 +190,23 @@ static bool lcd_panel_io_color_trans_done(
 static void lcd_backlight_set(bool on)
 {
     uint8_t target = on ? s_backlight_brightness : 0U;
+    if (s_backlight_dimmed) target /= 4U;
     uint32_t duty = 0;
     esp_err_t err;
 
     if (s_backlight_pwm_ready) {
+        if (!on) {
+            /* 关屏时停止PWM并锁定关闭电平，避免轻睡眠时低电平误点亮背光。 */
+            err = ledc_stop(MORI_LCD_BK_PWM_MODE, MORI_LCD_BK_PWM_CHANNEL, !MORI_LCD_BK_ON_LEVEL);
+            if (err == ESP_OK) err = gpio_hold_en(MORI_PIN_LCD_BK);
+            if (err == ESP_OK) s_backlight_held = true;
+            if (err != ESP_OK) ESP_LOGW(LCD_TAG, "backlight off hold failed: %s", esp_err_to_name(err));
+            return;
+        }
+        if (s_backlight_held) {
+            (void)gpio_hold_dis(MORI_PIN_LCD_BK);
+            s_backlight_held = false;
+        }
         duty = (MORI_LCD_BK_ON_LEVEL != 0) ? target : (MORI_LCD_BK_BRIGHTNESS_MAX - target);
         err = ledc_set_duty(MORI_LCD_BK_PWM_MODE, MORI_LCD_BK_PWM_CHANNEL, duty);
         if (err == ESP_OK) {
@@ -232,6 +255,8 @@ static esp_err_t lcd_backlight_pwm_init(void)
     if (s_backlight_pwm_ready) {
         return ESP_OK;
     }
+    (void)gpio_hold_dis(MORI_PIN_LCD_BK);
+    s_backlight_held = false;
 
     err = ledc_timer_config(&timer_cfg);
     if (err != ESP_OK) {
@@ -251,6 +276,7 @@ static esp_err_t lcd_backlight_pwm_init(void)
 
 esp_err_t lcd_display_init(void)
 {
+    if (!s_panel_lock) s_panel_lock = xSemaphoreCreateMutexStatic(&s_panel_lock_storage);
     esp_err_t err;
     if (!s_backlight_lock) s_backlight_lock = xSemaphoreCreateMutexStatic(&s_backlight_lock_storage);
     spi_bus_config_t bus_config = {
@@ -397,6 +423,11 @@ esp_err_t lcd_display_draw_bitmap(int x_start, int y_start, int x_end, int y_end
     if (color_data == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
+    xSemaphoreTake(s_panel_lock, portMAX_DELAY);
+    if (s_panel_sleeping) {
+        xSemaphoreGive(s_panel_lock);
+        return ESP_OK;
+    }
 
     if (s_flush_done_sem != NULL) {
         while (xSemaphoreTake(s_flush_done_sem, 0) == pdTRUE) {
@@ -405,20 +436,76 @@ esp_err_t lcd_display_draw_bitmap(int x_start, int y_start, int x_end, int y_end
 
     err = esp_lcd_panel_draw_bitmap(s_panel, x_start, y_start, x_end, y_end, color_data);
     if (err != ESP_OK) {
+        xSemaphoreGive(s_panel_lock);
         return err;
     }
 
     if (s_flush_done_sem != NULL) {
         if (xSemaphoreTake(s_flush_done_sem, pdMS_TO_TICKS(MORI_LCD_DRAW_TIMEOUT_MS)) != pdTRUE) {
             ESP_LOGE(LCD_TAG, "wait LCD flush done timeout (%d ms)", MORI_LCD_DRAW_TIMEOUT_MS);
+            xSemaphoreGive(s_panel_lock);
             return ESP_ERR_TIMEOUT;
         }
     }
 
+    xSemaphoreGive(s_panel_lock);
     return ESP_OK;
 }
 
 #include "lcd_backlight_api.inc"
+
+esp_err_t lcd_display_set_idle_dimmed(bool dimmed)
+{
+    if (!s_backlight_lock) return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(s_backlight_lock, portMAX_DELAY);
+    if (s_backlight_dimmed != dimmed) {
+        s_backlight_dimmed = dimmed;
+        lcd_backlight_set(!s_backlight_suspended);
+    }
+    xSemaphoreGive(s_backlight_lock);
+    return ESP_OK;
+}
+
+bool lcd_display_is_sleeping(void) { return s_panel_sleeping; }
+
+esp_err_t lcd_display_set_sleeping(bool sleeping)
+{
+    if (!s_lcd_ready) return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(s_panel_lock, portMAX_DELAY);
+    esp_err_t err = ESP_OK;
+    if (sleeping != s_panel_sleeping) {
+        if (sleeping) {
+            (void)lcd_display_set_backlight_suspended(true);
+            err = esp_lcd_panel_disp_on_off(s_panel, false);
+            if (err == ESP_OK) err = lcd_write_cmd(0x10, NULL, 0);
+            if (err == ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(120));
+                s_panel_sleeping = true;
+                if (s_backlight_held) {
+                    esp_err_t pm_err = power_manager_set_display_awake(false);
+                    if (pm_err != ESP_OK) ESP_LOGW(LCD_TAG, "display sleep lock release failed: %s", esp_err_to_name(pm_err));
+                }
+            } else {
+                (void)esp_lcd_panel_disp_on_off(s_panel, true);
+                (void)lcd_display_set_backlight_suspended(false);
+            }
+        } else {
+            /* 先禁止轻睡眠，再启动屏幕和PWM，亮屏期间不允许PWM被睡眠打断。 */
+            err = power_manager_set_display_awake(true);
+            if (err == ESP_OK) err = lcd_write_cmd(0x11, NULL, 0);
+            if (err == ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(120));
+                err = esp_lcd_panel_disp_on_off(s_panel, true);
+            }
+            if (err == ESP_OK) {
+                s_panel_sleeping = false;
+                (void)lcd_display_set_backlight_suspended(false);
+            }
+        }
+    }
+    xSemaphoreGive(s_panel_lock);
+    return err;
+}
 
 int lcd_display_width(void)
 {

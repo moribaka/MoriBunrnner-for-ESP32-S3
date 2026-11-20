@@ -24,6 +24,15 @@ typedef struct {
     uint32_t battery_discharge_current_ma_x10;
     uint32_t ipsout_voltage_mv;
     int32_t internal_temp_deci_c;
+    uint8_t fuel_gauge_raw;
+    uint8_t fuel_gauge_percent;
+    bool fuel_gauge_valid;
+    uint32_t coulomb_charge_raw;
+    uint32_t coulomb_discharge_raw;
+    uint16_t coulomb_sample_hz;
+    uint16_t shutdown_voltage_mv;
+    bool coulomb_valid;
+    bool coulomb_fresh_epoch;
 } axp209_snapshot_t;
 
 typedef struct {

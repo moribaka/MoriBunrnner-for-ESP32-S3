@@ -321,6 +321,7 @@ typedef struct {
     burner_gbx_wait_list_t chip_erase_wait_for;
     uint8_t unlock_read_count;
     burner_gbx_unlock_read_step_t unlock_read[BURNER_GBX_UNLOCK_READ_MAX];
+    uint32_t flash_id_offsets[BURNER_GBX_FLASH_ID_LEN_MAX];
     uint8_t flash_id_len[BURNER_GBX_FLASH_ID_MAX];
     uint8_t flash_ids[BURNER_GBX_FLASH_ID_MAX][BURNER_GBX_FLASH_ID_LEN_MAX];
     uint8_t flash_id_bank_len[BURNER_GBX_FLASH_ID_MAX];
@@ -766,6 +767,8 @@ esp_err_t burner_gbabf_gba_probe_locked(uint8_t id[8], uint32_t *device_size,
     uint32_t *sector_size, uint16_t *buffer_bytes, bool *cfi_ok);
 esp_err_t burner_auto_gba_probe_locked(uint8_t id[8], uint32_t *device_size,
     uint32_t *sector_size, uint16_t *buffer_bytes, bool *cfi_ok);
+esp_err_t burner_auto_analyze_gba_locked(uint8_t id[8], uint32_t *size, uint32_t *sector,
+                                         uint16_t *buffer, bool *cfi, char *name, size_t name_len);
 const char *burner_auto_gba_probe_source(void);
 unsigned burner_gba_intel_speed_get(void);
 esp_err_t burner_gba_intel_speed_set(unsigned mode);
@@ -1108,7 +1111,7 @@ esp_err_t burner_gbx_find_agb_profile_for_probe(
     int32_t *score_out,
     bool *ambiguous_out);
 esp_err_t burner_gbx_find_agb_profile_for_method_id(
-    const burner_gbx_cmd_list_t *method,
+    const burner_gbx_profile_t *method_profile,
     const uint8_t *id,
     size_t id_len,
     burner_gbx_profile_t *profile_out,

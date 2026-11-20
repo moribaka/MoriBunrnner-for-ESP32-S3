@@ -2798,12 +2798,13 @@
             
             const sidebarBattery = document.getElementById('sidebarBattery');
             const sidebarChargeState = document.getElementById('sidebarChargeState');
-            if (sidebarBattery) sidebarBattery.textContent = batteryPercent + '%';
+            if (sidebarBattery) sidebarBattery.textContent = (batteryPercent === null ? '--' : batteryPercent) + '%';
             
             const chargeState = power.charge_state || ip5306.charge_state || 'unknown';
             const stateMap = {
                 'charging': '⚡ 充电中',
                 'charge_full': '✓ 已充满',
+                'charge_ready': '🔌 外接供电',
                 'discharging': '🔋 放电中',
                 'discharging_light_load': '💤 轻载',
                 'no_battery_external_power': '🔌 仅外部供电(无电池)',
@@ -2834,7 +2835,7 @@
         }
 
         function estimateBatteryPercent(powerLike) {
-            if (!powerLike || typeof powerLike !== 'object') return 0;
+            if (!powerLike || typeof powerLike !== 'object') return null;
 
             const genericReported = parseTelemetryNumber(powerLike.battery_percent, -1);
             if (powerLike.battery_percent_valid !== false && genericReported >= 0) {
@@ -2847,10 +2848,9 @@
                 return Math.max(0, Math.min(100, Math.round(reported)));
             }
 
-            // 兜底：仅在无百分比时给出确定性状态值，避免随机跳动。
+            // 没有有效测量时显示未知，不凭充电状态编造百分比。
             if (powerLike.charge_full || powerLike.charge_full_flag) return 100;
-            if ((powerLike.charge_state || '') === 'charging') return 50;
-            return 0;
+            return null;
         }
 
         // 路由处理
@@ -3159,6 +3159,11 @@
                 </div>
 
                 <div class="card animate-in">
+                    <label><input type="checkbox" id="wifiKeepOnline" onchange="saveWiFiPowerPolicy(this)"> 无线调试常在线</label>
+                    <p class="page-subtitle">关闭后按需联网，空闲一分钟关闭无线。设备上的 Wi-Fi 菜单可重新连接。</p>
+                </div>
+
+                <div class="card animate-in">
                     <div class="card-header">
                         <h3 class="card-title">可用网络</h3>
                         <button class="btn btn-primary" onclick="scanWiFi()">
@@ -3177,6 +3182,10 @@
             `;
 
             loadWiFiStatus();
+            fetch('/api/power/policy').then(r => r.json()).then(p => {
+                const input = document.getElementById('wifiKeepOnline');
+                if (input) input.checked = !!p.wifi_keep_online;
+            }).catch(() => {});
         }
 
         // 电源状态页面
@@ -3215,6 +3224,8 @@
                         <div class="heap-bar">
                             <div class="heap-fill" id="powerBatteryBar" style="width: 0%"></div>
                         </div>
+                        <div id="powerLearningInfo" class="status-label">电量学习状态待更新</div>
+                        <button type="button" onclick="resetBatteryLearning()">更换电池后重置学习</button>
                     </div>
                     
                     <div class="power-card">
@@ -6496,8 +6507,8 @@
                     const heapEl = document.getElementById('sysHeap');
                     const heapBarEl = document.getElementById('sysHeapBar');
 
-                    if (batteryEl) batteryEl.textContent = batteryPercent + '%';
-                    if (batteryBarEl) batteryBarEl.style.width = batteryPercent + '%';
+                    if (batteryEl) batteryEl.textContent = (batteryPercent === null ? '--' : batteryPercent) + '%';
+                    if (batteryBarEl) batteryBarEl.style.width = (batteryPercent ?? 0) + '%';
                     if (uptimeEl) uptimeEl.textContent = formatDuration(Math.floor(powerData.uptime_ms / 1000));
 
                     const freeHeap = powerData.free_heap || 0;
@@ -7898,6 +7909,22 @@
         }
 
         // Wi-Fi 功能
+        async function saveWiFiPowerPolicy(input) {
+            input.disabled = true;
+            try {
+                const response = await fetch('/api/power/policy', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({wifi_keep_online: input.checked, wifi_idle_off_minutes: 1})
+                });
+                const policy = await response.json();
+                if (!response.ok || !policy.ok) throw new Error('保存失败');
+                input.checked = !!policy.wifi_keep_online;
+            } catch (error) {
+                input.checked = !input.checked;
+                showToast('无线省电设置保存失败', 'error');
+            } finally { input.disabled = false; }
+        }
+
         async function loadWiFiStatus() {
             try {
                 // 获取当前连接状态
@@ -8093,6 +8120,17 @@
             updatePowerDetailTables(state.powerData);
         }
 
+        async function resetBatteryLearning() {
+            if (!window.confirm('仅在更换电池或需要重新学习时重置。确定清除已有电量学习记录？')) return;
+            try {
+                const response = await fetch('/api/power/calibration/reset?confirm=reset-battery', {method: 'POST'});
+                if (!response.ok) throw new Error('重置失败');
+                await refreshPowerDetail();
+            } catch (error) {
+                window.alert(error.message || '重置失败，请重试');
+            }
+        }
+
         function updatePowerDetailTables(data) {
             if (!data) return;
             const power = data.power || {};
@@ -8101,12 +8139,22 @@
             
             // 更新主显示
             const batteryPercent = estimateBatteryPercent(power.ready ? power : ip5306);
-            document.getElementById('powerBattery').textContent = batteryPercent + '%';
-            document.getElementById('powerBatteryBar').style.width = batteryPercent + '%';
+            document.getElementById('powerBattery').textContent = (batteryPercent === null ? '--' : batteryPercent) + '%';
+            document.getElementById('powerBatteryBar').style.width = (batteryPercent ?? 0) + '%';
+            const learningInfo = document.getElementById('powerLearningInfo');
+            if (learningInfo) {
+                const labels = {waiting_reference: '等待满电或低电量参考', learning_discharge: '正在记录放电',
+                    learning_charge: '正在记录充电', provisional: '已得到初步容量，继续使用完善',
+                    learned: '已有电池学习数据', reanchor: '已有容量，等待电量参考校正',
+                    counter_unavailable: '计量暂不可用', unsupported: '此电源芯片不支持自学习'};
+                const capacity = power.learned_capacity_mah ? ` · 可用容量约 ${power.learned_capacity_mah} mAh` : '';
+                learningInfo.textContent = (labels[power.calibration_state] || '尚在学习') + capacity;
+            }
             
             const stateMap = {
                 'charging': '⚡ 充电中',
                 'charge_full': '✓ 已充满',
+                'charge_ready': '🔌 外接供电',
                 'discharging': '🔋 放电中',
                 'discharging_light_load': '💤 轻载',
                 'no_battery_external_power': '🔌 仅外部供电(无电池)',
@@ -8284,6 +8332,7 @@
             const stateMap = {
                 'charging': '充电中',
                 'charge_full': '已充满',
+                'charge_ready': '外接供电',
                 'discharging': '放电中',
                 'discharging_light_load': '轻载放电',
                 'no_battery_external_power': '仅外部供电(无电池)',

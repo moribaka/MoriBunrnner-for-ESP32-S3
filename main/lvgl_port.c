@@ -19,6 +19,7 @@
 #define LVGL_TASK_PRIORITY 4
 #define LVGL_DRAW_BUF_LINES 20
 #define LVGL_TASK_FRAME_MS 16
+#define LVGL_SLEEP_CHECK_MS 1000
 #define LVGL_IDLE_DIM_TIMEOUT_DEFAULT_MIN 1U
 #define LVGL_TASK_CORE_ID 0
 #define LVGL_PSRAM_POOL_COUNT 4
@@ -37,6 +38,7 @@ static StaticSemaphore_t s_idle_lock_storage;
 static SemaphoreHandle_t s_idle_lock;
 static volatile uint32_t s_idle_dim_suspend_count = 0;
 static volatile uint16_t s_idle_dim_timeout_minutes = LVGL_IDLE_DIM_TIMEOUT_DEFAULT_MIN;
+static bool lvgl_is_idle_dimmed_locked(void);
 
 static void *lvgl_alloc_draw_buffer(size_t size, const char *name)
 {
@@ -78,23 +80,23 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 
 static void lvgl_task(void *arg)
 {
-    TickType_t last_wake = xTaskGetTickCount();
     uint64_t last_tick_ms = (uint64_t)esp_timer_get_time() / 1000U;
 
     (void)arg;
 
     while (1) {
-        (void)lvgl_port_is_idle_dimmed();
+        xSemaphoreTakeRecursive(s_idle_lock, portMAX_DELAY);
+        bool sleeping = lvgl_is_idle_dimmed_locked();
+        xSemaphoreGiveRecursive(s_idle_lock);
         uint64_t now_ms = (uint64_t)esp_timer_get_time() / 1000U;
         lv_tick_inc((uint32_t)(now_ms - last_tick_ms));
         last_tick_ms = now_ms;
         ui_process();
-        (void)lv_timer_handler();
-        /* A slow filesystem operation must not cause a burst of catch-up frames. */
-        TickType_t now_tick = xTaskGetTickCount();
-        if ((TickType_t)(now_tick - last_wake) > pdMS_TO_TICKS(LVGL_TASK_FRAME_MS))
-            last_wake = now_tick - pdMS_TO_TICKS(LVGL_TASK_FRAME_MS) + 1;
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(LVGL_TASK_FRAME_MS));
+        if (!sleeping) {
+            (void)lv_timer_handler();
+        }
+        /* 熄屏不绘图；按键通知可立即打断等待。电池由独立监测路径更新。 */
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(sleeping ? LVGL_SLEEP_CHECK_MS : LVGL_TASK_FRAME_MS));
     }
 }
 
@@ -103,10 +105,7 @@ static void lvgl_mark_activity_locked(void)
     int64_t now_us = esp_timer_get_time();
 
     s_last_activity_us = now_us;
-    if (s_idle_dimmed) {
-        s_idle_dimmed = false;
-        (void)lcd_display_set_backlight_suspended(false);
-    }
+    if (s_lvgl_task && xTaskGetCurrentTaskHandle() != s_lvgl_task) xTaskNotifyGive(s_lvgl_task);
 }
 
 static void lvgl_set_idle_dim_suspended_locked(bool suspended)
@@ -115,10 +114,7 @@ static void lvgl_set_idle_dim_suspended_locked(bool suspended)
         if (s_idle_dim_suspend_count < UINT32_MAX) {
             s_idle_dim_suspend_count++;
         }
-        if (s_idle_dimmed) {
-            s_idle_dimmed = false;
-            (void)lcd_display_set_backlight_suspended(false);
-        }
+        lvgl_mark_activity_locked();
         return;
     }
 
@@ -126,7 +122,7 @@ static void lvgl_set_idle_dim_suspended_locked(bool suspended)
         s_idle_dim_suspend_count--;
     }
     if (s_idle_dim_suspend_count == 0u) {
-        (void)lvgl_port_is_idle_dimmed();
+        lvgl_mark_activity_locked();
     }
 }
 
@@ -151,20 +147,15 @@ static bool lvgl_is_idle_dimmed_locked(void)
     if (s_last_activity_us == 0) {
         s_last_activity_us = now_us;
     }
-    if (s_idle_dim_suspend_count > 0u) {
-        return false;
-    }
-    if (timeout_minutes == 0U) {
-        if (s_idle_dimmed) {
-            s_idle_dimmed = false;
-            (void)lcd_display_set_backlight_suspended(false);
-        }
-        return false;
-    }
-    if (!s_idle_dimmed &&
-        (uint64_t)(now_us - s_last_activity_us) >= ((uint64_t)timeout_minutes * 60ULL * 1000ULL * 1000ULL)) {
-        s_idle_dimmed = true;
-        (void)lcd_display_set_backlight_suspended(true);
+    uint64_t elapsed = (uint64_t)(now_us - s_last_activity_us);
+    uint64_t timeout = (uint64_t)timeout_minutes * 60000000ULL;
+    bool enabled = timeout_minutes != 0 && s_idle_dim_suspend_count == 0;
+    bool sleeping = enabled && elapsed >= timeout;
+    bool dimmed = enabled && !sleeping && elapsed >= (timeout / 2 < 30000000ULL ? timeout / 2 : 30000000ULL);
+    (void)lcd_display_set_idle_dimmed(dimmed);
+    if (sleeping != s_idle_dimmed && lcd_display_set_sleeping(sleeping) == ESP_OK) {
+        s_idle_dimmed = sleeping;
+        ESP_LOGI(LVGL_TAG, "panel %s", sleeping ? "asleep" : "awake");
     }
 
     return s_idle_dimmed;
@@ -194,7 +185,7 @@ void lvgl_port_set_idle_dim_timeout_minutes(uint16_t minutes)
 bool lvgl_port_is_idle_dimmed(void)
 {
     if (s_idle_lock) xSemaphoreTakeRecursive(s_idle_lock, portMAX_DELAY);
-    bool dimmed = lvgl_is_idle_dimmed_locked();
+    bool dimmed = s_idle_dimmed;
     if (s_idle_lock) xSemaphoreGiveRecursive(s_idle_lock);
     return dimmed;
 }

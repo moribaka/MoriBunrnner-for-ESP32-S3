@@ -1,6 +1,9 @@
+enum { UI_BURN_OP_TOP = 24, UI_BURN_OP_LINE = 21 };
+static uint16_t s_burn_drawn_selection;
+
 static uint16_t ui_burn_rom_visible_rows(void)
 {
-    int32_t rows = (UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H) / UI_LIST_LINE_H;
+    int32_t rows = (UI_CANVAS_H - UI_HINT_H - UI_LIST_HEADER_H - UI_BURN_OP_TOP) / UI_BURN_OP_LINE;
 
     return (rows > 0) ? (uint16_t)rows : 1U;
 }
@@ -85,9 +88,7 @@ static void ui_burn_info_draw_emit(
         ui_px_text_clipped(text_x, row_y, text_w, value, true);
     }
     if (ui_burn_info_kind_selectable(kind) && s_burner_focus_info && index == s_burner_info_selected) {
-        /* Invert after the text so the row shows white background with black
-           glyphs, matching the operation list selector. */
-        ui_px_invert_rect(ctx->x + 1, row_y - 2, ctx->w - 2, UI_LIST_LINE_H - 1);
+        ui_px_highlight_rect(ctx->x + 1, row_y - 2, ctx->w - 2, UI_LIST_LINE_H - 1);
     }
 }
 
@@ -98,13 +99,11 @@ static void ui_px_draw_burner_cart_info_panel(const ui_model_t *model, int32_t x
     int32_t text_w = w - 10;
 
     (void)model;
-    ui_px_frame(x, y, w, h, true);
-    if (s_burner_info_nor_detail) {
-        ui_px_text_clipped(text_x, y + 8, text_w, s_burner_focus_info ? "> NOR" : "NOR", true);
-    } else {
-        ui_px_text_clipped(text_x, y + 8, text_w, s_burner_focus_info ? "> Cart info" : "Cart info", true);
-    }
-    ui_px_hline(x + 4, y + 22, w - 8, true);
+    ui_px_panel(x, y, w, h, false);
+    ui_px_color_box(x + 1, y + 1, w - 2, 21, s_burner_focus_info ? UI_COLOR_AMBER : UI_COLOR_SAND);
+    const char *heading = s_burner_info_nor_detail ? "NOR Flash" :
+        (ui_lang_is_zh() ? "卡带资料" : "Cartridge info");
+    ui_px_text_clipped(text_x, y + 7, text_w, heading, true);
 
     ui_burn_info_ensure_visible();
     (void)ui_burn_info_enumerate(ui_burn_info_draw_emit, &ctx);
@@ -126,25 +125,66 @@ static const char *ui_probe_chip_name(const burner_status_t *status)
     return "unknown";
 }
 
+static void ui_px_burn_action_row(const ui_model_t *model, uint16_t row, uint16_t count,
+                                  int32_t x, int32_t y, int32_t w)
+{
+    const int32_t text_x = x + 6;
+    const int32_t text_w = w - 12;
+    uint16_t index = model->scroll + row;
+    int32_t row_y = y + UI_BURN_OP_TOP + (int32_t)row * UI_BURN_OP_LINE;
+    char title[UI_ROW_TEXT_MAX_LEN] = {0};
+    char hint[UI_ROW_TEXT_MAX_LEN] = {0};
+
+    if (index >= count) {
+        return;
+    }
+    bool focus = !s_burner_focus_info && index == model->selected;
+    ui_px_color_box(x + 1, row_y, w - 2, UI_BURN_OP_LINE - 1, focus ? UI_COLOR_AMBER : UI_COLOR_TILE);
+    if (focus) ui_px_color_box(x + 1, row_y, 3, UI_BURN_OP_LINE - 1, UI_COLOR_ORANGE);
+    ui_fill_burn_rom_row(model, index, title, sizeof(title), hint, sizeof(hint));
+    if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
+        ((index == 1U && !ui_gba_sram_patch_selectable()) ||
+         (index == 3U && s_gba_save_patch_choice != 1U))) {
+        ui_px_text_clipped_disabled(text_x, row_y + 5, text_w, title);
+    } else {
+        ui_px_text_clipped(text_x, row_y + 5, text_w, title, true);
+    }
+    if (hint[0] != '\0') {
+        int32_t hint_w = ui_px_text_width(hint);
+        int32_t hint_x;
+
+        if (hint_w > text_w / 2) {
+            hint_w = text_w / 2;
+        }
+        hint_x = text_x + text_w - hint_w;
+        if (hint_x > text_x + ui_px_text_width(title) + 6) {
+            if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
+                ((index == 1U && !ui_gba_sram_patch_selectable()) ||
+                 (index == 3U && s_gba_save_patch_choice != 1U))) {
+                ui_px_text_clipped_disabled(hint_x, row_y + 5, hint_w, hint);
+            } else {
+                ui_px_text_clipped(hint_x, row_y + 5, hint_w, hint, true);
+            }
+        }
+    }
+}
+
+static void ui_px_burn_action_header(const ui_model_t *model, int32_t x, int32_t y, int32_t w, uint16_t count)
+{
+    char position[20];
+    snprintf(position, sizeof(position), "%u/%u", (unsigned)model->selected + 1U, (unsigned)count);
+    ui_px_color_box(x + 1, y + 1, w - 2, 21, s_burner_focus_info ? UI_COLOR_SAND : UI_COLOR_AMBER);
+    const char *heading = ui_lang_is_zh() ? "卡带操作" : "Actions";
+    ui_px_text(x + 6, y + 7, heading, true);
+    ui_px_text(x + w - 6 - ui_px_text_width(position), y + 7, position, true);
+}
+
 static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, int32_t y, int32_t w, int32_t h)
 {
     uint16_t count = ui_page_item_count(model);
-    uint16_t selected = ui_current_selected(model);
-    uint16_t scroll = ui_current_scroll(model);
-    uint16_t visible_rows = ui_burn_rom_visible_rows();
-    int32_t list_h = visible_rows * UI_LIST_LINE_H;
-    int32_t bar_x = x + w - UI_LIST_BAR_W;
-    int32_t text_x = x + 4;
-    int32_t text_w = w - UI_LIST_BAR_W - 10;
-    int32_t selected_row = (int32_t)selected - (int32_t)scroll;
-    int32_t selector_y = y + selected_row * UI_LIST_LINE_H;
-    int32_t selector_w = w - UI_LIST_BAR_W - 1;
-    int32_t bar_h = 1;
-
-    if (list_h > h) {
-        list_h = h;
-    }
-    ui_px_frame(x, y, w, h, true);
+    uint16_t selected = model->selected;
+    s_burn_drawn_selection = selected;
+    ui_px_panel(x, y, w, h, false);
     if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_CUSTOM) {
         const int32_t key_w = (w - UI_LIST_BAR_W - 12) / 3;
         const int32_t key_h = 22;
@@ -170,68 +210,14 @@ static void ui_px_draw_burn_rom_ops_panel(const ui_model_t *model, int32_t x, in
             ui_px_frame(key_x, key_y, key_w - 3, key_h - 3, true);
             ui_px_text_clipped(key_x + 8, key_y + 6, key_w - 16, label, true);
             if (i == selected) {
-                ui_px_invert_rect(key_x + 1, key_y + 1, key_w - 5, key_h - 5);
+                ui_px_highlight_rect(key_x + 1, key_y + 1, key_w - 5, key_h - 5);
             }
         }
         return;
     }
-    ui_px_vline(bar_x + 2, y + 1, h - 2, true);
-    if (count > 0U) {
-        bar_h = (int32_t)(((uint32_t)(selected + 1U) * (uint32_t)list_h) / count);
-        if (bar_h < 1) {
-            bar_h = 1;
-        } else if (bar_h > list_h - 2) {
-            bar_h = list_h - 2;
-        }
-        ui_px_box(bar_x, y + 1, UI_LIST_BAR_W, bar_h, true);
-    }
-
-    for (uint16_t row = 0; row < visible_rows; ++row) {
-        uint16_t index = scroll + row;
-        int32_t row_y = y + (int32_t)row * UI_LIST_LINE_H + 1;
-        char title[UI_ROW_TEXT_MAX_LEN] = {0};
-        char hint[UI_ROW_TEXT_MAX_LEN] = {0};
-
-        if (index >= count || row_y + UI_LIST_LINE_H > y + h) {
-            continue;
-        }
-        ui_fill_burn_rom_row(model, index, title, sizeof(title), hint, sizeof(hint));
-        if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
-            ((index == 1U && !ui_gba_sram_patch_selectable()) ||
-             (index == 3U && s_gba_save_patch_choice != 1U))) {
-            ui_px_text_clipped_disabled(text_x, row_y + 3, text_w, title);
-        } else {
-            ui_px_text_clipped(text_x, row_y + 3, text_w, title, true);
-        }
-        if (hint[0] != '\0') {
-            int32_t hint_w = ui_px_text_width(hint);
-            int32_t hint_x;
-
-            if (hint_w > text_w / 2) {
-                hint_w = text_w / 2;
-            }
-            hint_x = text_x + text_w - hint_w;
-            if (hint_x > text_x + ui_px_text_width(title) + 6) {
-                if (s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_WRITE &&
-                    ((index == 1U && !ui_gba_sram_patch_selectable()) ||
-                     (index == 3U && s_gba_save_patch_choice != 1U))) {
-                    ui_px_text_clipped_disabled(hint_x, row_y + 3, hint_w, hint);
-                } else {
-                    ui_px_text_clipped(hint_x, row_y + 3, hint_w, hint, true);
-                }
-            }
-        }
-    }
-
-    if (selected_row < 0 || selected_row >= (int32_t)visible_rows) {
-        selector_y = y;
-    }
-    s_anim.list_selector_target_y = (float)selector_y;
-    s_anim.list_selector_target_w = (float)selector_w;
-    ui_anim_move(&s_anim.list_selector_y, s_anim.list_selector_target_y, UI_LIST_SELECTOR_Y_SPEED);
-    ui_anim_move(&s_anim.list_selector_w, s_anim.list_selector_target_w, UI_LIST_SELECTOR_W_SPEED);
-    if (!s_burner_focus_info) {
-        ui_px_invert_rect(x, (int32_t)s_anim.list_selector_y, (int32_t)s_anim.list_selector_w, UI_LIST_LINE_H - 1);
+    ui_px_burn_action_header(model, x, y, w, count);
+    for (uint16_t row = 0; row < ui_burn_rom_visible_rows(); ++row) {
+        ui_px_burn_action_row(model, row, count, x, y, w);
     }
 }
 
@@ -277,16 +263,26 @@ static void ui_px_apply_burn_rom_split_dynamic(const ui_model_t *model)
         ui_px_invalidate_rect(0, UI_CANVAS_H - UI_HINT_H - 3, UI_CANVAS_W, UI_HINT_H + 3);
     }
     if (redraw_content) {
-        ui_px_clear_rect(layout.info_x, layout.info_y, layout.info_w, layout.info_h);
-        ui_px_clear_rect(layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
         ui_px_draw_burner_cart_info_panel(model, layout.info_x, layout.info_y, layout.info_w, layout.info_h);
-        ui_px_draw_burn_rom_ops_panel(model, layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
         ui_px_invalidate_rect(layout.info_x, layout.info_y, layout.info_w, layout.info_h);
+    }
+    if (redraw_content || s_burn_rom_submenu == UI_BURN_ROM_SUBMENU_DUMP_CUSTOM) {
+        ui_px_draw_burn_rom_ops_panel(model, layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
         ui_px_invalidate_rect(layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
         return;
     }
-    ui_px_clear_rect(layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
-    ui_px_draw_burn_rom_ops_panel(model, layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
-    ui_px_invalidate_rect(layout.ops_x, layout.ops_y, layout.ops_w, layout.ops_h);
+    if (model->motion_dirty && model->selected != s_burn_drawn_selection) {
+        uint16_t count = ui_page_item_count(model);
+        uint16_t indices[] = {s_burn_drawn_selection, model->selected};
+        for (size_t i = 0; i < 2; ++i) {
+            uint16_t row = indices[i] - model->scroll;
+            if (row >= ui_burn_rom_visible_rows()) continue;
+            ui_px_burn_action_row(model, row, count, layout.ops_x, layout.ops_y, layout.ops_w);
+            ui_px_invalidate_rect(layout.ops_x, layout.ops_y + UI_BURN_OP_TOP + row * UI_BURN_OP_LINE,
+                                  layout.ops_w, UI_BURN_OP_LINE);
+        }
+        ui_px_burn_action_header(model, layout.ops_x, layout.ops_y, layout.ops_w, count);
+        ui_px_invalidate_rect(layout.ops_x, layout.ops_y, layout.ops_w, UI_BURN_OP_TOP);
+        s_burn_drawn_selection = model->selected;
+    }
 }
-

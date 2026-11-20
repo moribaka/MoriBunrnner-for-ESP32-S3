@@ -369,6 +369,11 @@ static const char *ui_probe_nor_model(const burner_status_t *status)
     if (status == NULL || !status->probe_valid) {
         return NULL;
     }
+    if (status->probe_cart_mode == BURNER_CART_MODE_GBA &&
+        (strcmp(status->probe_mapper_name, "AUTO:GBX") == 0 || strcmp(status->probe_mapper_name, "GBX") == 0) &&
+        status->probe_chip_name[0] != '\0') {
+        return status->probe_chip_name;
+    }
     name = (status->probe_cart_mode == BURNER_CART_MODE_GBA) ?
                burner_gba_chip_name(status->probe_id) :
                burner_mbc5_chip_name(status->probe_id);

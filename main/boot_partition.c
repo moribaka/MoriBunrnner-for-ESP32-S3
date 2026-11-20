@@ -12,6 +12,7 @@
 #include "smb_client.h"
 #include "usb_msc_tf.h"
 #include "wifi_manager.h"
+#include "tca9555.h"
 #include "burner/core/ws_server_internal.h"
 
 static const char *BOOT_PARTITION_TAG = "boot_partition";
@@ -22,6 +23,14 @@ static void boot_partition_quiesce_services(void)
 
     err = music_player_stop();
     (void)err;
+    (void)tca9555_pin_write(TCA9555_IO1_4, false);
+    if (s_mcu_spi_ready && !burner_spi_swd_restore_blocked()) {
+        burner_spi_lock_take();
+        err = burner_bacon_gba_release_bus_idle();
+        if (err == ESP_OK) err = burner_bacon_gba_power_cmd(false, false);
+        burner_spi_lock_give();
+        if (err != ESP_OK) ESP_LOGW(BOOT_PARTITION_TAG, "cart park failed: %s", esp_err_to_name(err));
+    }
 
     smb_client_disconnect();
 

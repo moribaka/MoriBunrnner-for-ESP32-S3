@@ -591,9 +591,9 @@ static void ui_px_draw_music_seek_bar(uint32_t percent)
 {
     int32_t fill_w = (int32_t)(((uint32_t)UI_MUSIC_SEEK_BAR_W * percent) / 100U);
 
-    ui_px_frame(UI_MUSIC_SEEK_BAR_X, UI_MUSIC_SEEK_BAR_Y, UI_MUSIC_SEEK_BAR_W, 10, true);
+    ui_px_color_box(UI_MUSIC_SEEK_BAR_X, UI_MUSIC_SEEK_BAR_Y, UI_MUSIC_SEEK_BAR_W, 10, UI_COLOR_SAND);
     if (fill_w > 0) {
-        ui_px_box(UI_MUSIC_SEEK_BAR_X + 1, UI_MUSIC_SEEK_BAR_Y + 1, fill_w - (fill_w > 1 ? 1 : 0), 8, true);
+        ui_px_color_box(UI_MUSIC_SEEK_BAR_X, UI_MUSIC_SEEK_BAR_Y, fill_w, 10, UI_COLOR_ORANGE);
     }
 }
 
@@ -624,8 +624,7 @@ static void ui_px_draw_music_drawer(const ui_model_t *model, const music_player_
         int32_t list_y = drawer_y + 18;
         int32_t list_h = drawer_h - 22;
 
-        ui_px_box(drawer_x, drawer_y, drawer_w, drawer_h, false);
-        ui_px_frame(drawer_x, drawer_y, drawer_w, drawer_h, true);
+        ui_px_panel(drawer_x, drawer_y, drawer_w, drawer_h, false);
         ui_px_text_clipped(drawer_x + 8, drawer_y + 4, drawer_w - 16, ui_tr("Music"), true);
         ui_px_hline(drawer_x + 1, drawer_y + 16, drawer_w - 2, true);
         if (model->file_total == 0U) {
@@ -644,7 +643,7 @@ static void ui_px_draw_music_drawer(const ui_model_t *model, const music_player_
             }
             if (model->file_selected >= model->file_scroll &&
                 model->file_selected < model->file_scroll + UI_MUSIC_DRAWER_VISIBLE_ROWS) {
-                ui_px_invert_rect(drawer_x + 2, selector_y, drawer_w - 8, UI_LIST_LINE_H - 1);
+                ui_px_highlight_rect(drawer_x + 2, selector_y, drawer_w - 8, UI_LIST_LINE_H - 1);
             }
             ui_px_vline(drawer_x + drawer_w - 4, list_y, list_h, true);
             ui_px_box(drawer_x + drawer_w - 6, list_y, 4, list_bar_h, true);
